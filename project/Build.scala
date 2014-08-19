@@ -8,6 +8,8 @@ import com.typesafe.sbt.SbtScalariform._
 import org.scalastyle.sbt.ScalastylePlugin
 import scalariform.formatter.preferences._
 import bintray.Plugin.bintrayPublishSettings
+import com.typesafe.sbt.SbtNativePackager._
+import NativePackagerKeys._
 
 // There are advantages to using real Scala build files with SBT:
 //  - Multi-JVM testing won't work without it, for now
@@ -30,8 +32,8 @@ object JobServerBuild extends Build {
   )
 
   lazy val jobServer = Project(id = "job-server", base = file("job-server"),
-    settings = commonSettings210 ++ Assembly.settings ++ Revolver.settings ++ Seq(
-      description  := "Spark as a Service: a RESTful job server for Apache Spark",
+    settings = packagerSettings ++ commonSettings210 ++ Assembly.settings ++ Revolver.settings ++ Seq(
+      description := "Spark as a Service: a RESTful job server for Apache Spark",
       libraryDependencies ++= sparkDeps ++ slickDeps ++ coreTestDeps,
 
       // Automatically package the test jar when we run tests here
@@ -93,6 +95,10 @@ object JobServerBuild extends Build {
     crossPaths   := false,
     scalaVersion := "2.10.4",
     scalaBinaryVersion := "2.10",
+    packageSummary := "Spark Job Server",
+    packageDescription := "Provides a RESTful interface for submitting Spark Jobs",
+    name in Debian := "job-server",
+    maintainer := "Ooyala Optimization <optimization-team@ooyala.com>",
 
     runScalaStyle := {
       org.scalastyle.sbt.PluginKeys.scalastyle.toTask("").value
