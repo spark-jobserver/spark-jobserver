@@ -24,6 +24,14 @@ object JobServerBuild extends Build {
 
   import Dependencies._
 
+  lazy val packageMappingsSettings = (installDir: String, assemblyName: String) => Seq(
+    packageSummary := "Spark Job Server",
+    packageDescription := "Spark as a Service: a RESTful job server for Apache Spark",
+    name in Debian := assemblyName,
+    maintainer := "Ooyala Optimization <optimization-team@ooyala.com>",
+    linuxPackageMappings += packageMapping(assembly.value -> (installDir + "/" + assemblyName + ".jar"))
+  )
+
   lazy val akkaApp = Project(id = "akka-app", base = file("akka-app"),
     settings = commonSettings210 ++ Seq(
       description := "Common Akka application stack: metrics, tracing, logging, and more.",
@@ -32,25 +40,26 @@ object JobServerBuild extends Build {
   )
 
   lazy val jobServer = Project(id = "job-server", base = file("job-server"),
-    settings = packagerSettings ++ commonSettings210 ++ Assembly.settings ++ Revolver.settings ++ Seq(
-      description := "Spark as a Service: a RESTful job server for Apache Spark",
-      libraryDependencies ++= sparkDeps ++ slickDeps ++ coreTestDeps,
+    settings = packagerSettings ++ commonSettings210 ++ Assembly.settings ++ packagerSettings ++
+      packageMappingsSettings("/usr/lib/spark-jobserver", "job-server") ++ Revolver.settings ++ Seq(
+        description := "Spark as a Service: a RESTful job server for Apache Spark",
+        libraryDependencies ++= sparkDeps ++ slickDeps ++ coreTestDeps,
 
-      // Automatically package the test jar when we run tests here
-      // And always do a clean before package (package depends on clean) to clear out multiple versions
-      test in Test <<= (test in Test).dependsOn(packageBin in Compile in jobServerTestJar)
-                                     .dependsOn(clean in Compile in jobServerTestJar),
+        // Automatically package the test jar when we run tests here
+        // And always do a clean before package (package depends on clean) to clear out multiple versions
+        test in Test <<= (test in Test).dependsOn(packageBin in Compile in jobServerTestJar)
+                                       .dependsOn(clean in Compile in jobServerTestJar),
 
-      // Adds the path of extra jars to the front of the classpath
-      fullClasspath in Compile <<= (fullClasspath in Compile).map { classpath =>
-        extraJarPaths ++ classpath
-      },
-      javaOptions in Revolver.reStart += jobServerLogging,
-      // Give job server a bit more PermGen since it does classloading
-      javaOptions in Revolver.reStart += "-XX:MaxPermSize=256m",
-      javaOptions in Revolver.reStart += "-Djava.security.krb5.realm= -Djava.security.krb5.kdc=",
-      // This lets us add Spark back to the classpath without assembly barfing
-      fullClasspath in Revolver.reStart := (fullClasspath in Compile).value
+        // Adds the path of extra jars to the front of the classpath
+        fullClasspath in Compile <<= (fullClasspath in Compile).map { classpath =>
+          extraJarPaths ++ classpath
+        },
+        javaOptions in Revolver.reStart += jobServerLogging,
+        // Give job server a bit more PermGen since it does classloading
+        javaOptions in Revolver.reStart += "-XX:MaxPermSize=256m",
+        javaOptions in Revolver.reStart += "-Djava.security.krb5.realm= -Djava.security.krb5.kdc=",
+        // This lets us add Spark back to the classpath without assembly barfing
+        fullClasspath in Revolver.reStart := (fullClasspath in Compile).value
       )
   ) dependsOn(akkaApp)
 
@@ -95,10 +104,6 @@ object JobServerBuild extends Build {
     crossPaths   := false,
     scalaVersion := "2.10.4",
     scalaBinaryVersion := "2.10",
-    packageSummary := "Spark Job Server",
-    packageDescription := "Provides a RESTful interface for submitting Spark Jobs",
-    name in Debian := "job-server",
-    maintainer := "Ooyala Optimization <optimization-team@ooyala.com>",
 
     runScalaStyle := {
       org.scalastyle.sbt.PluginKeys.scalastyle.toTask("").value
