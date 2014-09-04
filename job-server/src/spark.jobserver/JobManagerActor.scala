@@ -11,12 +11,13 @@ import scala.concurrent.Future
 import scala.util.{Failure, Success, Try}
 import spark.jobserver.ContextSupervisor.StopContext
 import spark.jobserver.io.{ JobDAO, JobInfo, JarInfo }
+import spark.jobserver.NotificationActor.JobNotification
 import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
 
 object JobManagerActor {
   // Messages
   case object Initialize
-  case class StartJob(appName: String, classPath: String, config: Config,
+  case class StartJob(appName: String, classPath: String, callbackUrl: Option[String], config: Config,
                       subscribedEvents: Set[Class[_]])
 
   // Results/Data
@@ -89,6 +90,7 @@ class JobManagerActor(dao: JobDAO,
 
   private val statusActor = context.actorOf(Props(classOf[JobStatusActor], dao), "status-actor")
   protected val resultActor = resultActorRef.getOrElse(context.actorOf(Props[JobResultActor], "result-actor"))
+  private val notificationActor =  context.actorOf(Props(classOf[NotificationActor]), "notification-actor")
 
   override def postStop() {
     logger.info("Shutting down SparkContext {}", contextName)
@@ -112,12 +114,13 @@ class JobManagerActor(dao: JobDAO,
           self ! PoisonPill
       }
 
-    case StartJob(appName, classPath, jobConfig, events) =>
-      startJobInternal(appName, classPath, jobConfig, events, sparkContext, sparkEnv, rddManagerActor)
+    case StartJob(appName, classPath, callbackUrl, jobConfig, events) =>
+      startJobInternal(appName, classPath, callbackUrl, jobConfig, events, sparkContext, sparkEnv, rddManagerActor)
   }
 
   def startJobInternal(appName: String,
                        classPath: String,
+                       callbackUrl: Option[String],
                        jobConfig: Config,
                        events: Set[Class[_]],
                        sparkContext: SparkContext,
@@ -154,7 +157,7 @@ class JobManagerActor(dao: JobDAO,
       resultActor ! Subscribe(jobId, sender, events)
       statusActor ! Subscribe(jobId, sender, events)
 
-      val jobInfo = JobInfo(jobId, contextName, jarInfo, classPath, DateTime.now(), None, None)
+      val jobInfo = JobInfo(jobId, contextName, jarInfo, classPath, DateTime.now(), callbackUrl, None, None)
       future =
         Option(getJobFuture(jobJarInfo, jobInfo, jobConfig, sender, sparkContext, sparkEnv,
                             rddManagerActor))
@@ -211,10 +214,12 @@ class JobManagerActor(dao: JobDAO,
           case SparkJobInvalid(reason) => {
             val err = new Throwable(reason)
             statusActor ! JobValidationFailed(jobId, DateTime.now(), err)
+            notificationActor ! JobNotification(jobId,"INVALID",jobInfo.callbackUrl)
             throw err
           }
           case SparkJobValid => {
             statusActor ! JobStarted(jobId: String, contextName, jobInfo.startTime)
+            notificationActor ! JobNotification(jobId,"STARTED",jobInfo.callbackUrl)
             job.runJob(sparkContext, jobConfig)
           }
         }
@@ -225,9 +230,11 @@ class JobManagerActor(dao: JobDAO,
       case Success(result: Any) =>
         statusActor ! JobFinished(jobId, DateTime.now())
         resultActor ! JobResult(jobId, result)
+        notificationActor ! JobNotification(jobId,"SUCCESS",jobInfo.callbackUrl)
       case Failure(error: Throwable) =>
         // If and only if job validation fails, JobErroredOut message is dropped silently in JobStatusActor.
         statusActor ! JobErroredOut(jobId, DateTime.now(), error)
+        notificationActor ! JobNotification(jobId,"FAILURE",jobInfo.callbackUrl)
         logger.warn("Exception from job " + jobId + ": ", error)
     }.andThen {
       case _ =>

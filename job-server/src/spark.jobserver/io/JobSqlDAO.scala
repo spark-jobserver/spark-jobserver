@@ -31,16 +31,17 @@ class JobSqlDAO(config: Config) extends JobDAO {
 
   // Explicitly avoiding to label 'jarId' as a foreign key to avoid dealing with
   // referential integrity constraint violations.
-  class Jobs(tag: Tag) extends Table[(String, String, Int, String, Timestamp,
+  class Jobs(tag: Tag) extends Table[(String, String, Int, String, Timestamp, Option[String],
                                       Option[Timestamp], Option[String])] (tag, "JOBS") {
     def jobId = column[String]("JOB_ID", O.PrimaryKey)
     def contextName = column[String]("CONTEXT_NAME")
     def jarId = column[Int]("JAR_ID") // FK to JARS table
     def classPath = column[String]("CLASSPATH")
     def startTime = column[Timestamp]("START_TIME")
+    def callbackUrl = column[Option[String]]("CALLBACK_URL")
     def endTime = column[Option[Timestamp]]("END_TIME")
     def error = column[Option[String]]("ERROR")
-    def * = (jobId, contextName, jarId, classPath, startTime, endTime, error)
+    def * = (jobId, contextName, jarId, classPath, startTime, callbackUrl, endTime, error)
   }
   val jobs = TableQuery[Jobs]
 
@@ -235,7 +236,7 @@ class JobSqlDAO(config: Config) extends JobDAO {
         val jarId = queryJarId(jobInfo.jarInfo.appName, jobInfo.jarInfo.uploadTime)
 
         // Extract out the the JobInfo members and convert any members to appropriate SQL types
-        val JobInfo(jobId, contextName, _, classPath, startTime, endTime, error) = jobInfo
+        val JobInfo(jobId, contextName, _, classPath, startTime, callbackUrlOpt,endTime, error) = jobInfo
         val (start, endOpt, errOpt) = (convertDateJodaToSql(startTime),
           endTime.map(convertDateJodaToSql(_)),
           error.map(_.getMessage))
@@ -246,7 +247,7 @@ class JobSqlDAO(config: Config) extends JobDAO {
         val updateQuery = jobs.filter(_.jobId === jobId).map(job => (job.endTime, job.error))
 
         updateQuery.list.size match {
-          case 0 => jobs += (jobId, contextName, jarId, classPath, start, endOpt, errOpt)
+          case 0 => jobs += (jobId, contextName, jarId, classPath, start, callbackUrlOpt, endOpt, errOpt)
           case _ => updateQuery.update(endOpt, errOpt)
         }
     }
@@ -261,15 +262,16 @@ class JobSqlDAO(config: Config) extends JobDAO {
           jar <- jars
           j <- jobs if j.jarId === jar.jarId
         } yield
-          (j.jobId, j.contextName, jar.appName, jar.uploadTime, j.classPath, j.startTime, j.endTime, j.error)
+          (j.jobId, j.contextName, jar.appName, jar.uploadTime, j.classPath, j.startTime, j.callbackUrl, j.endTime, j.error)
 
         // Transform the each row of the table into a map of JobInfo values
-        joinQuery.list.map { case (id, context, app, upload, classpath, start, end, err) =>
+        joinQuery.list.map { case (id, context, app, upload, classpath, start, callbackUrl, end, err) =>
           id -> JobInfo(id,
             context,
             JarInfo(app, convertDateSqlToJoda(upload)),
             classpath,
             convertDateSqlToJoda(start),
+            callbackUrl,
             end.map(convertDateSqlToJoda(_)),
             err.map(new Throwable(_)))
         }.toMap

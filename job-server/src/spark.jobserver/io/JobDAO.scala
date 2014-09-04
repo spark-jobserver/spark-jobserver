@@ -10,7 +10,7 @@ case class JarInfo(appName: String, uploadTime: DateTime)
 // NOTE: if endTime is not None, then the job has finished.
 case class JobInfo(jobId: String, contextName: String,
                    jarInfo: JarInfo, classPath: String,
-                   startTime: DateTime, endTime: Option[DateTime],
+                   startTime: DateTime, callbackUrl: Option[String],endTime: Option[DateTime],
                    error: Option[Throwable]) {
   def jobLengthMillis: Option[Long] = endTime.map { end => new Duration(startTime, end).getMillis() }
 

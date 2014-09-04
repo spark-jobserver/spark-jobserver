@@ -71,7 +71,7 @@ class JobSqlDAOSpec extends TestJarFinder with FunSpec with ShouldMatchers with 
       val endTime: Option[DateTime] = if (hasEndTime) someEndTime else noEndTime
       val error: Option[Throwable] = if (hasError) someError else noError
 
-      JobInfo(id, contextName, jarInfo, classPath, startTime, endTime, error)
+      JobInfo(id, contextName, jarInfo, classPath, startTime, None, endTime, error)
     }
 
     genTestJobInfo _

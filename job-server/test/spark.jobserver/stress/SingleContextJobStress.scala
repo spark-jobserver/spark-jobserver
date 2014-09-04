@@ -60,7 +60,7 @@ object SingleContextJobStress extends App with TestJarFinder {
   val startTime = System.currentTimeMillis()
 
   while (true) {
-    val f = jobManager ? StartJob("demo1", demoJarClass, emptyConfig, Set(classOf[JobResult]))
+    val f = jobManager ? StartJob("demo1", demoJarClass, None, emptyConfig, Set(classOf[JobResult]))
     Await.result(f, 3 seconds) match {
       case JobResult(info, Some(m)) =>
         numJobs += 1

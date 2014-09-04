@@ -23,7 +23,7 @@ with FunSpec with ShouldMatchers with BeforeAndAfter with BeforeAndAfterAll {
   private val appName = "appName"
   private val jarInfo = JarInfo(appName, DateTime.now)
   private val classPath = "classPath"
-  private val jobInfo = JobInfo(jobId, contextName, jarInfo, classPath, DateTime.now, None, None)
+  private val jobInfo = JobInfo(jobId, contextName, jarInfo, classPath, DateTime.now, None, None, None)
   private val jobConfig = ConfigFactory.empty()
 
   override def afterAll() {
@@ -130,7 +130,7 @@ with FunSpec with ShouldMatchers with BeforeAndAfter with BeforeAndAfterAll {
       val startTime = DateTime.now
       actor ! JobStarted(jobId, contextName, startTime)
       actor ! GetRunningJobStatus
-      expectMsg(Seq(JobInfo(jobId, contextName, jarInfo, classPath, startTime, None, None)))
+      expectMsg(Seq(JobInfo(jobId, contextName, jarInfo, classPath, startTime, None, None, None)))
 
       val finishTIme = DateTime.now
       actor ! JobFinished(jobId, finishTIme)
@@ -140,7 +140,7 @@ with FunSpec with ShouldMatchers with BeforeAndAfter with BeforeAndAfterAll {
 
     it("should update JobValidationFailed status correctly") {
       val initTime = DateTime.now
-      val jobInfo = JobInfo(jobId, contextName, jarInfo, classPath, initTime, None, None)
+      val jobInfo = JobInfo(jobId, contextName, jarInfo, classPath, initTime, None, None, None)
       actor ! JobInit(jobInfo)
 
       val failedTime = DateTime.now

@@ -233,9 +233,9 @@ class WebApi(system: ActorSystem, config: Config, port: Int,
           future.map {
             case NoSuchJobId =>
               notFound(ctx, "No such job ID " + jobId.toString)
-            case JobInfo(_, _, _, _, _, None, _) =>
+            case JobInfo(_, _, _, _, _,_ ,None, _) =>
               ctx.complete(Map(StatusKey -> "RUNNING"))
-            case JobInfo(_, _, _, _, _, _, Some(ex)) =>
+            case JobInfo(_, _, _, _, _, _, _, Some(ex)) =>
               ctx.complete(Map(StatusKey -> "ERROR", "ERROR" -> formatException(ex)))
             case JobResult(_, result) =>
               ctx.complete(resultToTable(result))
@@ -259,12 +259,13 @@ class WebApi(system: ActorSystem, config: Config, port: Int,
                 Map("jobId" -> info.jobId,
                   "startTime" -> info.startTime.toString(),
                   "classPath" -> info.classPath,
+                  "callbackUrl" -> info.callbackUrl.getOrElse(""),
                   "context"   -> (if (info.contextName.isEmpty) "<<ad-hoc>>" else info.contextName),
                   "duration" -> getJobDurationString(info)) ++ (info match {
-                    case JobInfo(_, _, _, _, _, None, _)       => Map(StatusKey -> "RUNNING")
-                    case JobInfo(_, _, _, _, _, _, Some(ex))   => Map(StatusKey -> "ERROR",
+                    case JobInfo(_, _, _, _, _, _, None, _)       => Map(StatusKey -> "RUNNING")
+                    case JobInfo(_, _, _, _, _, _, _, Some(ex))   => Map(StatusKey -> "ERROR",
                                                                       ResultKey -> formatException(ex))
-                    case JobInfo(_, _, _, _, _, Some(e), None) => Map(StatusKey -> "FINISHED")
+                    case JobInfo(_, _, _, _, _, _, Some(e), None) => Map(StatusKey -> "FINISHED")
                   })
               }
               ctx.complete(jobReport)
@@ -285,14 +286,15 @@ class WebApi(system: ActorSystem, config: Config, port: Int,
        *                                   then a temporary context is allocated for the job
        * @optional @param sync Boolean if "true", then wait for and return results, otherwise return job Id
        * @optional @param timeout Int - the number of seconds to wait for sync results to come back
+       * @optional @param callbackUrl URL - the callbackUrl as string to be called back with sttaus updates
        * @return JSON result of { StatusKey -> "OK" | "ERROR", ResultKey -> "result"}, where "result" is
        *         either the job id, or a result
        */
       post {
         entity(as[String]) { configString =>
           parameters('appName, 'classPath,
-            'context ?, 'sync.as[Boolean] ?, 'timeout.as[Int] ?) {
-            (appName, classPath, contextOpt, syncOpt, timeoutOpt) =>
+            'context ?, 'sync.as[Boolean] ?, 'timeout.as[Int] ?, 'callbackUrl ?) {
+            (appName, classPath, contextOpt, syncOpt, timeoutOpt, callbackUrlOpt) =>
               try {
                 val async = !syncOpt.getOrElse(false)
                 val postedJobConfig = ConfigFactory.parseString(configString)
@@ -303,7 +305,7 @@ class WebApi(system: ActorSystem, config: Config, port: Int,
                 val events = if (async) asyncEvents else syncEvents
                 val timeout = timeoutOpt.map(t => Timeout(t.seconds)).getOrElse(DefaultSyncTimeout)
                 val future = jobManager.get.ask(
-                  JobManagerActor.StartJob(appName, classPath, jobConfig, events))(timeout)
+                  JobManagerActor.StartJob(appName, classPath, callbackUrlOpt,jobConfig, events))(timeout)
                 respondWithMediaType(MediaTypes.`application/json`) { ctx =>
                   future.map {
                     case JobResult(_, res)       => ctx.complete(resultToTable(res))

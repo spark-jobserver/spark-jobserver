@@ -18,11 +18,11 @@ class JobManagerActorSpec extends JobManagerSpec {
       expectMsgClass(classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", classPrefix + "CacheSomethingJob", emptyConfig,
+      manager ! JobManagerActor.StartJob("demo", classPrefix + "CacheSomethingJob", None, emptyConfig,
         errorEvents ++ syncEvents)
       val JobResult(_, sum: Int) = expectMsgClass(classOf[JobResult])
 
-      manager ! JobManagerActor.StartJob("demo", classPrefix + "AccessCacheJob", emptyConfig,
+      manager ! JobManagerActor.StartJob("demo", classPrefix + "AccessCacheJob", None, emptyConfig,
         errorEvents ++ syncEvents)
       val JobResult(_, sum2: Int) = expectMsgClass(classOf[JobResult])
 
@@ -34,7 +34,7 @@ class JobManagerActorSpec extends JobManagerSpec {
       expectMsgClass(classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", classPrefix + "CacheRddByNameJob", emptyConfig,
+      manager ! JobManagerActor.StartJob("demo", classPrefix + "CacheRddByNameJob", None, emptyConfig,
         errorEvents ++ syncEvents)
       expectMsgPF(1 second, "Expected a JobResult or JobErroredOut message!") {
         case JobResult(_, sum: Int) => sum should equal (1 + 4 + 9 + 16 + 25)

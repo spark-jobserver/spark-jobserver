@@ -66,7 +66,7 @@ with FunSpec with ShouldMatchers with BeforeAndAfter with BeforeAndAfterAll with
   describe("error conditions") {
     it("should return errors if appName does not match") {
       uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo2", wordCountClass, emptyConfig, Set.empty[Class[_]])
+      manager ! JobManagerActor.StartJob("demo2", wordCountClass, None, emptyConfig, Set.empty[Class[_]])
       expectMsg(CommonMessages.NoSuchApplication)
     }
 
@@ -74,7 +74,7 @@ with FunSpec with ShouldMatchers with BeforeAndAfter with BeforeAndAfterAll with
       uploadTestJar()
       manager ! JobManagerActor.Initialize
       expectMsgClass(classOf[JobManagerActor.Initialized])
-      manager ! JobManagerActor.StartJob("demo", "no.such.class", emptyConfig, Set.empty[Class[_]])
+      manager ! JobManagerActor.StartJob("demo", "no.such.class", None, emptyConfig, Set.empty[Class[_]])
       expectMsg(CommonMessages.NoSuchClass)
     }
 
@@ -82,7 +82,7 @@ with FunSpec with ShouldMatchers with BeforeAndAfter with BeforeAndAfterAll with
       uploadJar(dao, "README.md", "notajar")
       manager ! JobManagerActor.Initialize
       expectMsgClass(classOf[JobManagerActor.Initialized])
-      manager ! JobManagerActor.StartJob("notajar", "no.such.class", emptyConfig, Set.empty[Class[_]])
+      manager ! JobManagerActor.StartJob("notajar", "no.such.class", None, emptyConfig, Set.empty[Class[_]])
       expectMsg(CommonMessages.NoSuchClass)
     }
 
@@ -91,7 +91,7 @@ with FunSpec with ShouldMatchers with BeforeAndAfter with BeforeAndAfterAll with
       expectMsgClass(classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", wordCountClass, emptyConfig, allEvents)
+      manager ! JobManagerActor.StartJob("demo", wordCountClass, None, emptyConfig, allEvents)
       expectMsgClass(classOf[CommonMessages.JobValidationFailed])
       expectNoMsg()
     }
@@ -109,7 +109,7 @@ with FunSpec with ShouldMatchers with BeforeAndAfter with BeforeAndAfterAll with
       expectMsgClass(classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, allEvents)
+      manager ! JobManagerActor.StartJob("demo", wordCountClass, None, stringConfig, allEvents)
       expectMsgClass(classOf[JobStarted])
       expectMsgAllClassOf(classOf[JobFinished], classOf[JobResult])
       expectNoMsg()
@@ -120,13 +120,13 @@ with FunSpec with ShouldMatchers with BeforeAndAfter with BeforeAndAfterAll with
       expectMsgClass(classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, allEvents)
+      manager ! JobManagerActor.StartJob("demo", wordCountClass, None, stringConfig, allEvents)
       expectMsgClass(classOf[JobStarted])
       expectMsgAllClassOf(classOf[JobFinished], classOf[JobResult])
       expectNoMsg()
 
       // should be ok to run the same more again
-      manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, allEvents)
+      manager ! JobManagerActor.StartJob("demo", wordCountClass, None, stringConfig, allEvents)
       expectMsgClass(classOf[JobStarted])
       expectMsgAllClassOf(classOf[JobFinished], classOf[JobResult])
       expectNoMsg()
@@ -137,7 +137,7 @@ with FunSpec with ShouldMatchers with BeforeAndAfter with BeforeAndAfterAll with
       expectMsgClass(classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, syncEvents ++ errorEvents)
+      manager ! JobManagerActor.StartJob("demo", wordCountClass, None, stringConfig, syncEvents ++ errorEvents)
       expectMsgPF(3 seconds, "Did not get JobResult") {
         case JobResult(_, result: Map[String, Int]) => println("I got results! " + result)
       }
@@ -149,7 +149,7 @@ with FunSpec with ShouldMatchers with BeforeAndAfter with BeforeAndAfterAll with
       expectMsgClass(classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, errorEvents ++ asyncEvents)
+      manager ! JobManagerActor.StartJob("demo", wordCountClass, None, stringConfig, errorEvents ++ asyncEvents)
       expectMsgClass(classOf[JobStarted])
       expectNoMsg()
     }
@@ -159,7 +159,7 @@ with FunSpec with ShouldMatchers with BeforeAndAfter with BeforeAndAfterAll with
       expectMsgClass(classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", classPrefix + "MyErrorJob", emptyConfig, errorEvents)
+      manager ! JobManagerActor.StartJob("demo", classPrefix + "MyErrorJob", None, emptyConfig, errorEvents)
       val errorMsg = expectMsgClass(classOf[JobErroredOut])
       errorMsg.err.getClass should equal (classOf[IllegalArgumentException])
     }
@@ -170,7 +170,7 @@ with FunSpec with ShouldMatchers with BeforeAndAfter with BeforeAndAfterAll with
       expectMsgClass(classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", classPrefix + "ConfigCheckerJob", jobConfig,
+      manager ! JobManagerActor.StartJob("demo", classPrefix + "ConfigCheckerJob", None, jobConfig,
         syncEvents ++ errorEvents)
       expectMsgPF(3 seconds, "Did not get JobResult") {
         case JobResult(_, keys: Seq[String]) =>
@@ -183,7 +183,7 @@ with FunSpec with ShouldMatchers with BeforeAndAfter with BeforeAndAfterAll with
       expectMsgClass(classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", classPrefix + "ZookeeperJob", stringConfig,
+      manager ! JobManagerActor.StartJob("demo", classPrefix + "ZookeeperJob", None, stringConfig,
         syncEvents ++ errorEvents)
       expectMsgPF(4 seconds, "Did not get JobResult") {
         case JobResult(_, result: Array[Product]) =>
@@ -205,7 +205,7 @@ with FunSpec with ShouldMatchers with BeforeAndAfter with BeforeAndAfterAll with
       val messageCounts = new mutable.HashMap[Class[_], Int].withDefaultValue(0)
       // Try to start 3 instances of this job. 2 of them should start, and the 3rd should be denied.
       for (i <- 0 until MaxJobsPerContext + 1) {
-        manager ! JobManagerActor.StartJob("demo", classPrefix + "SleepJob", jobConfig, allEvents)
+        manager ! JobManagerActor.StartJob("demo", classPrefix + "SleepJob", None, jobConfig, allEvents)
       }
 
       while (messageCounts.values.sum < (MaxJobsPerContext * 3 + 1)) {
@@ -233,7 +233,7 @@ with FunSpec with ShouldMatchers with BeforeAndAfter with BeforeAndAfterAll with
       expectMsgClass(classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", classPrefix + "SimpleObjectJob", emptyConfig,
+      manager ! JobManagerActor.StartJob("demo", classPrefix + "SimpleObjectJob", None, emptyConfig,
         syncEvents ++ errorEvents)
       expectMsgPF(3 seconds, "Did not get JobResult") {
         case JobResult(_, result: Int) => result should equal (1 + 2 + 3)
