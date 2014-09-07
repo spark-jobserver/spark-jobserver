@@ -78,8 +78,8 @@ class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.syst
     }
 
     it("should be able to add multiple new contexts") {
-      supervisor ! AddContext("c1", contextConfig)
-      supervisor ! AddContext("c2", contextConfig)
+      supervisor ! AddContext("c1", None, contextConfig)
+      supervisor ! AddContext("c2", None, contextConfig)
       expectMsg(ContextInitialized)
       expectMsg(ContextInitialized)
       supervisor ! ListContexts
@@ -92,7 +92,7 @@ class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.syst
 
     it("should be able to stop contexts already running") {
       import scala.concurrent.duration._
-      supervisor ! AddContext("c1", contextConfig)
+      supervisor ! AddContext("c1", None, contextConfig)
       expectMsg(ContextInitialized)
       supervisor ! ListContexts
       expectMsg(Seq("c1"))
@@ -111,10 +111,10 @@ class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.syst
     }
 
     it("should not allow creation of an already existing context") {
-      supervisor ! AddContext("c1", contextConfig)
+      supervisor ! AddContext("c1", None, contextConfig)
       expectMsg(ContextInitialized)
 
-      supervisor ! AddContext("c1", contextConfig)
+      supervisor ! AddContext("c1", None, contextConfig)
       expectMsg(ContextAlreadyExists)
     }
   }

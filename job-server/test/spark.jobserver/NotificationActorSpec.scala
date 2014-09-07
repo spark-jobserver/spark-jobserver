@@ -39,6 +39,15 @@ with FunSpec with ShouldMatchers with BeforeAndAfter with BeforeAndAfterAll {
       expectNoMsg()
     }
 
+    it("should accept the ContextNotification message with callback url"){
+      actor ! NotificationActor.ContextNotification("invalid-name", "INITIALIZED", Some("http://httpbin.org/get"))
+      expectNoMsg()
+    }
+
+    it("should accept the ContextNotification message without callback url"){
+      actor ! NotificationActor.ContextNotification("invalid-name", "INITIALIZED", None)
+      expectNoMsg()
+    }
 
   }
 

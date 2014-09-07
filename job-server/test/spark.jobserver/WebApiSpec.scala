@@ -72,8 +72,8 @@ with ScalatestRouteTest with HttpService {
       case ListContexts =>  sender ! Seq("context1", "context2")
       case StopContext("none") => sender ! NoSuchContext
       case StopContext(_)      => sender ! ContextStopped
-      case AddContext("one", _) => sender ! ContextAlreadyExists
-      case AddContext(_, _)     => sender ! ContextInitialized
+      case AddContext("one",_ , _) => sender ! ContextAlreadyExists
+      case AddContext(_ ,_ , _)     => sender ! ContextInitialized
 
       case GetContext("no-context") => sender ! NoSuchContext
       case GetContext(_)            => sender ! (self, self)

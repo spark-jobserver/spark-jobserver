@@ -48,7 +48,7 @@ class NotificationActor extends InstrumentedActor {
       logger.info("Job Notification " + jobId + " with status " + status)
     }
     case ContextNotification(contextName, status, callbackUrlOpt)=>{
-      logger.info("Context Notification "+ contextName+ " with status "+ status)
+      logger.info("Context Notification "+ contextName + " with status "+ status)
       callbackUrlOpt match {
         case Some(callbackUrl)=>{
           val uri = Uri(callbackUrl + "?contextName=" + contextName + "&status=" + status)
