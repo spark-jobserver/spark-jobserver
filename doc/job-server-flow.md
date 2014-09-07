@@ -31,8 +31,8 @@ Context routes
 
 - create a context with given contextName and configuration parameters.
 
-        user->WebApi: POST /contexts/<contextName>?numCores=<nInt>&memPerNode=512m
-        WebApi->LocalContextSupervisor: AddContext(contextName)
+        user->WebApi: POST /contexts/<contextName>?numCores=<nInt>&memPerNode=512m&callbackUrl=Optional url
+        WebApi->LocalContextSupervisor: AddContext(contextName, callbackUrl:Optional[String])
         opt if contexts contains contextName
           LocalContextSupervisor->WebApi: ContextAlreadyExists
           WebApi->user: 400
@@ -104,7 +104,7 @@ Job routes
 
 - submit a job
 
-        user->WebApi: POST /jobs/<appName, classPath, contextName, sync> configString
+        user->WebApi: POST /jobs/<appName, classPath, contextName, sync, callBackUrl> configString
         WebApi->LocalContextSupervisor: GetContext(contextName)
         opt if no such context:
           LocalContextSupervisor->WebApi: NoSuchContext

@@ -106,6 +106,7 @@ class WebApi(system: ActorSystem, config: Config, port: Int,
          *
          * @optional @param num-cpu-cores Int - Number of cores the context will use
          * @optional @param mem-per-node String - -Xmx style string (512m, 1g, etc) for max memory per node
+         * @optional @param callbackUrl String -callback url
          * @return the string "OK", or error if context exists or could not be initialized
          */
         path(Segment) { (contextName) =>
@@ -115,7 +116,7 @@ class WebApi(system: ActorSystem, config: Config, port: Int,
           } else {
             parameterMap { (params) =>
               val config = ConfigFactory.parseMap(params.asJava)
-              val future = supervisor ? AddContext(contextName, config)
+              val future = supervisor ? AddContext(contextName,  params.get("callbackUrl"), config)
               respondWithMediaType(MediaTypes.`application/json`) { ctx =>
                 future.map {
                   case ContextInitialized   => ctx.complete(StatusCodes.OK)

@@ -11,13 +11,14 @@ import scala.collection.mutable
 import scala.util.{Failure, Success, Try}
 import org.joda.time.DateTime
 import org.joda.time.format.DateTimeFormat
+import spark.jobserver.NotificationActor.ContextNotification
 
 /** Messages common to all ContextSupervisors */
 object ContextSupervisor {
   // Messages/actions
   case object AddContextsFromConfig // Start up initial contexts
   case object ListContexts
-  case class AddContext(name: String, contextConfig: Config)
+  case class AddContext(name: String,  callbackUrl: Option[String],contextConfig: Config)
   case class GetAdHocContext(classPath: String, contextConfig: Config)
   case class GetContext(name: String) // returns JobManager, JobResultActor
   case class GetResultActor(name: String)  // returns JobResultActor
@@ -79,6 +80,7 @@ class LocalContextSupervisorActor(dao: JobDAO) extends InstrumentedActor {
   // This is for capturing results for ad-hoc jobs. Otherwise when ad-hoc job dies, resultActor also dies,
   // and there is no way to retrieve results.
   val globalResultActor = context.actorOf(Props[JobResultActor], "global-result-actor")
+  private val notificationActor =  context.actorOf(Props(classOf[NotificationActor]), "notification-actor")
 
   def wrappedReceive: Receive = {
     case AddContextsFromConfig =>
@@ -87,16 +89,19 @@ class LocalContextSupervisorActor(dao: JobDAO) extends InstrumentedActor {
     case ListContexts =>
       sender ! contexts.keys.toSeq
 
-    case AddContext(name, contextConfig) =>
+    case AddContext(name, callbackUrlOpt, contextConfig) =>
       val originator = sender // Sender is a mutable reference, must capture in immutable val
       val mergedConfig = contextConfig.withFallback(defaultContextConfig)
       if (contexts contains name) {
-        originator ! ContextAlreadyExists
+          originator ! ContextAlreadyExists
+          notificationActor ! ContextNotification(name, "ERROR", callbackUrlOpt)
       } else {
-        startContext(name, mergedConfig, false, contextTimeout) { contextMgr =>
+          startContext(name, mergedConfig, false, contextTimeout) { contextMgr =>
           originator ! ContextInitialized
+          notificationActor ! ContextNotification(name, "INITIALIZED", callbackUrlOpt)
         } { err =>
           originator ! ContextInitError(err)
+          notificationActor ! ContextNotification(name, "ERROR", callbackUrlOpt)
         }
       }
 
