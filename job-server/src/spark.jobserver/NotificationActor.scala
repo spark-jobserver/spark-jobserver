@@ -14,9 +14,24 @@ import scala.concurrent.duration._
 
 object NotificationActor {
 
+  object JobStatus extends Enumeration {
+    type status = Value
+    val INVALID = Value("INVALID")
+    val STARTED = Value("STARTED")
+    val SUCCESS = Value("SUCCESS")
+    val FAILURE= Value("FAILURE")
+  }
+
+  object ContextStatus extends Enumeration {
+    type status = Value
+    val INITIALIZED = Value("INITIALIZED")
+    val ERROR = Value("ERROR")
+  }
+
   //Request
-  case class JobNotification(jobId: String, status: String, callbackUrlOpt: Option[String])
-  case class ContextNotification(contextName:String, status:String, callbackUrlOpt:Option[String])
+  case class JobNotification(jobId: String, status: JobStatus.status, callbackUrlOpt: Option[String])
+  case class ContextNotification(contextName:String, status:ContextStatus.status,
+                                 callbackUrlOpt:Option[String])
 
   // Akka 2.2.x style actor props for actor creation
   def props(): Props = Props(classOf[NotificationActor])
@@ -48,7 +63,7 @@ class NotificationActor extends InstrumentedActor {
       logger.info("Job Notification " + jobId + " with status " + status)
     }
     case ContextNotification(contextName, status, callbackUrlOpt)=>{
-      logger.info("Context Notification "+ contextName + " with status "+ status)
+      logger.info("Context Notification " + contextName + " with status " + status)
       callbackUrlOpt match {
         case Some(callbackUrl)=>{
           val uri = Uri(callbackUrl + "?contextName=" + contextName + "&status=" + status)

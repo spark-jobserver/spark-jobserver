@@ -11,7 +11,7 @@ import scala.collection.mutable
 import scala.util.{Failure, Success, Try}
 import org.joda.time.DateTime
 import org.joda.time.format.DateTimeFormat
-import spark.jobserver.NotificationActor.ContextNotification
+import spark.jobserver.NotificationActor.{ContextStatus, ContextNotification}
 
 /** Messages common to all ContextSupervisors */
 object ContextSupervisor {
@@ -94,14 +94,14 @@ class LocalContextSupervisorActor(dao: JobDAO) extends InstrumentedActor {
       val mergedConfig = contextConfig.withFallback(defaultContextConfig)
       if (contexts contains name) {
           originator ! ContextAlreadyExists
-          notificationActor ! ContextNotification(name, "ERROR", callbackUrlOpt)
+          notificationActor ! ContextNotification(name, ContextStatus.ERROR, callbackUrlOpt)
       } else {
           startContext(name, mergedConfig, false, contextTimeout) { contextMgr =>
           originator ! ContextInitialized
-          notificationActor ! ContextNotification(name, "INITIALIZED", callbackUrlOpt)
+          notificationActor ! ContextNotification(name, ContextStatus.INITIALIZED, callbackUrlOpt)
         } { err =>
           originator ! ContextInitError(err)
-          notificationActor ! ContextNotification(name, "ERROR", callbackUrlOpt)
+          notificationActor ! ContextNotification(name, ContextStatus.ERROR, callbackUrlOpt)
         }
       }
 

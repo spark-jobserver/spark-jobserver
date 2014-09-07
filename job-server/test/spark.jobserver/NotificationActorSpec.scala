@@ -5,7 +5,7 @@ import akka.testkit.ImplicitSender
 import akka.testkit.TestKit
 import org.scalatest.matchers.ShouldMatchers
 import org.scalatest.{FunSpec, BeforeAndAfter, BeforeAndAfterAll}
-
+import spark.jobserver.NotificationActor.{JobStatus, ContextStatus}
 
 
 object NotificationSpec {
@@ -30,22 +30,22 @@ with FunSpec with ShouldMatchers with BeforeAndAfter with BeforeAndAfterAll {
 
   describe("NotificationActor"){
     it("should accept the JobNotification message with callback url"){
-      actor ! NotificationActor.JobNotification("invalid-id", "SUCCESS", Some("http://httpbin.org/get"))
+      actor ! NotificationActor.JobNotification("invalid-id", JobStatus.SUCCESS, Some("http://httpbin.org/get"))
       expectNoMsg()
     }
 
     it("should accept the JobNotification message without callback url"){
-      actor ! NotificationActor.JobNotification("invalid-id", "SUCCESS", None)
+      actor ! NotificationActor.JobNotification("invalid-id", JobStatus.SUCCESS, None)
       expectNoMsg()
     }
 
     it("should accept the ContextNotification message with callback url"){
-      actor ! NotificationActor.ContextNotification("invalid-name", "INITIALIZED", Some("http://httpbin.org/get"))
+      actor ! NotificationActor.ContextNotification("invalid-name", ContextStatus.INITIALIZED, Some("http://httpbin.org/get"))
       expectNoMsg()
     }
 
     it("should accept the ContextNotification message without callback url"){
-      actor ! NotificationActor.ContextNotification("invalid-name", "INITIALIZED", None)
+      actor ! NotificationActor.ContextNotification("invalid-name", ContextStatus.INITIALIZED, None)
       expectNoMsg()
     }
 

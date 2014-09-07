@@ -11,7 +11,7 @@ import scala.concurrent.Future
 import scala.util.{Failure, Success, Try}
 import spark.jobserver.ContextSupervisor.StopContext
 import spark.jobserver.io.{ JobDAO, JobInfo, JarInfo }
-import spark.jobserver.NotificationActor.JobNotification
+import spark.jobserver.NotificationActor.{JobStatus, JobNotification}
 import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
 
 object JobManagerActor {
@@ -214,12 +214,12 @@ class JobManagerActor(dao: JobDAO,
           case SparkJobInvalid(reason) => {
             val err = new Throwable(reason)
             statusActor ! JobValidationFailed(jobId, DateTime.now(), err)
-            notificationActor ! JobNotification(jobId,"INVALID",jobInfo.callbackUrl)
+            notificationActor ! JobNotification(jobId,JobStatus.INVALID,jobInfo.callbackUrl)
             throw err
           }
           case SparkJobValid => {
             statusActor ! JobStarted(jobId: String, contextName, jobInfo.startTime)
-            notificationActor ! JobNotification(jobId,"STARTED",jobInfo.callbackUrl)
+            notificationActor ! JobNotification(jobId,JobStatus.STARTED,jobInfo.callbackUrl)
             job.runJob(sparkContext, jobConfig)
           }
         }
@@ -230,11 +230,11 @@ class JobManagerActor(dao: JobDAO,
       case Success(result: Any) =>
         statusActor ! JobFinished(jobId, DateTime.now())
         resultActor ! JobResult(jobId, result)
-        notificationActor ! JobNotification(jobId,"SUCCESS",jobInfo.callbackUrl)
+        notificationActor ! JobNotification(jobId,JobStatus.SUCCESS,jobInfo.callbackUrl)
       case Failure(error: Throwable) =>
         // If and only if job validation fails, JobErroredOut message is dropped silently in JobStatusActor.
         statusActor ! JobErroredOut(jobId, DateTime.now(), error)
-        notificationActor ! JobNotification(jobId,"FAILURE",jobInfo.callbackUrl)
+        notificationActor ! JobNotification(jobId,JobStatus.FAILURE,jobInfo.callbackUrl)
         logger.warn("Exception from job " + jobId + ": ", error)
     }.andThen {
       case _ =>
