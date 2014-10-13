@@ -2,6 +2,7 @@ package spark.jobserver
 
 import com.typesafe.config.Config
 import org.apache.spark.SparkContext
+import org.apache.spark.sql.cassandra.CassandraSQLContext
 
 sealed trait SparkJobValidation {
   // NOTE(harish): We tried using lazy eval here by passing in a function
@@ -27,7 +28,7 @@ trait SparkJob {
    * @param jobConfig the Typesafe Config object passed into the job request
    * @return the job result
    */
-  def runJob(sc: SparkContext, jobConfig: Config): Any
+  def runJob(sc: SparkContext, jobConfig: Config, casSql: CassandraSQLContext): Any
 
   /**
    * This method is called by the job server to allow jobs to validate their input and reject
@@ -37,5 +38,5 @@ trait SparkJob {
    * trying to start this job.
    * @return either SparkJobValid or SparkJobInvalid
    */
-  def validate(sc: SparkContext, config: Config): SparkJobValidation
+  def validate(sc: SparkContext, config: Config, casSql: CassandraSQLContext): SparkJobValidation
 }

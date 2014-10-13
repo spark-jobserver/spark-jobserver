@@ -2,6 +2,7 @@ package spark.jobserver
 
 import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.spark._
+import org.apache.spark.sql.cassandra.CassandraSQLContext
 
 /**
  * A very short job for stress tests purpose.
@@ -13,15 +14,16 @@ object VeryShortDoubleJob extends SparkJob {
   def main(args: Array[String]) {
     val sc = new SparkContext("local[4]", "VeryShortDoubleJob")
     val config = ConfigFactory.parseString("")
-    val results = runJob(sc, config)
+    val casSql = new CassandraSQLContext(sc)
+    val results = runJob(sc, config,casSql)
     println("Result is " + results)
   }
 
-  override def validate(sc: SparkContext, config: Config): SparkJobValidation = {
+  override def validate(sc: SparkContext, config: Config,casSql: CassandraSQLContext): SparkJobValidation = {
     SparkJobValid
   }
 
-  override def runJob(sc: SparkContext, config: Config): Any = {
+  override def runJob(sc: SparkContext, config: Config,casSql: CassandraSQLContext): Any = {
     val dd = sc.parallelize(data)
     dd.map( _ * 2 ).collect()
   }

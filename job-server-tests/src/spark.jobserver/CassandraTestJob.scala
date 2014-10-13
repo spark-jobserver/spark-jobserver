@@ -2,7 +2,6 @@ package spark.jobserver
 
 import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.spark._
-import org.apache.spark.SparkContext._
 import org.apache.spark.sql.cassandra.CassandraSQLContext
 
 import scala.util.Try
@@ -15,7 +14,7 @@ import scala.util.Try
  *
  * validate() returns SparkJobInvalid if there is no input.string
  */
-object WordCountExample extends SparkJob {
+object CassandraTestJob extends SparkJob {
   def main(args: Array[String]) {
     val sc = new SparkContext("local[4]", "WordCountExample")
     val config = ConfigFactory.parseString("")
@@ -31,10 +30,11 @@ object WordCountExample extends SparkJob {
   }
 
   override def runJob(sc: SparkContext, config: Config,casSql: CassandraSQLContext): Any = {
-    //val people = casSql.sql("select * from spark.people");
-    //people.take(10)
-    val dd = sc.parallelize(config.getString("input.string").split(" ").toSeq)
-    dd.map((_, 1)).reduceByKey(_ + _).collect().toMap
+    casSql.setKeyspace("spark")
+    casSql.cacheTable("spark.people")
+    val people = casSql.sql("select * from spark.people")
+    people.take(200)
+
 
   }
 }

@@ -2,6 +2,7 @@ package spark.jobserver
 
 import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.spark._
+import org.apache.spark.sql.cassandra.CassandraSQLContext
 import scala.util.Try
 import java.util.{Random, Date}
 
@@ -23,15 +24,16 @@ object LongPiJob extends SparkJob {
   def main(args: Array[String]) {
     val sc = new SparkContext("local[4]", "LongPiJob")
     val config = ConfigFactory.parseString("")
-    val results = runJob(sc, config)
+    val casSql = new CassandraSQLContext(sc);
+    val results = runJob(sc, config, casSql)
     println("Result is " + results)
   }
 
-  override def validate(sc: SparkContext, config: Config): SparkJobValidation = {
+  override def validate(sc: SparkContext, config: Config,casSql: CassandraSQLContext): SparkJobValidation = {
     SparkJobValid
   }
 
-  override def runJob(sc: SparkContext, config: Config): Any = {
+  override def runJob(sc: SparkContext, config: Config,casSql: CassandraSQLContext): Any = {
     val duration = Try(config.getInt("stress.test.longpijob.duration")).getOrElse(5)
     var hit:Long = 0
     var total:Long = 0
