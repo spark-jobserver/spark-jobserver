@@ -1,17 +1,20 @@
 package spark.jobserver
 
-import akka.actor.{ActorRef, Props, PoisonPill}
-import com.typesafe.config.Config
 import java.net.{URI, URL}
 import java.util.concurrent.atomic.AtomicInteger
+
+import akka.actor.{ActorRef, PoisonPill, Props}
+import com.typesafe.config.Config
 import ooyala.common.akka.InstrumentedActor
-import org.apache.spark.{ SparkEnv, SparkContext }
+import org.apache.spark.sql.cassandra.CassandraSQLContext
+import org.apache.spark.{SparkContext, SparkEnv}
 import org.joda.time.DateTime
+import spark.jobserver.ContextSupervisor.StopContext
+import spark.jobserver.io.{JarInfo, JobDAO, JobInfo}
+import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
+
 import scala.concurrent.Future
 import scala.util.{Failure, Success, Try}
-import spark.jobserver.ContextSupervisor.StopContext
-import spark.jobserver.io.{ JobDAO, JobInfo, JarInfo }
-import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
 
 object JobManagerActor {
   // Messages
@@ -63,15 +66,17 @@ class JobManagerActor(dao: JobDAO,
                       isAdHoc: Boolean,
                       resultActorRef: Option[ActorRef] = None) extends InstrumentedActor {
 
-  import CommonMessages._
-  import JobManagerActor._
-  import scala.util.control.Breaks._
-  import collection.JavaConverters._
-  import context.dispatcher       // for futures to work
+  import context.dispatcher
+  import spark.jobserver.CommonMessages._
+  import spark.jobserver.JobManagerActor._
+
+import scala.collection.JavaConverters._
+  import scala.util.control.Breaks._       // for futures to work
 
   val config = context.system.settings.config
 
   var sparkContext: SparkContext = _
+  var cassandraSQLContext: CassandraSQLContext= _
   var sparkEnv: SparkEnv = _
   protected var rddManagerActor: ActorRef = _
 
@@ -101,6 +106,7 @@ class JobManagerActor(dao: JobDAO,
         // Load side jars first in case the ContextFactory comes from it
         getSideJars(contextConfig).foreach { jarUri => jarLoader.addURL(new URL(convertJarUriSparkToJava(jarUri))) }
         sparkContext = createContextFromConfig()
+        cassandraSQLContext = new CassandraSQLContext(sparkContext)
         sparkEnv = SparkEnv.get
         rddManagerActor = context.actorOf(Props(classOf[RddManagerActor], sparkContext), "rdd-manager-actor")
         getSideJars(contextConfig).foreach { jarUri => sparkContext.addJar(jarUri) }
@@ -113,7 +119,7 @@ class JobManagerActor(dao: JobDAO,
       }
 
     case StartJob(appName, classPath, jobConfig, events) =>
-      startJobInternal(appName, classPath, jobConfig, events, sparkContext, sparkEnv, rddManagerActor)
+      startJobInternal(appName, classPath, jobConfig, events, sparkContext, sparkEnv, rddManagerActor,cassandraSQLContext)
   }
 
   def startJobInternal(appName: String,
@@ -122,7 +128,7 @@ class JobManagerActor(dao: JobDAO,
                        events: Set[Class[_]],
                        sparkContext: SparkContext,
                        sparkEnv: SparkEnv,
-                       rddManagerActor: ActorRef): Option[Future[Any]] = {
+                       rddManagerActor: ActorRef,cassandraSQLContext: CassandraSQLContext): Option[Future[Any]] = {
     var future: Option[Future[Any]] = None
     breakable {
       val lastUploadTime = dao.getLastUploadTime(appName)
@@ -157,7 +163,7 @@ class JobManagerActor(dao: JobDAO,
       val jobInfo = JobInfo(jobId, contextName, jarInfo, classPath, DateTime.now(), None, None)
       future =
         Option(getJobFuture(jobJarInfo, jobInfo, jobConfig, sender, sparkContext, sparkEnv,
-                            rddManagerActor))
+          rddManagerActor, cassandraSQLContext))
     }
 
     future
@@ -169,7 +175,7 @@ class JobManagerActor(dao: JobDAO,
                            subscriber: ActorRef,
                            sparkContext: SparkContext,
                            sparkEnv: SparkEnv,
-                           rddManagerActor: ActorRef): Future[Any] = {
+                           rddManagerActor: ActorRef,cassandraSQLContext: CassandraSQLContext): Future[Any] = {
     // Use the SparkContext's ActorSystem threadpool for the futures, so we don't corrupt our own
     implicit val executionContext = sparkEnv.actorSystem
 
@@ -207,7 +213,7 @@ class JobManagerActor(dao: JobDAO,
       try {
         statusActor ! JobStatusActor.JobInit(jobInfo)
 
-        job.validate(sparkContext, jobConfig) match {
+        job.validate(sparkContext, jobConfig, cassandraSQLContext) match {
           case SparkJobInvalid(reason) => {
             val err = new Throwable(reason)
             statusActor ! JobValidationFailed(jobId, DateTime.now(), err)
@@ -215,7 +221,7 @@ class JobManagerActor(dao: JobDAO,
           }
           case SparkJobValid => {
             statusActor ! JobStarted(jobId: String, contextName, jobInfo.startTime)
-            job.runJob(sparkContext, jobConfig)
+            job.runJob(sparkContext, jobConfig, cassandraSQLContext)
           }
         }
       } finally {
