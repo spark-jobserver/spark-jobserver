@@ -20,9 +20,9 @@ object Dependencies {
     // to use this one
     "com.typesafe.akka" %% "akka-slf4j" % "2.2.4" % "provided",
     "io.spray" %% "spray-json" % "1.2.5",
-    "io.spray" % "spray-can" % "1.3.2",
-    "io.spray" % "spray-routing" % "1.3.2",
-    "io.spray" % "spray-client" % "1.3.2",
+    "io.spray" % "spray-can" % "1.3.1",
+    "io.spray" % "spray-routing" % "1.3.1",
+    "io.spray" % "spray-client" % "1.3.1",
     yammerDeps
   ) ++ yodaDeps
 
