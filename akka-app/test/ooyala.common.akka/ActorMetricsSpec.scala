@@ -1,13 +1,12 @@
 package ooyala.common.akka
 
-import org.scalatest.matchers.ShouldMatchers
-import org.scalatest.FunSpec
+import org.scalatest.{FunSpecLike, Matchers}
 import akka.testkit.TestActorRef
 
 import akka.actor.{Actor, ActorSystem}
 
 
-class ActorMetricsSpec extends FunSpec with ShouldMatchers {
+class ActorMetricsSpec extends FunSpecLike with Matchers {
   implicit val system = ActorSystem("test")
 
   describe("actor metrics") {

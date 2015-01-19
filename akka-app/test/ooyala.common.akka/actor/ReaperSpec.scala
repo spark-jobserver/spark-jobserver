@@ -3,8 +3,7 @@ package ooyala.common.akka.actor
 
 import akka.actor.{ActorSystem, Props, ActorRef}
 import akka.testkit.{TestKit, ImplicitSender, TestProbe}
-import org.scalatest.{FunSpec, WordSpec, BeforeAndAfterAll}
-import org.scalatest.matchers.MustMatchers
+import org.scalatest.{FunSpecLike, WordSpec, BeforeAndAfterAll,Matchers}
 
 // Our test reaper.  Sends the snooper a message when all
 // the souls have been reaped
@@ -13,9 +12,9 @@ class TestReaper(snooper: ActorRef) extends Reaper {
 }
 
 class ReaperSpec extends TestKit(ActorSystem("ReaperSpec")) with ImplicitSender
-    with FunSpec
+    with FunSpecLike
     with BeforeAndAfterAll
-    with MustMatchers {
+    with Matchers {
 
   import Reaper._
   import scala.concurrent.duration._

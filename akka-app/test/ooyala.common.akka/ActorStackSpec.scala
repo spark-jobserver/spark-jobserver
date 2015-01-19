@@ -1,7 +1,6 @@
 package ooyala.common.akka
 
-import org.scalatest.matchers.ShouldMatchers
-import org.scalatest.FunSpec
+import org.scalatest.{FunSpecLike,Matchers}
 import akka.testkit.TestActorRef
 
 import akka.actor.{Actor, ActorSystem}
@@ -23,7 +22,7 @@ trait AddPrefix extends ActorStack {
   }
 }
 
-class ActorStackSpec extends FunSpec with ShouldMatchers {
+class ActorStackSpec extends FunSpecLike with Matchers {
   implicit val system = ActorSystem("test")
 
   describe("stacking traits") {

@@ -5,8 +5,8 @@ import akka.io.IO
 import akka.pattern.ask
 import akka.testkit.{TestKit, ImplicitSender}
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{FunSpec, BeforeAndAfter, BeforeAndAfterAll}
-import org.scalatest.matchers.ShouldMatchers
+import org.scalatest.{FunSpecLike, BeforeAndAfter, BeforeAndAfterAll}
+import org.scalatest.Matchers
 import spray.client.pipelining._
 
 import scala.concurrent.{Await, Future}
@@ -79,7 +79,7 @@ class SimpleHttpServer extends Actor with ActorLogging {
 }
 
 class SparkWebUiActorSpec extends TestKit(SparkWebUiActorSpec.system) with ImplicitSender
-  with FunSpec with ShouldMatchers with BeforeAndAfter with BeforeAndAfterAll {
+  with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
   // Used in the asks (?) below to request info from contextSupervisor and resultActor
   implicit val ShortTimeout = Timeout(3 seconds)
