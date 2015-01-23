@@ -118,5 +118,22 @@ class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.syst
       supervisor ! AddContext("c1", contextConfig)
       expectMsg(ContextAlreadyExists)
     }
+	
+	it("should list empty contexts if a yarn-client mode context crashed") {
+      import ContextSupervisor._
+      supervisor ! AddContext("c1", contextConfig)
+      expectMsg(ContextInitialized)
+
+      supervisor ! ListContexts
+      expectMsg(Seq("c1"))
+
+      supervisor ! GetContext("c1")
+      val (jmActor,rActor) = expectMsgClass(classOf[Tuple2[ActorRef,ActorRef]])
+      jmActor !  PoisonPill
+      supervisor ! ListContexts
+      //expectMsg(Seq("c1"))
+      expectMsg(Seq.empty[String])
+	}
+	
   }
 }
