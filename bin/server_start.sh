@@ -16,7 +16,7 @@ GC_OPTS="-XX:+UseConcMarkSweepGC
          -XX:MaxPermSize=512m
          -XX:+CMSClassUnloadingEnabled "
 
-JAVA_OPTS="-Xmx5g -XX:MaxDirectMemorySize=512M
+JAVA_OPTS="-Xmx5g -Xms5g -XX:MaxDirectMemorySize=512M
            -XX:+HeapDumpOnOutOfMemoryError -Djava.net.preferIPv4Stack=true
            -Dcom.sun.management.jmxremote.port=9999
            -Dcom.sun.management.jmxremote.authenticate=false
