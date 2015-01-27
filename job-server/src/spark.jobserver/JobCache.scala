@@ -3,6 +3,7 @@ package spark.jobserver
 import java.net.URL
 import org.apache.spark.{SparkContext, SparkEnv}
 import org.joda.time.DateTime
+import org.slf4j.LoggerFactory
 import spark.jobserver.io.JobDAO
 import spark.jobserver.util.{ContextURLClassLoader, LRUCache}
 
@@ -14,8 +15,10 @@ case class JobJarInfo(constructor: () => SparkJob,
  * A cache for SparkJob classes.  A lot of times jobs are run repeatedly, and especially for low-latency
  * jobs, why retrieve the jar and load it every single time?
  */
-class JobCache(maxEntries: Int, dao: JobDAO, sparkContext: SparkContext, loader: ContextURLClassLoader) {
+class JobCache(maxEntries: Int, dao: JobDAO, sparkContext: SparkContext, loader: ContextURLClassLoader,
+                jarCacheEnabled: Boolean) {
   private val cache = new LRUCache[(String, DateTime, String), JobJarInfo](maxEntries)
+  private val logger = LoggerFactory.getLogger(getClass)
 
   /**
    * Retrieves the given SparkJob class from the cache if it's there, otherwise use the DAO to retrieve it.
@@ -24,12 +27,23 @@ class JobCache(maxEntries: Int, dao: JobDAO, sparkContext: SparkContext, loader:
    * @param classPath the fully qualified name of the class/object to load
    */
   def getSparkJob(appName: String, uploadTime: DateTime, classPath: String): JobJarInfo = {
-    cache.get((appName, uploadTime, classPath), {
-      val jarFilePath = new java.io.File(dao.retrieveJarFile(appName, uploadTime)).getAbsolutePath()
-      sparkContext.addJar(jarFilePath)   // Adds jar for remote executors
-      loader.addURL(new URL("file:" + jarFilePath))   // Now jar added for local loader
-      val constructor = JarUtils.loadClassOrObject[SparkJob](classPath, loader)
-      JobJarInfo(constructor, classPath, jarFilePath)
-    })
+    if (jarCacheEnabled)
+    {
+      logger.info(s"JobCache: Jar caching enabled for ${(appName, uploadTime, classPath)}")
+      cache.get((appName, uploadTime, classPath), loadJar(appName, uploadTime, classPath))
+    }
+    else
+    {
+      logger.info(s"JobCache: Jar caching disabled for ${(appName, uploadTime, classPath)}")
+      loadJar(appName, uploadTime, classPath)
+    }
+  }
+
+  private def loadJar(appName: String, uploadTime: DateTime, classPath: String): JobJarInfo = {
+    val jarFilePath = new java.io.File(dao.retrieveJarFile(appName, uploadTime)).getAbsolutePath()
+    sparkContext.addJar(jarFilePath)   // Adds jar for remote executors
+    loader.addURL(new URL("file:" + jarFilePath))   // Now jar added for local loader
+    val constructor = JarUtils.loadClassOrObject[SparkJob](classPath, loader)
+    JobJarInfo(constructor, classPath, jarFilePath)
   }
 }
