@@ -3,6 +3,7 @@ package spark.jobserver
 import java.net.URL
 import org.apache.spark.{SparkContext, SparkEnv}
 import org.joda.time.DateTime
+import org.slf4j.LoggerFactory
 import spark.jobserver.io.JobDAO
 import spark.jobserver.util.{ContextURLClassLoader, JarUtils, LRUCache}
 
@@ -16,6 +17,7 @@ case class JobJarInfo(constructor: () => SparkJobBase,
  */
 class JobCache(maxEntries: Int, dao: JobDAO, sparkContext: SparkContext, loader: ContextURLClassLoader) {
   private val cache = new LRUCache[(String, DateTime, String), JobJarInfo](maxEntries)
+  private val logger = LoggerFactory.getLogger(getClass)
 
   /**
    * Retrieves the given SparkJob class from the cache if it's there, otherwise use the DAO to retrieve it.
@@ -26,8 +28,8 @@ class JobCache(maxEntries: Int, dao: JobDAO, sparkContext: SparkContext, loader:
   def getSparkJob(appName: String, uploadTime: DateTime, classPath: String): JobJarInfo = {
     cache.get((appName, uploadTime, classPath), {
       val jarFilePath = new java.io.File(dao.retrieveJarFile(appName, uploadTime)).getAbsolutePath()
-      sparkContext.addJar(jarFilePath)   // Adds jar for remote executors
-      loader.addURL(new URL("file:" + jarFilePath))   // Now jar added for local loader
+      sparkContext.addJar(jarFilePath) // Adds jar for remote executors
+      loader.addURL(new URL("file:" + jarFilePath)) // Now jar added for local loader
       val constructor = JarUtils.loadClassOrObject[SparkJobBase](classPath, loader)
       JobJarInfo(constructor, classPath, jarFilePath)
     })
