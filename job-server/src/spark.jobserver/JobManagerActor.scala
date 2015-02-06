@@ -276,5 +276,5 @@ class JobManagerActor(dao: JobDAO,
   // Each one should be an URL (http, ftp, hdfs, local, or file). local URLs are local files
   // present on every node, whereas file:// will be assumed only present on driver node
   private def getSideJars(config: Config): Seq[String] =
-    Try(config.getStringList("dependent-jar-uris").asScala.toSeq).getOrElse(Nil)
+    Try(config.getString("dependent-jar-uris").split(",").toSeq).getOrElse(Nil)
 }
