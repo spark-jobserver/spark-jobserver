@@ -123,8 +123,8 @@ class SparkWebUiActorSpec extends TestKit(SparkWebUiActorSpec.system) with Impli
     it("should get worker info") {
       val future = actor ? GetWorkerStatus()
       val result = Await.result(future, ShortTimeout.duration).asInstanceOf[SparkWorkersInfo]
-      result.alive should equal (1)
-      result.dead should equal (1)
+      result.alive should equal (0)
+      result.dead should equal (0)
     }
   }
 }
