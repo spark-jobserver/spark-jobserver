@@ -51,6 +51,9 @@ object Dependencies {
     "io.spray" %% "spray-testkit" % "1.3.2" % "test"
   )
 
+  lazy val swaggerDeps = Seq (
+    "com.gettyimages" %% "spray-swagger" % "0.5.0"
+  )
 
   lazy val serverDeps = apiDeps ++ yodaDeps
   lazy val apiDeps = sparkDeps :+ typeSafeConfigDeps

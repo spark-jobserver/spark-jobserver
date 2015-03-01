@@ -1,10 +1,12 @@
 package spark.jobserver
 
-import akka.actor.{ ActorSystem, ActorRef }
+import akka.actor.{ActorRefFactory, ActorSystem, ActorRef}
 import akka.pattern.ask
 import akka.util.Timeout
+import com.gettyimages.spray.swagger.SwaggerHttpService
 import com.typesafe.config.{ Config, ConfigFactory, ConfigException, ConfigRenderOptions }
 import java.util.NoSuchElementException
+import com.wordnik.swagger.model.ApiInfo
 import ooyala.common.akka.web.{ WebService, CommonRoutes }
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
@@ -18,14 +20,15 @@ import spray.http.StatusCodes
 import spray.httpx.SprayJsonSupport.sprayJsonMarshaller
 import spray.json.DefaultJsonProtocol._
 import spray.routing.{ HttpService, Route, RequestContext }
+import scala.reflect.runtime.universe._
 
 class WebApi(system: ActorSystem,
              config: Config,
              port: Int,
-             jarManager: ActorRef,
-             supervisor: ActorRef,
+             override val jarManager: ActorRef,
+             override val supervisor: ActorRef,
              jobInfo: ActorRef)
-    extends HttpService with CommonRoutes {
+  extends HttpService with CommonRoutes with JarRoutes with CommonRouteBehaviour with ContextRoutes {
   import CommonMessages._
   import ContextSupervisor._
   import scala.concurrent.duration._
@@ -34,117 +37,45 @@ class WebApi(system: ActorSystem,
   import ooyala.common.akka.web.JsonUtils._
 
   override def actorRefFactory: ActorSystem = system
-  implicit val ec: ExecutionContext = system.dispatcher
-  implicit val ShortTimeout = Timeout(3 seconds)
-  val DefaultSyncTimeout = Timeout(10 seconds)
-  val DefaultJobLimit = 50
-  val StatusKey = "status"
-  val ResultKey = "result"
+  override implicit val ec: ExecutionContext = system.dispatcher
 
-  val contextTimeout = SparkJobUtils.getContextTimeout(config)
+  override val contextTimeout = SparkJobUtils.getContextTimeout(config)
   val sparkAliveWorkerThreshold = Try(config.getInt("spark.jobserver.sparkAliveWorkerThreshold")).getOrElse(1)
   val bindAddress = config.getString("spark.jobserver.bind-address")
 
   val logger = LoggerFactory.getLogger(getClass)
 
-  val myRoutes = jarRoutes ~ contextRoutes ~ jobRoutes ~ healthzRoutes ~ otherRoutes
+  val swaggerService = new SwaggerHttpService {
+    override def apiTypes : Seq[Type] = Seq(typeOf[JarRoutes], typeOf[ContextRoutes])
+    override def apiVersion : String = "2.0"
+    override def baseUrl : String = "/" // let swagger-ui determine the host and port
+    override def docsPath : String = "api-docs"
+    override def actorRefFactory : ActorRefFactory = WebApi.this.actorRefFactory
+    override def apiInfo : Option[ApiInfo] = Some(new ApiInfo("Spark Job-Server",
+      "Provides a RESTful interface for submitting and managing Apache Spark jobs, jars, and job contexts",
+      "https://github.com/spark-jobserver/spark-jobserver",
+      "",
+      "Apache V2",
+      "http://www.apache.org/licenses/LICENSE-2.0"))
+
+    //authorizations, not used
+  }
+
+  val myRoutes = jarRoutes ~ contextRoutes ~ jobRoutes ~ healthzRoutes ~ otherRoutes ~ swaggerService.routes ~
+    get {
+      implicit val ar: ActorSystem = actorRefFactory
+      pathPrefix("docs") { pathEndOrSingleSlash {
+        getFromResource("swagger-ui/index.html")
+      }
+      } ~ {
+        getFromResourceDirectory("swagger-ui")
+      }
+    }
+
 
   def start() {
     logger.info("Starting browser web service...")
     WebService.start(myRoutes ~ commonRoutes, system, bindAddress, port)
-  }
-
-  /**
-   * Routes for listing and uploading jars
-   *    GET /jars              - lists all current jars
-   *    POST /jars/<appName>   - upload a new jar file
-   */
-  def jarRoutes: Route = pathPrefix("jars") {
-    // GET /jars route returns a JSON map of the app name and the last time a jar was uploaded.
-    get { ctx =>
-      val future = (jarManager ? ListJars).mapTo[collection.Map[String, DateTime]]
-      future.map { jarTimeMap =>
-        val stringTimeMap = jarTimeMap.map { case (app, dt) => (app, dt.toString()) }.toMap
-        ctx.complete(stringTimeMap)
-      }.recover {
-        case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
-      }
-    } ~
-      // POST /jars/<appName>
-      // The <appName> needs to be unique; uploading a jar with the same appName will replace it.
-      post {
-        path(Segment) { appName =>
-          entity(as[Array[Byte]]) { jarBytes =>
-            val future = jarManager ? StoreJar(appName, jarBytes)
-            respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-              future.map {
-                case JarStored  => ctx.complete(StatusCodes.OK)
-                case InvalidJar => badRequest(ctx, "Jar is not of the right format")
-              }.recover {
-                case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
-              }
-            }
-          }
-        }
-      }
-  }
-
-  /**
-   * Routes for listing, adding, and stopping contexts
-   *     GET /contexts         - lists all current contexts
-   *     POST /contexts/<contextName> - creates a new context
-   *     DELETE /contexts/<contextName> - stops a context and all jobs running in it
-   */
-  def contextRoutes: Route = pathPrefix("contexts") {
-    import ContextSupervisor._
-    import collection.JavaConverters._
-    get { ctx =>
-      (supervisor ? ListContexts).mapTo[Seq[String]]
-        .map { contexts => ctx.complete(contexts) }
-    } ~
-      post {
-        /**
-         *  POST /contexts/<contextName>?<optional params> -
-         *    Creates a long-running context with contextName and options for context creation
-         *    All options are merged into the defaults in spark.context-settings
-         *
-         * @optional @param num-cpu-cores Int - Number of cores the context will use
-         * @optional @param memory-per-node String - -Xmx style string (512m, 1g, etc) for max memory per node
-         * @return the string "OK", or error if context exists or could not be initialized
-         */
-        path(Segment) { (contextName) =>
-          // Enforce user context name to start with letters
-          if (!contextName.head.isLetter) {
-            complete(StatusCodes.BadRequest, errMap("context name must start with letters"))
-          } else {
-            parameterMap { (params) =>
-              val config = ConfigFactory.parseMap(params.asJava)
-              val future = (supervisor ? AddContext(contextName, config))(contextTimeout.seconds)
-              respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-                future.map {
-                  case ContextInitialized   => ctx.complete(StatusCodes.OK)
-                  case ContextAlreadyExists => badRequest(ctx, "context " + contextName + " exists")
-                  case ContextInitError(e)  => ctx.complete(500, errMap(e, "CONTEXT INIT ERROR"))
-                }
-              }
-            }
-          }
-        }
-      } ~
-      delete {
-        //  DELETE /contexts/<contextName>
-        //  Stop the context with the given name.  Executors will be shut down and all cached RDDs
-        //  and currently running jobs will be lost.  Use with care!
-        path(Segment) { (contextName) =>
-          val future = supervisor ? StopContext(contextName)
-          respondWithMediaType(MediaTypes.`text/plain`) { ctx =>
-            future.map {
-              case ContextStopped => ctx.complete(StatusCodes.OK)
-              case NoSuchContext  => notFound(ctx, "context " + contextName + " not found")
-            }
-          }
-        }
-      }
   }
 
   /**
@@ -236,11 +167,11 @@ class WebApi(system: ActorSystem,
                   "classPath" -> info.classPath,
                   "context"   -> (if (info.contextName.isEmpty) "<<ad-hoc>>" else info.contextName),
                   "duration" -> getJobDurationString(info)) ++ (info match {
-                    case JobInfo(_, _, _, _, _, None, _)       => Map(StatusKey -> "RUNNING")
-                    case JobInfo(_, _, _, _, _, _, Some(ex))   => Map(StatusKey -> "ERROR",
-                                                                      ResultKey -> formatException(ex))
-                    case JobInfo(_, _, _, _, _, Some(e), None) => Map(StatusKey -> "FINISHED")
-                  })
+                  case JobInfo(_, _, _, _, _, None, _)       => Map(StatusKey -> "RUNNING")
+                  case JobInfo(_, _, _, _, _, _, Some(ex))   => Map(StatusKey -> "ERROR",
+                    ResultKey -> formatException(ex))
+                  case JobInfo(_, _, _, _, _, Some(e), None) => Map(StatusKey -> "FINISHED")
+                })
               }
               ctx.complete(jobReport)
             }
@@ -273,7 +204,7 @@ class WebApi(system: ActorSystem,
                 val postedJobConfig = ConfigFactory.parseString(configString)
                 val jobConfig = postedJobConfig.withFallback(config)
                 val contextConfig = Try(jobConfig.getConfig("spark.context-settings")).
-                                      getOrElse(ConfigFactory.empty)
+                  getOrElse(ConfigFactory.empty)
                 val jobManager = getJobManagerForContext(contextOpt, contextConfig, classPath)
                 val events = if (async) asyncEvents else syncEvents
                 val timeout = timeoutOpt.map(t => Timeout(t.seconds)).getOrElse(DefaultSyncTimeout)
@@ -286,8 +217,8 @@ class WebApi(system: ActorSystem,
                     case JobStarted(jobId, context, _) =>
                       jobInfo ! StoreJobConfig(jobId, postedJobConfig)
                       ctx.complete(202, Map[String, Any](
-                                          StatusKey -> "STARTED",
-                                          ResultKey -> Map("jobId" -> jobId, "context" -> context)))
+                        StatusKey -> "STARTED",
+                        ResultKey -> Map("jobId" -> jobId, "context" -> context)))
                     case JobValidationFailed(_, _, ex) =>
                       ctx.complete(400, errMap(ex, "VALIDATION FAILED"))
                     case NoSuchApplication => notFound(ctx, "appName " + appName + " not found")
@@ -318,43 +249,6 @@ class WebApi(system: ActorSystem,
       }
   }
 
-  private def badRequest(ctx: RequestContext, msg: String) =
-    ctx.complete(StatusCodes.BadRequest, errMap(msg))
-
-  private def notFound(ctx: RequestContext, msg: String) =
-    ctx.complete(StatusCodes.NotFound, errMap(msg))
-
-  private def errMap(errMsg: String) = Map(StatusKey -> "ERROR", ResultKey -> errMsg)
-
-  private def errMap(t: Throwable, status: String) =
-    Map(StatusKey -> status, ResultKey -> formatException(t))
-
-  private def getJobDurationString(info: JobInfo): String =
-    info.jobLengthMillis.map { ms => ms / 1000.0 + " secs" }.getOrElse("Job not done yet")
-
-  def resultToMap(result: Any): Map[String, Any] = result match {
-    case m: Map[_, _] => m.map { case (k, v) => (k.toString, v) }.toMap
-    case s: Seq[_]    => s.zipWithIndex.map { case (item, idx) => (idx.toString, item) }.toMap
-    case a: Array[_]  => a.toSeq.zipWithIndex.map { case (item, idx) => (idx.toString, item) }.toMap
-    case item         => Map(ResultKey -> item)
-  }
-
-  def resultToTable(result: Any): Map[String, Any] = {
-    Map(StatusKey -> "OK", ResultKey -> result)
-  }
-
-  def formatException(t: Throwable): Any =
-    if (t.getCause != null) {
-      Map("message" -> t.getMessage,
-          "errorClass" -> t.getClass.getName,
-          "cause" ->   t.getCause.getMessage,
-          "causingClass" -> t.getCause.getClass.getName,
-          "stack" -> t.getCause.getStackTrace.map(_.toString).toSeq)
-    } else {
-      Map("message" -> t.getMessage,
-          "errorClass" -> t.getClass.getName,
-          "stack" -> t.getStackTrace.map(_.toString).toSeq)
-    }
 
   private def getJobManagerForContext(context: Option[String],
                                       contextConfig: Config,

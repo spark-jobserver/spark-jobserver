@@ -7,6 +7,7 @@ test-reports/
 .ensime*
 .idea*
 .vagrant
+.DS_Store
 
 # ignore deployment configs
 config/*.conf
