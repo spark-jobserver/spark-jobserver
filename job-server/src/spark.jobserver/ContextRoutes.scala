@@ -59,7 +59,7 @@ trait ContextRoutes extends HttpService with CommonRouteBehaviour  {
       value = "Name for the context"),
     new ApiImplicitParam(name = "num-cpu-cores", required = false, dataType = "Int", paramType = "query",
       value = "Number of cores the context will use"),
-    new ApiImplicitParam(name = "memory-per-node String", required = false, dataType = "Int",
+    new ApiImplicitParam(name = "memory-per-node", required = false, dataType = "String",
       paramType = "query",
       value = "-Xmx style string (512m, 1g, etc) for max memory per node")
 
