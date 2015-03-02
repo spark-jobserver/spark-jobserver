@@ -46,9 +46,9 @@ trait JobRoutes extends HttpService with CommonRouteBehaviour {
 
   import JobInfoActor._
   import JobManagerActor._
-
-
-  def jobRoutes: Route = pathPrefix("jobs") { getConfig ~ getJobs ~ getJobId ~ postJobs}
+  
+  // Note that the order is important since it defines matching order!
+  def jobRoutes: Route = pathPrefix("jobs") { getConfig ~ getJobId ~ getJobs ~ postJobs}
 
   @Path("/{jobId}/config")
   @ApiOperation(httpMethod = "GET", response = classOf[String],
