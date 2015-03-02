@@ -55,7 +55,7 @@ Then go ahead and start the job server using the instructions above.
 
 Let's upload the jar:
 
-    curl --data-binary @job-server-tests/target/job-server-tests-0.4.1.jar localhost:8090/jars/test
+    curl --data-binary @job-server-tests/target/job-server-tests-0.4.2-SNAPSHOT.jar localhost:8090/jars/test
     OK⏎
 
 The above jar is uploaded as app `test`.  Next, let's start an ad-hoc word count job, meaning that the job
