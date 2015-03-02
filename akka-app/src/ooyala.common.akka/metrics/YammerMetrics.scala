@@ -17,7 +17,7 @@ trait YammerMetrics {
     })
 
   def histogram(name: String): Histogram = Metrics.newHistogram(getClass, name, true)
-  
-  def timer(name: String, durationUnit:TimeUnit=TimeUnit.NANOSECONDS, rateUnit:TimeUnit=TimeUnit.SECONDS): Timer =
+  def timer(name: String, durationUnit:TimeUnit=TimeUnit.NANOSECONDS,
+            rateUnit:TimeUnit=TimeUnit.SECONDS): Timer =
         Metrics.newTimer(getClass, name, durationUnit, rateUnit)
 }
