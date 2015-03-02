@@ -31,7 +31,13 @@ For release notes, look in the `notes/` directory.  They should also be up on [l
 
 ## Quick start / development mode
 
-You need to have [SBT](http://www.scala-sbt.org/release/docs/Getting-Started/Setup.html) installed.
+First clone the repository and check out the v0.4.1 version by running:
+
+    git clone https://github.com/spark-jobserver/spark-jobserver.git
+    cd spark-jobserver
+    git checkout tags/v0.4.1
+
+You need to have [SBT](http://www.scala-sbt.org/release/docs/Getting-Started/Setup.html) installed. Start the SBT shell by running the `sbt` command from within the `spark-jobserver` directory.
 
 From SBT shell, simply type "reStart".  This uses a default configuration file.  An optional argument is a
 path to an alternative config file.  You can also specify JVM parameters after "---".  Including all the
