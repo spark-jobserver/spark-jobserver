@@ -1,34 +1,22 @@
 package spark.jobserver
 
-import com.wordnik.swagger.annotations._
-import spray.http.{MediaTypes, StatusCodes}
-import spray.routing.{HttpService, Route}
-
-import akka.actor.{ ActorSystem, ActorRef }
+import akka.actor.ActorRef
 import akka.pattern.ask
-import akka.util.Timeout
-import com.typesafe.config.{ Config, ConfigFactory, ConfigException, ConfigRenderOptions }
-import java.util.NoSuchElementException
-import ooyala.common.akka.web.{ WebService, CommonRoutes }
+
+import com.wordnik.swagger.annotations._
+
 import org.joda.time.DateTime
-import org.slf4j.LoggerFactory
-import spark.jobserver.util.SparkJobUtils
-import scala.concurrent.{Await, ExecutionContext}
-import scala.util.Try
-import spark.jobserver.io.JobInfo
-import spray.http.HttpResponse
-import spray.http.MediaTypes
-import spray.http.StatusCodes
+
+import spray.http.{MediaTypes, StatusCodes}
 import spray.httpx.SprayJsonSupport.sprayJsonMarshaller
 import spray.json.DefaultJsonProtocol._
+import spray.routing.{HttpService, Route}
+
+import scala.concurrent.ExecutionContext
 
 @Api(value = "/jars", description = "Jar Operations")
 trait JarRoutes extends HttpService with CommonRouteBehaviour {
   import CommonMessages._
-  import ContextSupervisor._
-  import scala.concurrent.duration._
-  import ContextSupervisor._
-  import collection.JavaConverters._
   import ooyala.common.akka.web.JsonUtils._
 
   implicit def ec: ExecutionContext =actorRefFactory.dispatcher

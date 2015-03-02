@@ -1,18 +1,17 @@
 package spark.jobserver
 
 import akka.actor.ActorRef
-import com.typesafe.config.ConfigFactory
-import spark.jobserver.util.SparkJobUtils
-import spray.routing._
-import com.wordnik.swagger.annotations._
-import spray.routing.{HttpService, Route}
-
-import akka.actor.{ ActorRef }
 import akka.pattern.ask
+
+import com.typesafe.config.ConfigFactory
+
+import com.wordnik.swagger.annotations._
+
 import spray.http.MediaTypes
 import spray.http.StatusCodes
 import spray.httpx.SprayJsonSupport.sprayJsonMarshaller
 import spray.json.DefaultJsonProtocol._
+import spray.routing.{HttpService, Route}
 
 import scala.concurrent.ExecutionContext
 
@@ -51,6 +50,7 @@ trait ContextRoutes extends HttpService with CommonRouteBehaviour  {
       .map {contexts => ctx.complete (contexts)}
     }
   }
+
   @ApiOperation(httpMethod = "POST", response = classOf[String],
     value = "Creates a long-running context with contextName and options for context creation",
     notes = "All options are merged into the defaults in spark.context-settings")
