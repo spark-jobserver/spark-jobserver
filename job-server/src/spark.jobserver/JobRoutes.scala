@@ -2,28 +2,23 @@ package spark.jobserver
 
 import javax.ws.rs.Path
 
-import akka.actor.{ActorRefFactory, ActorSystem, ActorRef}
+import akka.actor.ActorRef
 import akka.pattern.ask
 import akka.util.Timeout
-import com.gettyimages.spray.swagger.SwaggerHttpService
-import com.typesafe.config.{ Config, ConfigFactory, ConfigException, ConfigRenderOptions }
-import java.util.NoSuchElementException
+
+import com.typesafe.config.{ConfigException, ConfigFactory, ConfigRenderOptions, Config}
+
 import com.wordnik.swagger.annotations._
-import com.wordnik.swagger.model.ApiInfo
-import ooyala.common.akka.web.{ WebService, CommonRoutes }
-import org.joda.time.DateTime
-import org.slf4j.LoggerFactory
-import spark.jobserver.util.SparkJobUtils
-import scala.concurrent.{Await, ExecutionContext}
-import scala.util.Try
+
 import spark.jobserver.io.JobInfo
-import spray.http.HttpResponse
-import spray.http.MediaTypes
-import spray.http.StatusCodes
+
+import spray.http.{MediaTypes, StatusCodes}
 import spray.httpx.SprayJsonSupport.sprayJsonMarshaller
 import spray.json.DefaultJsonProtocol._
-import spray.routing.{ HttpService, Route, RequestContext }
-import scala.reflect.runtime.universe._
+import spray.routing.{HttpService, Route}
+
+import scala.concurrent.{Await, ExecutionContext}
+import scala.util.Try
 
 @Api(value = "/jobs", description = "Main routes for starting a job, listing existing jobs," +
   " getting job results")
@@ -46,7 +41,7 @@ trait JobRoutes extends HttpService with CommonRouteBehaviour {
 
   import JobInfoActor._
   import JobManagerActor._
-  
+
   // Note that the order is important since it defines matching order!
   def jobRoutes: Route = pathPrefix("jobs") { getConfig ~ getJobId ~ getJobs ~ postJobs}
 
@@ -55,7 +50,7 @@ trait JobRoutes extends HttpService with CommonRouteBehaviour {
     value = "returns the configuration used to launch this job or an error if not found.")
   @ApiImplicitParams(Array(
     new ApiImplicitParam(name = "jobId", required = true, dataType = "String", paramType = "path",
-      value = "Job Identifyer")
+      value = "Job Identifier")
    ))
   @ApiResponses(Array(
     new ApiResponse(code = 200, message = "A json representation of ConfigObject configuration " +
@@ -80,7 +75,7 @@ trait JobRoutes extends HttpService with CommonRouteBehaviour {
     value = "returns the job's status.")
   @ApiImplicitParams(Array(
     new ApiImplicitParam(name = "jobId", required = true, dataType = "String", paramType = "path",
-      value = "Job Identifyer")
+      value = "Job Identifier")
   ))
   @ApiResponses(Array(
     new ApiResponse(code = 200, message =
@@ -113,7 +108,7 @@ trait JobRoutes extends HttpService with CommonRouteBehaviour {
   ))
   @ApiResponses(Array(
     new ApiResponse(code = 200, message =
-      """A json array with each job and its satus, ie: {jobId: "word-count-2013-04-22", status: "RUNNING"}
+      """A json array with each job and its status, ie: {jobId: "word-count-2013-04-22", status: "RUNNING"}
       """),
     new ApiResponse(code = 404, message = "If job for jobId was not found")))
   def getJobs: Route = get {
