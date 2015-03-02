@@ -31,7 +31,13 @@ For release notes, look in the `notes/` directory.  They should also be up on [l
 
 ## Quick start / development mode
 
-You need to have [SBT](http://www.scala-sbt.org/release/docs/Getting-Started/Setup.html) installed.
+First clone the repository and check out the 0.4.1 branch by running:
+
+    git clone https://github.com/spark-jobserver/spark-jobserver.git
+    cd spark-jobserver
+    git checkout tags/v0.4.1
+
+You need to have [SBT](http://www.scala-sbt.org/release/docs/Getting-Started/Setup.html) installed. Start the SBT shell by running `sbt` from within the `spark-jobserver` directory.
 
 From SBT shell, simply type "reStart".  This uses a default configuration file.  An optional argument is a
 path to an alternative config file.  You can also specify JVM parameters after "---".  Including all the
@@ -55,7 +61,7 @@ Then go ahead and start the job server using the instructions above.
 
 Let's upload the jar:
 
-    curl --data-binary @job-server-tests/target/job-server-tests-0.4.2-SNAPSHOT.jar localhost:8090/jars/test
+    curl --data-binary @job-server-tests/target/job-server-tests-0.4.1.jar localhost:8090/jars/test
     OK⏎
 
 The above jar is uploaded as app `test`.  Next, let's start an ad-hoc word count job, meaning that the job
