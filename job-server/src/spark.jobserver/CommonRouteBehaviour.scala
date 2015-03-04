@@ -24,6 +24,10 @@ import spray.json.DefaultJsonProtocol._
 trait CommonRouteBehaviour extends CommonRoutes {
   import scala.concurrent.duration._
 
+  def config: Config
+
+  implicit def ec: ExecutionContext = actorRefFactory.dispatcher
+
   implicit val ShortTimeout = Timeout(3 seconds)
   val DefaultSyncTimeout = Timeout(10 seconds)
   val DefaultJobLimit = 50

@@ -17,7 +17,7 @@ import spray.httpx.SprayJsonSupport.sprayJsonMarshaller
 import spray.json.DefaultJsonProtocol._
 import spray.routing.{HttpService, Route}
 
-import scala.concurrent.{Await, ExecutionContext}
+import scala.concurrent.{Await}
 import scala.util.Try
 
 @Api(value = "/jobs", description = "Main routes for starting a job, listing existing jobs," +
@@ -28,9 +28,7 @@ trait JobRoutes extends HttpService with CommonRouteBehaviour {
   import ContextSupervisor._
   import ooyala.common.akka.web.JsonUtils._
 
-  def config: Config
   def jobInfo: ActorRef
-  implicit def ec: ExecutionContext =actorRefFactory.dispatcher
 
   val errorEvents: Set[Class[_]] = Set(classOf[JobErroredOut], classOf[JobValidationFailed])
   val asyncEvents = Set(classOf[JobStarted]) ++ errorEvents

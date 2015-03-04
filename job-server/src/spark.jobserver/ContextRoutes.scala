@@ -6,6 +6,7 @@ import akka.pattern.ask
 import com.typesafe.config.ConfigFactory
 
 import com.wordnik.swagger.annotations._
+import spark.jobserver.util.SparkJobUtils
 
 import spray.http.MediaTypes
 import spray.http.StatusCodes
@@ -24,9 +25,7 @@ trait ContextRoutes extends HttpService with CommonRouteBehaviour  {
   import collection.JavaConverters._
   import ooyala.common.akka.web.JsonUtils._
 
-  implicit def ec: ExecutionContext =actorRefFactory.dispatcher
-
-  val contextTimeout: Int
+  val contextTimeout = SparkJobUtils.getContextTimeout(config)
 
   val supervisor: ActorRef
   /**

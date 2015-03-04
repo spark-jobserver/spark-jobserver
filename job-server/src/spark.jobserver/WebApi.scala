@@ -18,7 +18,6 @@ import spray.httpx.SprayJsonSupport.sprayJsonMarshaller
 import spray.json.DefaultJsonProtocol._
 import spray.routing.{ HttpService, Route }
 
-import scala.concurrent.ExecutionContext
 import scala.reflect.runtime.universe._
 import scala.util.Try
 
@@ -38,9 +37,7 @@ class WebApi(system: ActorSystem,
   import ooyala.common.akka.web.JsonUtils._
 
   override def actorRefFactory: ActorSystem = system
-  override implicit val ec: ExecutionContext = system.dispatcher
 
-  override val contextTimeout = SparkJobUtils.getContextTimeout(config)
   val sparkAliveWorkerThreshold = Try(config.getInt("spark.jobserver.sparkAliveWorkerThreshold")).getOrElse(1)
   val bindAddress = config.getString("spark.jobserver.bind-address")
 

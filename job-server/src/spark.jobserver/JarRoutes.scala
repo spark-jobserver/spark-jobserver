@@ -12,14 +12,11 @@ import spray.httpx.SprayJsonSupport.sprayJsonMarshaller
 import spray.json.DefaultJsonProtocol._
 import spray.routing.{HttpService, Route}
 
-import scala.concurrent.ExecutionContext
-
 @Api(value = "/jars", description = "Jar Operations")
 trait JarRoutes extends HttpService with CommonRouteBehaviour {
   import CommonMessages._
   import ooyala.common.akka.web.JsonUtils._
 
-  implicit def ec: ExecutionContext =actorRefFactory.dispatcher
   def jarManager: ActorRef
   /**
    * Routes for listing and uploading jars
