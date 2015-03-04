@@ -87,8 +87,8 @@ class JobManagerActor(dao: JobDAO,
   private val jobCacheEnabled = Try(config.getBoolean("spark.job-cache.enabled")).getOrElse(false)
   // Use Spark Context's built in classloader when SPARK-1230 is merged.
   private val jarLoader = new ContextURLClassLoader(Array[URL](), getClass.getClassLoader)
-  lazy val jobCache = new JobCache(jobCacheSize, dao, jobContext.sparkContext, jarLoader)
 
+  lazy val jobCache = new JobCache(jobCacheSize, dao, jobContext.sparkContext, jarLoader)
 
   private val statusActor = context.actorOf(Props(classOf[JobStatusActor], dao), "status-actor")
   protected val resultActor = resultActorRef.getOrElse(context.actorOf(Props[JobResultActor], "result-actor"))
