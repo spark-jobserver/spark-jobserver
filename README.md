@@ -9,6 +9,7 @@ See [Troubleshooting Tips](doc/troubleshooting.md).
 ## Features
 
 - *"Spark as a Service"*: Simple REST interface for all aspects of job, context management
+- Support for Spark SQL Contexts/jobs and custom job contexts!  See [Contexts](doc/contexts.md).
 - Supports sub-second low-latency jobs via long-running job contexts
 - Start and stop job contexts for RDD sharing and low-latency jobs; change resources on restart
 - Kill running jobs via stop context
@@ -92,7 +93,7 @@ real clusters and most jobs this may be too slow.
 
 Another way of running this job is in a pre-created context.  Start a new context:
 
-    curl -d "" 'localhost:8090/contexts/test-context?num-cpu-cores=4&mem-per-node=512m'
+    curl -d "" 'localhost:8090/contexts/test-context?num-cpu-cores=4&memory-per-node=512m'
     OK⏎
 
 You can verify that the context has been created:
