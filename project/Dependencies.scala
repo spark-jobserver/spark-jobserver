@@ -26,8 +26,8 @@ object Dependencies {
     "io.spray" %% "spray-client" % "1.3.2",
     yammerDeps
   ) ++ yodaDeps
-  
-  val sparkVersion = sys.env.getOrElse("SPARK_VERSION", "1.2.1")
+
+  val sparkVersion = sys.env.getOrElse("SPARK_VERSION", "1.3.0")
   lazy val sparkDeps = Seq(
     "org.apache.spark" %% "spark-core" % sparkVersion % "provided" exclude(
                                             "io.netty", "netty-all") excludeAll(excludeQQ),
