@@ -5,6 +5,8 @@ sbt job-server/assembly
 
 PKG=$(mktemp -d spark-job-server.XXX)
 
+echo "Using directory $PKG"
+
 mkdir -p $PKG/opt/spark-job-server
 
 cp job-server/target/spark-job-server.jar $PKG/opt/spark-job-server
