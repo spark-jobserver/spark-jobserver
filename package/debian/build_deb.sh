@@ -5,8 +5,8 @@ echo "Present working directory: `pwd`"
 
 sbt job-server/assembly
 
-PKG=$(mktemp -d spark-job-server.XXX)
-
+PKG=spark-job-server.$$
+mkdir -p $PKG
 echo "Using package directory: $PKG"
 
 mkdir -p $PKG/opt/spark-job-server
