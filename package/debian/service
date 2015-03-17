@@ -1,0 +1,62 @@
+#!/bin/bash
+# chkconfig: 2345 98 02
+#
+# description: Java running ETL process
+#
+
+SPARK_JOB_SERVER_HOME=/opt/spark-job-server
+
+start() {
+  nohup $SPARK_JOB_SERVER_HOME/server_start.sh
+}
+
+stop() {
+  $SPARK_JOB_SERVER_HOME/server_stop.sh
+}
+ 
+restart() {
+    echo "Restarting $NAME"
+    stop
+    sleep 5
+    start
+}
+ 
+status() {
+  # 3 == not runnig
+  # 0 == running
+  # 1 == stale pid file ie crashed usuallyi
+  source $SPARK_JOB_SERVER_HOME/settings.sh
+  if [[ ! -f $PIDFILE ]]; then
+    RETVAL=3
+    echo "Not running"
+  else
+    /bin/kill -0 $(cat $PIDFILE) 2>&1 >/dev/null
+    if [[ $? -eq 0 ]]; then
+      RETVAL=0
+      echo "Running"
+    else
+      RETVAL=1
+      echo "Not running; pidfile still present (probably crashed, check logs at $LOGFILE)"
+    fi
+  fi
+}
+ 
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    status)
+        status
+        ;;
+    restart)
+        restart
+        ;;
+    *)
+        echo "Usage: {start|stop|status|restart}"
+        exit 1
+        ;;
+esac
+exit $RETVAL
