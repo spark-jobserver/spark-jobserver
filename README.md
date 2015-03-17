@@ -108,7 +108,7 @@ From this point, you could asynchronously query the status and results:
 Note that you could append `&sync=true` when you POST to /jobs to get the results back in one request, but for
 real clusters and most jobs this may be too slow.
 
-#### Persistent Context Mode - Related Queries
+#### Persistent Context Mode - Faster & Required for Related Queries
 
 Another way of running this job is in a pre-created context.  Start a new context:
 
