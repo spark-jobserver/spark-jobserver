@@ -64,6 +64,7 @@ EXTRA_JAR for adding a jar to the classpath.
 
 ### WordCountExample walk-through
 
+#### Package Jar - Send to Server
 First, to package the test jar containing the WordCountExample: `sbt job-server-tests/package`.
 Then go ahead and start the job server using the instructions above.
 
@@ -71,6 +72,8 @@ Let's upload the jar:
 
     curl --data-binary @job-server-tests/target/job-server-tests-$VER.jar localhost:8090/jars/test
     OK⏎
+
+#### Ad-hoc Mode - Single, Unrelated Queries (Transient Context)
 
 The above jar is uploaded as app `test`.  Next, let's start an ad-hoc word count job, meaning that the job
 server will create its own SparkContext, and return a job ID for subsequent querying:
@@ -104,6 +107,8 @@ From this point, you could asynchronously query the status and results:
 
 Note that you could append `&sync=true` when you POST to /jobs to get the results back in one request, but for
 real clusters and most jobs this may be too slow.
+
+#### Persistent Context Mode - Related Queries
 
 Another way of running this job is in a pre-created context.  Start a new context:
 
