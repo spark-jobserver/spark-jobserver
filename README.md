@@ -17,7 +17,7 @@ See [Troubleshooting Tips](doc/troubleshooting.md).
 ## Features
 
 - *"Spark as a Service"*: Simple REST interface for all aspects of job, context management
-- Support for Spark SQL Contexts/jobs and custom job contexts!  See [Contexts](doc/contexts.md).
+- Support for Spark SQL and Hive Contexts/jobs and custom job contexts!  See [Contexts](doc/contexts.md).
 - Supports sub-second low-latency jobs via long-running job contexts
 - Start and stop job contexts for RDD sharing and low-latency jobs; change resources on restart
 - Kill running jobs via stop context
@@ -65,6 +65,7 @@ EXTRA_JAR for adding a jar to the classpath.
 
 ### WordCountExample walk-through
 
+#### Package Jar - Send to Server
 First, to package the test jar containing the WordCountExample: `sbt job-server-tests/package`.
 Then go ahead and start the job server using the instructions above.
 
@@ -72,6 +73,8 @@ Let's upload the jar:
 
     curl --data-binary @job-server-tests/target/job-server-tests-$VER.jar localhost:8090/jars/test
     OK⏎
+
+#### Ad-hoc Mode - Single, Unrelated Queries (Transient Context)
 
 The above jar is uploaded as app `test`.  Next, let's start an ad-hoc word count job, meaning that the job
 server will create its own SparkContext, and return a job ID for subsequent querying:
@@ -105,6 +108,8 @@ From this point, you could asynchronously query the status and results:
 
 Note that you could append `&sync=true` when you POST to /jobs to get the results back in one request, but for
 real clusters and most jobs this may be too slow.
+
+#### Persistent Context Mode - Faster & Required for Related Queries
 
 Another way of running this job is in a pre-created context.  Start a new context:
 
