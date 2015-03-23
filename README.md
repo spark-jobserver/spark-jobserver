@@ -6,6 +6,14 @@ It was originally started at [Ooyala](http://www.ooyala.com), but this is now th
 
 See [Troubleshooting Tips](doc/troubleshooting.md).
 
+## Users
+
+(Please add yourself to this list!)
+
+- Ooyala
+- Netflix
+- Avenida.com
+
 ## Features
 
 - *"Spark as a Service"*: Simple REST interface for all aspects of job, context management
@@ -18,6 +26,7 @@ See [Troubleshooting Tips](doc/troubleshooting.md).
 - Works with Standalone Spark as well as Mesos and yarn-client
 - Job and jar info is persisted via a pluggable DAO interface
 - Named RDDs to cache and retrieve RDDs by name, improving RDD sharing and reuse among jobs. 
+- Supports Scala 2.10 and 2.11
 
 ## Version Information
 
@@ -26,12 +35,18 @@ See [Troubleshooting Tips](doc/troubleshooting.md).
 | 0.3.1       | 0.9.1         |
 | 0.4.0       | 1.0.2         |
 | 0.4.1       | 1.1.0         |
+| 0.5.0       | 1.2.0         |
+| 0.5.1       | 1.3.0         |
 
 For release notes, look in the `notes/` directory.  They should also be up on [ls.implicit.ly](http://ls.implicit.ly/spark-jobserver/spark-jobserver).
 
 ## Quick start / development mode
 
 You need to have [SBT](http://www.scala-sbt.org/release/docs/Getting-Started/Setup.html) installed.
+
+To set the current version, do something like this:
+
+    export VER=`sbt version | tail -1 | cut -f2`
 
 From SBT shell, simply type "reStart".  This uses a default configuration file.  An optional argument is a
 path to an alternative config file.  You can also specify JVM parameters after "---".  Including all the
@@ -50,14 +65,16 @@ EXTRA_JAR for adding a jar to the classpath.
 
 ### WordCountExample walk-through
 
+#### Package Jar - Send to Server
 First, to package the test jar containing the WordCountExample: `sbt job-server-tests/package`.
 Then go ahead and start the job server using the instructions above.
 
 Let's upload the jar:
 
-    curl --data-binary @job-server-tests/target/job-server-tests-0.4.1.jar localhost:8090/jars/test
+    curl --data-binary @job-server-tests/target/job-server-tests-$VER.jar localhost:8090/jars/test
     OK⏎
 
+#### Ad-hoc Mode - Single, Unrelated Jobs (Transient Context)
 The above jar is uploaded as app `test`.  Next, let's start an ad-hoc word count job, meaning that the job
 server will create its own SparkContext, and return a job ID for subsequent querying:
 
@@ -91,6 +108,7 @@ From this point, you could asynchronously query the status and results:
 Note that you could append `&sync=true` when you POST to /jobs to get the results back in one request, but for
 real clusters and most jobs this may be too slow.
 
+#### Persistent Context Mode - Faster & Required for Related Jobs
 Another way of running this job is in a pre-created context.  Start a new context:
 
     curl -d "" 'localhost:8090/contexts/test-context?num-cpu-cores=4&memory-per-node=512m'
@@ -121,7 +139,7 @@ In your `build.sbt`, add this to use the job server jar:
 
 	resolvers += "Job Server Bintray" at "https://dl.bintray.com/spark-jobserver/maven"
 
-	libraryDependencies += "spark.jobserver" % "job-server-api" % "0.4.1" % "provided"
+	libraryDependencies += "spark.jobserver" % "job-server-api" % "0.5.0" % "provided"
 
 For most use cases it's better to have the dependencies be "provided" because you don't want SBT assembly to include the whole job server jar.
 
@@ -173,7 +191,7 @@ To use this feature, the SparkJob needs to mixin `NamedRddSupport`:
 ```scala
 object SampleNamedRDDJob  extends SparkJob with NamedRddSupport {
     override def runJob(sc:SparkContext, jobConfig: Config): Any = ???
-    override def validate(sc:SparkContext, config: Contig): SparkJobValidation = ???
+    override def validate(sc:SparkContext, config: Config): SparkJobValidation = ???
 }
 ```
 
@@ -248,7 +266,9 @@ the REST API.
 ### Context configuration
 
 A number of context-specific settings can be controlled when creating a context (POST /contexts) or running an
-ad-hoc job (which creates a context on the spot).
+ad-hoc job (which creates a context on the spot).  For example, add urls of dependent jars for a context.
+
+    POST '/contexts/my-new-context?dependent-jar-uris=file:///some/path/of/my-foo-lib.jar'
 
 When creating a context via POST /contexts, the query params are used to override the default configuration in
 spark.context-settings.  For example,
@@ -304,6 +324,8 @@ If we encounter a data type that is not supported, then the entire result will b
 ## Contribution and Development
 Contributions via Github Pull Request are welcome.  See the TODO for some ideas.
 
+- If you need to build with a specific scala version use ++x.xx.x followed by the regular command,
+for instance: `sbt ++2.11.6 job-server/compile` 
 - From the "master" project, please run "test" to ensure nothing is broken.
    - You may need to set `SPARK_LOCAL_IP` to `localhost` to ensure Akka port can bind successfully
 - Logging for tests goes to "job-server-test.log"
@@ -315,8 +337,8 @@ Contributions via Github Pull Request are welcome.  See the TODO for some ideas.
 ### Publishing packages
 
 - Be sure you are in the master project
-- Run `test` to ensure all tests pass
-- Now just run `publish` and package will be published to bintray
+- Run `+test` to ensure all tests pass for all scala versions
+- Now just run `+publish` and package will be published to bintray
 
 To announce the release on [ls.implicit.ly](http://ls.implicit.ly/), use
 [Herald](https://github.com/n8han/herald#install) after adding release notes in
