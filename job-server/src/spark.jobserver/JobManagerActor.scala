@@ -11,7 +11,7 @@ import org.joda.time.DateTime
 import scala.concurrent.{ Future, ExecutionContext }
 import scala.util.{Failure, Success, Try}
 import spark.jobserver.ContextSupervisor.StopContext
-import spark.jobserver.io.{ JobDAO, JobInfo, JarInfo }
+import spark.jobserver.io.{JobDAOActor, JobDAO, JobInfo, JarInfo}
 import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
 
 object JobManagerActor {
@@ -27,7 +27,7 @@ object JobManagerActor {
   case class JobLoadingError(err: Throwable)
 
   // Akka 2.2.x style actor props for actor creation
-  def props(dao: JobDAO, name: String, config: Config, isAdHoc: Boolean,
+  def props(dao: ActorRef, name: String, config: Config, isAdHoc: Boolean,
             resultActorRef: Option[ActorRef] = None): Props =
     Props(classOf[JobManagerActor], dao, name, config, isAdHoc, resultActorRef)
 }
@@ -58,7 +58,7 @@ object JobManagerActor {
  *   }
  * }}}
  */
-class JobManagerActor(dao: JobDAO,
+class JobManagerActor(dao: ActorRef,
                       contextName: String,
                       contextConfig: Config,
                       isAdHoc: Boolean,
@@ -136,7 +136,17 @@ class JobManagerActor(dao: JobDAO,
                        rddManagerActor: ActorRef): Option[Future[Any]] = {
     var future: Option[Future[Any]] = None
     breakable {
-      val lastUploadTime = dao.getLastUploadTime(appName)
+      import akka.pattern.ask
+      import akka.util.Timeout
+      import scala.concurrent.duration._
+      import scala.concurrent.Await
+
+      val daoAskTimeout = Timeout(3 seconds)
+      val resp = Await.result(
+        (dao ? JobDAOActor.GetLastUploadTime(appName))(daoAskTimeout).mapTo[JobDAOActor.LastUploadTime],
+        daoAskTimeout.duration)
+
+      val lastUploadTime = resp.lastUploadTime
       if (!lastUploadTime.isDefined) {
         sender ! NoSuchApplication
         break

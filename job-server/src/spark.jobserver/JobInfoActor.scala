@@ -7,7 +7,7 @@ import com.typesafe.config.Config
 import ooyala.common.akka.InstrumentedActor
 import scala.concurrent.Await
 import spark.jobserver.ContextSupervisor.{GetContext, GetAdHocContext}
-import spark.jobserver.io.JobDAO
+import spark.jobserver.io.{JobDAOActor, JobDAO}
 
 object JobInfoActor {
   // Requests
@@ -19,7 +19,7 @@ object JobInfoActor {
   case object JobConfigStored
 }
 
-class JobInfoActor(jobDao: JobDAO, contextSupervisor: ActorRef) extends InstrumentedActor {
+class JobInfoActor(jobDao: ActorRef, contextSupervisor: ActorRef) extends InstrumentedActor {
   import CommonMessages._
   import JobInfoActor._
   import scala.concurrent.duration._
@@ -31,44 +31,53 @@ class JobInfoActor(jobDao: JobDAO, contextSupervisor: ActorRef) extends Instrume
 
   override def wrappedReceive: Receive = {
     case GetJobStatuses(limit) =>
-      val infos = jobDao.getJobInfos.values.toSeq.sortBy(_.startTime.toString())
-      if (limit.isDefined) {
-        sender ! infos.takeRight(limit.get)
-      } else {
-        sender ! infos
-      }
+      import akka.pattern.{ask, pipe}
+      val req = (jobDao ? JobDAOActor.GetJobInfos).mapTo[JobDAOActor.JobInfos].map { jobInfos =>
+        val infos = jobInfos.jobInfos.values.toSeq.sortBy(_.startTime.toString())
+        if (limit.isDefined) {
+          infos.takeRight(limit.get)
+        }
+        else {
+          infos
+        }
+      }.pipeTo(sender)
 
     case GetJobResult(jobId) =>
-      breakable {
-        val jobInfoOpt = jobDao.getJobInfos.get(jobId)
+      import akka.pattern.{ask, pipe}
+      val receiver = sender()
+      val req = (jobDao ? JobDAOActor.GetJobInfos).mapTo[JobDAOActor.JobInfos]
+      req.map { resp =>
+        val jobInfoOpt = resp.jobInfos.get(jobId)
         if (!jobInfoOpt.isDefined) {
-          sender ! NoSuchJobId
-          break
+          NoSuchJobId
         }
-
-        jobInfoOpt.filter { job => job.isRunning || job.isErroredOut }
-          .foreach { jobInfo =>
-            sender ! jobInfo
-            break
+        else {
+          val runningOrErrored = jobInfoOpt.filter { job => job.isRunning || job.isErroredOut }
+          if (runningOrErrored.isDefined) {
+            runningOrErrored.get
           }
+          else {
+            //get the context from jobInfo
+            val context = jobInfoOpt.get.contextName
 
-        // get the context from jobInfo
-        val context = jobInfoOpt.get.contextName
+            val future = (contextSupervisor ? ContextSupervisor.GetResultActor(context)).mapTo[ActorRef]
+            val resultActor = Await.result(future, 3 seconds)
 
-        val future = (contextSupervisor ? ContextSupervisor.GetResultActor(context)).mapTo[ActorRef]
-        val resultActor = Await.result(future, 3 seconds)
-
-        val receiver = sender // must capture the sender since callbacks are run in a different thread
-        for (result <- (resultActor ? GetJobResult(jobId))) {
-          receiver ! result // a JobResult(jobId, result) object is sent
+            val jobResultFuture = (resultActor ? GetJobResult(jobId))
+            val jobResult = Await.result(jobResultFuture, 3 seconds)
+            jobResult
+          }
         }
-      }
+      }.pipeTo(receiver)
 
     case GetJobConfig(jobId) =>
-      sender ! jobDao.getJobConfigs.get(jobId).getOrElse(NoSuchJobId)
+      import akka.pattern.{ask,pipe}
+      (jobDao ? JobDAOActor.GetJobConfigs).mapTo[JobDAOActor.JobConfigs].map { jobConfigs =>
+        jobConfigs.jobConfigs.get(jobId).getOrElse(NoSuchJobId)
+      }.pipeTo(sender)
 
     case StoreJobConfig(jobId, jobConfig) =>
-      jobDao.saveJobConfig(jobId, jobConfig)
+      jobDao ! JobDAOActor.SaveJobConfig(jobId, jobConfig)
       sender ! JobConfigStored
   }
 }

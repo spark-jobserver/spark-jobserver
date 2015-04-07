@@ -43,16 +43,6 @@ class JobDAOActor(dao:JobDAO) extends InstrumentedActor {
   def wrappedReceive: Receive = {
     case SaveJar(appName,uploadTime,jarBytes) =>
       dao.saveJar(appName, uploadTime, jarBytes)
-      /*val originator = sender()
-      if (!JarUtils.validateJarBytes(jarBytes))
-      {
-        originator ! InvalidJar
-      }
-      else
-      {
-        dao.saveJar(appName, uploadTime, jarBytes)
-        originator ! JarStored
-      }*/
 
     case GetApps =>
       sender() ! Apps(dao.getApps)

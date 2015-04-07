@@ -65,7 +65,7 @@ object ContextSupervisor {
  *   }
  * }}}
  */
-class LocalContextSupervisorActor(dao: JobDAO) extends InstrumentedActor {
+class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
   import ContextSupervisor._
   import scala.collection.JavaConverters._
   import scala.concurrent.duration._

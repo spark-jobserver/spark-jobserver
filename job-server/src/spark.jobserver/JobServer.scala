@@ -52,8 +52,9 @@ object JobServer {
     val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO), "dao-manager")
 
     val jarManager = system.actorOf(Props(classOf[JarManager], daoActor), "jar-manager")
-    val supervisor = system.actorOf(Props(classOf[LocalContextSupervisorActor], jobDAO), "context-supervisor")
-    val jobInfo = system.actorOf(Props(classOf[JobInfoActor], jobDAO, supervisor), "job-info")
+    val supervisor = system.actorOf(Props(classOf[LocalContextSupervisorActor], daoActor),
+      "context-supervisor")
+    val jobInfo = system.actorOf(Props(classOf[JobInfoActor], daoActor, supervisor), "job-info")
 
     // Create initial contexts
     supervisor ! ContextSupervisor.AddContextsFromConfig
