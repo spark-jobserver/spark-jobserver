@@ -15,7 +15,8 @@ import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
 
 object JobManagerActor {
   // Messages
-  case object Initialize
+  case class Initialize(daoActor: ActorRef, resultActorOpt: Option[ActorRef],
+                         contextName: String, contextConfig: Config, isAdHoc: Boolean)
   case class StartJob(appName: String, classPath: String, config: Config,
                       subscribedEvents: Set[Class[_]])
 
@@ -25,9 +26,7 @@ object JobManagerActor {
   case class JobLoadingError(err: Throwable)
 
   // Akka 2.2.x style actor props for actor creation
-  def props(dao: ActorRef, name: String, config: Config, isAdHoc: Boolean,
-            resultActorRef: Option[ActorRef] = None): Props =
-    Props(classOf[JobManagerActor], dao, name, config, isAdHoc, resultActorRef)
+  def props(): Props = Props(classOf[JobManagerActor])
 }
 
 /**
@@ -56,11 +55,7 @@ object JobManagerActor {
  *   }
  * }}}
  */
-class JobManagerActor(dao: ActorRef,
-                      contextName: String,
-                      contextConfig: Config,
-                      isAdHoc: Boolean,
-                      resultActorRef: Option[ActorRef] = None) extends InstrumentedActor {
+class JobManagerActor extends InstrumentedActor {
 
   import CommonMessages._
   import JobManagerActor._
@@ -80,15 +75,21 @@ class JobManagerActor(dao: ActorRef,
   // When the job cache retrieves a jar from the DAO, it also adds it to the SparkContext for distribution
   // to executors.  We do not want to add the same jar every time we start a new job, as that will cause
   // the executors to re-download the jar every time, and causes race conditions.
-  // NOTE: It's important that jobCache be lazy as sparkContext is not initialized until later
+
   private val jobCacheSize = Try(config.getInt("spark.job-cache.max-entries")).getOrElse(10000)
   private val jobCacheEnabled = Try(config.getBoolean("spark.job-cache.enabled")).getOrElse(false)
   // Use Spark Context's built in classloader when SPARK-1230 is merged.
   private val jarLoader = new ContextURLClassLoader(Array[URL](), getClass.getClassLoader)
-  lazy val jobCache = new JobCache(jobCacheSize, dao, jobContext.sparkContext, jarLoader, jobCacheEnabled)
 
-  private val statusActor = context.actorOf(Props(classOf[JobStatusActor], dao), "status-actor")
-  protected val resultActor = resultActorRef.getOrElse(context.actorOf(Props[JobResultActor], "result-actor"))
+  //NOTE: Must be initialized after sparkContext is created
+  private var jobCache: JobCache = _
+
+  private var statusActor: ActorRef = _
+  protected var resultActor: ActorRef = _
+  private var daoActor: ActorRef = _
+  private var contextName: String = _
+  private var contextConfig: Config = _
+  private var isAdHoc: Boolean = _
 
   override def postStop() {
     logger.info("Shutting down SparkContext {}", contextName)
@@ -96,7 +97,14 @@ class JobManagerActor(dao: ActorRef,
   }
 
   def wrappedReceive: Receive = {
-    case Initialize =>
+    case Initialize(dao, resOpt, ctxName, ctxConf, adHoc) =>
+      daoActor = dao
+      statusActor = context.actorOf(Props(classOf[JobStatusActor], daoActor))
+      resultActor = resOpt.getOrElse(context.actorOf(Props[JobResultActor]))
+      contextName = ctxName
+      contextConfig = ctxConf
+      isAdHoc = adHoc
+
       try {
         // Load side jars first in case the ContextFactory comes from it
         getSideJars(contextConfig).foreach { jarUri =>
@@ -106,6 +114,7 @@ class JobManagerActor(dao: ActorRef,
         sparkEnv = SparkEnv.get
         rddManagerActor = context.actorOf(Props(classOf[RddManagerActor], jobContext.sparkContext),
                                           "rdd-manager-actor")
+        jobCache = new JobCache(jobCacheSize, daoActor, jobContext.sparkContext, jarLoader, jobCacheEnabled)
         getSideJars(contextConfig).foreach { jarUri => jobContext.sparkContext.addJar(jarUri) }
         sender ! Initialized(resultActor)
       } catch {
@@ -135,7 +144,7 @@ class JobManagerActor(dao: ActorRef,
 
       val daoAskTimeout = Timeout(3 seconds)
       val resp = Await.result(
-        (dao ? JobDAOActor.GetLastUploadTime(appName))(daoAskTimeout).mapTo[JobDAOActor.LastUploadTime],
+        (daoActor ? JobDAOActor.GetLastUploadTime(appName))(daoAskTimeout).mapTo[JobDAOActor.LastUploadTime],
         daoAskTimeout.duration)
 
       val lastUploadTime = resp.lastUploadTime

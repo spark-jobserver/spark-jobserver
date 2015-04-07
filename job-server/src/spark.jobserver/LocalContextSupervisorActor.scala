@@ -156,9 +156,9 @@ class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
     logger.info("Creating a SparkContext named {}", name)
 
     val resultActorRef = if (isAdHoc) Some(globalResultActor) else None
-    val ref = context.actorOf(Props(
-      classOf[JobManagerActor], dao, name, contextConfig, isAdHoc, resultActorRef), name)
-    (ref ? JobManagerActor.Initialize)(Timeout(timeoutSecs.second)).onComplete {
+    val ref = context.actorOf(Props(classOf[JobManagerActor]), name)
+    (ref ? JobManagerActor.Initialize(
+      dao, resultActorRef, name, contextConfig, isAdHoc))(Timeout(timeoutSecs.second)).onComplete {
       case Failure(e: Exception) =>
         logger.error("Exception after sending Initialize to JobManagerActor", e)
         // Make sure we try to shut down the context in case it gets created anyways
