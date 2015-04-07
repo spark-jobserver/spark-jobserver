@@ -4,7 +4,7 @@ import akka.actor.ActorSystem
 import akka.actor.Props
 import com.typesafe.config.{Config, ConfigFactory}
 import java.io.File
-import spark.jobserver.io.JobDAO
+import spark.jobserver.io.{JobDAOActor, JobDAO}
 import org.slf4j.LoggerFactory
 
 /**
@@ -49,13 +49,15 @@ object JobServer {
     val ctor = clazz.getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
     val jobDAO = ctor.newInstance(config).asInstanceOf[JobDAO]
 
-    val jarManager = system.actorOf(Props(classOf[JarManager], jobDAO), "jar-manager")
+    val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO), "dao-manager")
+
+    val jarManager = system.actorOf(Props(classOf[JarManager], daoActor), "jar-manager")
     val supervisor = system.actorOf(Props(classOf[LocalContextSupervisorActor], jobDAO), "context-supervisor")
     val jobInfo = system.actorOf(Props(classOf[JobInfoActor], jobDAO, supervisor), "job-info")
 
     // Create initial contexts
     supervisor ! ContextSupervisor.AddContextsFromConfig
-    new WebApi(system, config, port, jarManager, supervisor, jobInfo).start()
+    new WebApi(system, config, port, jarManager, supervisor, jobInfo, daoActor).start()
 
   }
 
