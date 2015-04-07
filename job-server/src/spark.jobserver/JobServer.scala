@@ -57,7 +57,7 @@ object JobServer {
 
     // Create initial contexts
     supervisor ! ContextSupervisor.AddContextsFromConfig
-    new WebApi(system, config, port, jarManager, supervisor, jobInfo, daoActor).start()
+    new WebApi(system, config, port, jarManager, supervisor, jobInfo).start()
 
   }
 

@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory
 import spark.jobserver.util.SparkJobUtils
 import scala.concurrent.{Await, ExecutionContext}
 import scala.util.Try
-import spark.jobserver.io.{JobDAOActor, JobInfo}
+import spark.jobserver.io.JobInfo
 import spray.http.HttpResponse
 import spray.http.MediaTypes
 import spray.http.StatusCodes
@@ -24,8 +24,7 @@ class WebApi(system: ActorSystem,
              port: Int,
              jarManager: ActorRef,
              supervisor: ActorRef,
-             jobInfo: ActorRef,
-             daoActor: ActorRef)
+             jobInfo: ActorRef)
     extends HttpService with CommonRoutes {
   import CommonMessages._
   import ContextSupervisor._
