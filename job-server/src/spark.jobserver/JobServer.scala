@@ -48,7 +48,6 @@ object JobServer {
     val clazz = Class.forName(config.getString("spark.jobserver.jobdao"))
     val ctor = clazz.getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
     val jobDAO = ctor.newInstance(config).asInstanceOf[JobDAO]
-
     val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO), "dao-manager")
 
     val jarManager = system.actorOf(Props(classOf[JarManager], daoActor), "jar-manager")
