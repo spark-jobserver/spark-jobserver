@@ -37,6 +37,10 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
   private val cluster = Cluster(context.system)
   private val selfAddress = cluster.selfAddress
 
+  // This is for capturing results for ad-hoc jobs. Otherwise when ad-hoc job dies, resultActor also dies,
+  // and there is no way to retrieve results.
+  val globalResultActor = context.actorOf(Props[JobResultActor], "global-result-actor")
+
   logger.info("AkkaClusterSupervisor initialized on {}", selfAddress)
 
   override def preStart(): Unit = {
@@ -109,10 +113,33 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
         originator ! ContextInitError(err)
       }
 
-    case GetResultActor(name) => //???
-    case GetContext(name) => //???
-    case StopContext(name) => //???
-    case Terminated(actorRef) => //???
+    case GetResultActor(name) =>
+      sender ! resultActors.get(name).getOrElse(globalResultActor)
+
+    case GetContext(name) =>
+      if (contexts contains name) {
+        sender ! (contexts(name), resultActors(name))
+      } else {
+        sender ! NoSuchContext
+      }
+
+    case StopContext(name) =>
+      if (contexts contains name) {
+        logger.info("Shutting down context {}", name)
+
+        context.watch(contexts(name))
+        contexts(name) ! PoisonPill
+        resultActors.remove(name)
+        sender ! ContextStopped
+      } else {
+        sender ! NoSuchContext
+      }
+
+    case Terminated(actorRef) =>
+      val name: String = actorRef.path.name
+      logger.info("Actor terminated: {}", name)
+      contexts.foreach { kv => if (kv._2 == actorRef) contexts.remove(kv._1) }
+      resultActors.foreach { kv => if (kv._2 == actorRef) resultActors.remove(kv._1) }
   }
 
   private def initContext(actorName: String, ref: ActorRef, timeoutSecs: Int = 1)
@@ -120,8 +147,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
                          (successFunc: ActorRef => Unit, failureFunc: Throwable => Unit): Unit = {
     import akka.pattern.ask
 
-    context.watch(ref)
-    val resultActor = context.actorOf(Props(classOf[JobResultActor]))
+    val resultActor = if (isAdHoc) globalResultActor else context.actorOf(Props(classOf[JobResultActor]))
     (ref ? JobManagerActor.Initialize(
       daoActor, Some(resultActor), ctxName, ctxConf, isAdHoc, self))(Timeout(timeoutSecs.second)).onComplete {
       case Failure(e:Exception) =>
