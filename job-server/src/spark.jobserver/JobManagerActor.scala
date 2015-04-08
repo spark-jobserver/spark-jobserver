@@ -16,7 +16,7 @@ import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
 object JobManagerActor {
   // Messages
   case class Initialize(daoActor: ActorRef, resultActorOpt: Option[ActorRef],
-                         contextName: String, contextConfig: Config, isAdHoc: Boolean)
+                         contextName: String, contextConfig: Config, isAdHoc: Boolean, supervisor: ActorRef)
   case class StartJob(appName: String, classPath: String, config: Config,
                       subscribedEvents: Set[Class[_]])
 
@@ -90,6 +90,8 @@ class JobManagerActor extends InstrumentedActor {
   private var contextName: String = _
   private var contextConfig: Config = _
   private var isAdHoc: Boolean = _
+  private var supervisor: ActorRef = _
+
 
   override def postStop() {
     logger.info("Shutting down SparkContext {}", contextName)
@@ -97,13 +99,14 @@ class JobManagerActor extends InstrumentedActor {
   }
 
   def wrappedReceive: Receive = {
-    case Initialize(dao, resOpt, ctxName, ctxConf, adHoc) =>
+    case Initialize(dao, resOpt, ctxName, ctxConf, adHoc, sup) =>
       daoActor = dao
       statusActor = context.actorOf(Props(classOf[JobStatusActor], daoActor))
       resultActor = resOpt.getOrElse(context.actorOf(Props[JobResultActor]))
       contextName = ctxName
       contextConfig = ctxConf
       isAdHoc = adHoc
+      supervisor = sup
 
       try {
         // Load side jars first in case the ContextFactory comes from it
@@ -284,7 +287,7 @@ class JobManagerActor extends InstrumentedActor {
   // This method should be called after each job is succeeded or failed
   private def postEachJob() {
     // Delete the JobManagerActor after each adhoc job
-    if (isAdHoc) context.parent ! StopContext(contextName) // its parent is LocalContextSupervisorActor
+    if (isAdHoc) supervisor ! StopContext(contextName)
   }
 
   // Protocol like "local" is supported in Spark for Jar loading, but not supported in Java.
