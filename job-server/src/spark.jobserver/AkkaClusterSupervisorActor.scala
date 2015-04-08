@@ -80,6 +80,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
 
     case ListContexts =>
       sender ! contexts.keys.toSeq
+
     case AddContext(name, contextConfig) =>
       val originator = sender()
       val mergedConfig = contextConfig.withFallback(defaultContextConfig)
@@ -92,7 +93,22 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
           originator ! ContextInitError(err)
         }
       }
-    case GetAdHocContext(classPath, contextConfig) => //???
+
+    case GetAdHocContext(classPath, contextConfig) =>
+      val originator = sender()
+      val mergedConfig = contextConfig.withFallback(defaultContextConfig)
+
+      var contextName = ""
+      do {
+        contextName = java.util.UUID.randomUUID().toString().substring(0, 8) + "-" + classPath
+      } while (contexts contains contextName)
+
+      startContext(contextName, mergedConfig, true) { ref =>
+        originator ! (contexts(contextName), resultActors(contextName))
+      } { err =>
+        originator ! ContextInitError(err)
+      }
+
     case GetResultActor(name) => //???
     case GetContext(name) => //???
     case StopContext(name) => //???
