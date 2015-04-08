@@ -2,7 +2,7 @@ package spark.jobserver
 
 import akka.actor.ActorSystem
 import akka.actor.Props
-import com.typesafe.config.{Config, ConfigFactory}
+import com.typesafe.config.{ConfigValueFactory, Config, ConfigFactory}
 import java.io.File
 import spark.jobserver.io.{JobDAOActor, JobDAO}
 import org.slf4j.LoggerFactory
@@ -51,7 +51,7 @@ object JobServer {
     val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO), "dao-manager")
 
     val jarManager = system.actorOf(Props(classOf[JarManager], daoActor), "jar-manager")
-    val supervisor = system.actorOf(Props(classOf[LocalContextSupervisorActor], daoActor),
+    val supervisor = system.actorOf(Props(classOf[AkkaClusterSupervisorActor], daoActor),
       "context-supervisor")
     val jobInfo = system.actorOf(Props(classOf[JobInfoActor], daoActor, supervisor), "job-info")
 
@@ -62,6 +62,14 @@ object JobServer {
   }
 
   def main(args: Array[String]) {
-    start(args, config => ActorSystem("JobServer", config))
+    import scala.collection.JavaConverters._
+    def makeSupervisorSystem(name: String)(config: Config): ActorSystem = {
+      val configWithRole = config.withValue("akka.cluster.roles",
+        ConfigValueFactory.fromIterable(List("supervisor").asJava))
+      ActorSystem(name, configWithRole)
+    }
+    start(args, makeSupervisorSystem("JobServer")(_))
   }
+
+
 }
