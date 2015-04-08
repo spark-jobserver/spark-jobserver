@@ -75,7 +75,9 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
       }
 
 
-    case AddContextsFromConfig => //???
+    case AddContextsFromConfig =>
+      addContextsFromConfig(config)
+
     case ListContexts =>
       sender ! contexts.keys.toSeq
     case AddContext(name, contextConfig) =>
@@ -151,6 +153,16 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
   }
 
   private def addContextsFromConfig(config: Config) {
+    for (contexts <- Try(config.getObject("spark.contexts"))) {
+      contexts.keySet().asScala.foreach { contextName =>
+        val contextConfig = config.getConfig("spark.contexts." + contextName)
+          .withFallback(defaultContextConfig)
+        startContext(contextName, contextConfig, false) { ref =>} {
+          e => logger.error("Unable to start context" + contextName, e)
+        }
+        Thread sleep 1000 // Give some spacing so multiple contexts can be created
+      }
+    }
 
   }
 
