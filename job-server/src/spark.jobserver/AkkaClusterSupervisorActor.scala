@@ -1,6 +1,7 @@
 package spark.jobserver
 
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 
 import akka.actor._
 import akka.cluster.Cluster
@@ -22,8 +23,9 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
 
   val config = context.system.settings.config
   val defaultContextConfig = config.getConfig("spark.context-settings")
+  val contextInitTimeout = config.getDuration("spark.context-settings.context-init-timeout",
+                                                TimeUnit.SECONDS)
   val managerStartCommand = config.getString("deploy.manager-start-cmd")
-  val contextTimeout = SparkJobUtils.getContextTimeout(config)
   import context.dispatcher
 
   //actor name -> (context name, context config, context isadhoc)
@@ -69,7 +71,8 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
           if (initInfoOpt.isDefined && callbackOpt.isDefined) {
             val (ctxName, ctxConf, isAdHoc) = initInfoOpt.get
             val (successFunc, failureFunc) = callbackOpt.get
-            initContext(actorName, actorRef, 10)(ctxName, ctxConf, isAdHoc)(successFunc, failureFunc)
+            initContext(actorName, actorRef, contextInitTimeout)(
+              ctxName, ctxConf, isAdHoc)(successFunc, failureFunc)
           }
           else {
             logger.warn("No initialization or callback found for jobManager actor {}", actorRef.path)
@@ -142,7 +145,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
       resultActors.foreach { kv => if (kv._2 == actorRef) resultActors.remove(kv._1) }
   }
 
-  private def initContext(actorName: String, ref: ActorRef, timeoutSecs: Int = 1)
+  private def initContext(actorName: String, ref: ActorRef, timeoutSecs: Long = 1)
                          (ctxName: String, ctxConf: Config, isAdHoc: Boolean)
                          (successFunc: ActorRef => Unit, failureFunc: Throwable => Unit): Unit = {
     import akka.pattern.ask
@@ -183,12 +186,10 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
       }
     }
 
-    if (processStart.isSuccess)
-    {
+    if (processStart.isSuccess) {
       contextInitInfos(contextActorName) = (name, contextConfig, isAdHoc)
       contextCallbacks(contextActorName) = (successFunc, failureFunc)
-    }
-    else {
+    } else {
       failureFunc(processStart.failed.get)
     }
 
