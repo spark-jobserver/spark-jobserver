@@ -4,6 +4,7 @@ import akka.actor.ActorRef
 import com.yammer.metrics.core.Meter
 import ooyala.common.akka.InstrumentedActor
 import ooyala.common.akka.metrics.YammerMetrics
+import org.joda.time.DateTime
 import scala.collection.mutable
 import scala.util.Try
 import spark.jobserver.io.{JobDAOActor, JobInfo, JobDAO}
@@ -31,6 +32,13 @@ class JobStatusActor(jobDao: ActorRef) extends InstrumentedActor with YammerMetr
   val metricNumSubscriptions = gauge("num-subscriptions", subscribers.size)
   val metricNumJobInfos = gauge("num-running-jobs", infos.size)
   val metricStatusRates = mutable.HashMap.empty[String, Meter]
+
+  override def postStop(): Unit = {
+    val stopTime = DateTime.now()
+    val stoppedInfos = infos.values.map { info =>
+      info.copy(endTime = Some(stopTime), error = Some(new Exception("Context for this job was terminated")))}
+    stoppedInfos.foreach({info => jobDao ! JobDAOActor.SaveJobInfo(info)})
+  }
 
   override def wrappedReceive: Receive = {
     case GetRunningJobStatus =>
