@@ -1,6 +1,5 @@
 #!/bin/bash
-# Script to start the job manager
-# args: <job manager actor name> <cluster address>
+
 set -e
 
 get_abs_script_path() {
@@ -11,16 +10,6 @@ get_abs_script_path() {
 }
 
 get_abs_script_path
-
-GC_OPTS="-XX:+UseConcMarkSweepGC
-         -verbose:gc -XX:+PrintGCTimeStamps -Xloggc:$appdir/gc.out
-         -XX:MaxPermSize=512m
-         -XX:+CMSClassUnloadingEnabled "
-
-JAVA_OPTS="-Xmx5g -XX:MaxDirectMemorySize=512M
-           -XX:+HeapDumpOnOutOfMemoryError -Djava.net.preferIPv4Stack=true"
-
-MAIN="spark.jobserver.JobManager"
 
 conffile=$(ls -1 $appdir/*.conf | head -1)
 if [ -z "$conffile" ]; then
@@ -74,5 +63,3 @@ export SPARK_HOME
 # job server jar needs to appear first so its deps take higher priority
 # need to explicitly include app dir in classpath so logging configs can be found
 CLASSPATH="$appdir:$appdir/spark-job-server.jar:$($SPARK_HOME/bin/compute-classpath.sh)"
-
-exec java -cp $CLASSPATH $GC_OPTS $JAVA_OPTS $LOGGING_OPTS $CONFIG_OVERRIDES $MAIN $1 $2 $conffile 2>&1 &
