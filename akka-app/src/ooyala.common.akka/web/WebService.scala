@@ -1,6 +1,8 @@
 package ooyala.common.akka.web
 
 import akka.actor.ActorSystem
+import com.typesafe.config.Config
+import spray.can.server.ServerSettings
 import spray.routing.{Route, SimpleRoutingApp}
 
 /**
@@ -16,9 +18,9 @@ object WebService extends SimpleRoutingApp {
    * @param host The host string to bind to, defaults to "0.0.0.0"
    * @param port The port number to bind to
    */
-  def start(route: Route, system: ActorSystem,
+  def start(route: Route, system: ActorSystem, config: Config,
             host: String = "0.0.0.0", port: Int = 8080) {
     implicit val actorSystem = system
-    startServer(host, port)(route)
+    startServer(host, port, settings = Some(ServerSettings.fromSubConfig(config)))(route)
   }
 }
