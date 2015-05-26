@@ -51,7 +51,7 @@ class WebApi(system: ActorSystem,
 
   def start() {
     logger.info("Starting browser web service...")
-    WebService.start(myRoutes ~ commonRoutes, system, bindAddress, port)
+    WebService.start(myRoutes ~ commonRoutes, system, config, bindAddress, port)
   }
 
   /**
