@@ -36,11 +36,6 @@ fi
 # Pull in other env vars in spark config, such as MESOS_NATIVE_LIBRARY
 . $SPARK_CONF_DIR/spark-env.sh
 
-if [ -f "$PIDFILE" ] && kill -0 $(cat "$PIDFILE"); then
-   echo 'Job server is already running'
-   exit 1
-fi
-
 if [ -z "$LOG_DIR" ]; then
   LOG_DIR=/tmp/job-server
   echo "LOG_DIR empty; logging will go to $LOG_DIR"
