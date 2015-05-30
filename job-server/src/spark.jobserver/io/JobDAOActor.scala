@@ -1,5 +1,6 @@
 package spark.jobserver.io
 
+import akka.actor.Props
 import com.typesafe.config.Config
 import ooyala.common.akka.InstrumentedActor
 import org.joda.time.DateTime
@@ -35,6 +36,7 @@ object JobDAOActor {
   case object InvalidJar //SaveJar?
   case object JarStored //SaveJar?
 
+  def props(dao: JobDAO): Props = Props(classOf[JobDAOActor], dao)
 }
 
 class JobDAOActor(dao:JobDAO) extends InstrumentedActor {

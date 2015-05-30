@@ -3,7 +3,7 @@ package spark.jobserver
 import akka.actor._
 import akka.testkit.{TestKit, ImplicitSender}
 import com.typesafe.config.ConfigFactory
-import spark.jobserver.io.JobDAO
+import spark.jobserver.io.{JobDAOActor, JobDAO}
 import org.scalatest.{Matchers, FunSpecLike, BeforeAndAfterAll, BeforeAndAfter}
 
 
@@ -50,6 +50,7 @@ class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.syst
 
   var supervisor: ActorRef = _
   var dao: JobDAO = _
+  var daoActor: ActorRef = _
 
   val contextConfig = LocalContextSupervisorSpec.config.getConfig("spark.context-settings")
 
@@ -58,7 +59,8 @@ class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.syst
 
   before {
     dao = new InMemoryDAO
-    supervisor = system.actorOf(Props(classOf[LocalContextSupervisorActor], dao))
+    daoActor = system.actorOf(JobDAOActor.props(dao))
+    supervisor = system.actorOf(Props(classOf[LocalContextSupervisorActor], daoActor))
   }
 
   after {
@@ -91,7 +93,6 @@ class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.syst
       expectMsg(Seq("c1", "c2"))
       supervisor ! GetResultActor("c1")
       val rActor = expectMsgClass(classOf[ActorRef])
-      rActor.path.toString should endWith ("result-actor")
       rActor.path.toString should not include ("global")
     }
 

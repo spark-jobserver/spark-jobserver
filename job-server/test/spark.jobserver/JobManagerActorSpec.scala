@@ -1,20 +1,23 @@
 package spark.jobserver
 
 import akka.actor.Props
+import akka.testkit.TestProbe
 import spark.jobserver.CommonMessages.{JobErroredOut, JobResult}
+import spark.jobserver.io.JobDAOActor
 
-class JobManagerActorSpec extends JobManagerSpec {
+class JobManagerActorSpec extends JobManagerSpec(adhoc = false) {
   import scala.concurrent.duration._
 
   before {
     dao = new InMemoryDAO
-    manager =
-      system.actorOf(JobManagerActor.props(dao, "test", JobManagerSpec.config, false))
+    daoActor = system.actorOf(JobDAOActor.props(dao))
+    manager = system.actorOf(JobManagerActor.props())
+    supervisor = TestProbe().ref
   }
 
   describe("starting jobs") {
     it("jobs should be able to cache RDDs and retrieve them through getPersistentRDDs") {
-      manager ! JobManagerActor.Initialize
+      manager ! JobManagerActor.Initialize(daoActor, None, "ctx", JobManagerSpec.config, false, supervisor)
       expectMsgClass(classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
@@ -30,7 +33,7 @@ class JobManagerActorSpec extends JobManagerSpec {
     }
 
     it ("jobs should be able to cache and retrieve RDDs by name") {
-      manager ! JobManagerActor.Initialize
+      manager ! JobManagerActor.Initialize(daoActor, None, "ctx", JobManagerSpec.config, false, supervisor)
       expectMsgClass(classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
