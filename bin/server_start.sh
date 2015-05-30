@@ -26,5 +26,11 @@ MAIN="spark.jobserver.JobServer"
 
 . $appdir/setenv.sh
 
+PIDFILE=$appdir/spark-jobserver.pid
+if [ -f "$PIDFILE" ] && kill -0 $(cat "$PIDFILE"); then
+   echo 'Job server is already running'
+   exit 1
+fi
+
 exec java -cp $CLASSPATH $GC_OPTS $JAVA_OPTS $LOGGING_OPTS $CONFIG_OVERRIDES $MAIN $conffile 2>&1 &
 echo $! > $pidFilePath
