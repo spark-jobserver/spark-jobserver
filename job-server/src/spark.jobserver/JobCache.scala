@@ -19,6 +19,7 @@ case class JobJarInfo(constructor: () => SparkJobBase,
  * A cache for SparkJob classes.  A lot of times jobs are run repeatedly, and especially for low-latency
  * jobs, why retrieve the jar and load it every single time?
  */
+
 class JobCache(maxEntries: Int, dao: ActorRef, sparkContext: SparkContext, loader: ContextURLClassLoader) {
   import scala.concurrent.duration._
 
