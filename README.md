@@ -233,6 +233,9 @@ def validate(sc:SparkContext, config: Contig): SparkJobValidation = {
 
 NOTE: by default the assembly jar from `job-server-extras`, which includes support for SQLContext and HiveContext, is used.  If you face issues with all the extra dependencies, consider modifying the install scripts to invoke `sbt job-server/assembly` instead, which doesn't include the extra dependencies.
 
+NOTE: Each context is a separate process launched using spark-submit, via the included `manager_start.sh` script.
+You may want to set `deploy.manager-start-cmd` to the correct path to your start script and customize the script.
+
 Note: to test out the deploy to a local staging dir, or package the job server for Mesos,
 use `bin/server_package.sh <environment>`.
 
