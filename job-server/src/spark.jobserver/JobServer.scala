@@ -2,9 +2,9 @@ package spark.jobserver
 
 import akka.actor.ActorSystem
 import akka.actor.Props
-import com.typesafe.config.{Config, ConfigFactory}
+import com.typesafe.config.{ConfigValueFactory, Config, ConfigFactory}
 import java.io.File
-import spark.jobserver.io.JobDAO
+import spark.jobserver.io.{JobDAOActor, JobDAO}
 import org.slf4j.LoggerFactory
 
 /**
@@ -48,10 +48,12 @@ object JobServer {
     val clazz = Class.forName(config.getString("spark.jobserver.jobdao"))
     val ctor = clazz.getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
     val jobDAO = ctor.newInstance(config).asInstanceOf[JobDAO]
+    val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO), "dao-manager")
 
-    val jarManager = system.actorOf(Props(classOf[JarManager], jobDAO), "jar-manager")
-    val supervisor = system.actorOf(Props(classOf[LocalContextSupervisorActor], jobDAO), "context-supervisor")
-    val jobInfo = system.actorOf(Props(classOf[JobInfoActor], jobDAO, supervisor), "job-info")
+    val jarManager = system.actorOf(Props(classOf[JarManager], daoActor), "jar-manager")
+    val supervisor = system.actorOf(Props(classOf[AkkaClusterSupervisorActor], daoActor),
+      "context-supervisor")
+    val jobInfo = system.actorOf(Props(classOf[JobInfoActor], daoActor, supervisor), "job-info")
 
     // Create initial contexts
     supervisor ! ContextSupervisor.AddContextsFromConfig
@@ -60,6 +62,14 @@ object JobServer {
   }
 
   def main(args: Array[String]) {
-    start(args, config => ActorSystem("JobServer", config))
+    import scala.collection.JavaConverters._
+    def makeSupervisorSystem(name: String)(config: Config): ActorSystem = {
+      val configWithRole = config.withValue("akka.cluster.roles",
+        ConfigValueFactory.fromIterable(List("supervisor").asJava))
+      ActorSystem(name, configWithRole)
+    }
+    start(args, makeSupervisorSystem("JobServer")(_))
   }
+
+
 }
