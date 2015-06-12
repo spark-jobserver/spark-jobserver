@@ -1,4 +1,4 @@
--J-Xmx1500m
--J-XX:MaxPermSize=512m
+-J-Xmx2048M
+-J-XX:MaxPermSize=512M
 -J-Dakka.test.timefactor=3
 
