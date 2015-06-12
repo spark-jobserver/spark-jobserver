@@ -3,4 +3,5 @@ scala:
    - 2.10.4
    - 2.11.6
 script:
-     - sbt ++$TRAVIS_SCALA_VERSION -d test
+     - sbt -d --version
+     - sbt ++$TRAVIS_SCALA_VERSION test
