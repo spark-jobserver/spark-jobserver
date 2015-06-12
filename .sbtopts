@@ -1,0 +1,7 @@
+-J-XX:MaxPermSize=512m
+-J-Xms256m
+-J-Xmx2g
+-J-XX:+CMSClassUnloadingEnabled
+-J-XX:+UseConcMarkSweepGC
+-J-Dakka.test.timefactor=3
+
