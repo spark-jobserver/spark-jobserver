@@ -1,5 +1,7 @@
 -XX:MaxPermSize=512m
 -Xms256m
--Xmx1g
+-Xmx2g
 -XX:+CMSClassUnloadingEnabled
 -XX:+UseConcMarkSweepGC
+-Dakka.test.timefactor=3
+

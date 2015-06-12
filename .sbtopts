@@ -1,5 +1,0 @@
--J-Xmx2048M
--J-XX:MaxPermSize=384M
--J-XX:+UseConcMarkSweepGC
--J-Dakka.test.timefactor=3 
-
