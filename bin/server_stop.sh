@@ -23,6 +23,7 @@ if [ ! -f "$pidFilePath" ] || ! kill -0 $(cat "$pidFilePath"); then
    echo 'Job server not running'
 else
   echo 'Stopping job server...'
-  kill -15 $(cat "$pidFilePath") && rm -f "$pidFilePath"
+  PID=$(cat "$pidFilePath")
+  kill -15 -- -$(ps -o pgid= $PID | grep -o [0-9]*) && rm -f "$pidFilePath"
   echo '...job server stopped'
 fi
