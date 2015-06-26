@@ -16,7 +16,7 @@ parent=$2
 signal=$1
 
 # A string which will be populated with descendant processes ids
-pids=""
+pids="$parent"
 
 # Kills the given process if it is running. It also checks whether the given parameter contains process ID
 function kill_if_running() {

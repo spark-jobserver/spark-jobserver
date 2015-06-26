@@ -24,7 +24,7 @@ if [ ! -f "$pidFilePath" ] || ! kill -0 "$(cat "$pidFilePath")"; then
 else
   echo 'Stopping job server...'
   PID="$(cat "$pidFilePath")"
-  "$(dirname "$0")"/kill-process-tree.sh -2 $PID
+  "$(dirname "$0")"/kill-process-tree.sh 15 $PID && rm "$pidFilePath"
   echo '...job server stopped'
 fi
 
