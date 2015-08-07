@@ -6,7 +6,7 @@ set -e
 
 get_abs_script_path() {
   pushd . >/dev/null
-  cd $(dirname $0)
+  cd "$(dirname "$0")"
   appdir=$(pwd)
   popd  >/dev/null
 }
@@ -26,14 +26,14 @@ JAVA_OPTS="-XX:MaxDirectMemorySize=512M
 
 MAIN="spark.jobserver.JobServer"
 
-conffile=$(ls -1 $appdir/*.conf | head -1)
+conffile="$(ls -1 "$appdir"/*.conf | head -1)"
 if [ -z "$conffile" ]; then
   echo "No configuration file found"
   exit 1
 fi
 
 if [ -f "$appdir/settings.sh" ]; then
-  . $appdir/settings.sh
+  . "$appdir/settings.sh"
 else
   echo "Missing $appdir/settings.sh, exiting"
   exit 1
@@ -46,7 +46,7 @@ fi
 
 pidFilePath=$appdir/$PIDFILE
 
-if [ -f "$pidFilePath" ] && kill -0 $(cat "$pidFilePath"); then
+if [ -f "$pidFilePath" ] && kill -0 "$(cat "$pidFilePath")"; then
    echo 'Job server is already running'
    exit 1
 fi
@@ -57,8 +57,9 @@ if [ -z "$LOG_DIR" ]; then
 fi
 mkdir -p $LOG_DIR
 
-LOGGING_OPTS="-Dlog4j.configuration=file:$appdir/log4j-server.properties
-              -DLOG_DIR=$LOG_DIR"
+LOGGING_OPTS="-DLOG_DIR=$LOG_DIR"
+
+export SPARK_SUBMIT_LOGBACK_CONF_FILE="$appdir/logback-server.xml"
 
 # For Mesos
 CONFIG_OVERRIDES=""
@@ -77,8 +78,9 @@ fi
 # This needs to be exported for standalone mode so drivers can connect to the Spark cluster
 export SPARK_HOME
 
-$SPARK_HOME/bin/spark-submit --class $MAIN --driver-memory $DRIVER_MEMORY \
+# DSE_BIN is set in settings.sh
+"$DSE_HOME/bin/dse" spark-submit --class "$MAIN" --driver-memory 5G \
   --conf "spark.executor.extraJavaOptions=$LOGGING_OPTS" \
   --driver-java-options "$GC_OPTS $JAVA_OPTS $LOGGING_OPTS $CONFIG_OVERRIDES" \
-  $@ $appdir/spark-job-server.jar $conffile 2>&1 &
-echo $! > $pidFilePath
+  "$@" "$appdir/spark-job-server.jar" "$conffile" 2>&1 &
+echo "$!" > "$pidFilePath"
