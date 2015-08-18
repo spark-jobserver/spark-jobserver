@@ -31,7 +31,7 @@ elif [ -z "$ENV" ]; then
     exit 1
 fi
 
-SPARK_VERSION=1.3.1.0 #Last digit is DSE Specific 
+SPARK_VERSION=1.4.1.1 #Last digit is DSE Specific 
 
 DEPLOY_HOSTS="localhost"
 
