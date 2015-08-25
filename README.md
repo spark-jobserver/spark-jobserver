@@ -234,6 +234,40 @@ def validate(sc:SparkContext, config: Contig): SparkJobValidation = {
 }
 ```
 
+### Authentication
+Authentication uses the [Apache Shiro](http://shiro.apache.org/index.html) framework. Authentication is activated by setting this flag (Section 'shiro'): 
+```
+authentication = on
+```
+Shiro-specific configuration options should be placed into a file named 'shiro.ini' in the JobServer installation directory. 
+Here is an example that configures LDAP with user group verification:
+```
+# use this for basic ldap authorization, without group checking
+# activeDirectoryRealm = org.apache.shiro.realm.ldap.JndiLdapRealm
+# use this for checking group membership of users based on the 'member' attribute of the groups:
+activeDirectoryRealm = spark.jobserver.auth.MyLdapRealm
+activeDirectoryRealm.contextFactory.environment[java.naming.security.credentials] = password
+activeDirectoryRealm.contextFactory.url = ldap://xxx.yyy..org:389
+activeDirectoryRealm.userDnTemplate = cn={0},ou=people,dc=xxx,dc=org
+
+cacheManager = org.apache.shiro.cache.MemoryConstrainedCacheManager
+
+securityManager.cacheManager = $cacheManager
+```
+
+The group verification currently requires two more settings (Section 'shiro' in your application.conf file):    
+```
+ldap {
+    # indicates that only users that are in either 'group1' or 'group2' or both are admitted
+    allowedGroups = ["cn=group1,ou=groups", "cn=group2,ou=groups"]
+    # ldap search base
+    searchBase = "dc=xxx,dc=org"
+}
+
+```
+
+
+
 ## Deployment
 
 1. Copy `config/local.sh.template` to `<environment>.sh` and edit as appropriate.  NOTE: be sure to set SPARK_VERSION if you need to compile against a different version, ie. 1.4.1 for job server 0.5.2

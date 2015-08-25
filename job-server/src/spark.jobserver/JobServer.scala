@@ -26,6 +26,13 @@ import org.slf4j.LoggerFactory
 object JobServer {
   val logger = LoggerFactory.getLogger(getClass)
 
+  private def setSystemPropertiesFromConfig(config: Config) {
+    val props = System.getProperties()
+    if (config.hasPath("shiro.ldap.searchBase")) {
+      props.setProperty("shiro.ldap.searchBase", config.getString("shiro.ldap.searchBase"))
+    }
+  }
+
   // Allow custom function to create ActorSystem.  An example of why this is useful:
   // we can have something that stores the ActorSystem so it could be shut down easily later.
   def start(args: Array[String], makeSystem: Config => ActorSystem) {
@@ -40,6 +47,7 @@ object JobServer {
     } else {
       defaultConfig
     }
+    setSystemPropertiesFromConfig(config)
     logger.info("Starting JobServer with config {}", config.getConfig("spark").root.render())
     logger.info("Spray config: {}", config.getConfig("spray.can.server").root.render())
     val port = config.getInt("spark.jobserver.port")
