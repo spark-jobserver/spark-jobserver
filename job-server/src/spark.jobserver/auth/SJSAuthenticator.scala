@@ -17,8 +17,8 @@ import org.apache.shiro.SecurityUtils
 import org.apache.shiro.authc._
 import org.apache.shiro.config.IniSecurityManagerFactory
 import org.apache.shiro.mgt.SecurityManager
-import org.apache.shiro.util.Factory;
-
+import org.apache.shiro.util.Factory
+import org.apache.shiro.subject.Subject
 
 trait SJSAuthenticator {
 
@@ -26,11 +26,30 @@ trait SJSAuthenticator {
     val logger = LoggerFactory.getLogger(getClass)
 
     //TODO - can we read this information from the config instead?
-    val ldapFactory = new IniSecurityManagerFactory("classpath:shiro.ini")
+    val ldapFactory = new IniSecurityManagerFactory(config.getString("shiro.path.ini"))
     val sManager = ldapFactory.getInstance()
     SecurityUtils.setSecurityManager(sManager)
 
-    val allowedGroups: java.util.List[String] = config.getStringList("shiro.ldap.allowedGroups")
+    val allowedGroups: Option[java.util.List[String]] = {
+      if (config.hasPath("shiro.ldap.allowedGroups")) {
+        val g = config.getStringList("shiro.ldap.allowedGroups")
+        if (g.size() > 0) { Some(g) } else { None }
+      } else {
+        None
+      }
+    }
+
+    def isInAllowedGroupOrNoCheckOnGroups(currentUser: Subject): Boolean = {
+      allowedGroups match {
+        case Some(groups) => {
+          val roles: Array[Boolean] = currentUser.hasRoles(groups)
+          roles.foldLeft(false)((r, isInGroup) => isInGroup || r)
+        }
+        case None => {
+          true
+        }
+      }
+    }
 
     def validate(userPass: Option[UserPass]): Future[Option[AuthInfo]] = {
       val currentUser = SecurityUtils.getSubject()
@@ -41,14 +60,13 @@ trait SJSAuthenticator {
         val token = new UsernamePasswordToken(user, pass)
         try {
           currentUser.login(token)
-          val iter = allowedGroups.iterator()
-          val roles: Array[Boolean] = currentUser.hasRoles(allowedGroups)
           val fullName = currentUser.getPrincipal().toString
-          currentUser.logout()
-          if (roles.foldLeft(true)((r, isInGroup) => isInGroup || r)) {
+          if (isInAllowedGroupOrNoCheckOnGroups(currentUser)) {
             logger.trace("ACCESS GRANTED for user [" + fullName + "]")
+            currentUser.logout()
             Option(new AuthInfo(new User(fullName)))
           } else {
+            currentUser.logout()
             logger.info("ACCESS DENIED (GROUP)")
             None
           }
