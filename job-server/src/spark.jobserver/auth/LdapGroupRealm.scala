@@ -20,14 +20,14 @@ import com.typesafe.config.{ Config, ConfigFactory }
  *
  * @author dwk (basics in Java stem from different sources by various authors from stackoverflow and such)
  */
-class MyLdapRealm extends JndiLdapRealm {
+class LdapGroupRealm extends JndiLdapRealm {
 
   private val logger = LoggerFactory.getLogger(getClass)
 
   private val searchFilter = "(&(objectClass=person)(CN={0}))"
 
   //TODO - this property is set in JobServer.scala (after it is retrieved from
-  //  the merged configuration) -- is there better way?
+  //  the merged configuration) -- is there a better way?
   private val searchBase: String = System.getProperty("shiro.ldap.searchBase")
 
   private val searchCtls: SearchControls = {
