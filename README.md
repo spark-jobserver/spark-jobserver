@@ -20,10 +20,11 @@ See [Troubleshooting Tips](doc/troubleshooting.md) as well as [Yarn tips](doc/ya
 - Frontline Solvers
 - Aruba Networks
 - [Zed Worldwide](http://www.zed.com)
+- [KNIME](https://www.knime.org/)
 
 ## Features
 
-- *"Spark as a Service"*: Simple REST interface for all aspects of job, context management
+- *"Spark as a Service"*: Simple REST interface (including HTTPS) for all aspects of job, context management
 - Support for Spark SQL, Hive, Streaming Contexts/jobs and custom job contexts!  See [Contexts](doc/contexts.md).
 - Supports sub-second low-latency jobs via long-running job contexts
 - Start and stop job contexts for RDD sharing and low-latency jobs; change resources on restart
@@ -173,9 +174,9 @@ object SampleJob  extends SparkJob {
 ```
 
 - `runJob` contains the implementation of the Job. The SparkContext is managed by the JobServer and will be provided to the job through this method.
-  This releaves the developer from the boiler-plate configuration management that comes with the creation of a Spark job and allows the Job Server to
+  This relieves the developer from the boiler-plate configuration management that comes with the creation of a Spark job and allows the Job Server to
 manage and re-use contexts.
-- `validate` allows for an initial validation of the context and any provided configuration. If the context and configuration are OK to run the job, returning `spark.jobserver.SparkJobValid` will let the job execute, otherwise returning `spark.jobserver.SparkJobInvalid(reason)` prevents the job from running and provides means to convey the reason of failure. In this case, the call immediatly returns an `HTTP/1.1 400 Bad Request` status code.  
+- `validate` allows for an initial validation of the context and any provided configuration. If the context and configuration are OK to run the job, returning `spark.jobserver.SparkJobValid` will let the job execute, otherwise returning `spark.jobserver.SparkJobInvalid(reason)` prevents the job from running and provides means to convey the reason of failure. In this case, the call immediately returns an `HTTP/1.1 400 Bad Request` status code.  
 `validate` helps you preventing running jobs that will eventually fail due to missing or wrong configuration and save both time and resources.  
 
 Let's try running our sample job with an invalid configuration:
@@ -234,7 +235,27 @@ def validate(sc:SparkContext, config: Contig): SparkJobValidation = {
 }
 ```
 
+### HTTPS / SSL Configuration
+To activate ssl communication, set these flags in your application.conf file (Section 'spray.can.server'):
+```
+  ssl-encryption = on
+  keystore = "~/sjs.jks"
+  keystorePW = "changeit"
+```
+
+You will need a keystore that contains the server certificate. The bare minimum is achieved with this command which creates a self-signed certificate:
+```
+ keytool -genkey -keyalg RSA -alias jobserver -keystore ~/sjs.jks -storepass changeit -validity 360 -keysize 2048
+```
+You may place the keystore anywhere.    
+Here is an example of simple curl command that utilizes ssl:
+```
+curl -k https://localhost:8090/contexts
+```
+The ```-k``` flag tells curl to "Allow connections to SSL sites without certs". Export your server certificate and import it into the client's truststore to fully utilize ssl security. 
+
 ### Authentication
+
 Authentication uses the [Apache Shiro](http://shiro.apache.org/index.html) framework. Authentication is activated by setting this flag (Section 'shiro'): 
 ```
 authentication = on
@@ -266,9 +287,9 @@ ldap {
 
 ```
 
-
-
 ## Deployment
+
+### Manual steps
 
 1. Copy `config/local.sh.template` to `<environment>.sh` and edit as appropriate.  NOTE: be sure to set SPARK_VERSION if you need to compile against a different version, ie. 1.4.1 for job server 0.5.2
 2. `bin/server_deploy.sh <environment>` -- this packages the job server along with config files and pushes
@@ -282,10 +303,14 @@ NOTE: by default the assembly jar from `job-server-extras`, which includes suppo
 Note: to test out the deploy to a local staging dir, or package the job server for Mesos,
 use `bin/server_package.sh <environment>`.
 
+### Chef
+
+There is also a [Chef cookbook](https://github.com/spark-jobserver/chef-spark-jobserver) which can be used to deploy Spark Jobserver.
+
 ## Architecture
 
 The job server is intended to be run as one or more independent processes, separate from the Spark cluster
-(though it very well may be colocated with say the Master).
+(though it very well may be collocated with say the Master).
 
 At first glance, it seems many of these functions (eg job management) could be integrated into the Spark standalone master.  While this is true, we believe there are many significant reasons to keep it separate:
 
@@ -305,8 +330,8 @@ Flow diagrams are checked in in the doc/ subdirectory.  .diagram files are for w
 
 ### Contexts
 
-    GET /contexts         - lists all current contexts
-    POST /contexts/<name> - creates a new context
+    GET /contexts           - lists all current contexts
+    POST /contexts/<name>   - creates a new context
     DELETE /contexts/<name> - stops a context and all jobs running in it
 
 ### Jobs
