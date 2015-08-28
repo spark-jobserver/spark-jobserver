@@ -414,14 +414,14 @@ class WebApi(system: ActorSystem,
   def formatException(t: Throwable): Any =
     if (t.getCause != null) {
       Map("message" -> t.getMessage,
-        "errorClass" -> t.getClass.getName,
-        "cause" -> t.getCause.getMessage,
-        "causingClass" -> t.getCause.getClass.getName,
-        "stack" -> t.getCause.getStackTrace.map(_.toString).toSeq)
+         "errorClass" -> t.getClass.getName,
+         "cause" -> t.getCause.getMessage,
+         "causingClass" -> t.getCause.getClass.getName,
+         "stack" -> t.getCause.getStackTrace.map(_.toString).toSeq)
     } else {
       Map("message" -> t.getMessage,
-        "errorClass" -> t.getClass.getName,
-        "stack" -> t.getStackTrace.map(_.toString).toSeq)
+         "errorClass" -> t.getClass.getName,
+         "stack" -> t.getStackTrace.map(_.toString).toSeq)
     }
 
   private def getJobManagerForContext(context: Option[String],
