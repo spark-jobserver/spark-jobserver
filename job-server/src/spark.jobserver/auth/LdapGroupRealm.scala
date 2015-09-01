@@ -2,6 +2,7 @@ package spark.jobserver.auth
 
 import org.apache.shiro.realm.ldap.JndiLdapRealm
 import org.apache.shiro.realm.ldap.LdapContextFactory
+import org.apache.shiro.realm.ldap.JndiLdapContextFactory
 import org.apache.shiro.realm.ldap.LdapUtils
 import org.apache.shiro.subject.PrincipalCollection
 import org.apache.shiro.authz._
@@ -18,17 +19,12 @@ import com.typesafe.config.{ Config, ConfigFactory }
  * @note not all LDAP installations use the member property.... we might have to add
  *   memberOf matches as well and others
  *
- * @author dwk (basics in Java stem from different sources by various authors from stackoverflow and such)
+ * @author KNIME (basics in Java stem from different sources by various authors from stackoverflow and such)
  */
 class LdapGroupRealm extends JndiLdapRealm {
+  import collection.JavaConverters._
 
   private val logger = LoggerFactory.getLogger(getClass)
-
-  private val searchFilter = "(&(objectClass=person)(CN={0}))"
-
-  //TODO - this property is set in JobServer.scala (after it is retrieved from
-  //  the merged configuration) -- is there a better way?
-  private val searchBase: String = System.getProperty("shiro.ldap.searchBase")
 
   private val searchCtls: SearchControls = {
     val c = new SearchControls();
@@ -36,91 +32,113 @@ class LdapGroupRealm extends JndiLdapRealm {
     c
   }
 
+  lazy val searchBase: String = getContextFactory() match {
+    case jni: JndiLdapContextFactory =>
+      getEnvironmentParam(jni, "ldap.searchBase")
+    case _ =>
+      throw new RuntimeException("Configuration error: " +
+        "LdapGroupRealm requires setting of the parameter 'searchBase'")
+  }
+
+  lazy val allowedGroups: Option[Array[String]] = getContextFactory() match {
+    case jni: JndiLdapContextFactory =>
+      val groups = getEnvironmentParam(jni, "ldap.allowedGroups").
+        split("\"").filter(group => group.replaceAll("[, ]", "").length() > 0)
+      if (groups.isEmpty) {
+        None
+      } else {
+        Some(groups)
+      }
+    case _ =>
+      None
+  }
+
+  private def getEnvironmentParam(jni: JndiLdapContextFactory, param: String): String = {
+    val value = jni.getEnvironment().get(param)
+    value match {
+      case null =>
+        //tell user what is missing instead of just throwing a NPE
+        throw new RuntimeException("Configuration error: " +
+          "LdapGroupRealm requires setting of the parameter '" + param + "'")
+      case v =>
+        v.toString
+    }
+  }
+
   override def queryForAuthorizationInfo(principals: PrincipalCollection,
                                          ldapContextFactory: LdapContextFactory): AuthorizationInfo = {
 
     val username = getAvailablePrincipal(principals).toString
-
-    // Perform context search
-    val ldapContext = ldapContextFactory.getSystemLdapContext();
-
+    val ldapContext = ldapContextFactory.getSystemLdapContext()
     try {
-      val roleNames: java.util.Set[String] = getRoleNamesForUser(username, ldapContext);
-      buildAuthorizationInfo(roleNames);
+      queryForAuthorizationInfo(ldapContext, username)
     } finally {
       LdapUtils.closeContext(ldapContext);
     }
   }
 
-  def buildAuthorizationInfo(roleNames: java.util.Set[String]): AuthorizationInfo = {
-    return new SimpleAuthorizationInfo(roleNames);
+  def queryForAuthorizationInfo(ldapContext: LdapContext, username: String): AuthorizationInfo = {
+    val roleNames = getRoleNamesForUser(ldapContext, username)
+    if (isInAllowedGroupOrNoCheckOnGroups(roleNames)) {
+      new SimpleAuthorizationInfo(roleNames.asJava)
+    } else {
+      throw new AuthorizationException(LdapGroupRealm.ERROR_MSG_NO_VALID_GROUP)
+    }
   }
 
   //TODO - can (should?) this information be cached?
-  private def retrieveGroups(ldapContext: LdapContext): Map[String, Set[String]] = {
-    val groupMemberFilter = "(member=*)"
+  def retrieveGroups(ldapContext: LdapContext): Map[String, Set[String]] = {
     logger.trace("Retrieving group memberships.")
 
     val groupSearchAtts: Array[Object] = Array()
-    val groupAnswer = ldapContext.search(searchBase, groupMemberFilter,
-      groupSearchAtts, searchCtls);
 
-    val members = scala.collection.mutable.Map[String, Set[String]]()
+    val groupAnswer = ldapContext.search(searchBase, LdapGroupRealm.groupMemberFilter,
+      groupSearchAtts, searchCtls).asScala
 
-    while (groupAnswer.hasMoreElements()) {
-      val sr2: SearchResult = groupAnswer.next()
-
-      if (logger.isDebugEnabled()) {
-        logger.debug("Checking members of group [" + sr2.getName() + "]")
-      }
-
-      members += sr2.getName() -> getMembers(sr2)
-    }
-    members.toMap
+    groupAnswer.map(sr2 => {
+      logger.debug("Checking members of group [%s]" format (sr2.getName()))
+      sr2.getName() -> getMembers(sr2)
+    }).toMap
   }
 
   private def getMembers(sr: SearchResult): Set[String] = {
-    val attrs: Attributes = sr.getAttributes();
+    val attrs: Attributes = sr.getAttributes()
 
-    val members = scala.collection.mutable.HashSet[String]()
     if (attrs != null) {
-      val ae: NamingEnumeration[_ <: Attribute] = attrs.getAll();
-      while (ae.hasMore()) {
-        val attr: Attribute = ae.next();
-
-        if (attr.getID().equals("member")) {
-          val javaMembers: java.util.Collection[String] = LdapUtils.getAllAttributeValues(attr)
-
-          val iter: java.util.Iterator[String] = javaMembers.iterator()
-          while (iter.hasNext()) {
-            members += iter.next()
-          }
-        }
-      }
+      LdapUtils.getAllAttributeValues(attrs.get("member")).asScala.toSet
+    } else {
+      Set()
     }
-    members.toSet
   }
 
-  private def getRoleNamesForUser(username: String, ldapContext: LdapContext): java.util.Set[String] = {
-    val roleNames: java.util.Set[String] = new java.util.LinkedHashSet[String]()
-
+  def getRoleNamesForUser(ldapContext: LdapContext, username: String): Set[String] = {
     val searchAtts: Array[Object] = Array(username)
 
-    val answer: NamingEnumeration[SearchResult] = ldapContext.search(searchBase, searchFilter,
-      searchAtts, searchCtls);
+    val answer: Iterator[SearchResult] = ldapContext.search(searchBase, LdapGroupRealm.personSearchFilter,
+      searchAtts, searchCtls).asScala
 
     val members = retrieveGroups(ldapContext)
 
-    while (answer.hasMoreElements()) {
-      val userSearchResult: SearchResult = answer.next()
-
+    answer.map(userSearchResult => {
       val fullGroupMemberName = "%s,%s" format (userSearchResult.getName(), searchBase)
-      val groups: Set[String] = members.filter(entry => {
+      members.filter(entry => {
         entry._2.contains(fullGroupMemberName)
-      }).map(e => e._1).toSet
-
-      groups.foreach(g => roleNames.add(g))
-    }
-    roleNames
+      }).map(e => e._1)
+    }).flatten.toSet
   }
+
+  def isInAllowedGroupOrNoCheckOnGroups(roles: Set[String]): Boolean = {
+    allowedGroups match {
+      case Some(groups) =>
+        roles.foldLeft(false)((isInGroup, r) => isInGroup || groups.contains(r))
+      case None =>
+        true
+    }
+  }
+}
+
+object LdapGroupRealm {
+  val groupMemberFilter = "(member=*)"
+  val personSearchFilter = "(&(objectClass=person)(CN={0}))"
+  val ERROR_MSG_NO_VALID_GROUP = "no valid group found"
 }

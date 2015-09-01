@@ -261,17 +261,21 @@ Authentication uses the [Apache Shiro](http://shiro.apache.org/index.html) frame
 ```
 authentication = on
 # absolute path to shiro config file, including file name
-path.ini = "/some/path/shiro.ini"
+config.path = "/some/path/shiro.ini"
 ```
-Shiro-specific configuration options should be placed into a file named 'shiro.ini' in the directory as specified by the config option 'path.ini'. 
+Shiro-specific configuration options should be placed into a file named 'shiro.ini' in the directory as specified by the config option 'config.path'. 
 Here is an example that configures LDAP with user group verification:
 ```
 # use this for basic ldap authorization, without group checking
 # activeDirectoryRealm = org.apache.shiro.realm.ldap.JndiLdapRealm
 # use this for checking group membership of users based on the 'member' attribute of the groups:
 activeDirectoryRealm = spark.jobserver.auth.LdapGroupRealm
+# search base for ldap groups (only relevant for LdapGroupRealm):
+activeDirectoryRealm.contextFactory.environment[ldap.searchBase] = dc=xxx,dc=org
+# allowed groups (only relevant for LdapGroupRealm):
+activeDirectoryRealm.contextFactory.environment[ldap.allowedGroups] = "cn=group1,ou=groups", "cn=group2,ou=groups"
 activeDirectoryRealm.contextFactory.environment[java.naming.security.credentials] = password
-activeDirectoryRealm.contextFactory.url = ldap://xxx.yyy..org:389
+activeDirectoryRealm.contextFactory.url = ldap://localhost:389
 activeDirectoryRealm.userDnTemplate = cn={0},ou=people,dc=xxx,dc=org
 
 cacheManager = org.apache.shiro.cache.MemoryConstrainedCacheManager
@@ -279,19 +283,10 @@ cacheManager = org.apache.shiro.cache.MemoryConstrainedCacheManager
 securityManager.cacheManager = $cacheManager
 ```
 
-The group verification currently requires two more settings (Section 'shiro' in your application.conf file):    
-```
-ldap {
-    # indicates that only users that are in either 'group1' or 'group2' or both are admitted
-    # uncomment only if checks on groups are desired and make sure to adjust shiro.ini accordingly
-    # an empty list of allowed groups also effectively disables group checking
-	allowedGroups = ["cn=group1,ou=groups", "cn=group2,ou=groups"]
-    # ldap search base
-    searchBase = "dc=xxx,dc=org"
-}
-```
+Make sure to edit the url, credentials, userDnTemplate, ldap.allowedGroups and ldap.searchBase settings in accordance with your local setup.
 
-Here is an example of a simple curl command that authenticates a user and uses ssl:
+Here is an example of a simple curl command that authenticates a user and uses ssl (you may want to use -H to hide the 
+credentials, this is just a simple example to get you started):
 ```
 curl -k --basic --user 'user:pw' https://localhost:8090/contexts
 ```

@@ -11,7 +11,7 @@ import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import spark.jobserver.util.SparkJobUtils
 import spark.jobserver.util.SslContextFactory
-import scala.concurrent.{Await, ExecutionContext}
+import scala.concurrent.{ Await, ExecutionContext }
 import scala.util.Try
 import spark.jobserver.io.JobInfo
 import spark.jobserver.auth._
@@ -23,6 +23,9 @@ import spray.json.DefaultJsonProtocol._
 import spray.routing.{ HttpService, Route, RequestContext }
 import spray.routing.directives.AuthMagnet
 import spray.io.ServerSSLEngineProvider
+import org.apache.shiro.config.IniSecurityManagerFactory
+import org.apache.shiro.mgt.SecurityManager
+import org.apache.shiro.SecurityUtils
 
 class WebApi(system: ActorSystem,
              config: Config,
@@ -54,12 +57,13 @@ class WebApi(system: ActorSystem,
   val myRoutes = jarRoutes ~ contextRoutes ~ jobRoutes ~ healthzRoutes ~ otherRoutes
 
   lazy val authenticator: AuthMagnet[AuthInfo] = {
-    if (config.hasPath("shiro.authentication") &&
-      config.getBoolean("shiro.authentication")) {
+    if (config.getBoolean("shiro.authentication")) {
       logger.info("Using authentication.")
-      asShiroAuthenticator(config)
+      val sManager = new IniSecurityManagerFactory(config.getString("shiro.config.path")).getInstance()
+      SecurityUtils.setSecurityManager(sManager)
+      asShiroAuthenticator
     } else {
-      logger.trace("No authentication.")
+      logger.info("No authentication.")
       asAllUserAuthenticator
     }
   }
@@ -94,7 +98,7 @@ class WebApi(system: ActorSystem,
   def jarRoutes: Route = pathPrefix("jars") {
     // user authentication
     authenticate(authenticator) { authInfo =>
-     // GET /jars route returns a JSON map of the app name and the last time a jar was uploaded.
+      // GET /jars route returns a JSON map of the app name and the last time a jar was uploaded.
       get { ctx =>
         val future = (jarManager ? ListJars).mapTo[collection.Map[String, DateTime]]
         future.map { jarTimeMap =>
@@ -135,7 +139,7 @@ class WebApi(system: ActorSystem,
     import collection.JavaConverters._
     // user authentication
     authenticate(authenticator) { authInfo =>
-     get { ctx =>
+      get { ctx =>
         (supervisor ? ListContexts).mapTo[Seq[String]]
           .map { contexts => ctx.complete(contexts) }
       } ~
@@ -224,7 +228,7 @@ class WebApi(system: ActorSystem,
 
     // user authentication
     authenticate(authenticator) { authInfo =>
-     /**
+      /**
        * GET /jobs/<jobId>/config --
        * returns the configuration used to launch this job or an error if not found.
        *
@@ -414,14 +418,14 @@ class WebApi(system: ActorSystem,
   def formatException(t: Throwable): Any =
     if (t.getCause != null) {
       Map("message" -> t.getMessage,
-          "errorClass" -> t.getClass.getName,
-          "cause" -> t.getCause.getMessage,
-          "causingClass" -> t.getCause.getClass.getName,
-          "stack" -> t.getCause.getStackTrace.map(_.toString).toSeq)
+        "errorClass" -> t.getClass.getName,
+        "cause" -> t.getCause.getMessage,
+        "causingClass" -> t.getCause.getClass.getName,
+        "stack" -> t.getCause.getStackTrace.map(_.toString).toSeq)
     } else {
       Map("message" -> t.getMessage,
-          "errorClass" -> t.getClass.getName,
-          "stack" -> t.getStackTrace.map(_.toString).toSeq)
+        "errorClass" -> t.getClass.getName,
+        "stack" -> t.getStackTrace.map(_.toString).toSeq)
     }
 
   private def getJobManagerForContext(context: Option[String],

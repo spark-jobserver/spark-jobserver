@@ -7,7 +7,23 @@ package spark.jobserver.auth
  */
 class AuthInfo(val user: User) {
   def hasPermission(permission: String): Boolean = {
-    // Code to verify whether user has the given permission
+    //no further checks, all authenticated users can perform all
+    // all operations
     true
+    // someone could add code here to check whether user has the given permission
   }
+
+  override def equals(other: Any): Boolean =
+    other match {
+      case that: AuthInfo =>
+        (that canEqual this) &&
+          user == that.user
+      case _ => false
+    }
+
+  def canEqual(other: Any): Boolean =
+    other.isInstanceOf[AuthInfo]
+
+  override def hashCode: Int = user.hashCode
+
 }
