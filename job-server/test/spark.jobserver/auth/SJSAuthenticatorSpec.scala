@@ -71,7 +71,7 @@ goodguy = winnebago:drive:eagle5
 """
 
   //set this to true to check your real ldap server
-  val isGroupChecking = true
+  val isGroupChecking = false
   val ini = {
     val tmp = new Ini()
     if (isGroupChecking) {
