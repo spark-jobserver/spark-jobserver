@@ -31,11 +31,11 @@ class SJSAuthenticatorSpec extends HttpService with SJSAuthenticator with FunSpe
 # use this for checking group membership of users based on the 'member' attribute of the groups:
 activeDirectoryRealm = spark.jobserver.auth.LdapGroupRealm
 # search base for ldap groups:
-activeDirectoryRealm.contextFactory.environment[ldap.searchBase] = dc=knime,dc=org
-activeDirectoryRealm.contextFactory.environment[ldap.allowedGroups] = "cn=knime,ou=groups", "cn=spark,ou=groups",,,,,
-activeDirectoryRealm.contextFactory.environment[java.naming.security.credentials] = Password4Admin
-activeDirectoryRealm.contextFactory.url = ldap://testing.knime.org:389
-activeDirectoryRealm.userDnTemplate = cn={0},ou=people,dc=knime,dc=org
+activeDirectoryRealm.contextFactory.environment[ldap.searchBase] = dc=xxx,dc=org
+activeDirectoryRealm.contextFactory.environment[ldap.allowedGroups] = "cn=xx,ou=groups", "cn=spark,ou=groups",,,,,
+activeDirectoryRealm.contextFactory.environment[java.naming.security.credentials] = password
+activeDirectoryRealm.contextFactory.url = ldap://localhost:389
+activeDirectoryRealm.userDnTemplate = cn={0},ou=people,dc=xxx,dc=org
 
 cacheManager = org.apache.shiro.cache.MemoryConstrainedCacheManager
 
@@ -89,24 +89,24 @@ goodguy = winnebago:drive:eagle5
   val logger = LoggerFactory.getLogger(getClass)
 
   val testUserWithValidGroup = if (isGroupChecking) {
-    "knime"
+    "user"
   } else {
     "lonestarr" 
   }
 
   val testUserWithValidGroupPassword = if (isGroupChecking) {
-    "Pw4KN!ME"
+    "user"
   } else {
     "vespa" 
   }
 
   val testUserWithoutValidGroup = if (isGroupChecking) { 
-    "bind-user"
+    "other-user"
   } else {
     "presidentskroob"
   }
   val testUserWithoutValidGroupPassword = if (isGroupChecking) {
-    "bind4knime"
+    "other-password"
   } else {
     "12345"
   }

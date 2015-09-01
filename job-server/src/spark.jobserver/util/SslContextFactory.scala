@@ -32,7 +32,7 @@ object SslContextFactory {
       val ksName = config.getString("keystore")
       val ksPassphrase = config.getString("keystorePW").toCharArray()
       val keystoreType = config.getString("keystoreType")
-      logger.info(config.getString("encryptionType") + " encryption activated.")
+      logger.info(keystoreType + " encryption activated.")
       val ks = KeyStore.getInstance(keystoreType)
       //throws exception if keystore cannot be found or accessed
       // and prevents start-up

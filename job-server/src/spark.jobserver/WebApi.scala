@@ -11,7 +11,7 @@ import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import spark.jobserver.util.SparkJobUtils
 import spark.jobserver.util.SslContextFactory
-import scala.concurrent.{ Await, ExecutionContext }
+import scala.concurrent.{Await, ExecutionContext}
 import scala.util.Try
 import spark.jobserver.io.JobInfo
 import spark.jobserver.auth._
@@ -33,7 +33,7 @@ class WebApi(system: ActorSystem,
              jarManager: ActorRef,
              supervisor: ActorRef,
              jobInfo: ActorRef)
-  extends HttpService with CommonRoutes with SJSAuthenticator {
+    extends HttpService with CommonRoutes with SJSAuthenticator {
   import CommonMessages._
   import ContextSupervisor._
   import scala.concurrent.duration._
@@ -195,7 +195,7 @@ class WebApi(system: ActorSystem,
    *    GET /healthz              - return OK or error message
    */
   def healthzRoutes: Route = pathPrefix("healthz") {
-    //TODO - authentication required?
+    //no authentication required
     get { ctx =>
       logger.info("Receiving healthz check request")
       ctx.complete("OK")
@@ -204,7 +204,7 @@ class WebApi(system: ActorSystem,
 
   def otherRoutes: Route = get {
     implicit val ar = actorRefFactory
-    //TODO - authentication required?
+    //no authentication required
 
     path("") {
       // Main index.html page
@@ -418,14 +418,14 @@ class WebApi(system: ActorSystem,
   def formatException(t: Throwable): Any =
     if (t.getCause != null) {
       Map("message" -> t.getMessage,
-        "errorClass" -> t.getClass.getName,
-        "cause" -> t.getCause.getMessage,
-        "causingClass" -> t.getCause.getClass.getName,
-        "stack" -> t.getCause.getStackTrace.map(_.toString).toSeq)
+          "errorClass" -> t.getClass.getName,
+          "cause" ->   t.getCause.getMessage,
+          "causingClass" -> t.getCause.getClass.getName,
+          "stack" -> t.getCause.getStackTrace.map(_.toString).toSeq)
     } else {
       Map("message" -> t.getMessage,
-        "errorClass" -> t.getClass.getName,
-        "stack" -> t.getStackTrace.map(_.toString).toSeq)
+          "errorClass" -> t.getClass.getName,
+          "stack" -> t.getStackTrace.map(_.toString).toSeq)
     }
 
   private def getJobManagerForContext(context: Option[String],
