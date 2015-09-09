@@ -95,7 +95,7 @@ export HADOOP_CONF_DIR
 cmd='$SPARK_HOME/bin/spark-submit --class $MAIN --driver-memory $JOBSERVER_MEMORY
   --conf "spark.executor.extraJavaOptions=$LOGGING_OPTS"
   --driver-java-options "$GC_OPTS $JAVA_OPTS $LOGGING_OPTS $CONFIG_OVERRIDES"
-  $@ $appdir/spark-job-server.jar $conffile'
+  $@ $appdir/spark-jobserver-$JOBSERVER_VERSION.jar $conffile'
 if [ -z "$JOBSERVER_FG" ]; then
   eval $cmd 2>&1 &
   echo $! > $pidFilePath

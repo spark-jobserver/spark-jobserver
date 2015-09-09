@@ -5,7 +5,7 @@ import AssemblyKeys._
 
 object Assembly {
   lazy val settings = assemblySettings ++ Seq(
-    jarName in assembly := "spark-job-server.jar",
+    jarName in assembly := "spark-jobserver-%s.jar".format(version.value),
     // uncomment below to exclude tests
     // test in assembly := {},
     excludedJars in assembly <<= (fullClasspath in assembly) map { _ filter { cp =>

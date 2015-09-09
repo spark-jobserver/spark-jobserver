@@ -18,7 +18,7 @@ spark {
     jobdao = spark.jobserver.io.JobFileDAO
 
     filedao {
-      rootdir = /tmp/spark-job-server/filedao/data
+      rootdir = /tmp/spark-jobserver/filedao/data
     }
   }
 

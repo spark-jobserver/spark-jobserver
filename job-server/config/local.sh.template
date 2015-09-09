@@ -22,3 +22,4 @@ SPARK_EXECUTOR_URI=/home/spark/spark-0.8.0.tar.gz
 # YARN_CONF_DIR=/pathToRemoteConf/conf
 # HADOOP_CONF_DIR=/pathToRemoteConf/conf
 SCALA_VERSION=2.10.4 # or 2.11.6
+JOBSERVER_VERSION=0.5.2

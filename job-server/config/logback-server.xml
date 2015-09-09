@@ -11,11 +11,11 @@
         <!--for further documentation-->
 
         <!-- This is where the current log file is written -->
-        <file>${LOG_DIR}/spark-job-server.log</file>
+        <file>${LOG_DIR}/spark-jobserver.log</file>
 
         <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
             <!-- daily rollover -->
-            <fileNamePattern>${LOG_DIR}/spark-job-server.%d{yyyy-MM-dd}.log</fileNamePattern>
+            <fileNamePattern>${LOG_DIR}/spark-jobserver.%d{yyyy-MM-dd}.log</fileNamePattern>
 
             <!-- keep 30 days' worth of history -->
             <maxHistory>30</maxHistory>
