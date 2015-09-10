@@ -14,3 +14,13 @@ config/*.sh
 job-server/config/*.conf
 job-server/config/*.sh
 metastore_db/
+
+#ignore generated config
+bin/ec2_example.sh
+
+# ignore spark binaries
+spark-1.5.0-bin-hadoop2.6.tgz
+spark-1.5.0-bin-hadoop2.6/
+
+# don't ignore the ec2 config and sh files
+!job-server/config/ec2.sh

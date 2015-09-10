@@ -62,6 +62,10 @@ For release notes, look in the `notes/` directory.  They should also be up on [l
 
 The easiest way to get started is to try the [Docker container](doc/docker.md) which prepackages a Spark distribution with the job server and lets you start and deploy it.
 
+## EC2 Start
+
+Follow the instructions in [EC2](doc/EC2.md) to spin up a Spark cluster with job server and an example application.
+
 ## Development mode
 
 The example walk-through below shows you how to use the job server with an included example job, by running the job server in local development mode in SBT.  This is not an example of usage in production.

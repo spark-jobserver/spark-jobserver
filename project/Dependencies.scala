@@ -32,14 +32,16 @@ object Dependencies {
   lazy val sparkDeps = Seq(
     "org.apache.spark" %% "spark-core" % sparkVersion % "provided" excludeAll(excludeNettyIo, excludeQQ),
     // Force netty version.  This avoids some Spark netty dependency problem.
-    "io.netty" % "netty-all" % "4.0.23.Final"
+    "io.netty" % "netty-all" % "4.0.23.Final",
+    "org.scala-lang" % "scala-library" % "2.10.3"
   )
 
   lazy val scalaLib = if (scala.util.Properties.versionString.split(" ")(1).startsWith("2.10"))
-      Seq("org.scala-lang" % "scala-library" % "2.10.3")
-    else Seq()
+    Seq("org.scala-lang" % "scala-library" % "2.10.3")
+  else Seq()
 
   lazy val sparkExtraDeps = Seq(
+    "org.apache.spark" %% "spark-mllib" % sparkVersion % "provided" excludeAll(excludeNettyIo, excludeQQ),
     "org.apache.spark" %% "spark-sql" % sparkVersion % "provided" excludeAll(excludeNettyIo, excludeQQ),
     "org.apache.spark" %% "spark-streaming" % sparkVersion % "provided" excludeAll(excludeNettyIo, excludeQQ),
     "org.apache.spark" %% "spark-hive" % sparkVersion % "provided" excludeAll(excludeNettyIo, excludeQQ, excludeScalaTest)
@@ -64,7 +66,7 @@ object Dependencies {
   )
 
   lazy val securityDeps = Seq(
-     "org.apache.shiro" % "shiro-core" % "1.2.4"
+    "org.apache.shiro" % "shiro-core" % "1.2.4"
   )
 
   lazy val serverDeps = apiDeps ++ yodaDeps
