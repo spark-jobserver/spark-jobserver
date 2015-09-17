@@ -77,7 +77,7 @@ class WebApi(system: ActorSystem,
             val future = jarManager ? StoreJar(appName, jarBytes)
             respondWithMediaType(MediaTypes.`application/json`) { ctx =>
               future.map {
-                case JarStored  => ctx.complete(StatusCodes.OK)
+                case JarStored  => ctx.complete(StatusCodes.OK, Map(StatusKey -> "OK"))
                 case InvalidJar => badRequest(ctx, "Jar is not of the right format")
               }.recover {
                 case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
@@ -121,7 +121,7 @@ class WebApi(system: ActorSystem,
               val future = (supervisor ? AddContext(contextName, config))(contextTimeout.seconds)
               respondWithMediaType(MediaTypes.`application/json`) { ctx =>
                 future.map {
-                  case ContextInitialized   => ctx.complete(StatusCodes.OK)
+                  case ContextInitialized   => ctx.complete(StatusCodes.OK, Map(StatusKey -> "OK"))
                   case ContextAlreadyExists => badRequest(ctx, "context " + contextName + " exists")
                   case ContextInitError(e)  => ctx.complete(500, errMap(e, "CONTEXT INIT ERROR"))
                 }
@@ -138,7 +138,7 @@ class WebApi(system: ActorSystem,
           val future = supervisor ? StopContext(contextName)
           respondWithMediaType(MediaTypes.`text/plain`) { ctx =>
             future.map {
-              case ContextStopped => ctx.complete(StatusCodes.OK)
+              case ContextStopped => ctx.complete(StatusCodes.OK, Map(StatusKey -> "OK"))
               case NoSuchContext  => notFound(ctx, "context " + contextName + " not found")
             }
           }
@@ -153,7 +153,7 @@ class WebApi(system: ActorSystem,
   def healthzRoutes: Route = pathPrefix("healthz") {
     get { ctx =>
       logger.info("Receiving healthz check request")
-      ctx.complete("OK")
+      ctx.complete(StatusCodes.OK, Map(StatusKey -> "OK"))
     }
   }
 
