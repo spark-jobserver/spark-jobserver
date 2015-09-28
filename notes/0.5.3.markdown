@@ -13,7 +13,7 @@
 * Fixes to context config merging (@zeitos)
 * JobSqlDAO to support username, password, DB connection pooling (@ffarozan)
 * Doc: Instructions for running job-server docker container in yarn-client (@MeiSign)
-* Doc: Various fixes to README (@noorul) and deploy instructions (@mvle) and troubleshooting (@eranation)
+* Doc: Various fixes to README (@noorul) and deploy instructions (@mvle @lewismc) and troubleshooting (@eranation)
 * Fix issue #229: Always use limit while reading from DB (@noorul)
 * Fix typo in SparkStreamingJob that used to be called SparkStramingJob. This will break your code if you used SparkStramingJob (@zeitos)
  
