@@ -12,6 +12,8 @@ See [Troubleshooting Tips](doc/troubleshooting.md) as well as [Yarn tips](doc/ya
 
 (Please add yourself to this list!)
 
+Spark Job Server is now included in Datastax Enterprise 4.8!
+
 - [Ooyala](http://www.ooyala.com)
 - [Netflix](http://www.netflix.com)
 - [Avenida.com](http://www.avenida.com)
@@ -50,7 +52,7 @@ See [Troubleshooting Tips](doc/troubleshooting.md) as well as [Yarn tips](doc/ya
 | 0.5.0       | 1.2.0         |
 | 0.5.1       | 1.3.0         |
 | 0.5.2       | 1.3.1         |
-| master      | 1.4.1         |
+| 0.6.0       | 1.4.1         |
 
 For release notes, look in the `notes/` directory.  They should also be up on [ls.implicit.ly](http://ls.implicit.ly/spark-jobserver/spark-jobserver).
 
@@ -163,11 +165,11 @@ In your `build.sbt`, add this to use the job server jar:
 
 	resolvers += "Job Server Bintray" at "https://dl.bintray.com/spark-jobserver/maven"
 
-	libraryDependencies += "spark.jobserver" %% "job-server-api" % "0.5.2" % "provided"
+	libraryDependencies += "spark.jobserver" %% "job-server-api" % "0.6.0" % "provided"
 
 If a SQL or Hive job/context is desired, you also want to pull in `job-server-extras`:
 
-    libraryDependencies += "spark.jobserver" %% "job-server-extras" % "0.5.2" % "provided"
+    libraryDependencies += "spark.jobserver" %% "job-server-extras" % "0.6.0" % "provided"
 
 For most use cases it's better to have the dependencies be "provided" because you don't want SBT assembly to include the whole job server jar.
 
@@ -302,7 +304,7 @@ curl -k --basic --user 'user:pw' https://localhost:8090/contexts
 
 ### Manual steps
 
-1. Copy `config/local.sh.template` to `<environment>.sh` and edit as appropriate.  NOTE: be sure to set SPARK_VERSION if you need to compile against a different version, ie. 1.4.1 for job server 0.5.2
+1. Copy `config/local.sh.template` to `<environment>.sh` and edit as appropriate.  NOTE: be sure to set SPARK_VERSION if you need to compile against a different version, ie. 1.4.1 for job server 0.6.0
 2. Copy `config/shiro.ini.template` to `shiro.ini` and edit as appropriate. NOTE: only required when `authentication = on`
 3. Copy `config/local.conf.template` to `<environment>.conf` and edit as appropriate.
 4. `bin/server_deploy.sh <environment>` -- this packages the job server along with config files and pushes
