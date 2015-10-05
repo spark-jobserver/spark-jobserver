@@ -30,7 +30,7 @@ class JobServerNamedRdds(val rddManager: ActorRef) extends NamedRdds {
       case None =>
         // Try to generate the RDD and send the result of the operation to the rddManager.
         try {
-          val rdd = createRdd(rddGen, name, forceComputation)
+          val rdd = createRdd(rddGen, name, forceComputation, storageLevel)
           rddManager ! CreateRddResult(name, Right(rdd))
           rdd
         } catch {
@@ -53,7 +53,7 @@ class JobServerNamedRdds(val rddManager: ActorRef) extends NamedRdds {
 
   def update[T](name: String, rddGen: => RDD[T], forceComputation: Boolean = true,
                            storageLevel: StorageLevel = defaultStorageLevel): RDD[T] = {
-    val rdd = createRdd(rddGen, name, forceComputation)
+    val rdd = createRdd(rddGen, name, forceComputation, storageLevel)
     rddManager ! CreateRddResult(name, Right(rdd))
     rdd
   }
@@ -83,8 +83,8 @@ class JobServerNamedRdds(val rddManager: ActorRef) extends NamedRdds {
    */
   private def createRdd[T](rddGen: => RDD[T],
                            name: String,
-                           forceComputation: Boolean = true,
-                           storageLevel: StorageLevel = defaultStorageLevel): RDD[T] = {
+                           forceComputation: Boolean,
+                           storageLevel: StorageLevel): RDD[T] = {
     require(!forceComputation || storageLevel != StorageLevel.NONE,
       "forceComputation implies storageLevel != NONE")
     val rdd = rddGen
