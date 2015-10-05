@@ -38,13 +38,16 @@ trait NamedRdds {
    *
    * @param name the unique name of the RDD. The uniqueness is scoped to the current SparkContext.
    * @param rddGen a 0-ary function which will generate the RDD if it doesn't already exist.
+   * @param forceComputation if true, forces the RDD to be computed by calling count().
+   * @param storageLevel the storage level to persist the RDD with. Default: StorageLevel.MEMORY_ONLY.
    * @param timeout if the RddManager doesn't respond within this timeout, an error will be thrown.
    * @tparam T the generic type of the RDD.
    * @return the RDD with the given name.
    * @throws java.util.concurrent.TimeoutException if the request to the RddManager times out.
    * @throws java.lang.RuntimeException wrapping any error that occurs within the generator function.
    */
-  def getOrElseCreate[T](name: String, rddGen: => RDD[T])
+  def getOrElseCreate[T](name: String, rddGen: => RDD[T], forceComputation: Boolean = true,
+                           storageLevel: StorageLevel = defaultStorageLevel)
                         (implicit timeout: Timeout = defaultTimeout): RDD[T]
 
   /**
@@ -75,10 +78,13 @@ trait NamedRdds {
    *
    * @param name the unique name of the RDD. The uniqueness is scoped to the current SparkContext.
    * @param rddGen a 0-ary function which will be called to generate the RDD in the caller's thread.
+   * @param forceComputation if true, forces the RDD to be computed by calling count().
+   * @param storageLevel the storage level to persist the RDD with. Default: StorageLevel.MEMORY_ONLY.
    * @tparam T the generic type of the RDD.
    * @return the RDD with the given name.
    */
-  def update[T](name: String, rddGen: => RDD[T]): RDD[T]
+  def update[T](name: String, rddGen: => RDD[T], forceComputation: Boolean = true,
+                           storageLevel: StorageLevel = defaultStorageLevel): RDD[T]
 
   /**
    * Destroys an RDD with the given name, if one existed. Has no effect if no RDD with this name exists.
