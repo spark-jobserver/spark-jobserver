@@ -16,7 +16,7 @@ By default, the container has an embedded Spark distro and runs using Spark loca
 
 To change the spark master the container runs against, set SPARK_MASTER when you start the container:
 
-    docker run -d -p 8090:8090 -e SPARK_MASTER=mesos://zk://mesos.master:5050 velvia/spark-jobserver:0.5.2-SNAPSHOT
+    docker run -d -p 8090:8090 -e SPARK_MASTER=mesos://zk://mesos.master:5050 velvia/spark-jobserver:0.5.2
 
 You can easily change the amount of memory job server uses with `JOBSERVER_MEMORY`, or replace the entire config job server uses at startup with `JOBSERVER_CONFIG`.
 
