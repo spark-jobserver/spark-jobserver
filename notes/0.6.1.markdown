@@ -1,0 +1,3 @@
+#Scala #akka @ApacheSpark
+
+* Fix for PostgreSQL varchar issue (@ffarozan)
