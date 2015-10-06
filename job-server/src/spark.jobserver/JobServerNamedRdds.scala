@@ -17,8 +17,8 @@ class JobServerNamedRdds(val rddManager: ActorRef) extends NamedRdds {
 
   require(rddManager != null, "rddManager ActorRef must not be null!")
 
-  def getOrElseCreate[T](name: String, 
-                         rddGen: => RDD[T], 
+  def getOrElseCreate[T](name: String,
+                         rddGen: => RDD[T],
                          forceComputation: Boolean = true,
                          storageLevel: StorageLevel = defaultStorageLevel)
                         (implicit timeout: Timeout = defaultTimeout): RDD[T] = {
@@ -53,8 +53,8 @@ class JobServerNamedRdds(val rddManager: ActorRef) extends NamedRdds {
     }
   }
 
-  def update[T](name: String, 
-                rddGen: => RDD[T], 
+  def update[T](name: String,
+                rddGen: => RDD[T],
                 forceComputation: Boolean = true,
                 storageLevel: StorageLevel = defaultStorageLevel): RDD[T] = {
     val rdd = createRdd(rddGen, name, forceComputation, storageLevel)

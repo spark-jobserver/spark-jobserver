@@ -46,8 +46,8 @@ trait NamedRdds {
    * @throws java.util.concurrent.TimeoutException if the request to the RddManager times out.
    * @throws java.lang.RuntimeException wrapping any error that occurs within the generator function.
    */
-  def getOrElseCreate[T](name: String, 
-                         rddGen: => RDD[T], 
+  def getOrElseCreate[T](name: String,
+                         rddGen: => RDD[T],
                          forceComputation: Boolean = true,
                          storageLevel: StorageLevel = defaultStorageLevel)
                         (implicit timeout: Timeout = defaultTimeout): RDD[T]
@@ -85,8 +85,8 @@ trait NamedRdds {
    * @tparam T the generic type of the RDD.
    * @return the RDD with the given name.
    */
-  def update[T](name: String, 
-                rddGen: => RDD[T], 
+  def update[T](name: String,
+                rddGen: => RDD[T],
                 forceComputation: Boolean = true,
                 storageLevel: StorageLevel = defaultStorageLevel): RDD[T]
 
