@@ -49,14 +49,14 @@ class JobSqlDAO(config: Config) extends JobDAO {
     def classPath = column[String]("CLASSPATH")
     def startTime = column[Timestamp]("START_TIME")
     def endTime = column[Option[Timestamp]]("END_TIME")
-    def error = column[Option[String]]("ERROR")
+    def error = column[Option[String]]("ERROR", O.DBType("varchar"))
     def * = (jobId, contextName, jarId, classPath, startTime, endTime, error)
   }
   val jobs = TableQuery[Jobs]
 
   class Configs(tag: Tag) extends Table[(String, String)](tag, "CONFIGS") {
     def jobId = column[String]("JOB_ID", O.PrimaryKey)
-    def jobConfig = column[String]("JOB_CONFIG")
+    def jobConfig = column[String]("JOB_CONFIG", O.DBType("varchar"))
     def * = (jobId, jobConfig)
   }
   //scalastyle:on
@@ -315,7 +315,6 @@ class JobSqlDAO(config: Config) extends JobDAO {
         } yield
           (j.jobId, j.contextName, jar.appName, jar.uploadTime, j.classPath, j.startTime,
             j.endTime, j.error)
-        logger.info("Query: " + joinQuery.selectStatement)
         joinQuery.list.map { case (id, context, app, upload, classpath, start, end, err) =>
           JobInfo(id,
             context,
