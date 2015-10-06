@@ -13,6 +13,7 @@ object JobInfoActor {
   // Requests
   case class GetJobStatuses(limit: Option[Int])
   case class GetJobConfig(jobId: String)
+  case class GetJobStatus(jobId: String)
   case class StoreJobConfig(jobId: String, jobConfig: Config)
 
   // Responses
@@ -32,6 +33,9 @@ class JobInfoActor(jobDao: JobDAO, contextSupervisor: ActorRef) extends Instrume
   override def wrappedReceive: Receive = {
     case GetJobStatuses(limit) =>
       sender ! jobDao.getJobInfos(limit.get)
+
+    case GetJobStatus(jobId) =>
+      sender ! jobDao.getJobInfo(jobId).get
 
     case GetJobResult(jobId) =>
       breakable {
