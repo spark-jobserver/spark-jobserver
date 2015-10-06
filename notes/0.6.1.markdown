@@ -1,3 +1,4 @@
 #Scala #akka @ApacheSpark
 
+* Fix issue #247: Allow non-computed named RDDs (@TimMaltGermany / KNIME)
 * Fix for PostgreSQL varchar issue (@ffarozan)
