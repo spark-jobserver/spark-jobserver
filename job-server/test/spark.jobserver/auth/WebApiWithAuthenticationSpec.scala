@@ -74,11 +74,16 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
   private val authorization = new Authorization(new BasicHttpCredentials("presidentskroob", "12345"))
   private val authorizationInvalidPassword = new Authorization(new BasicHttpCredentials("presidentskroob", "xxx"))
   private val authorizationUnknownUser = new Authorization(new BasicHttpCredentials("whoami", "xxx"))
+  private val dt = DateTime.parse("2013-05-29T00Z")
+  private val jobInfo = JobInfo("foo-1", "context", JarInfo("demo", dt), "com.abc.meme", dt, None, None)
+  private val ResultKey = "result"
 
   class DummyActor extends Actor {
     import CommonMessages._
+    import JobInfoActor._
     def receive = {
       case ListJars                       => sender ! Map()
+      case GetJobStatus(id)               => sender ! jobInfo
       case GetJobResult(id)               => sender ! JobResult(id, id + "!!!")
       case ContextSupervisor.ListContexts => sender ! Seq("context1", "context2")
     }
