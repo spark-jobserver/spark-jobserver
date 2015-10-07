@@ -48,9 +48,9 @@ with ScalatestRouteTest with HttpService {
 
   val dt = DateTime.parse("2013-05-29T00Z")
   val baseJobInfo = JobInfo("foo-1", "context", JarInfo("demo", dt), "com.abc.meme", dt, None, None)
+  val finishedJobInfo = baseJobInfo.copy(endTime = Some(dt.plusMinutes(5)))
   val StatusKey = "status"
   val ResultKey = "result"
-
   class DummyActor extends Actor {
 
     import CommonMessages._
@@ -59,22 +59,32 @@ with ScalatestRouteTest with HttpService {
     import JobManagerActor._
 
     def receive = {
+      case GetJobStatus("_mapseq") =>
+        sender ! finishedJobInfo
       case GetJobResult("_mapseq") =>
         val map = Map("first" -> Seq(1, 2, Seq("a", "b")))
         sender ! JobResult("_seqseq", map)
+      case GetJobStatus("_mapmap") =>
+        sender ! finishedJobInfo
       case GetJobResult("_mapmap") =>
         val map = Map("second" -> Map("K" -> Map("one" -> 1)))
         sender ! JobResult("_mapmap", map)
+      case GetJobStatus("_seq") =>
+        sender ! finishedJobInfo
       case GetJobResult("_seq") =>
         sender ! JobResult("_seq", Seq(1, 2, Map("3" -> "three")))
+      case GetJobStatus("_num") =>
+        sender ! finishedJobInfo
       case GetJobResult("_num") =>
         sender ! JobResult("_num", 5000)
+      case GetJobStatus("_unk") =>
+        sender ! finishedJobInfo
       case GetJobResult("_unk") => sender ! JobResult("_case", Seq(1, math.BigInt(101)))
-      case GetJobResult("job_to_kill") => sender ! baseJobInfo
+      case GetJobStatus("job_to_kill") => sender ! baseJobInfo
+      case GetJobStatus(id) => sender ! baseJobInfo
       case GetJobResult(id) => sender ! JobResult(id, id + "!!!")
       case GetJobStatuses(limitOpt) =>
-        sender ! Seq(baseJobInfo,
-                     baseJobInfo.copy(endTime = Some(dt.plusMinutes(5))))
+        sender ! Seq(baseJobInfo, finishedJobInfo)
 
       case ListJars => sender ! Map("demo1" -> dt, "demo2" -> dt.plusHours(1))
       // Ok these really belong to a JarManager but what the heck, type unsafety!!
