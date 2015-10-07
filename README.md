@@ -25,6 +25,7 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 - [KNIME](https://www.knime.org/)
 - [Azavea](http://azavea.com)
 - [Maana](http://maana.io/)
+- [Newsweaver](https://www.newsweaver.com)
 
 ## Features
 
