@@ -1,6 +1,6 @@
 import sbt._
 import Keys._
-import sbtassembly.Plugin._
+import sbtassembly.AssemblyPlugin.autoImport._
 import spray.revolver.RevolverPlugin._
 import com.typesafe.sbt.SbtScalariform._
 import scalariform.formatter.preferences._
@@ -82,7 +82,7 @@ object JobServerBuild extends Build {
     fork in Test := true,
     // Temporarily disable test for assembly builds so folks can package and get started.  Some tests
     // are flaky in extras esp involving paths.
-    test in AssemblyKeys.assembly := {},
+    test in assembly := {},
     exportJars := true
   )
 
@@ -97,9 +97,9 @@ object JobServerBuild extends Build {
 
   lazy val dockerSettings = Seq(
     // Make the docker task depend on the assembly task, which generates a fat JAR file
-    docker <<= (docker dependsOn (AssemblyKeys.assembly in jobServerExtras)),
+    docker <<= (docker dependsOn (assembly in jobServerExtras)),
     dockerfile in docker := {
-      val artifact = (AssemblyKeys.outputPath in AssemblyKeys.assembly in jobServerExtras).value
+      val artifact = (outputPath in assembly in jobServerExtras).value
       val artifactTargetPath = s"/app/${artifact.name}"
       new sbtdocker.mutable.Dockerfile {
         from("ottoops/mesos-java7")
