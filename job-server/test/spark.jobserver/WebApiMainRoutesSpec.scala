@@ -19,6 +19,16 @@ class WebApiMainRoutesSpec extends WebApiSpec {
   import spray.json.DefaultJsonProtocol._
   import ooyala.common.akka.web.JsonUtils._
 
+  val getJobStatusInfoMap = {
+    Map(
+      "jobId" -> "foo-1",
+      "startTime" -> "2013-05-29T00:00:00.000Z",
+      "classPath" -> "com.abc.meme",
+      "context"  -> "context",
+      "duration" -> "300.0 secs",
+      StatusKey -> "FINISHED")
+  }
+
   describe("jars routes") {
     it("should list all jars") {
       Get("/jars") ~> sealRoute(routes) ~> check {
@@ -87,7 +97,6 @@ class WebApiMainRoutesSpec extends WebApiSpec {
           sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, Any]] should be (Map(
-          StatusKey -> "OK",
           ResultKey -> Map(masterConfKey->"overriden", bindConfKey -> bindConfVal, "foo.baz" -> "booboo", "shiro.authentication" -> "off")
         ))
       }
@@ -109,7 +118,6 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, Any]] should be (Map(
-          StatusKey -> "OK",
           ResultKey -> Map(masterConfKey->masterConfVal, bindConfKey -> bindConfVal, "foo.baz" -> "booboo", "shiro.authentication" -> "off")
         ))
       }
@@ -121,7 +129,6 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, Any]] should be (Map(
-          StatusKey -> "OK",
           ResultKey -> Map(masterConfKey->masterConfVal, bindConfKey -> bindConfVal, "foo.baz" -> "booboo", "shiro.authentication" -> "off")
         ))
       }
@@ -141,7 +148,12 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       Get("/jobs/foobar") ~> sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, String]] should be (Map(
-          StatusKey -> "OK",
+          "jobId" -> "foo-1",
+          "startTime" -> "2013-05-29T00:00:00.000Z",
+          "classPath" -> "com.abc.meme",
+          "context"  -> "context",
+          "duration" -> "Job not done yet",
+          StatusKey -> "RUNNING",
           ResultKey -> "foobar!!!"
         ))
       }
@@ -217,17 +229,14 @@ class WebApiMainRoutesSpec extends WebApiSpec {
     it("should be able to serialize nested Seq's and Map's within Map's to JSON") {
       Get("/jobs/_mapseq") ~> sealRoute(routes) ~> check {
         status should be (OK)
-        responseAs[Map[String, Any]] should be (Map(
-          StatusKey -> "OK",
-          ResultKey -> Map("first" -> Seq(1, 2, Seq("a", "b")))
-      ))
+        responseAs[Map[String, Any]] should be (
+          getJobStatusInfoMap ++ Map(ResultKey -> Map("first" -> Seq(1, 2, Seq("a", "b")))))
       }
 
       Get("/jobs/_mapmap") ~> sealRoute(routes) ~> check {
         status should be (OK)
-        responseAs[Map[String, Any]] should be (Map(
-          StatusKey -> "OK",
-          ResultKey -> Map("second" -> Map("K" -> Map("one" -> 1)))
+        responseAs[Map[String, Any]] should be (
+          getJobStatusInfoMap ++ Map(ResultKey -> Map("second" -> Map("K" -> Map("one" -> 1)))
         ))
       }
     }
@@ -236,8 +245,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       Get("/jobs/_seq") ~> sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, Any]] should be (
-          Map( StatusKey -> "OK",
-            ResultKey -> Seq(1, 2, Map("3" -> "three"))
+          getJobStatusInfoMap ++ Map(ResultKey -> Seq(1, 2, Map("3" -> "three"))
           )
         )
       }
@@ -247,7 +255,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       Get("/jobs/_num") ~> sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, Any]] should be (
-          Map(StatusKey -> "OK", ResultKey -> 5000)
+          getJobStatusInfoMap ++ Map(ResultKey -> 5000)
         )
       }
     }
@@ -256,7 +264,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       Get("/jobs/_unk") ~> sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, Any]] should be (
-          Map(StatusKey -> "OK", ResultKey -> Seq(1,  "101"))
+          getJobStatusInfoMap ++ Map(ResultKey -> Seq(1,  "101"))
         )
       }
     }

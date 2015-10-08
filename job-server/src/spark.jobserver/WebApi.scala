@@ -56,7 +56,7 @@ object WebApi {
   }
 
   def resultToTable(result: Any): Map[String, Any] = {
-    Map(StatusKey -> "OK", ResultKey -> result)
+    Map(ResultKey -> result)
   }
 
   def formatException(t: Throwable): Any =
@@ -71,6 +71,19 @@ object WebApi {
         "errorClass" -> t.getClass.getName,
         "stack" -> t.getStackTrace.map(_.toString).toSeq)
     }
+
+  def getJobReport(jobInfo: JobInfo): Map[String, Any] = {
+    Map("jobId" -> jobInfo.jobId,
+      "startTime" -> jobInfo.startTime.toString(),
+      "classPath" -> jobInfo.classPath,
+      "context" -> (if (jobInfo.contextName.isEmpty) "<<ad-hoc>>" else jobInfo.contextName),
+      "duration" -> getJobDurationString(jobInfo)) ++ (jobInfo match {
+        case JobInfo(_, _, _, _, _, None, _) => Map(StatusKey -> "RUNNING")
+        case JobInfo(_, _, _, _, _, _, Some(ex)) => Map(StatusKey -> "ERROR",
+          ResultKey -> formatException(ex))
+        case JobInfo(_, _, _, _, _, Some(e), None) => Map(StatusKey -> "FINISHED")
+      })
+  }
 }
 
 class WebApi(system: ActorSystem,
@@ -321,21 +334,25 @@ class WebApi(system: ActorSystem,
           }
         }
       } ~
-        // GET /jobs/<jobId>  returns the result in JSON form in a table
-        //  JSON result always starts with: {"status": "ERROR" / "OK" / "RUNNING"}
+        // GET /jobs/<jobId>
+        // Returns job information in JSON.
         // If the job isn't finished yet, then {"status": "RUNNING" | "ERROR"} is returned.
+        // Returned JSON contains result attribute if status is "FINISHED"
         (get & path(Segment)) { jobId =>
-          val future = jobInfo ? GetJobResult(jobId)
+          val statusFuture = jobInfo ? GetJobStatus(jobId)
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-            future.map {
+            statusFuture.map {
               case NoSuchJobId =>
                 notFound(ctx, "No such job ID " + jobId.toString)
-              case JobInfo(_, _, _, _, _, None, _) =>
-                ctx.complete(Map(StatusKey -> "RUNNING"))
-              case JobInfo(_, _, _, _, _, _, Some(ex)) =>
-                ctx.complete(Map(StatusKey -> "ERROR", "ERROR" -> formatException(ex)))
-              case JobResult(_, result) =>
-                ctx.complete(resultToTable(result))
+              case info: JobInfo =>
+                val jobReport = getJobReport(info)
+                val resultFuture = jobInfo ? GetJobResult(jobId)
+                resultFuture.map {
+                  case JobResult(_, result) =>
+                    ctx.complete(jobReport ++ resultToTable(result))
+                  case _ =>
+                    ctx.complete(jobReport)
+                }
             }
           }
         } ~
@@ -343,7 +360,7 @@ class WebApi(system: ActorSystem,
         //  Stop the current job. All other jobs submited with this spark context
         //  will continue to run
         (delete & path(Segment)) { jobId =>
-          val future = jobInfo ? GetJobResult(jobId)
+          val future = jobInfo ? GetJobStatus(jobId)
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
             future.map {
               case NoSuchJobId =>
@@ -354,8 +371,6 @@ class WebApi(system: ActorSystem,
                 ctx.complete(Map(StatusKey -> "KILLED"))
               case JobInfo(_, _, _, _, _, _, Some(ex)) =>
                 ctx.complete(Map(StatusKey -> "ERROR", "ERROR" -> formatException(ex)))
-              case JobResult(_, result) =>
-                ctx.complete(resultToTable(result))
             }
           }
         } ~
@@ -373,16 +388,7 @@ class WebApi(system: ActorSystem,
             respondWithMediaType(MediaTypes.`application/json`) { ctx =>
               future.map { infos =>
                 val jobReport = infos.map { info =>
-                  Map("jobId" -> info.jobId,
-                    "startTime" -> info.startTime.toString(),
-                    "classPath" -> info.classPath,
-                    "context" -> (if (info.contextName.isEmpty) "<<ad-hoc>>" else info.contextName),
-                    "duration" -> getJobDurationString(info)) ++ (info match {
-                      case JobInfo(_, _, _, _, _, None, _) => Map(StatusKey -> "RUNNING")
-                      case JobInfo(_, _, _, _, _, _, Some(ex)) => Map(StatusKey -> "ERROR",
-                        ResultKey -> formatException(ex))
-                      case JobInfo(_, _, _, _, _, Some(e), None) => Map(StatusKey -> "FINISHED")
-                    })
+                  getJobReport(info)
                 }
                 ctx.complete(jobReport)
               }
