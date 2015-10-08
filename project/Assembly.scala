@@ -18,6 +18,9 @@ object Assembly {
       case m if m.toLowerCase.matches("meta-inf.*\\.sf$") => MergeStrategy.discard
       case "reference.conf" => MergeStrategy.concat
       case _ => MergeStrategy.first
-    }
+    },
+    assemblyShadeRules in assembly := Seq(
+      ShadeRule.rename("shapeless.**" -> "sjs.shapeless.@1").inAll
+    )
   )
 }
