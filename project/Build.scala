@@ -43,6 +43,8 @@ object JobServerBuild extends Build {
       fullClasspath in Compile <<= (fullClasspath in Compile).map { classpath =>
         extraJarPaths ++ classpath
       },
+      // Must disable this due to a bug with sbt-assembly 0.14's shading.... :(
+      test in assembly := {},
       // Must run the examples and tests in separate JVMs to avoid mysterious
       // scala.reflect.internal.MissingRequirementError errors. (TODO)
       // TODO: Remove this once we upgrade to Spark 1.4 ... see resolution of SPARK-5281.
