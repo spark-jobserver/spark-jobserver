@@ -13,6 +13,7 @@ object JobInfoActor {
   // Requests
   case class GetJobStatuses(limit: Option[Int])
   case class GetJobConfig(jobId: String)
+  case class GetJobStatus(jobId: String)
   case class StoreJobConfig(jobId: String, jobConfig: Config)
 
   // Responses
@@ -31,29 +32,28 @@ class JobInfoActor(jobDao: JobDAO, contextSupervisor: ActorRef) extends Instrume
 
   override def wrappedReceive: Receive = {
     case GetJobStatuses(limit) =>
-      val infos = jobDao.getJobInfos.values.toSeq.sortBy(_.startTime.toString())
-      if (limit.isDefined) {
-        sender ! infos.takeRight(limit.get)
-      } else {
-        sender ! infos
-      }
+      sender ! jobDao.getJobInfos(limit.get)
+
+    case GetJobStatus(jobId) =>
+      sender ! jobDao.getJobInfo(jobId).get
 
     case GetJobResult(jobId) =>
       breakable {
-        val jobInfoOpt = jobDao.getJobInfos.get(jobId)
-        if (!jobInfoOpt.isDefined) {
+        val jobInfo = jobDao.getJobInfo(jobId)
+
+        if (!jobInfo.isDefined) {
           sender ! NoSuchJobId
           break
         }
 
-        jobInfoOpt.filter { job => job.isRunning || job.isErroredOut }
+        jobInfo.filter { job => job.isRunning || job.isErroredOut }
           .foreach { jobInfo =>
             sender ! jobInfo
             break
           }
 
         // get the context from jobInfo
-        val context = jobInfoOpt.get.contextName
+        val context = jobInfo.get.contextName
 
         val future = (contextSupervisor ? ContextSupervisor.GetResultActor(context)).mapTo[ActorRef]
         val resultActor = Await.result(future, 3 seconds)

@@ -1,8 +1,9 @@
 package spark.jobserver
 
 import com.typesafe.config.ConfigFactory
+import org.apache.spark.sql.Row
 import org.apache.spark.{SparkContext, SparkConf}
-import org.apache.spark.sql.catalyst.expressions.Row
+
 import org.apache.spark.sql.hive.test.TestHiveContext
 import spark.jobserver.context.{HiveContextLike, HiveContextFactory}
 
@@ -26,7 +27,7 @@ class HiveJobSpec extends ExtrasJobSpecBase(HiveJobSpec.getNewSystem) {
 
   val emptyConfig = ConfigFactory.parseString("spark.master = bar")
   val queryConfig = ConfigFactory.parseString(
-                      """sql = "SELECT firstName, lastName FROM `default.test_addresses` WHERE city = 'San Jose'" """)
+                      """sql = "SELECT firstName, lastName FROM `default`.`test_addresses` WHERE city = 'San Jose'" """)
 
   before {
     dao = new InMemoryDAO

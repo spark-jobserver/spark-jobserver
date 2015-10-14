@@ -1,0 +1,6 @@
+#Scala #akka @ApacheSpark
+
+* Updated to Spark 1.5.0 (@zeitos)
+* Return job status uniformly for both /jobs and /jobs/<jobId> routes (@noorul)
+* Fix issue #247: Allow non-computed named RDDs (@TimMaltGermany / KNIME)
+* Fix for PostgreSQL varchar issue (@ffarozan)

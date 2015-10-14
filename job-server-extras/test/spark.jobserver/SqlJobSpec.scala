@@ -1,9 +1,7 @@
 package spark.jobserver
 
 import com.typesafe.config.ConfigFactory
-import org.apache.spark.sql.catalyst.expressions.Row
-import scala.collection.mutable
-import spark.jobserver.io.JobDAO
+import org.apache.spark.sql.Row
 import spark.jobserver.context.SQLContextFactory
 
 object SqlJobSpec extends JobSpecConfig {

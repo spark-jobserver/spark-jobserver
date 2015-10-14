@@ -3,6 +3,8 @@ import sbt._
 object Dependencies {
   val excludeCglib = ExclusionRule(organization = "org.sonatype.sisu.inject")
   val excludeJackson = ExclusionRule(organization = "org.codehaus.jackson")
+  val excludeScalaTest = ExclusionRule(organization = "org.scalatest")
+  val excludeScala= ExclusionRule(organization = "org.scala-lang")
   val excludeNettyIo = ExclusionRule(organization = "io.netty", artifact= "netty-all")
   val excludeAsm = ExclusionRule(organization = "asm")
   val excludeQQ = ExclusionRule(organization = "org.scalamacros")
@@ -26,18 +28,23 @@ object Dependencies {
     yammerDeps
   ) ++ yodaDeps
 
-  val sparkVersion = sys.env.getOrElse("SPARK_VERSION", "1.3.1")
+  val sparkVersion = sys.env.getOrElse("SPARK_VERSION", "1.5.0")
   lazy val sparkDeps = Seq(
     "org.apache.spark" %% "spark-core" % sparkVersion % "provided" excludeAll(excludeNettyIo, excludeQQ),
     // Force netty version.  This avoids some Spark netty dependency problem.
     "io.netty" % "netty-all" % "4.0.23.Final"
   )
 
+  lazy val scalaLib = if (scala.util.Properties.versionString.split(" ")(1).startsWith("2.10"))
+      Seq("org.scala-lang" % "scala-library" % "2.10.3")
+    else Seq()
+
   lazy val sparkExtraDeps = Seq(
     "org.apache.spark" %% "spark-sql" % sparkVersion % "provided" excludeAll(excludeNettyIo, excludeQQ),
     "org.apache.spark" %% "spark-streaming" % sparkVersion % "provided" excludeAll(excludeNettyIo, excludeQQ),
-    "org.apache.spark" %% "spark-hive" % sparkVersion % "provided" excludeAll(excludeNettyIo, excludeQQ)
-  )
+    "org.apache.spark" %% "spark-hive" % sparkVersion % "provided" excludeAll(excludeNettyIo, excludeQQ, excludeScalaTest)
+  ) ++ scalaLib
+
 
   lazy val slickDeps = Seq(
     "com.typesafe.slick" %% "slick" % "2.1.0",
@@ -56,7 +63,10 @@ object Dependencies {
     "io.spray" %% "spray-testkit" % "1.3.2" % "test"
   )
 
-
+  lazy val securityDeps = Seq(
+     "org.apache.shiro" % "shiro-core" % "1.2.4"
+  )
+		
   lazy val serverDeps = apiDeps ++ yodaDeps
   lazy val apiDeps = sparkDeps :+ typeSafeConfigDeps
 

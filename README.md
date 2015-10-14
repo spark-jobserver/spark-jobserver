@@ -12,9 +12,11 @@ See [Troubleshooting Tips](doc/troubleshooting.md) as well as [Yarn tips](doc/ya
 
 (Please add yourself to this list!)
 
-- Ooyala
-- Netflix
-- Avenida.com
+Spark Job Server is now included in Datastax Enterprise 4.8!
+
+- [Ooyala](http://www.ooyala.com)
+- [Netflix](http://www.netflix.com)
+- [Avenida.com](http://www.avenida.com)
 - GumGum
 - Fuse Elements
 - Frontline Solvers
@@ -23,16 +25,19 @@ See [Troubleshooting Tips](doc/troubleshooting.md) as well as [Yarn tips](doc/ya
 - [KNIME](https://www.knime.org/)
 - [Azavea](http://azavea.com)
 - [Maana](http://maana.io/)
+- [Newsweaver](https://www.newsweaver.com)
 
 ## Features
 
 - *"Spark as a Service"*: Simple REST interface (including HTTPS) for all aspects of job, context management
 - Support for Spark SQL, Hive, Streaming Contexts/jobs and custom job contexts!  See [Contexts](doc/contexts.md).
+- LDAP Auth support via Apache Shiro integration
 - Supports sub-second low-latency jobs via long-running job contexts
 - Start and stop job contexts for RDD sharing and low-latency jobs; change resources on restart
 - Kill running jobs via stop context and delete job
 - Separate jar uploading step for faster job startup
 - Asynchronous and synchronous job API.  Synchronous API is great for low latency jobs!
+- Preliminary support for Java (see `JavaSparkJob`)
 - Works with Standalone Spark as well as Mesos and yarn-client
 - Job and jar info is persisted via a pluggable DAO interface
 - Named RDDs to cache and retrieve RDDs by name, improving RDD sharing and reuse among jobs. 
@@ -48,6 +53,8 @@ See [Troubleshooting Tips](doc/troubleshooting.md) as well as [Yarn tips](doc/ya
 | 0.5.0       | 1.2.0         |
 | 0.5.1       | 1.3.0         |
 | 0.5.2       | 1.3.1         |
+| 0.6.0       | 1.4.1         |
+| master      | 1.5.0         |
 
 For release notes, look in the `notes/` directory.  They should also be up on [ls.implicit.ly](http://ls.implicit.ly/spark-jobserver/spark-jobserver).
 
@@ -160,11 +167,11 @@ In your `build.sbt`, add this to use the job server jar:
 
 	resolvers += "Job Server Bintray" at "https://dl.bintray.com/spark-jobserver/maven"
 
-	libraryDependencies += "spark.jobserver" %% "job-server-api" % "0.5.2" % "provided"
+	libraryDependencies += "spark.jobserver" %% "job-server-api" % "0.6.0" % "provided"
 
 If a SQL or Hive job/context is desired, you also want to pull in `job-server-extras`:
 
-    libraryDependencies += "spark.jobserver" %% "job-server-extras" % "0.5.2" % "provided"
+    libraryDependencies += "spark.jobserver" %% "job-server-extras" % "0.6.0" % "provided"
 
 For most use cases it's better to have the dependencies be "provided" because you don't want SBT assembly to include the whole job server jar.
 
@@ -243,7 +250,8 @@ def validate(sc:SparkContext, config: Contig): SparkJobValidation = {
 To activate ssl communication, set these flags in your application.conf file (Section 'spray.can.server'):
 ```
   ssl-encryption = on
-  keystore = "~/sjs.jks"
+  # absolute path to keystore file
+  keystore = "/some/path/sjs.jks"
   keystorePW = "changeit"
 ```
 
@@ -252,21 +260,58 @@ You will need a keystore that contains the server certificate. The bare minimum 
  keytool -genkey -keyalg RSA -alias jobserver -keystore ~/sjs.jks -storepass changeit -validity 360 -keysize 2048
 ```
 You may place the keystore anywhere.    
-Here is an example of simple curl command that utilizes ssl:
+Here is an example of a simple curl command that utilizes ssl:
 ```
 curl -k https://localhost:8090/contexts
 ```
 The ```-k``` flag tells curl to "Allow connections to SSL sites without certs". Export your server certificate and import it into the client's truststore to fully utilize ssl security. 
 
+### Authentication
+
+Authentication uses the [Apache Shiro](http://shiro.apache.org/index.html) framework. Authentication is activated by setting this flag (Section 'shiro'): 
+```
+authentication = on
+# absolute path to shiro config file, including file name
+config.path = "/some/path/shiro.ini"
+```
+Shiro-specific configuration options should be placed into a file named 'shiro.ini' in the directory as specified by the config option 'config.path'. 
+Here is an example that configures LDAP with user group verification:
+```
+# use this for basic ldap authorization, without group checking
+# activeDirectoryRealm = org.apache.shiro.realm.ldap.JndiLdapRealm
+# use this for checking group membership of users based on the 'member' attribute of the groups:
+activeDirectoryRealm = spark.jobserver.auth.LdapGroupRealm
+# search base for ldap groups (only relevant for LdapGroupRealm):
+activeDirectoryRealm.contextFactory.environment[ldap.searchBase] = dc=xxx,dc=org
+# allowed groups (only relevant for LdapGroupRealm):
+activeDirectoryRealm.contextFactory.environment[ldap.allowedGroups] = "cn=group1,ou=groups", "cn=group2,ou=groups"
+activeDirectoryRealm.contextFactory.environment[java.naming.security.credentials] = password
+activeDirectoryRealm.contextFactory.url = ldap://localhost:389
+activeDirectoryRealm.userDnTemplate = cn={0},ou=people,dc=xxx,dc=org
+
+cacheManager = org.apache.shiro.cache.MemoryConstrainedCacheManager
+
+securityManager.cacheManager = $cacheManager
+```
+
+Make sure to edit the url, credentials, userDnTemplate, ldap.allowedGroups and ldap.searchBase settings in accordance with your local setup.
+
+Here is an example of a simple curl command that authenticates a user and uses ssl (you may want to use -H to hide the 
+credentials, this is just a simple example to get you started):
+```
+curl -k --basic --user 'user:pw' https://localhost:8090/contexts
+```
+
 ## Deployment
 
 ### Manual steps
 
-1. Copy `config/local.sh.template` to `<environment>.sh` and edit as appropriate.  NOTE: be sure to set SPARK_VERSION if you need to compile against a different version, ie. 1.4.1 for job server 0.5.2
-2. Copy `config/local.conf.template` to `<environment>.conf` and edit as appropriate.
-3. `bin/server_deploy.sh <environment>` -- this packages the job server along with config files and pushes
+1. Copy `config/local.sh.template` to `<environment>.sh` and edit as appropriate.  NOTE: be sure to set SPARK_VERSION if you need to compile against a different version, ie. 1.4.1 for job server 0.6.0
+2. Copy `config/shiro.ini.template` to `shiro.ini` and edit as appropriate. NOTE: only required when `authentication = on`
+3. Copy `config/local.conf.template` to `<environment>.conf` and edit as appropriate.
+4. `bin/server_deploy.sh <environment>` -- this packages the job server along with config files and pushes
    it to the remotes you have configured in `<environment>.sh`
-4. On the remote server, start it in the deployed directory with `server_start.sh` and stop it with `server_stop.sh`
+5. On the remote server, start it in the deployed directory with `server_start.sh` and stop it with `server_stop.sh`
 
 The `server_start.sh` script uses `spark-submit` under the hood and may be passed any of the standard extra arguments from `spark-submit`.
 
@@ -320,6 +365,24 @@ the REST API.
 
 For details on the Typesafe config format used for input (JSON also works), see the [Typesafe Config docs](https://github.com/typesafehub/config).
 
+### Data
+
+It is sometime necessary to programmatically upload files to the server. Use these paths to manage such files:
+
+    GET /data                - Lists previously uploaded files that were not yet deleted
+    POST /data/<prefix>      - Uploads a new file, the full path of the file on the server is returned, the 
+                               prefix is the prefix of the actual filename used on the server (a timestamp is 
+                               added to ensure uniqueness)							   
+    DELETE /data/<filename>  - Deletes the specified file (only if under control of the JobServer)
+
+These files are uploaded to the server and are stored in a local temporary 
+directory on the server where the JobServer runs. The POST command returns the full 
+pathname and filename of the uploaded file so that later jobs can work with this 
+just the same as with any other server-local file. A job could therefore add this file to HDFS or distribute 
+it to worker nodes via the SparkContext.addFile command.  	
+For files that are larger than a few hundred MB, it is recommended to manually upload these files to the server or 
+to directly add them to your HDFS.
+	
 ### Context configuration
 
 A number of context-specific settings can be controlled when creating a context (POST /contexts) or running an
