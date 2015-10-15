@@ -12,7 +12,7 @@ import org.slf4j.LoggerFactory
 import spark.jobserver.util.SparkJobUtils
 import spark.jobserver.util.SSLContextFactory
 import spark.jobserver.routes.DataRoutes
-import scala.concurrent.{Await, ExecutionContext}
+import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.Try
 import spark.jobserver.io.JobInfo
 import spark.jobserver.auth._
@@ -278,17 +278,20 @@ class WebApi(system: ActorSystem,
           parameter("reset") { reset =>
             respondWithMediaType(MediaTypes.`text/plain`) { ctx =>
               reset match {
-                case "all" => {
+                case "reboot" => {
                   import ContextSupervisor._
                   import collection.JavaConverters._
+                  import java.util.concurrent.TimeUnit
+
                   logger.warn("refreshing contexts")
                   val future = (supervisor ? ListContexts).mapTo[Seq[String]]
-                  Await.result(future, 1 second).asInstanceOf[Seq[String]]
-                    .foreach { context => {
-                      val stopFuture = supervisor ? StopContext(context)
-                      Await.ready(stopFuture, 5 seconds)
-                    }
-                  }
+                  val lookupTimeout = Try(config.getDuration("spark.jobserver.context-lookup-timeout",
+                    TimeUnit.MILLISECONDS).toInt / 1000).getOrElse(1)
+                  val contexts = Await.result(future, lookupTimeout.seconds).asInstanceOf[Seq[String]]
+
+                  val stopFutures = contexts.map(c => supervisor ? StopContext(c))
+                  Await.ready(Future.sequence(stopFutures), contextTimeout.seconds)
+
                   Thread.sleep(1000) // we apparently need some sleeping in here, so spark can catch up
 
                   (supervisor ? AddContextsFromConfig).onFailure {
