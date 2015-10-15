@@ -428,6 +428,10 @@ For the exact context configuration parameters, see JobManagerActor docs as well
 
 Also see the [yarn doc](doc/yarn.md) for more tips.
 
+### Other configuration settings
+
+For all of the Spark Job Server configuration settings, see `job-server/src/main/resources/application.conf`.
+
 ### Job Result Serialization
 
 The result returned by the `SparkJob` `runJob` method is serialized by the job server into JSON for routes
