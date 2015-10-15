@@ -116,7 +116,7 @@ class WebApi(system: ActorSystem,
   val logger = LoggerFactory.getLogger(getClass)
 
   val myRoutes = jarRoutes ~ contextRoutes ~ jobRoutes ~
-                 dataRoutes ~ contextRefreshRoutes ~ healthzRoutes ~ otherRoutes
+                 dataRoutes ~ healthzRoutes ~ otherRoutes
 
   lazy val authenticator: AuthMagnet[AuthInfo] = {
     if (config.getBoolean("shiro.authentication")) {
@@ -273,32 +273,34 @@ class WebApi(system: ActorSystem,
               }
             }
           }
-        }
-    }
-  }
+        } ~
+        put {
+          parameter("reset") { reset =>
+            respondWithMediaType(MediaTypes.`text/plain`) { ctx =>
+              reset match {
+                case "all" => {
+                  import ContextSupervisor._
+                  import collection.JavaConverters._
+                  logger.warn("refreshing contexts")
+                  val future = (supervisor ? ListContexts).mapTo[Seq[String]]
+                  Await.result(future, 1 second).asInstanceOf[Seq[String]]
+                    .foreach { context => {
+                      val stopFuture = supervisor ? StopContext(context)
+                      Await.ready(stopFuture, 5 seconds)
+                    }
+                  }
+                  Thread.sleep(1000) // we apparently need some sleeping in here, so spark can catch up
 
-  /**
-   * Routes for refreshing contexts
-   *     GET /contexts-refresh         - drop all existing contexts, and re-load from config
-   */
-  def contextRefreshRoutes: Route = pathPrefix("refresh-contexts") {
-    import ContextSupervisor._
-    import collection.JavaConverters._
-    get { ctx =>
-      logger.warn("refreshing contexts")
-      val future = (supervisor ? ListContexts).mapTo[Seq[String]]
-      Await.result(future, 1 second).asInstanceOf[Seq[String]]
-        .foreach { context => {
-          val stopFuture = supervisor ? StopContext(context)
-          Await.ready(stopFuture, 5 seconds)
+                  (supervisor ? AddContextsFromConfig).onFailure {
+                    case t => ctx.complete("ERROR")
+                  }
+                  ctx.complete(StatusCodes.OK)
+                }
+                case _ => ctx.complete("ERROR")
+              }
+            }
+          }
         }
-      }
-      Thread.sleep(1000) // we apparently need some sleeping in here, so spark can catch up
-
-      (supervisor ? AddContextsFromConfig).onFailure {
-        case t => ctx.complete("ERROR")
-      }
-      ctx.complete(StatusCodes.OK)
     }
   }
 
