@@ -28,7 +28,7 @@ object Dependencies {
     yammerDeps
   ) ++ yodaDeps
 
-  val sparkVersion = sys.env.getOrElse("SPARK_VERSION", "1.5.0")
+  val sparkVersion = sys.env.getOrElse("SPARK_VERSION", "1.5.1")
   lazy val sparkDeps = Seq(
     "org.apache.spark" %% "spark-core" % sparkVersion % "provided" excludeAll(excludeNettyIo, excludeQQ),
     // Force netty version.  This avoids some Spark netty dependency problem.
@@ -66,7 +66,7 @@ object Dependencies {
   lazy val securityDeps = Seq(
      "org.apache.shiro" % "shiro-core" % "1.2.4"
   )
-		
+
   lazy val serverDeps = apiDeps ++ yodaDeps
   lazy val apiDeps = sparkDeps :+ typeSafeConfigDeps
 
