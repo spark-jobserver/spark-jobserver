@@ -122,13 +122,18 @@ From this point, you could asynchronously query the status and results:
 
     curl localhost:8090/jobs/5453779a-f004-45fc-a11d-a39dae0f9bf4
     {
-      "status": "OK",
+      "duration": "6.341 secs",
+      "classPath": "spark.jobserver.WordCountExample",
+      "startTime": "2015-10-16T03:17:03.127Z",
+      "context": "b7ea0eb5-spark.jobserver.WordCountExample",
       "result": {
         "a": 2,
         "b": 2,
         "c": 1,
         "see": 1
-      }
+      },
+      "status": "FINISHED",
+      "jobId": "5453779a-f004-45fc-a11d-a39dae0f9bf4"
     }⏎
 
 Note that you could append `&sync=true` when you POST to /jobs to get the results back in one request, but for
@@ -151,7 +156,6 @@ Now let's run the job in the context and get the results back right away:
 
     curl -d "input.string = a b c a b see" 'localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample&context=test-context&sync=true'
     {
-      "status": "OK",
       "result": {
         "a": 2,
         "b": 2,
