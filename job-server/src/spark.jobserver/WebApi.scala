@@ -371,6 +371,8 @@ class WebApi(system: ActorSystem,
                 ctx.complete(Map(StatusKey -> "KILLED"))
               case JobInfo(_, _, _, _, _, _, Some(ex)) =>
                 ctx.complete(Map(StatusKey -> "ERROR", "ERROR" -> formatException(ex)))
+              case JobInfo(_, _, _, _, _, Some(e), None) =>
+                notFound(ctx, "No running job with ID " + jobId.toString)
             }
           }
         } ~
