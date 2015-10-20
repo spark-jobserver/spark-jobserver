@@ -13,6 +13,8 @@
 
 Note: To change the version of Spark on the cluster, set the SPARK_VERSION variable in both config/ec2.sh and config/user-ec2-settings.sh.template. 
 
+Note: The spark-ec2 script is unreliable. It may hang sometimes as it waits for every server in the cluster to come online. If you get an error message like "Warning: SSH connection error. (This could be temporary.)" for 20-30 min, just kill the script, run bin/ec2_destory.sh to kill your cluster, and restart the deploy with bin/ec2_deploy.sh.
+
 ## Using The Example
 
 1. Start a Spark Context by pressing the "Start Context" button.
