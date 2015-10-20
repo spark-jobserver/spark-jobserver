@@ -5,13 +5,14 @@ bin=`cd "$bin"; pwd`
 . "$bin"/../config/user-ec2-settings.sh
 
 #get spark binaries if they haven't been downloaded and extracted yet
-if [ ! -d "$bin"/../spark-1.5.0-bin-hadoop2.6 ]; then
-    wget -P "$bin"/.. http://apache.arvixe.com/spark/spark-1.5.0/spark-1.5.0-bin-hadoop2.6.tgz
-    tar -xvzf "$bin"/../spark-1.5.0-bin-hadoop2.6.tgz -C "$bin"/..
+SPARK_DIR=spark-$SPARK_VERSION-bin-hadoop$HADOOP_VERSION
+if [ ! -d "$bin"/../$SPARK_DIR ]; then
+    wget -P "$bin"/.. http://apache.arvixe.com/spark/spark-$SPARK_VERSION/$SPARK_DIR.tgz
+    tar -xvzf "$bin"/../$SPARK_DIR.tgz -C "$bin"/..
 fi
 
 #run spark-ec2 to start ec2 cluster
-EC2DEPLOY="$bin"/../spark-1.5.0-bin-hadoop2.6/ec2/spark-ec2
+EC2DEPLOY="$bin"/../$SPARK_DIR/ec2/spark-ec2
 "$EC2DEPLOY" --copy-aws-credentials --key-pair=$KEY_PAIR --hadoop-major-version=yarn --identity-file=$SSH_KEY --region=us-east-1 --zone=us-east-1a --instance-type=$INSTANCE_TYPE --slaves $NUM_SLAVES launch $CLUSTER_NAME
 #There is only 1 deploy host. However, the variable is plural as that is how Spark Job Server named it.
 #To minimize changes, I left the variable name alone.
