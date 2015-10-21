@@ -1,3 +1,4 @@
+//see http://bl.ocks.org/mbostock/4063663
 var width = 960,
   size = 150,
   padding = 19.5;
