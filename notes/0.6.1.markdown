@@ -1,5 +1,6 @@
 #Scala #akka @ApacheSpark
 
+* New route POST /contexts?reset=reboot to close and restart all contexts defined in config (@wildwood)
 * Updated to Spark 1.5.0 (@zeitos)
 * Return job status uniformly for both /jobs and /jobs/<jobId> routes (@noorul)
 * Fix issue #247: Allow non-computed named RDDs (@TimMaltGermany / KNIME)
