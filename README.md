@@ -169,9 +169,9 @@ Note the addition of `context=` and `sync=true`.
 ## Create a Job Server Project
 In your `build.sbt`, add this to use the job server jar:
 
-	resolvers += "Job Server Bintray" at "https://dl.bintray.com/spark-jobserver/maven"
+        resolvers += "Job Server Bintray" at "https://dl.bintray.com/spark-jobserver/maven"
 
-	libraryDependencies += "spark.jobserver" %% "job-server-api" % "0.6.0" % "provided"
+        libraryDependencies += "spark.jobserver" %% "job-server-api" % "0.6.0" % "provided"
 
 If a SQL or Hive job/context is desired, you also want to pull in `job-server-extras`:
 
@@ -351,9 +351,10 @@ Flow diagrams are checked in in the doc/ subdirectory.  .diagram files are for w
 
 ### Contexts
 
-    GET /contexts           - lists all current contexts
-    POST /contexts/<name>   - creates a new context
-    DELETE /contexts/<name> - stops a context and all jobs running in it
+    GET /contexts               - lists all current contexts
+    POST /contexts/<name>       - creates a new context
+    DELETE /contexts/<name>     - stops a context and all jobs running in it
+    PUT /contexts?reload=reboot - kills all contexts and re-loads only the contexts from config
 
 ### Jobs
 
@@ -376,17 +377,17 @@ It is sometime necessary to programmatically upload files to the server. Use the
     GET /data                - Lists previously uploaded files that were not yet deleted
     POST /data/<prefix>      - Uploads a new file, the full path of the file on the server is returned, the 
                                prefix is the prefix of the actual filename used on the server (a timestamp is 
-                               added to ensure uniqueness)							   
+                               added to ensure uniqueness)                                                         
     DELETE /data/<filename>  - Deletes the specified file (only if under control of the JobServer)
 
 These files are uploaded to the server and are stored in a local temporary 
 directory on the server where the JobServer runs. The POST command returns the full 
 pathname and filename of the uploaded file so that later jobs can work with this 
 just the same as with any other server-local file. A job could therefore add this file to HDFS or distribute 
-it to worker nodes via the SparkContext.addFile command.  	
+it to worker nodes via the SparkContext.addFile command.        
 For files that are larger than a few hundred MB, it is recommended to manually upload these files to the server or 
 to directly add them to your HDFS.
-	
+        
 ### Context configuration
 
 A number of context-specific settings can be controlled when creating a context (POST /contexts) or running an
@@ -487,7 +488,7 @@ Apache 2.0, see LICENSE.md
 ## TODO
 
 - More debugging for classpath issues
-- Update .g8 template, consider creating Activator template for sample job	
+- Update .g8 template, consider creating Activator template for sample job      
 - Add Swagger support.  See the spray-swagger project.
 - Implement an interactive SQL window.  See: [spark-admin](https://github.com/adatao/spark-admin)
 
