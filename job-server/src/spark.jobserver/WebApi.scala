@@ -1,5 +1,7 @@
 package spark.jobserver
 
+import java.util.concurrent.TimeUnit
+
 import akka.actor.{ ActorSystem, ActorRef }
 import akka.pattern.ask
 import akka.util.Timeout
@@ -104,7 +106,10 @@ class WebApi(system: ActorSystem,
 
   override def actorRefFactory: ActorSystem = system
   implicit val ec: ExecutionContext = system.dispatcher
-  implicit val ShortTimeout = Timeout(3 seconds)
+  implicit val ShortTimeout = Timeout(
+    Try(config.getDuration("spark.jobserver.short-timeout", TimeUnit.MILLISECONDS)).getOrElse(3000),
+    TimeUnit.MILLISECONDS
+  )
   val DefaultSyncTimeout = Timeout(10 seconds)
   val DefaultJobLimit = 50
   val StatusKey = "status"
