@@ -10,7 +10,7 @@ if [ -n "$SSH_KEY" ]  ; then
 fi
 
 VERSION=$(sed -E 's/version in ThisBuild := "(.*)"/\1/' version.sbt)
-wget -O- --post-file "$bin"/../job-server-extras/target/scala-2.10/job-server-extras_$VERSION.jar "$DEPLOY_HOSTS/jars/km"
+wget -O- --post-file "$bin"/../job-server-extras/target/scala-2.10/job-server-extras_2.10-$VERSION.jar "$DEPLOY_HOSTS/jars/km"
 scp -rp -o StrictHostKeyChecking=no $ssh_key_to_use "$bin"/../job-server-extras/src/main/KMeansExample/* ${APP_USER}@"${DEPLOY_HOSTS%:*}:/var/www/html/"
 
 echo "The example is running at ${DEPLOY_HOSTS%:*}:5080"
