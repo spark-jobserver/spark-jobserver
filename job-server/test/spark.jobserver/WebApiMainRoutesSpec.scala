@@ -97,7 +97,13 @@ class WebApiMainRoutesSpec extends WebApiSpec {
           sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, Any]] should be (Map(
-          ResultKey -> Map(masterConfKey->"overriden", bindConfKey -> bindConfVal, "foo.baz" -> "booboo", "shiro.authentication" -> "off")
+          ResultKey -> Map(
+            masterConfKey->"overriden",
+            bindConfKey -> bindConfVal,
+            "foo.baz" -> "booboo",
+            "shiro.authentication" -> "off",
+            "spark.jobserver.short-timeout" -> "3 s"
+          )
         ))
       }
     }
@@ -118,7 +124,13 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, Any]] should be (Map(
-          ResultKey -> Map(masterConfKey->masterConfVal, bindConfKey -> bindConfVal, "foo.baz" -> "booboo", "shiro.authentication" -> "off")
+          ResultKey -> Map(
+            masterConfKey -> masterConfVal,
+            bindConfKey -> bindConfVal,
+            "foo.baz" -> "booboo",
+            "shiro.authentication" -> "off",
+            "spark.jobserver.short-timeout" -> "3 s"
+          )
         ))
       }
     }
@@ -129,7 +141,13 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, Any]] should be (Map(
-          ResultKey -> Map(masterConfKey->masterConfVal, bindConfKey -> bindConfVal, "foo.baz" -> "booboo", "shiro.authentication" -> "off")
+          ResultKey -> Map(
+            masterConfKey -> masterConfVal,
+            bindConfKey -> bindConfVal,
+            "foo.baz" -> "booboo",
+            "shiro.authentication" -> "off",
+            "spark.jobserver.short-timeout" -> "3 s"
+          )
         ))
       }
     }
