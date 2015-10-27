@@ -6,3 +6,4 @@
 * Fix issue #247: Allow non-computed named RDDs (@TimMaltGermany / KNIME)
 * Fix for PostgreSQL varchar issue (@ffarozan)
 * Update Spray to 1.3.3 (@v-gerasimov)
+* Allow Web API timeouts to be configurable via `short-timeout` (@v-gerasimov)
