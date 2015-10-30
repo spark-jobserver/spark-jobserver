@@ -118,6 +118,8 @@ curl will munge your line separator chars.  Like:
 
     curl --data-binary @my-job-config.json 'localhost:8090/jobs?appNam=...'
 
+NOTE2: If you want to send in UTF-8 chars, make sure you pass in a proper header to CURL for the encoding, otherwise it may assume an encoding which is not what you expect.
+
 From this point, you could asynchronously query the status and results:
 
     curl localhost:8090/jobs/5453779a-f004-45fc-a11d-a39dae0f9bf4
