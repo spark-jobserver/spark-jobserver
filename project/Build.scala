@@ -102,10 +102,17 @@ object JobServerBuild extends Build {
       val artifact = (AssemblyKeys.outputPath in AssemblyKeys.assembly in jobServerExtras).value
       val artifactTargetPath = s"/app/${artifact.name}"
       new sbtdocker.mutable.Dockerfile {
-        from("ottoops/mesos-java7")
+        from("java:7-jre")
         // Dockerfile best practices: https://docs.docker.com/articles/dockerfile_best-practices/
         expose(8090)
         expose(9999)    // for JMX
+        env("MESOS_VERSION", mesosVersion)
+        runRaw("""echo "deb http://repos.mesosphere.io/ubuntu/ trusty main" > /etc/apt/sources.list.d/mesosphere.list && \
+                  apt-key adv --keyserver keyserver.ubuntu.com --recv E56151BF && \
+                  apt-get -y update && \
+                  apt-get -y install mesos=${MESOS_VERSION} && \
+                  apt-get clean
+               """)
         copy(artifact, artifactTargetPath)
         copy(baseDirectory(_ / "bin" / "server_start.sh").value, file("app/server_start.sh"))
         copy(baseDirectory(_ / "bin" / "server_stop.sh").value, file("app/server_stop.sh"))
@@ -130,7 +137,7 @@ object JobServerBuild extends Build {
     imageNames in docker := Seq(
       sbtdocker.ImageName(namespace = Some("velvia"),
                           repository = "spark-jobserver",
-                          tag = Some(version.value))
+                          tag = Some(s"${version.value}.mesos-${mesosVersion.split('-')(0)}.spark-${sparkVersion}"))
     )
   )
 
