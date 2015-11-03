@@ -1,0 +1,9 @@
+#MUST CUSTOMIZE THESE TO RUN
+# SSH Key to login to server that hosts Spark master node and Job Server
+SSH_KEY=PATH_TO_SSH_KEY
+KEY_PAIR=EC2_KEY_PAIR
+CLUSTER_NAME=large19Slaves
+INSTANCE_TYPE=r3.large
+NUM_SLAVES=19
+SPARK_VERSION=1.5.0
+HADOOP_VERSION=2.6

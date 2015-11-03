@@ -18,7 +18,7 @@ if [ ! -f "$configFile" ]; then
   echo "Could not find $configFile"
   exit 1
 fi
-. $configFile
+. "$configFile"
 
 majorRegex='([0-9]+\.[0-9]+)\.[0-9]+'
 if [[ $SCALA_VERSION =~ $majorRegex ]]
@@ -42,7 +42,6 @@ FILES="job-server-extras/target/scala-$majorVersion/spark-job-server.jar
        bin/server_start.sh
        bin/server_stop.sh
        bin/kill-process-tree.sh
-       $CONFIG_DIR/$ENV.conf
 	   config/shiro.ini
        config/log4j-server.properties"
 
@@ -53,7 +52,9 @@ fi
 
 for host in $DEPLOY_HOSTS; do
   # We assume that the deploy user is APP_USER and has permissions
-  ssh $ssh_key_to_use  ${APP_USER}@$host mkdir -p $INSTALL_DIR
-  scp $ssh_key_to_use  $FILES ${APP_USER}@$host:$INSTALL_DIR/
-  scp $ssh_key_to_use  $configFile ${APP_USER}@$host:$INSTALL_DIR/settings.sh
+  ssh -o StrictHostKeyChecking=no $ssh_key_to_use  ${APP_USER}@$host mkdir -p $INSTALL_DIR
+  scp -o StrictHostKeyChecking=no $ssh_key_to_use  $FILES ${APP_USER}@$host:$INSTALL_DIR/
+  scp -o StrictHostKeyChecking=no $ssh_key_to_use  "$CONFIG_DIR/$ENV.conf" ${APP_USER}@$host:$INSTALL_DIR/
+  scp -o StrictHostKeyChecking=no $ssh_key_to_use  "$configFile" ${APP_USER}@$host:$INSTALL_DIR/settings.sh
 done
+
