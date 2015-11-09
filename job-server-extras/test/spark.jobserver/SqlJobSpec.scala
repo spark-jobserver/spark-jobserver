@@ -1,8 +1,11 @@
 package spark.jobserver
 
-import com.typesafe.config.ConfigFactory
+import akka.actor.Props
+import akka.testkit.{TestProbe, TestActorRef}
+import com.typesafe.config.{ConfigValueFactory, ConfigFactory}
 import org.apache.spark.sql.Row
 import spark.jobserver.context.SQLContextFactory
+import spark.jobserver.io.{JobDAOActor, JobDAO}
 
 object SqlJobSpec extends JobSpecConfig {
   override val contextFactory = classOf[SQLContextFactory].getName
@@ -21,15 +24,20 @@ class SqlJobSpec extends ExtrasJobSpecBase(SqlJobSpec.getNewSystem) {
   val queryConfig = ConfigFactory.parseString(
                       """sql = "SELECT firstName, lastName FROM addresses WHERE city = 'San Jose'" """)
 
+  val sqlContextConfig = JobManagerSpec.config
+                           .withValue("context-factory",
+                                      ConfigValueFactory.fromAnyRef(SqlJobSpec.contextFactory))
+
   before {
     dao = new InMemoryDAO
-    manager =
-      system.actorOf(JobManagerActor.props(dao, "test", SqlJobSpec.contextConfig, false))
+    daoActor = system.actorOf(JobDAOActor.props(dao))
+    manager = system.actorOf(JobManagerActor.props())
+    supervisor = TestProbe().ref
   }
 
   describe("Spark SQL Jobs") {
     it("should be able to create and cache a table, then query it using separate SQL jobs") {
-      manager ! JobManagerActor.Initialize
+      manager ! JobManagerActor.Initialize(daoActor, None, "ctx", sqlContextConfig, true, supervisor)
       expectMsgClass(classOf[JobManagerActor.Initialized])
 
       uploadTestJar()

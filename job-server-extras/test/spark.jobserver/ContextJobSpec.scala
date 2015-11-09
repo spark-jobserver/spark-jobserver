@@ -2,7 +2,7 @@ package spark.jobserver
 
 import com.typesafe.config.ConfigFactory
 import scala.collection.mutable
-import spark.jobserver.io.JobDAO
+import spark.jobserver.io.{JobDAO, JobDAOActor}
 
 /**
  * This is just to test that you cannot load a SqlJob into a normal job context.
@@ -21,14 +21,14 @@ class ContextJobSpec extends JobSpecBase(ContextJobSpec.getNewSystem) {
 
   before {
     dao = new InMemoryDAO
-    manager =
-      system.actorOf(JobManagerActor.props(dao, "test", ContextJobSpec.config, false))
+    daoActor = system.actorOf(JobDAOActor.props(dao))
+    manager = system.actorOf(JobManagerActor.props())
   }
 
   describe("error conditions") {
     it("should get WrongJobType if loading SQL job in a plain SparkContext context") {
       uploadTestJar()
-      manager ! JobManagerActor.Initialize
+      manager ! JobManagerActor.Initialize(daoActor, None, "test", ContextJobSpec.config, false, supervisor)
       expectMsgClass(6 seconds, classOf[JobManagerActor.Initialized])
       manager ! JobManagerActor.StartJob("demo", sqlTestClass, emptyConfig, errorEvents)
       expectMsg(CommonMessages.WrongJobType)

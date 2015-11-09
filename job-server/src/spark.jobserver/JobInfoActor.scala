@@ -35,7 +35,9 @@ class JobInfoActor(jobDao: JobDAO, contextSupervisor: ActorRef) extends Instrume
       sender ! jobDao.getJobInfos(limit.get)
 
     case GetJobStatus(jobId) =>
-      sender ! jobDao.getJobInfo(jobId).get
+      val jobInfo = jobDao.getJobInfo(jobId)
+      val resp = if (!jobInfo.isDefined) NoSuchJobId else jobInfo.get
+      sender ! resp
 
     case GetJobResult(jobId) =>
       breakable {

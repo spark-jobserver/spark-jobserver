@@ -51,8 +51,10 @@ trait JobSpecConfig {
 abstract class JobSpecBaseBase(system: ActorSystem) extends TestKit(system) with ImplicitSender
 with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
   var dao: JobDAO = _
+  var daoActor: ActorRef = _
   var manager: ActorRef = _
   def testJar: java.io.File
+  var supervisor: ActorRef = _
 
   after {
     ooyala.common.akka.AkkaTestUtils.shutdownAndWait(manager)

@@ -1,15 +1,18 @@
 package spark.jobserver
 
+import akka.testkit.TestProbe
+import spark.jobserver.io.JobDAOActor
+
 /**
  * This tests JobManagerActor of AdHoc context.
- * Pass true to isAdHoc when the JobManagerActor is created.
  */
-class JobManagerActorAdHocSpec extends JobManagerSpec {
+class JobManagerActorAdHocSpec extends JobManagerSpec(adhoc = true) {
 
   before {
     dao = new InMemoryDAO
-    manager =
-      system.actorOf(JobManagerActor.props(dao, "test", JobManagerSpec.contextConfig, true))
+    daoActor = system.actorOf(JobDAOActor.props(dao))
+    manager = system.actorOf(JobManagerActor.props())
+    supervisor = TestProbe().ref
   }
 
 }
