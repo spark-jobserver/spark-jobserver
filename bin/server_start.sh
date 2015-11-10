@@ -78,8 +78,24 @@ fi
 # This needs to be exported for standalone mode so drivers can connect to the Spark cluster
 export SPARK_HOME
 
-# DSE_BIN is set in settings.sh
-"$DSE_HOME/bin/dse" spark-submit --class "$MAIN" --driver-memory 5G \
+# Identify location of dse command
+DSE="/usr/bin/dse"
+if [ -z "$DSE_HOME" ]; then
+    if [ -e "$DSE" ]; then
+        export DSE_HOME=/usr/share/dse
+    fi
+fi
+if [ ! -e "$DSE" ]; then
+    if [ -e "$DSE_HOME"/bin/dse ]; then
+        DSE="$DSE_HOME"/bin/dse
+    else
+      echo "Cannot determine DSE_HOME, please set it manually to your DSE install directory"
+      exit 1
+    fi
+fi
+
+# Submit the job server
+"$DSE" spark-submit --class "$MAIN" --driver-memory 5G \
   --conf "spark.executor.extraJavaOptions=$LOGGING_OPTS" \
   --driver-java-options "$GC_OPTS $JAVA_OPTS $LOGGING_OPTS $CONFIG_OVERRIDES" \
   "$@" "$appdir/spark-job-server.jar" "$conffile" 2>&1 &
