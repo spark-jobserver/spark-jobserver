@@ -9,6 +9,15 @@
 #   JOBSERVER_FG    - launches job server in foreground; defaults to forking in background
 set -e
 
+get_abs_script_path() {
+  pushd . >/dev/null
+  cd "$(dirname "$0")"
+  appdir=$(pwd)
+  popd  >/dev/null
+}
+
+get_abs_script_path
+
 . $appdir/setenv.sh
 
 GC_OPTS="-XX:+UseConcMarkSweepGC
