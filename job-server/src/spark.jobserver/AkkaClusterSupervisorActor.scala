@@ -12,6 +12,7 @@ import ooyala.common.akka.InstrumentedActor
 import spark.jobserver.util.SparkJobUtils
 import scala.collection.mutable
 import scala.util.{Try, Success, Failure}
+import scala.sys.process._
 
 /**
  * Created by ankits on 4/7/15.
@@ -177,10 +178,15 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
 
     logger.info("Starting context with actor name {} ", contextActorName)
 
-    val pb = new ProcessBuilder(managerStartCommand, contextActorName, selfAddress.toString)
+    val pb = Process(s"$managerStartCommand $contextActorName ${selfAddress.toString}")
+    val pio = new ProcessIO(_ => (),
+                        stdout => scala.io.Source.fromInputStream(stdout)
+                          .getLines.foreach(println),
+                        stderr => scala.io.Source.fromInputStream(stderr).getLines().foreach(println))
+    logger.info("Starting to execute sub process {}", pb)
     val processStart = Try {
-      val process = pb.start()
-      val exitVal = process.waitFor()
+      val process = pb.run(pio)
+      val exitVal = process.exitValue()
       if (exitVal != 0) {
         throw new IOException("Failed to launch context process, got exit code " + exitVal)
       }
@@ -208,9 +214,4 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
     }
 
   }
-
-
-
-
-
 }
