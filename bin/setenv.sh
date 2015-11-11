@@ -61,7 +61,3 @@ fi
 export SPARK_HOME
 export YARN_CONF_DIR
 export HADOOP_CONF_DIR
-
-# job server jar needs to appear first so its deps take higher priority
-# need to explicitly include app dir in classpath so logging configs can be found
-CLASSPATH="$appdir:$appdir/spark-job-server.jar:$($SPARK_HOME/bin/compute-classpath.sh)"
