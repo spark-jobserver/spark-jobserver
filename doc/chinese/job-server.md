@@ -1,12 +1,14 @@
-spark-jobserver
-    提供了一个RESTful接口来提交和管理spark的jobs,jars和job contexts。
-    特性：
-        1.针对job 和 contexts的各个方面提供了REST风格的api接口进行管理
-        2.支持SparkSQL，Hive，Streaming Contexts/jobs 以及定制job contexts!
-        3.支持压秒级别低延迟的任务通过长期运行的job contexts
-        4.可以通过结束context来停止运行的作业(job)
+spark-jobserver  
+    提供了一个RESTful接口来提交和管理spark的jobs,jars和job contexts。 
+    
+    特性： 
+        1.针对job 和 contexts的各个方面提供了REST风格的api接口进行管理 
+        2.支持SparkSQL，Hive，Streaming Contexts/jobs 以及定制job contexts! 
+        3.支持压秒级别低延迟的任务通过长期运行的job contexts 
+        4.可以通过结束context来停止运行的作业(job) 
         5.分割jar上传步骤以提高job的启动
-        6.异步和同步的job API，其中同步API对低延时作业非常有效
+        6.异步和同步的job API，其中同步API对低延时作业非常有效 
+        
         7.支持Standalone Spark和Mesos,yarn
         8.Job和jar信息通过一个可插拔的DAO接口来持久化
         9.命名RDD以缓存，并可以通过该名称获取RDD。这样可以提高作业间RDD的共享和重用
