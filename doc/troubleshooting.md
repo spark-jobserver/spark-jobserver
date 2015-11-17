@@ -86,3 +86,9 @@ You start from SBT using `reStart`, and when try to create a HiveContext or SQLC
 Solution:
 
 Before typing `reStart` in sbt, type `project job-server-extras` and only then start it using `reStart` 
+
+## Accessing a config file in my job jar
+
+```scala
+ConfigFactory.parseReader(paramReader = new InputStreamReader(getClass().getResourceAsStream(s"/$myPassedConfigPath"))
+```
