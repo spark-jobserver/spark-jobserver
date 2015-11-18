@@ -8,6 +8,8 @@ It was originally started at [Ooyala](http://www.ooyala.com), but this is now th
 
 See [Troubleshooting Tips](doc/troubleshooting.md) as well as [Yarn tips](doc/yarn.md).
 
+Also see [Chinese docs / 中文](doc/chinese/job-server.md).
+
 ## Users
 
 (Please add yourself to this list!)
