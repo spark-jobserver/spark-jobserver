@@ -8,7 +8,6 @@ import org.flywaydb.core.Flyway
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import scala.slick.driver.JdbcProfile
-import scala.slick.jdbc.meta.MTable
 import scala.reflect.runtime.universe
 import org.apache.commons.dbcp.BasicDataSource
 
@@ -82,6 +81,7 @@ class JobSqlDAO(config: Config) extends JobDAO {
     ds
   }
   val db = Database.forDataSource(dataSource)
+  // TODO: migrateLocations should be removed when tests have a running configuration
   val migrateLocations = config.getString("flyway.locations")
 
   // Server initialization
@@ -98,6 +98,7 @@ class JobSqlDAO(config: Config) extends JobDAO {
     // Flyway migration
     val flyway = new Flyway()
     flyway.setDataSource(jdbcUrl, jdbcUser, jdbcPassword)
+    // TODO: flyway.setLocations(migrateLocations) should be removed when tests have a running configuration
     flyway.setLocations(migrateLocations)
     flyway.migrate()
   }
