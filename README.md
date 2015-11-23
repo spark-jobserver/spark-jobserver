@@ -56,7 +56,7 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 | 0.5.1       | 1.3.0         |
 | 0.5.2       | 1.3.1         |
 | 0.6.0       | 1.4.1         |
-| master      | 1.5.1         |
+| master      | 1.5.2         |
 
 For release notes, look in the `notes/` directory.  They should also be up on [ls.implicit.ly](http://ls.implicit.ly/spark-jobserver/spark-jobserver).
 
