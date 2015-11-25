@@ -117,6 +117,14 @@ The last step to your jarn-client is to run the docker container that you have j
   
 Your Spark-Jobserver should now be up and running
 
+### Modifying the start-server.sh script
+
+The _start-server.sh_ script does not contain a ```--master``` option. In some clusters this means that the job will be launched in _cluster_ mode. To prevent this modify the start script and add: 
+
+```
+--master yarn-client
+```
+
 ### Important Context Settings for yarn
 
 I recently responded to a private question about configuring job-server AWS EMR running Spark and wanted to share with the group.
