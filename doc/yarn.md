@@ -80,7 +80,7 @@ Now that we have a docker.conf that should work we can create our dockerfile to 
 
 dockerfile:
 
-    FROM velvia/spark-jobserver:0.5.2
+    FROM velvia/spark-jobserver:0.6.1
     EXPOSE 32456-32472                                    # Expose driver port range (spark.driver.port + 16)
     ADD /path/to/your/docker.conf /app/docker.conf        # Add the docker.conf to the container
     ADD /path/to/your/cluster-config /app/cluster-config  # Add the yarn-site.xml and hfds-site.xml to the container
@@ -146,3 +146,19 @@ contexts {
 ```
 
 It was trial and error to find the best memory-per-node setting. If you over allocate memory per node, YARN will not allocate the expected executors.
+
+### ClassNotFoundException: org.apache.spark.deploy.yarn.YarnSparkHadoopUtil
+
+(Thanks to user @apivovarov - I believe solution is for non-Docker)
+
+I defined the following env vars in ~/.bashrc
+
+```bash
+export HADOOP_CONF_DIR=/etc/hadoop/conf
+export YARN_CONF_DIR=/etc/hadoop/conf
+export SPARK_HOME=/usr/lib/spark
+```
+
+I solved it by adding `export EXTRA_JAR=$SPARK_HOME/lib/spark-assembly-1.5.2-hadoop2.6.0.jar`.
+
+Ok, I solved my issues with jobserver. I use bin/server_package.sh ec2 script to build tar.gz distribution. I extracted dist on the server and run jobserver using server_start.sh script. Now Yarn works.
