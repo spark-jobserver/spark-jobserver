@@ -59,15 +59,19 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 | 0.6.1       | 1.5.2         |
 | master      | 1.5.2         |
 
-For release notes, look in the `notes/` directory.  They should also be up on [ls.implicit.ly](http://ls.implicit.ly/spark-jobserver/spark-jobserver).
+For release notes, look in the `notes/` directory.  They should also be up on [notes.implicit.ly](http://notes.implicit.ly/search/spark-jobserver).
 
-## Quick Start
+## Getting Started with Spark Job Server
 
 The easiest way to get started is to try the [Docker container](doc/docker.md) which prepackages a Spark distribution with the job server and lets you start and deploy it.
 
-## EC2 Start
+Alternatives:
 
-Follow the instructions in [EC2](doc/EC2.md) to spin up a Spark cluster with job server and an example application.
+* Build and run Job Server in local [development mode](#development-mode) within SBT.
+* Deploy job server to a cluster.  There are two alternatives (see the [deployment section](#deployment)):
+  - `server_deploy.sh`  deploys job server to a directory on a remote host.
+  - `server_package.sh` deploys job server to a local directory, from which you can deploy the directory, or create a .tar.gz for Mesos or YARN deployment.
+* EC2 Deploy scripts - follow the instructions in [EC2](doc/EC2.md) to spin up a Spark cluster with job server and an example application.
 
 ## Development mode
 
