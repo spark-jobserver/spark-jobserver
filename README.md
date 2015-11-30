@@ -73,6 +73,7 @@ Alternatives:
   - `server_deploy.sh`  deploys job server to a directory on a remote host.
   - `server_package.sh` deploys job server to a local directory, from which you can deploy the directory, or create a .tar.gz for Mesos or YARN deployment.
 * EC2 Deploy scripts - follow the instructions in [EC2](doc/EC2.md) to spin up a Spark cluster with job server and an example application.
+* EMR Deploy instruction - follow the instruction in [EMR](doc/EMR.md)
 
 ## Development mode
 
