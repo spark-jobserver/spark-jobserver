@@ -25,9 +25,11 @@ object KMeansExample extends SparkJob with NamedRddSupport {
    * @param config
    * @return Always return SparkJobValid as this example will not do error checking
    */
-  override def validate(sc: SparkContext, config: Config): SparkJobValidation = SparkJobValid
+  override def validate(sc: SparkContext, config: Config): scalaz.Validation[String, Unit] =
+    scalaz.Success(())
+  type Tmp = Unit
 
-  override def runJob(sc: SparkContext, config: Config): (Array[String], Array[String], Long) = {
+  override def runJob(sc: SparkContext, config: Unit): (Array[String], Array[String], Long) = {
     //load the hadoop configuration file, since the job server doesn't seem to do it
     val sqlContext = new SQLContext(sc)
 

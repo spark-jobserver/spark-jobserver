@@ -23,16 +23,17 @@ object LongPiJob extends SparkJob {
   def main(args: Array[String]) {
     val sc = new SparkContext("local[4]", "LongPiJob")
     val config = ConfigFactory.parseString("")
-    val results = runJob(sc, config)
-    println("Result is " + results)
+    validate(sc, config)
+      .map(i => runJob(sc, i))
+      .foreach(results => println(s"Result is $results"))
   }
 
-  override def validate(sc: SparkContext, config: Config): SparkJobValidation = {
-    SparkJobValid
+  type Tmp = Int
+  override def validate(sc: SparkContext, config: Config): scalaz.Validation[String, Int] = {
+    scalaz.Success(Try(config.getInt("stress.test.longpijob.duration")).getOrElse(5))
   }
 
-  override def runJob(sc: SparkContext, config: Config): Any = {
-    val duration = Try(config.getInt("stress.test.longpijob.duration")).getOrElse(5)
+  override def runJob(sc: SparkContext, duration: Int): Any = {
     var hit:Long = 0
     var total:Long = 0
     val start = now
