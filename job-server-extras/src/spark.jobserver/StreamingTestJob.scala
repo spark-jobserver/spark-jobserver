@@ -9,10 +9,12 @@ import scala.collection.mutable
 
 @VisibleForTesting
 object StreamingTestJob extends SparkStreamingJob {
-  def validate(ssc: StreamingContext, config: Config): SparkJobValidation = SparkJobValid
+  type Tmp = Unit
+  def validate(ssc: StreamingContext, config: Config): scalaz.Validation[String, Unit] =
+    scalaz.Success(())
 
 
-  def runJob(ssc: StreamingContext, config: Config): Any = {
+  def runJob(ssc: StreamingContext, config: Unit): Any = {
     val queue = mutable.Queue[RDD[String]]()
     queue += ssc.sparkContext.makeRDD(Seq("123", "test", "test2"))
     val lines = ssc.queueStream(queue)

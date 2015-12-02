@@ -197,16 +197,16 @@ To create a job that can be submitted through the job server, the job must imple
 Your job will look like:
 ```scala
 object SampleJob  extends SparkJob {
-    override def runJob(sc:SparkContext, jobConfig: Config): Any = ???
-    override def validate(sc:SparkContext, config: Config): SparkJobValidation = ???
+    override def runJob(sc:SparkContext, data: Tmp): Any = ???
+    type Tmp = ...
+    override def validate(sc:SparkContext, config: Config): scalaz.Validation[String, Tmp] = ???
 }
 ```
 
 - `runJob` contains the implementation of the Job. The SparkContext is managed by the JobServer and will be provided to the job through this method.
   This relieves the developer from the boiler-plate configuration management that comes with the creation of a Spark job and allows the Job Server to
 manage and re-use contexts.
-- `validate` allows for an initial validation of the context and any provided configuration. If the context and configuration are OK to run the job, returning `spark.jobserver.SparkJobValid` will let the job execute, otherwise returning `spark.jobserver.SparkJobInvalid(reason)` prevents the job from running and provides means to convey the reason of failure. In this case, the call immediately returns an `HTTP/1.1 400 Bad Request` status code.  
-`validate` helps you preventing running jobs that will eventually fail due to missing or wrong configuration and save both time and resources.  
+- `validate` allows for an initial validation of the context and any provided configuration. If the context and configuration are OK to run the job, returning `scalaz.Success` will let the job execute and pass the returned value to `runJob`. Returning `scalaz.Failure(reason)` prevents the job from running and provides means to convey the reason of failure. In this case, the call immediately returns an `HTTP/1.1 400 Bad Request` status code.  
 
 Let's try running our sample job with an invalid configuration:
 
@@ -239,9 +239,10 @@ Let's try running our sample job with an invalid configuration:
 Named RDDs are a way to easily share RDDs among job. Using this facility, computed RDDs can be cached with a given name and later on retrieved.
 To use this feature, the SparkJob needs to mixin `NamedRddSupport`:
 ```scala
-object SampleNamedRDDJob  extends SparkJob with NamedRddSupport {
-    override def runJob(sc:SparkContext, jobConfig: Config): Any = ???
-    override def validate(sc:SparkContext, config: Config): SparkJobValidation = ???
+object SampleNamedRDDJob extends SparkJob with NamedRddSupport {
+    override def runJob(sc:SparkContext, jobConfig: Tmp): Any = ???
+    type Tmp = ...
+    override def validate(sc:SparkContext, config: Config): scalaz.Validation[String, Tmp] = ???
 }
 ```
 
@@ -257,10 +258,10 @@ val rdd = this.namedRdds.get[(String, String)]("french_dictionary").get
 
 For jobs that depends on a named RDDs it's a good practice to check for the existence of the NamedRDD in the `validate` method as explained earlier:
 ```scala   
-def validate(sc:SparkContext, config: Contig): SparkJobValidation = {
+def validate(sc:SparkContext, config: Contig): scalaz.Validation[String, RDD[(Long, Seq[String])]] = {
   ...
   val rdd = this.namedRdds.get[(Long, scala.Seq[String])]("dictionary")
-  if (rdd.isDefined) SparkJobValid else SparkJobInvalid(s"Missing named RDD [dictionary]")
+  if (rdd.isDefined) scalaz.Success(rdd) else scalaz.Failure(s"Missing named RDD [dictionary]")
 }
 ```
 

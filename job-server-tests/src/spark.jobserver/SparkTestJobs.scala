@@ -4,13 +4,14 @@ import com.typesafe.config.Config
 import org.apache.spark._
 import org.apache.spark.rdd.RDD
 
-
 trait SparkTestJob extends SparkJob {
-  def validate(sc: SparkContext, config: Config): SparkJobValidation = SparkJobValid
+  type Tmp = Config
+  override def validate(sc: SparkContext, config: Config): scalaz.Validation[String, Config] =
+    scalaz.Success(config)
 }
 
 class MyErrorJob extends SparkTestJob {
-  def runJob(sc: SparkContext, config: Config): Any = {
+  override def runJob(sc: SparkContext, config: Config): Any = {
     throw new IllegalArgumentException("Foobar")
   }
 }

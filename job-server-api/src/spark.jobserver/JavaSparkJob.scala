@@ -3,6 +3,7 @@ package spark.jobserver
 import com.typesafe.config.Config
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.SparkContext
+import scalaz._
 
 /**
  * A class to make Java jobs easier to write.  In Java:
@@ -11,27 +12,28 @@ import org.apache.spark.SparkContext
  *   public Object runJob(JavaSparkContext jsc, Config jobConfig) { ... }
  * }
  */
-class JavaSparkJob extends SparkJob {
+abstract class JavaSparkJob extends SparkJobBase {
+  type Tmp = Object
+  type C = SparkContext
 
-  def runJob(sc: SparkContext, jobConfig: Config): Any = {
-    runJob(new JavaSparkContext(sc), jobConfig);
+  override def runJob(sc: SparkContext, config: Tmp): Any = {
+    runJob(new JavaSparkContext(sc), config)
   }
 
-  def validate(sc: SparkContext, config: Config): SparkJobValidation = {
-    Option(invalidate(new JavaSparkContext(sc), config))
-      .map(err => SparkJobInvalid(err))
-      .getOrElse(SparkJobValid)
+  override def validate(sc: SparkContext, config: Config): Validation[String, Tmp] = {
+    Validation.fromTryCatchNonFatal(parse(new JavaSparkContext(sc), config))
+      .leftMap(_.getMessage)
   }
 
   /**
    * The main class that carries out the Spark job.  The results will be converted to JSON
    * and emitted (but NOT persisted).
    */
-  def runJob(jsc: JavaSparkContext, jobConfig: Config): Any = {}
+  def runJob(jsc: JavaSparkContext, config: Tmp): Any
 
   /**
-   * Checks the config and returns an error message, or null if the config is fine.
+   * Parses the config and throws an error in case the config is invalid.
    * The error message will be returned to the user as a 404 HTTP error code.
    */
-  def invalidate(jsc: JavaSparkContext, config: Config): String = { null }
+  def parse(jsc: JavaSparkContext, config: Config): Tmp
 }

@@ -8,20 +8,20 @@ import org.apache.spark._
  * Small data. Double every value in the data.
  */
 object VeryShortDoubleJob extends SparkJob {
-  private val data = Array(1, 2, 3)
-
   def main(args: Array[String]) {
     val sc = new SparkContext("local[4]", "VeryShortDoubleJob")
     val config = ConfigFactory.parseString("")
-    val results = runJob(sc, config)
-    println("Result is " + results)
+    validate(sc, config)
+      .map(i => runJob(sc, i))
+      .foreach(results => println(s"Result is $results"))
   }
 
-  override def validate(sc: SparkContext, config: Config): SparkJobValidation = {
-    SparkJobValid
+  type Tmp = Array[Double]
+  override def validate(sc: SparkContext, config: Config): scalaz.Validation[String, Array[Double]] = {
+    scalaz.Success(Array(1, 2, 3))
   }
 
-  override def runJob(sc: SparkContext, config: Config): Any = {
+  override def runJob(sc: SparkContext, data: Array[Double]): Any = {
     val dd = sc.parallelize(data)
     dd.map( _ * 2 ).collect()
   }

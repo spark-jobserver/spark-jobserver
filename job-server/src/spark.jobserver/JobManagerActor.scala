@@ -241,17 +241,18 @@ class JobManagerActor(dao: JobDAO,
         statusActor ! JobStatusActor.JobInit(jobInfo)
 
         val jobC = jobContext.asInstanceOf[job.C]
-        job.validate(jobC, jobConfig) match {
-          case SparkJobInvalid(reason) => {
+        val parsed: scalaz.Validation[String, job.Tmp] = job.validate(jobC, jobConfig)
+        parsed match {
+          case scalaz.Failure(reason) => {
             val err = new Throwable(reason)
             statusActor ! JobValidationFailed(jobId, DateTime.now(), err)
             throw err
           }
-          case SparkJobValid => {
+          case scalaz.Success(config) => {
             statusActor ! JobStarted(jobId: String, contextName, jobInfo.startTime)
             val sc = jobContext.sparkContext
             sc.setJobGroup(jobId, s"Job group for $jobId and spark context ${sc.applicationId}", true)
-            job.runJob(jobC, jobConfig)
+            job.runJob(jobC, config)
           }
         }
       } finally {

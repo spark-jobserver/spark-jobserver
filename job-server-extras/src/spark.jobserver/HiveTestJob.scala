@@ -27,9 +27,11 @@ object HiveLoaderJob extends SparkHiveJob {
   //Will fail with a 'SemanticException : Invalid path' if this file is not there
   val loadPath = "'test/spark.jobserver/hive_test_job_addresses.txt'"
 
-  def validate(hive: HiveContext, config: Config): SparkJobValidation = SparkJobValid
+  type Tmp = Unit
+  def validate(hive: HiveContext, config: Config): scalaz.Validation[String, Unit] =
+    scalaz.Success(())
 
-  def runJob(hive: HiveContext, config: Config): Any = {
+  def runJob(hive: HiveContext, config: Unit): Any = {
     hive.sql("DROP TABLE if exists `default`.`test_addresses`")
     hive.sql(s"$tableCreate $tableArgs $tableRowFormat $tableColFormat $tableMapFormat $tableAs")
 
@@ -43,9 +45,12 @@ object HiveLoaderJob extends SparkHiveJob {
  * This job simply runs the Hive SQL in the config.
  */
 object HiveTestJob extends SparkHiveJob {
-  def validate(hive: HiveContext, config: Config): SparkJobValidation = SparkJobValid
+  type Tmp = String
+  def validate(hive: HiveContext, config: Config): scalaz.Validation[String, String] =
+    scalaz.Validation.fromTryCatchNonFatal(config.getString("sql"))
+     .leftMap(_.getMessage)
 
-  def runJob(hive: HiveContext, config: Config): Any = {
-    hive.sql(config.getString("sql")).collect()
+  def runJob(hive: HiveContext, config: String): Any = {
+    hive.sql(config).collect()
   }
 }

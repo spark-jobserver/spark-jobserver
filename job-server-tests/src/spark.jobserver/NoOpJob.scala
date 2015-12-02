@@ -10,11 +10,14 @@ object NoOpJob extends SparkJob {
   def main(args: Array[String]) {
     val sc = new SparkContext("local[4]", "NoOpJob")
     val config = ConfigFactory.parseString("")
-    val results = runJob(sc, config)
-    println("Result is " + results)
+    validate(sc, config)
+      .map(i => runJob(sc, i))
+      .foreach(results => println(s"Result is $results"))
   }
 
-  def validate(sc: SparkContext, config: Config): SparkJobValidation = SparkJobValid
+  type Tmp = Unit
+  def validate(sc: SparkContext, config: Config): scalaz.Validation[String, Unit] =
+    scalaz.Success(())
 
-  def runJob(sc: SparkContext, config: Config): Any = 1
+  def runJob(sc: SparkContext, config: Unit): Any = 1
 }

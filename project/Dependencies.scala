@@ -11,6 +11,7 @@ object Dependencies {
 
   lazy val typeSafeConfigDeps = "com.typesafe" % "config" % "1.2.1"
   lazy val yammerDeps = "com.yammer.metrics" % "metrics-core" % "2.2.0"
+  lazy val scalazDeps = "org.scalaz" %% "scalaz-core" % "7.1.5"
 
   lazy val yodaDeps = Seq(
     "org.joda" % "joda-convert" % "1.2",
