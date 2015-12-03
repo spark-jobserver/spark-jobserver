@@ -1,10 +1,11 @@
 package ooyala.common.akka.metrics
 
-import com.yammer.metrics.core._
-import com.yammer.metrics.Metrics
-import org.slf4j.Logger
 import java.util.concurrent.TimeUnit
+
+import com.yammer.metrics.Metrics
+import com.yammer.metrics.core._
 import com.yammer.metrics.stats.Snapshot
+import org.slf4j.Logger
 
 
 /**

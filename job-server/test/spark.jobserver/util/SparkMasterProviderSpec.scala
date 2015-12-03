@@ -2,7 +2,7 @@ package spark.jobserver.util
 
 import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.spark.SparkConf
-import org.scalatest.{Matchers, FunSpec}
+import org.scalatest.{FunSpec, Matchers}
 
 class SparkMasterProviderSpec extends FunSpec with Matchers {
 

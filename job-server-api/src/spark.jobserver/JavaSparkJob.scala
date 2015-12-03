@@ -1,8 +1,8 @@
 package spark.jobserver
 
 import com.typesafe.config.Config
-import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.SparkContext
+import org.apache.spark.api.java.JavaSparkContext
 
 /**
  * A class to make Java jobs easier to write.  In Java:
@@ -14,7 +14,7 @@ import org.apache.spark.SparkContext
 class JavaSparkJob extends SparkJob {
 
   def runJob(sc: SparkContext, jobConfig: Config): Any = {
-    runJob(new JavaSparkContext(sc), jobConfig);
+    runJob(new JavaSparkContext(sc), jobConfig)
   }
 
   def validate(sc: SparkContext, config: Config): SparkJobValidation = {

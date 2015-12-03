@@ -1,10 +1,10 @@
 package spark.jobserver
 
 import akka.actor._
-import akka.testkit.{TestKit, ImplicitSender}
+import akka.testkit.{ImplicitSender, TestKit}
 import com.typesafe.config.ConfigFactory
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 import spark.jobserver.io.JobDAO
-import org.scalatest.{Matchers, FunSpecLike, BeforeAndAfterAll, BeforeAndAfter}
 
 import scala.concurrent.duration._
 

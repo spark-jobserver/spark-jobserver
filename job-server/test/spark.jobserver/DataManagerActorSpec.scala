@@ -1,10 +1,10 @@
 package spark.jobserver
 
-import akka.actor.{ Props, ActorRef, ActorSystem }
-import akka.testkit.{ TestKit, ImplicitSender }
-import org.scalatest.{ FunSpecLike, BeforeAndAfter, BeforeAndAfterAll, Matchers }
 import java.nio.file.Files
 
+import akka.actor.{ActorRef, ActorSystem, Props}
+import akka.testkit.{ImplicitSender, TestKit}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 import spark.jobserver.io.DataFileDAO
 
 object DataManagerActorSpec {
@@ -14,13 +14,13 @@ object DataManagerActorSpec {
 class DataManagerActorSpec extends TestKit(DataManagerActorSpec.system) with ImplicitSender
     with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
-  import com.typesafe.config._
-  import CommonMessages.NoSuchJobId
   import DataManagerActor._
+  import com.typesafe.config.{ConfigFactory, ConfigValueFactory}
 
   private val bytes = Array[Byte](0, 1, 2)
   private val tmpDir = Files.createTempDirectory("ut")
-  private val config = ConfigFactory.empty().withValue("spark.jobserver.datadao.rootdir", ConfigValueFactory.fromAnyRef(tmpDir.toString))
+  private val config = ConfigFactory.empty().
+    withValue("spark.jobserver.datadao.rootdir", ConfigValueFactory.fromAnyRef(tmpDir.toString))
 
   override def afterAll() {
     dao.shutdown()

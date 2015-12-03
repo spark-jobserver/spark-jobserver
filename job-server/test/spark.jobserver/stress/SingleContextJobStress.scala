@@ -5,9 +5,10 @@ import akka.pattern.ask
 import akka.util.Timeout
 import com.typesafe.config.ConfigFactory
 import org.joda.time.DateTime
-import scala.concurrent.Await
 import spark.jobserver._
 import spark.jobserver.io.JobFileDAO
+
+import scala.concurrent.Await
 
 /**
  * A stress test for launching many jobs within a job context
@@ -20,6 +21,7 @@ object SingleContextJobStress extends App with TestJarFinder {
 
   import CommonMessages.JobResult
   import JobManagerActor._
+
   import scala.collection.JavaConverters._
   import scala.concurrent.duration._
   val jobDaoPrefix = "target/scala-" + version + "/jobserver/"

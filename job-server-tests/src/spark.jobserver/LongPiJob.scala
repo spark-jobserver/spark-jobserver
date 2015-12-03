@@ -1,9 +1,11 @@
 package spark.jobserver
 
+import java.util.{Date, Random}
+
 import com.typesafe.config.{Config, ConfigFactory}
-import org.apache.spark._
+import org.apache.spark.SparkContext
+
 import scala.util.Try
-import java.util.{Random, Date}
 
 /**
  * A long job for stress tests purpose.
@@ -33,16 +35,16 @@ object LongPiJob extends SparkJob {
 
   override def runJob(sc: SparkContext, config: Config): Any = {
     val duration = Try(config.getInt("stress.test.longpijob.duration")).getOrElse(5)
-    var hit:Long = 0
-    var total:Long = 0
+    var hit = 0L
+    var total = 0L
     val start = now
     while(stillHaveTime(start, duration)) {
       val counts = estimatePi(sc)
-      hit = hit + counts._1
-      total = total + counts._2
+      hit += counts._1
+      total += counts._2
     }
 
-    (4.0 * hit) / total
+    (4D * hit) / total
   }
 
   /**

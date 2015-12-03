@@ -5,7 +5,6 @@ import org.apache.spark._
 import org.apache.spark.ml.clustering.KMeans
 import org.apache.spark.ml.feature.{StandardScaler, VectorAssembler}
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
-import org.apache.spark.storage.StorageLevel
 
 /**
  * A Spark job example that implements the SparkJob trait and can be submitted to the job server.
@@ -73,14 +72,12 @@ object KMeansExample extends SparkJob with NamedRddSupport {
       namedRdds.update("kmeans", dataWithPredictions.rdd)
       sampleAndReturn(dataWithPredictions)
     }
-
-
   }
 
   def sampleAndReturn(dataWithPredictions: DataFrame): (Array[String], Array[String], Long) = {
     //take 1000 points
     val sample = dataWithPredictions.drop("Features").drop("ScaledFeatures")
-      .sample(false, 1000 / dataWithPredictions.count().toDouble)
+      .sample(false, 1000D / dataWithPredictions.count())
     (sample.columns, sample.toJSON.collect(), sample.count())
   }
 }

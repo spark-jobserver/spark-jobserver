@@ -1,8 +1,7 @@
 package spark.jobserver
 
-import akka.actor.{ActorSystem, ActorRef}
-import akka.testkit.ImplicitSender
-import akka.testkit.TestKit
+import akka.actor.{ActorRef, ActorSystem}
+import akka.testkit.{ImplicitSender, TestKit}
 import com.typesafe.config.ConfigFactory
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}

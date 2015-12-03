@@ -1,7 +1,7 @@
 package ooyala.common.akka.web
 
-import spray.json._
 import spray.json.DefaultJsonProtocol._
+import spray.json._
 
 
 /**

@@ -1,8 +1,9 @@
 package ooyala.common.akka.actor
 
 import akka.actor.{ActorRef, Terminated}
-import scala.collection.mutable.ArrayBuffer
 import ooyala.common.akka.InstrumentedActor
+
+import scala.collection.mutable.ArrayBuffer
 
 // Taken from http://letitcrash.com/post/30165507578/shutdown-patterns-in-akka-2
 

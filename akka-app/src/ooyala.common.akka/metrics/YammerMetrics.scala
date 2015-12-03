@@ -1,8 +1,9 @@
 package ooyala.common.akka.metrics
 
-import com.yammer.metrics.Metrics
-import com.yammer.metrics.core.{Histogram, Meter, Gauge, Timer}
 import java.util.concurrent.TimeUnit
+
+import com.yammer.metrics.Metrics
+import com.yammer.metrics.core.{Gauge, Histogram, Meter, Timer}
 
 /**
  * Utility trait to make metrics creation slightly less verbose

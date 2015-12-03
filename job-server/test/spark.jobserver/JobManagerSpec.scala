@@ -2,16 +2,17 @@ package spark.jobserver
 
 import com.typesafe.config.ConfigFactory
 import spark.jobserver.JobManagerActor.KillJob
+
 import scala.collection.mutable
-import spark.jobserver.io.JobDAO
 
 object JobManagerSpec extends JobSpecConfig
 
 abstract class JobManagerSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
-  import scala.concurrent.duration._
   import CommonMessages._
   import JobManagerSpec.MaxJobsPerContext
   import akka.testkit._
+
+  import scala.concurrent.duration._
 
   val classPrefix = "spark.jobserver."
   private val wordCountClass = classPrefix + "WordCountExample"

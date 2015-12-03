@@ -1,9 +1,8 @@
 package spark.jobserver
 
-import akka.actor.{Props, ActorRef, ActorSystem}
-import akka.testkit.{TestKit, ImplicitSender}
-import org.scalatest.{FunSpecLike, BeforeAndAfter, BeforeAndAfterAll, Matchers}
-
+import akka.actor.{ActorRef, ActorSystem, Props}
+import akka.testkit.{ImplicitSender, TestKit}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 import spark.jobserver.io.JobDAO
 
 object JobInfoActorSpec {
@@ -13,9 +12,9 @@ object JobInfoActorSpec {
 class JobInfoActorSpec extends TestKit(JobInfoActorSpec.system) with ImplicitSender
 with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
-  import com.typesafe.config._
   import CommonMessages.NoSuchJobId
   import JobInfoActor._
+  import com.typesafe.config._
 
   private val jobId = "jobId"
   private val jobConfig = ConfigFactory.empty()

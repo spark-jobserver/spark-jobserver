@@ -1,7 +1,7 @@
 package spark.jobserver
 
 import com.typesafe.config.Config
-import org.apache.spark._
+import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 
 
@@ -38,14 +38,14 @@ class CacheSomethingJob extends SparkTestJob {
                .map(_ * 2)
     dd.setName("numbers")
     dd.cache()
-    dd.collect.toSeq.sum
+    dd.sum.toInt
   }
 }
 
 class AccessCacheJob extends SparkTestJob {
   def runJob(sc: SparkContext, config: Config): Any = {
     val rdd = sc.getPersistentRDDs.values.head.asInstanceOf[RDD[Int]]
-    rdd.collect.toSeq.sum
+    rdd.sum.toInt
   }
 }
 
@@ -56,13 +56,13 @@ class CacheRddByNameJob extends SparkTestJob with NamedRddSupport {
 
     val rdd = namedRdds.getOrElseCreate(getClass.getSimpleName, {
       // anonymous generator function
-      sc.parallelize(Seq(1, 2, 3, 4, 5))
+      sc.parallelize(1 to 5)
     })
 
     // RDD should already be in cache the second time
     val rdd2 = namedRdds.get[Int](getClass.getSimpleName)
     assert(rdd2 == Some(rdd), "Error: " + rdd2 + " != " + Some(rdd))
-    rdd.map { x => x * x }.collect().sum
+    rdd.map { x => x * x }.sum.toInt
   }
 }
 
@@ -78,7 +78,6 @@ class ZookeeperJob extends SparkTestJob {
 object SimpleObjectJob extends SparkTestJob {
   def runJob(sc: SparkContext, config: Config): Any = {
     val rdd = sc.parallelize(Seq(1, 2, 3))
-    rdd.collect().sum
-
+    rdd.sum.toInt
   }
 }

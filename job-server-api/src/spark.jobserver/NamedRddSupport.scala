@@ -1,10 +1,11 @@
 package spark.jobserver
 
-import akka.util.Timeout
-import java.lang.ThreadLocal
 import java.util.concurrent.atomic.AtomicReference
+
+import akka.util.Timeout
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
+
 import scala.concurrent.duration.Duration
 
 /**
