@@ -2,10 +2,9 @@ package spark.jobserver
 
 import akka.actor.{Actor, Props}
 import com.typesafe.config.ConfigFactory
-import spark.jobserver.io.{JobInfo, JarInfo}
 import org.joda.time.DateTime
-import org.scalatest.{Matchers, FunSpec, BeforeAndAfterAll}
-import spray.http.StatusCodes._
+import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
+import spark.jobserver.io.{JarInfo, JobInfo}
 import spray.routing.HttpService
 import spray.testkit.ScalatestRouteTest
 
@@ -16,9 +15,6 @@ import spray.testkit.ScalatestRouteTest
 class WebApiSpec extends FunSpec with Matchers with BeforeAndAfterAll
 with ScalatestRouteTest with HttpService {
   import scala.collection.JavaConverters._
-  import spray.httpx.SprayJsonSupport._
-  import spray.json.DefaultJsonProtocol._
-  import ooyala.common.akka.web.JsonUtils._
 
   def actorRefFactory = system
 

@@ -1,10 +1,10 @@
 package spark.jobserver.util
 
-import com.typesafe.config.{ ConfigFactory, ConfigValueFactory }
-import org.apache.spark.SparkConf
-import org.scalatest.{ Matchers, FunSpec }
 import java.io.FileNotFoundException
 import javax.net.ssl.SSLContext
+
+import com.typesafe.config.{ConfigFactory, ConfigValueFactory}
+import org.scalatest.{FunSpec, Matchers}
 
 class SSLContextFactorySpec extends FunSpec with Matchers {
   import collection.JavaConverters._

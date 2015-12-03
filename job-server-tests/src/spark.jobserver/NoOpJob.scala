@@ -1,7 +1,7 @@
 package spark.jobserver
 
 import com.typesafe.config.{Config, ConfigFactory}
-import org.apache.spark._
+import org.apache.spark.SparkContext
 
 /**
  * An empty no computation job for stress tests purpose.

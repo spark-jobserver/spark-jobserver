@@ -1,8 +1,8 @@
 package ooyala.common.akka.web
 
-import spray.routing.HttpService
-import com.yammer.metrics.core._
 import com.yammer.metrics.Metrics
+import com.yammer.metrics.core._
+import spray.routing.HttpService
 
 /**
  * Defines a couple common Spray routes for metrics, status, debugging

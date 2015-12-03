@@ -1,9 +1,10 @@
 package ooyala.common.akka.web
 
-import akka.actor.ActorSystem
-import spray.routing.{Route, SimpleRoutingApp}
 import javax.net.ssl.SSLContext
+
+import akka.actor.ActorSystem
 import spray.io.ServerSSLEngineProvider
+import spray.routing.{Route, SimpleRoutingApp}
 
 /**
  * Contains methods for starting an embedded Spray web server.

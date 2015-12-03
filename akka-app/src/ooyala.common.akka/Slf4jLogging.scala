@@ -1,6 +1,5 @@
 package ooyala.common.akka
 
-import akka.actor.Actor
 import org.slf4j.LoggerFactory
 
 /**

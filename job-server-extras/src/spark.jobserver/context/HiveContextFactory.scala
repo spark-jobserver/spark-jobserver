@@ -1,10 +1,9 @@
 package spark.jobserver.context
 
 import com.typesafe.config.Config
-import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.sql.hive.HiveContext
+import org.apache.spark.{SparkConf, SparkContext}
 import spark.jobserver.{ContextLike, SparkHiveJob, SparkJobBase}
-import spark.jobserver.util.SparkJobUtils
 
 class HiveContextFactory extends SparkContextFactory {
   type C = HiveContext with ContextLike

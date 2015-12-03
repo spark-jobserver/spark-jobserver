@@ -1,23 +1,12 @@
 package spark.jobserver.auth
 
-import org.scalatest.{ FunSpecLike, FunSpec, BeforeAndAfter, BeforeAndAfterAll, Matchers }
-import org.apache.shiro.config.IniSecurityManagerFactory
-import org.apache.shiro.mgt.DefaultSecurityManager
-import org.apache.shiro.mgt.SecurityManager
-import org.apache.shiro.realm.Realm
 import org.apache.shiro.SecurityUtils
-import org.apache.shiro.config.Ini
-import spark.jobserver.auth._
-import spray.routing.authentication.UserPass
-
-import spray.routing.directives.AuthMagnet
-import spray.routing.{ HttpService, Route, RequestContext }
-import spray.http.StatusCodes
-import spray.testkit.ScalatestRouteTest
-import scala.concurrent.duration.Duration
-import scala.concurrent.{ Await, ExecutionContext, Future }
+import org.apache.shiro.config.{Ini, IniSecurityManagerFactory}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 import org.slf4j.LoggerFactory
-import java.util.concurrent.TimeoutException
+import spray.routing.HttpService
+import spray.routing.authentication.UserPass
+import spray.testkit.ScalatestRouteTest
 
 object SJSAuthenticatorSpec {
     //edit this with your real LDAP server information, just remember not to 

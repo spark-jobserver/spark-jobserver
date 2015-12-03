@@ -52,7 +52,6 @@ object Dependencies {
     "com.typesafe.slick" %% "slick" % "2.1.0",
     "com.h2database" % "h2" % "1.3.170",
     "commons-dbcp" % "commons-dbcp" % "1.4"
-
   )
 
   lazy val logbackDeps = Seq(
@@ -60,7 +59,7 @@ object Dependencies {
   )
 
   lazy val coreTestDeps = Seq(
-    "org.scalatest" %% "scalatest" % "2.2.1" % "test",
+    "org.scalatest" %% "scalatest" % "2.2.5" % "test",
     "com.typesafe.akka" %% "akka-testkit" % "2.3.4" % "test",
     "io.spray" %% "spray-testkit" % "1.3.2" % "test"
   )

@@ -1,11 +1,11 @@
 package spark.jobserver
 
-import akka.actor.Props
 import spark.jobserver.CommonMessages.{JobErroredOut, JobResult}
 
 class JobManagerActorSpec extends JobManagerSpec {
-  import scala.concurrent.duration._
   import akka.testkit._
+
+  import scala.concurrent.duration._
 
   before {
     dao = new InMemoryDAO

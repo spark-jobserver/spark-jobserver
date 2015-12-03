@@ -1,11 +1,11 @@
 package spark.jobserver
 
-import akka.actor.{Props, PoisonPill, ActorRef, ActorSystem}
-import akka.testkit.{TestKit, ImplicitSender}
-import spark.jobserver.io.{JarInfo, JobInfo, JobDAO}
+import akka.actor.{ActorRef, ActorSystem, Props}
+import akka.testkit.{ImplicitSender, TestKit}
 import org.joda.time.DateTime
 import org.scalatest.matchers.ShouldMatchers
-import org.scalatest.{FunSpecLike, FunSpec, BeforeAndAfter, BeforeAndAfterAll}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike}
+import spark.jobserver.io.{JarInfo, JobDAO, JobInfo}
 
 object JobStatusActorSpec {
   val system = ActorSystem("test")
@@ -14,9 +14,9 @@ object JobStatusActorSpec {
 class JobStatusActorSpec extends TestKit(JobStatusActorSpec.system) with ImplicitSender
 with FunSpecLike with ShouldMatchers with BeforeAndAfter with BeforeAndAfterAll {
 
-  import com.typesafe.config._
   import CommonMessages._
   import JobStatusActor._
+  import com.typesafe.config._
 
   private val jobId = "jobId"
   private val contextName = "contextName"

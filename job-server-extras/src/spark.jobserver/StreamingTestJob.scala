@@ -17,8 +17,7 @@ object StreamingTestJob extends SparkStreamingJob {
     queue += ssc.sparkContext.makeRDD(Seq("123", "test", "test2"))
     val lines = ssc.queueStream(queue)
     val words = lines.flatMap(_.split(" "))
-    val pairs = words.map(word => (word, 1))
-    val wordCounts = pairs.reduceByKey(_ + _)
+    val wordCounts = words.countByValue()
     //do something
     wordCounts.foreachRDD(rdd => println(rdd.count()))
     ssc.start()

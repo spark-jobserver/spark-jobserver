@@ -1,11 +1,12 @@
 package spark.jobserver.io
 
+import java.io.File
+
+import com.google.common.io.Files
 import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import org.joda.time.DateTime
-import org.scalatest.{Matchers, FunSpecLike, BeforeAndAfter}
+import org.scalatest.{BeforeAndAfter, FunSpecLike, Matchers}
 import spark.jobserver.TestJarFinder
-import com.google.common.io.Files
-import java.io.File
 
 class JobSqlDAOSpec extends TestJarFinder with FunSpecLike with Matchers with BeforeAndAfter {
   private val config = ConfigFactory.load("local.test.jobsqldao.conf")

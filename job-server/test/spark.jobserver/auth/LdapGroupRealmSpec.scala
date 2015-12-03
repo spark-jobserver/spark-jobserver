@@ -1,17 +1,15 @@
 package spark.jobserver.auth
 
-import org.scalatest.{ FunSpecLike, FunSpec, BeforeAndAfter, BeforeAndAfterAll, Matchers }
-import org.apache.shiro.config.IniSecurityManagerFactory
-import org.apache.shiro.mgt.DefaultSecurityManager
-import org.apache.shiro.mgt.SecurityManager
-import org.apache.shiro.realm.Realm
-import org.apache.shiro.authz._
-import org.apache.shiro.SecurityUtils
-import org.apache.shiro.config.Ini
-import javax.naming.ldap.InitialLdapContext
-import javax.naming.ldap.LdapContext
 import javax.naming._
 import javax.naming.directory._
+import javax.naming.ldap.LdapContext
+
+import org.apache.shiro.SecurityUtils
+import org.apache.shiro.authz._
+import org.apache.shiro.config.{Ini, IniSecurityManagerFactory}
+import org.apache.shiro.mgt.DefaultSecurityManager
+import org.apache.shiro.realm.Realm
+import org.scalatest.{FunSpecLike, Matchers}
 
 class LdapGroupRealmSpec extends FunSpecLike with Matchers {
   import collection.JavaConverters._
