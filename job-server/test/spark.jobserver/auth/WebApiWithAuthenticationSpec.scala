@@ -38,6 +38,7 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
     spark {
       master = "${masterConfVal}"
       jobserver.bind-address = "${bindConfVal}"
+      jobserver.short-timeout = 3 s
     }
     shiro {
       authentication = on

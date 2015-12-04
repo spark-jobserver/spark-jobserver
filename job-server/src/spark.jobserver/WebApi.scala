@@ -1,5 +1,7 @@
 package spark.jobserver
 
+import java.util.concurrent.TimeUnit
+
 import akka.actor.{ ActorSystem, ActorRef }
 import akka.pattern.ask
 import akka.util.Timeout
@@ -12,7 +14,7 @@ import org.slf4j.LoggerFactory
 import spark.jobserver.util.SparkJobUtils
 import spark.jobserver.util.SSLContextFactory
 import spark.jobserver.routes.DataRoutes
-import scala.concurrent.{Await, ExecutionContext}
+import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.Try
 import spark.jobserver.io.JobInfo
 import spark.jobserver.auth._
@@ -93,7 +95,7 @@ class WebApi(system: ActorSystem,
              dataManager: ActorRef,
              supervisor: ActorRef,
              jobInfo: ActorRef)
-    extends HttpService with CommonRoutes with DataRoutes with SJSAuthenticator {
+    extends HttpService with CommonRoutes with DataRoutes with SJSAuthenticator with CORSSupport {
   import CommonMessages._
   import ContextSupervisor._
   import scala.concurrent.duration._
@@ -104,7 +106,8 @@ class WebApi(system: ActorSystem,
 
   override def actorRefFactory: ActorSystem = system
   implicit val ec: ExecutionContext = system.dispatcher
-  implicit val ShortTimeout = Timeout(3 seconds)
+  implicit val ShortTimeout =
+    Timeout(config.getDuration("spark.jobserver.short-timeout", TimeUnit.MILLISECONDS), TimeUnit.MILLISECONDS)
   val DefaultSyncTimeout = Timeout(10 seconds)
   val DefaultJobLimit = 50
   val StatusKey = "status"
@@ -115,8 +118,10 @@ class WebApi(system: ActorSystem,
 
   val logger = LoggerFactory.getLogger(getClass)
 
-  val myRoutes = jarRoutes ~ contextRoutes ~ jobRoutes ~
-                 dataRoutes ~ healthzRoutes ~ otherRoutes
+  val myRoutes = cors {
+    jarRoutes ~ contextRoutes ~ jobRoutes ~
+      dataRoutes ~ healthzRoutes ~ otherRoutes
+  }
 
   lazy val authenticator: AuthMagnet[AuthInfo] = {
     if (config.getBoolean("shiro.authentication")) {
@@ -273,6 +278,36 @@ class WebApi(system: ActorSystem,
               }
             }
           }
+        } ~
+        put {
+          parameter("reset") { reset =>
+            respondWithMediaType(MediaTypes.`text/plain`) { ctx =>
+              reset match {
+                case "reboot" => {
+                  import ContextSupervisor._
+                  import collection.JavaConverters._
+                  import java.util.concurrent.TimeUnit
+
+                  logger.warn("refreshing contexts")
+                  val future = (supervisor ? ListContexts).mapTo[Seq[String]]
+                  val lookupTimeout = Try(config.getDuration("spark.jobserver.context-lookup-timeout",
+                    TimeUnit.MILLISECONDS).toInt / 1000).getOrElse(1)
+                  val contexts = Await.result(future, lookupTimeout.seconds).asInstanceOf[Seq[String]]
+
+                  val stopFutures = contexts.map(c => supervisor ? StopContext(c))
+                  Await.ready(Future.sequence(stopFutures), contextTimeout.seconds)
+
+                  Thread.sleep(1000) // we apparently need some sleeping in here, so spark can catch up
+
+                  (supervisor ? AddContextsFromConfig).onFailure {
+                    case t => ctx.complete("ERROR")
+                  }
+                  ctx.complete(StatusCodes.OK)
+                }
+                case _ => ctx.complete("ERROR")
+              }
+            }
+          }
         }
     }
   }
@@ -371,6 +406,8 @@ class WebApi(system: ActorSystem,
                 ctx.complete(Map(StatusKey -> "KILLED"))
               case JobInfo(_, _, _, _, _, _, Some(ex)) =>
                 ctx.complete(Map(StatusKey -> "ERROR", "ERROR" -> formatException(ex)))
+              case JobInfo(_, _, _, _, _, Some(e), None) =>
+                notFound(ctx, "No running job with ID " + jobId.toString)
             }
           }
         } ~

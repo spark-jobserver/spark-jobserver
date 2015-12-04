@@ -30,6 +30,7 @@ with ScalatestRouteTest with HttpService {
     spark {
       master = "${masterConfVal}"
       jobserver.bind-address = "${bindConfVal}"
+      jobserver.short-timeout = 3 s
     }
     shiro {
       authentication = off
