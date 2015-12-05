@@ -57,7 +57,9 @@ object JobServerBuild extends Build {
 
   lazy val jobServerApi = Project(id = "job-server-api",
                                   base = file("job-server-api"),
-                                  settings = commonSettings ++ publishSettings)
+                                  settings = commonSettings ++ publishSettings ++ Seq(
+                                    libraryDependencies += scalazDeps
+                                  ))
 
   lazy val jobServerExtras = Project(id = "job-server-extras",
                                      base = file("job-server-extras"),

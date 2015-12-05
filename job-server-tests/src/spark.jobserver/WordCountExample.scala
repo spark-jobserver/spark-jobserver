@@ -17,18 +17,20 @@ object WordCountExample extends SparkJob {
   def main(args: Array[String]) {
     val sc = new SparkContext("local[4]", "WordCountExample")
     val config = ConfigFactory.parseString("")
-    val results = runJob(sc, config)
-    println("Result is " + results)
+    validate(sc, config)
+      .map(i => runJob(sc, i))
+      .foreach(results => println(s"Result is $results"))
   }
 
-  override def validate(sc: SparkContext, config: Config): SparkJobValidation = {
-    Try(config.getString("input.string"))
-      .map(x => SparkJobValid)
-      .getOrElse(SparkJobInvalid("No input.string config param"))
+  type Tmp = Seq[String]
+  override def validate(sc: SparkContext, config: Config): scalaz.Validation[String, Seq[String]] = {
+    scalaz.Validation.fromTryCatchNonFatal(config.getString("input.string"))
+      .leftMap(_.getMessage)
+      .map(_.split(" ").toSeq)
   }
 
-  override def runJob(sc: SparkContext, config: Config): Any = {
-    val dd = sc.parallelize(config.getString("input.string").split(" ").toSeq)
+  override def runJob(sc: SparkContext, data: Seq[String]): Any = {
+    val dd = sc.parallelize(data)
     dd.map((_, 1)).reduceByKey(_ + _).collect().toMap
   }
 }

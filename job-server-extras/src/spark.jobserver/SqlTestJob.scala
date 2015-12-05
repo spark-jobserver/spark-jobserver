@@ -16,9 +16,11 @@ object SqlLoaderJob extends SparkSqlJob {
     Address("Randy", "Charles", "101 A St.", "San Jose")
   )
 
-  def validate(sql: SQLContext, config: Config): SparkJobValidation = SparkJobValid
+  type Tmp = Unit
+  def validate(sql: SQLContext, config: Config): scalaz.Validation[String, Unit] =
+    scalaz.Success(())
 
-  def runJob(sql: SQLContext, config: Config): Any = {
+  def runJob(sql: SQLContext, config: Unit): Any = {
     import sql.implicits._
     val addrRdd = sql.sparkContext.parallelize(addresses)
     addrRdd.toDF().registerTempTable("addresses")
@@ -30,9 +32,12 @@ object SqlLoaderJob extends SparkSqlJob {
  * This job simply runs the SQL in the config.
  */
 object SqlTestJob extends SparkSqlJob {
-  def validate(sql: SQLContext, config: Config): SparkJobValidation = SparkJobValid
+  type Tmp = String
+  def validate(sql: SQLContext, config: Config): scalaz.Validation[String, String] =
+    scalaz.Validation.fromTryCatchNonFatal(config.getString("sql"))
+     .leftMap(_.getMessage)
 
-  def runJob(sql: SQLContext, config: Config): Any = {
-    sql.sql(config.getString("sql")).collect()
+  def runJob(sql: SQLContext, config: String): Any = {
+    sql.sql(config).collect()
   }
 }

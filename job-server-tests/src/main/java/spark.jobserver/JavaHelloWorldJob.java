@@ -6,7 +6,12 @@ import spark.jobserver.JavaSparkJob;
 
 public class JavaHelloWorldJob extends JavaSparkJob {
   @Override
-  public Object runJob(JavaSparkContext jsc, Config jobConfig) {
+  public Object runJob(JavaSparkContext jsc, Object message) {
+    return(message);
+  }
+
+  @Override
+  public Object parse(JavaSparkContext jsc, Config config) {
     return("Hello World!");
   }
 }
