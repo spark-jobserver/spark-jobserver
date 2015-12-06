@@ -1,0 +1,6 @@
+#Scala #akka @ApacheSpark
+
+* Fix bug - invalid error w no user/pass #329 (@slater-ben)
+* Database migration scripts and better table definitions (@v-gerasimov)
+* Chinese doc updates (@zp-j)
+* Minor improvements in style (@apivovarov)
