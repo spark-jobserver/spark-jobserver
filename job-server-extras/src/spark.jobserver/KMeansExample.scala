@@ -80,7 +80,7 @@ object KMeansExample extends SparkJob with NamedRddSupport {
   def sampleAndReturn(dataWithPredictions: DataFrame): (Array[String], Array[String], Long) = {
     //take 1000 points
     val sample = dataWithPredictions.drop("Features").drop("ScaledFeatures")
-      .sample(false, 1000 / dataWithPredictions.count().toDouble)
+      .sample(false, 1000D / dataWithPredictions.count())
     (sample.columns, sample.toJSON.collect(), sample.count())
   }
 }

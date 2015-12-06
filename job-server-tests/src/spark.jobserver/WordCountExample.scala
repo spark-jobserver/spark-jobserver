@@ -28,7 +28,6 @@ object WordCountExample extends SparkJob {
   }
 
   override def runJob(sc: SparkContext, config: Config): Any = {
-    val dd = sc.parallelize(config.getString("input.string").split(" ").toSeq)
-    dd.map((_, 1)).reduceByKey(_ + _).collect().toMap
+    sc.parallelize(config.getString("input.string").split(" ").toSeq).countByValue
   }
 }
