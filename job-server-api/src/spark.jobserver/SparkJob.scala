@@ -8,7 +8,7 @@ sealed trait SparkJobValidation {
   // instead, which worked fine with tests but when run with the job-server
   // it would just hang and timeout. This is something worth investigating
   def &&(sparkValidation: SparkJobValidation): SparkJobValidation = this match {
-    case SparkJobValid =>  sparkValidation
+    case SparkJobValid => sparkValidation
     case x => x
   }
 }
@@ -41,7 +41,6 @@ trait SparkJobBase {
    */
   def validate(sc: C, config: Config): SparkJobValidation
 }
-
 
 trait SparkJob extends SparkJobBase {
   type C = SparkContext
