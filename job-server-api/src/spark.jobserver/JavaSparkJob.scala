@@ -14,7 +14,7 @@ import org.apache.spark.SparkContext
 class JavaSparkJob extends SparkJob {
 
   def runJob(sc: SparkContext, jobConfig: Config): Any = {
-    runJob(new JavaSparkContext(sc), jobConfig);
+    runJob(new JavaSparkContext(sc), jobConfig)
   }
 
   def validate(sc: SparkContext, config: Config): SparkJobValidation = {
