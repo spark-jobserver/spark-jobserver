@@ -68,7 +68,7 @@ The easiest way to get started is to try the [Docker container](doc/docker.md) w
 
 Alternatives:
 
-* Build and run Job Server in local [development mode](#development-mode) within SBT.
+* Build and run Job Server in local [development mode](#development-mode) within SBT.  NOTE:  This does NOT work for YARN, and in fact is only recommended with `spark.master` set to `local[*]`.  Please deploy if you want to try with YARN or other real cluster.
 * Deploy job server to a cluster.  There are two alternatives (see the [deployment section](#deployment)):
   - `server_deploy.sh`  deploys job server to a directory on a remote host.
   - `server_package.sh` deploys job server to a local directory, from which you can deploy the directory, or create a .tar.gz for Mesos or YARN deployment.
