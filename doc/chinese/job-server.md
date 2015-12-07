@@ -8,7 +8,7 @@ Spark-jobserver 提供了一个 RESTful 接口来提交和管理 spark 的 jobs�
 - “Spark as Service”：针对 job 和 contexts 的各个方面提供了 REST 风格的 api 接口进行管理
 - 支持 SparkSQL、Hive、Streaming Contexts/jobs 以及定制 job contexts！具体参考[Contexts](doc/contexts.md)
 - 通过集成 Apache Shiro 来支持 LDAP 权限验证
-- 支持压秒级别低延迟的任务通过长期运行的 job contexts
+- 支持亚秒级别低延迟的任务通过长期运行的 job contexts
 - 可以通过结束 context 来停止运行的作业(job)
 - 分割 jar 上传步骤以提高 job 的启动
 - 异步和同步的 job API，其中同步 API 对低延时作业非常有效
