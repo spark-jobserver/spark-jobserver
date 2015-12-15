@@ -467,6 +467,13 @@ serialized properly:
 
 If we encounter a data type that is not supported, then the entire result will be serialized to a string.
 
+## Clients
+
+Spark Jobserver project has a
+[python binding](https://github.com/spark-jobserver/python-sjsclient) package.
+This can be used to quickly develop python applications that can interact with
+Spark Jobserver programmatically.
+
 ## Contribution and Development
 Contributions via Github Pull Request are welcome.  See the TODO for some ideas.
 
