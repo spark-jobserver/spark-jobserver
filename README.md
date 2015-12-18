@@ -22,7 +22,7 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 - GumGum
 - Fuse Elements
 - Frontline Solvers
-- Aruba Networks
+- [Aruba Networks](http://www.arubanetworks.com/)
 - [Zed Worldwide](http://www.zed.com)
 - [KNIME](https://www.knime.org/)
 - [Azavea](http://azavea.com)
