@@ -38,6 +38,33 @@ Now you should be able to run jobs in that context.  Note that SQL has to be quo
     
 NOTE: you will get an error if you run the wrong type of job, such as a regular SparkJob in a `SQLContext`.
 
+## Initializing a Hive/SQLContext Automatically
+
+You can skip the steps of context creation and jar upload with the latest job server using some config options.  Add the following to your job server config:
+
+```apache
+spark {
+  jobserver {
+    # Automatically load a set of jars at startup time.  Key is the appName, value is the path/URL.
+    job-jar-paths {    # NOTE: you may need an absolute path below
+      sql = job-server-extras/target/scala-2.10/job-server-extras_2.10-0.6.2-SNAPSHOT-tests.jar
+    }
+  }
+  
+  contexts {
+    sql-context {
+      num-cpu-cores = 1           # Number of cores to allocate.  Required.
+      memory-per-node = 512m         # Executor memory per node, -Xmx style eg 512m, 1G, etc.
+      context-factory = spark.jobserver.context.HiveContextFactory
+    }
+  }  
+}
+```
+
+Now, when you start up the job server, you will see a context `sql-context` and a jar app `sql` pre-loaded, and you can execute your SQL queries immediately (assuming you have tables stored in your Hive Metastore).
+
+NOTE: The above also works on DSE 4.8, which packages Job Server 0.5.2.
+
 ## Extending Job Server for Custom Contexts
 
 This can be done easily by extending the `SparkContextFactory` trait, like `SQLContextFactory` does.  Then, extend the `SparkJobBase` trait in a job with a type matching your factory.
