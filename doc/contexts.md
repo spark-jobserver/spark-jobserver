@@ -63,7 +63,7 @@ spark {
 
 Now, when you start up the job server, you will see a context `sql-context` and a jar app `sql` pre-loaded, and you can execute your SQL queries immediately (assuming you have tables stored in your Hive Metastore).
 
-NOTE: The above also works on DSE 4.8, which packages Job Server 0.5.2.
+NOTE: The above also works on DSE 4.8, which packages Job Server 0.5.2, but you need to edit the default configuration in `resources/spark/spark-jobserver/dse.conf`.
 
 ## Extending Job Server for Custom Contexts
 
