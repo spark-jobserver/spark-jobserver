@@ -44,8 +44,9 @@ class JarManager(jobDao: ActorRef) extends InstrumentedActor {
       import akka.pattern.{ask, pipe}
       import context.dispatcher
 
+      val requestor = sender
       val resp = (jobDao ? JobDAOActor.GetApps)(daoAskTimeout).mapTo[JobDAOActor.Apps]
-      resp.map { msg => msg.apps } pipeTo sender()
+      resp.map { msg => msg.apps } pipeTo requestor
 
 
     case StoreLocalJars(localJars) =>

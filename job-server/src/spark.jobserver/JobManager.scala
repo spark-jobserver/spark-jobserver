@@ -10,10 +10,6 @@ import ooyala.common.akka.actor.Reaper.WatchMe
 import org.slf4j.LoggerFactory
 import spark.jobserver.io.{JobDAOActor, JobDAO}
 
-/**
- * Created by ankits on 4/7/15.
- */
-
 object JobManager {
   val logger = LoggerFactory.getLogger(getClass)
 

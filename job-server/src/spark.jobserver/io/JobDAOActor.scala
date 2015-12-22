@@ -7,34 +7,32 @@ import org.joda.time.DateTime
 import spark.jobserver.io.JobDAOActor.SaveJar
 import spark.jobserver.util.JarUtils
 
-/**
- * Created by ankits on 4/6/15.
- */
-
 object JobDAOActor {
 
   //Requests
-  case class SaveJar(appName: String, uploadTime: DateTime, jarBytes: Array[Byte])
-  case object GetApps
-  case class GetJarPath(appName: String, uploadTime: DateTime)
+  sealed trait JobDAORequest
+  case class SaveJar(appName: String, uploadTime: DateTime, jarBytes: Array[Byte]) extends JobDAORequest
+  case object GetApps extends JobDAORequest
+  case class GetJarPath(appName: String, uploadTime: DateTime) extends JobDAORequest
 
-  case class SaveJobInfo(jobInfo: JobInfo)
-  case class GetJobInfos(limit: Int)
+  case class SaveJobInfo(jobInfo: JobInfo) extends JobDAORequest
+  case class GetJobInfos(limit: Int) extends JobDAORequest
 
-  case class SaveJobConfig(jobId:String, jobConfig:Config)
-  case object GetJobConfigs
+  case class SaveJobConfig(jobId:String, jobConfig:Config) extends JobDAORequest
+  case object GetJobConfigs extends JobDAORequest
 
-  case class GetLastUploadTime(appName: String)
+  case class GetLastUploadTime(appName: String) extends JobDAORequest
 
   //Responses
-  case class Apps(apps: Map[String, DateTime]) //GetApps?
-  case class JarPath(jarPath: String) //GetJarPath?
-  case class JobInfos(jobInfos: Seq[JobInfo]) //GetJobInfos?
-  case class JobConfigs(jobConfigs: Map[String, Config]) //GetJobConfigs?
-  case class LastUploadTime(lastUploadTime: Option[DateTime]) //GetLastUploadTime?
+  sealed trait JobDAOResponse
+  case class Apps(apps: Map[String, DateTime]) extends JobDAOResponse
+  case class JarPath(jarPath: String) extends JobDAOResponse
+  case class JobInfos(jobInfos: Seq[JobInfo]) extends JobDAOResponse
+  case class JobConfigs(jobConfigs: Map[String, Config]) extends JobDAOResponse
+  case class LastUploadTime(lastUploadTime: Option[DateTime]) extends JobDAOResponse
 
-  case object InvalidJar //SaveJar?
-  case object JarStored //SaveJar?
+  case object InvalidJar extends JobDAOResponse
+  case object JarStored extends JobDAOResponse
 
   def props(dao: JobDAO): Props = Props(classOf[JobDAOActor], dao)
 }

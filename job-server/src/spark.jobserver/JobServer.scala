@@ -61,11 +61,10 @@ object JobServer {
           new DataFileDAO(config)), "data-manager")
       val jarManager = system.actorOf(Props(classOf[JarManager], daoActor), "jar-manager")
       val contextPerJvm = config.getBoolean("spark.jobserver.context-per-jvm")
-      val supervisor = if (contextPerJvm) {
-        system.actorOf(Props(classOf[AkkaClusterSupervisorActor], daoActor), "context-supervisor")
-      } else {
-        system.actorOf(Props(classOf[LocalContextSupervisorActor], daoActor), "context-supervisor")
-      }
+      val supervisor =
+        system.actorOf(Props(if (contextPerJvm) { classOf[AkkaClusterSupervisorActor] }
+                             else               { classOf[LocalContextSupervisorActor] }, daoActor),
+                       "context-supervisor")
       val jobInfo = system.actorOf(Props(classOf[JobInfoActor], jobDAO, supervisor), "job-info")
 
       // Add initial job JARs, if specified in configuration.

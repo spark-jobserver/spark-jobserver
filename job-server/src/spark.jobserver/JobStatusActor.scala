@@ -1,6 +1,6 @@
 package spark.jobserver
 
-import akka.actor.ActorRef
+import akka.actor.{ActorRef, Props}
 import com.yammer.metrics.core.Meter
 import ooyala.common.akka.InstrumentedActor
 import ooyala.common.akka.metrics.YammerMetrics
@@ -12,6 +12,8 @@ import spark.jobserver.io.{JobDAOActor, JobInfo, JobDAO}
 object JobStatusActor {
   case class JobInit(jobInfo: JobInfo)
   case class GetRunningJobStatus()
+
+  def props(jobDao: ActorRef): Props = Props(classOf[JobStatusActor], jobDao)
 }
 
 /**
@@ -36,7 +38,8 @@ class JobStatusActor(jobDao: ActorRef) extends InstrumentedActor with YammerMetr
   override def postStop(): Unit = {
     val stopTime = DateTime.now()
     val stoppedInfos = infos.values.map { info =>
-      info.copy(endTime = Some(stopTime), error = Some(new Exception("Context for this job was terminated")))}
+      info.copy(endTime = Some(stopTime),
+                error = Some(new Exception(s"Context (${info.contextName}) for this job was terminated"))) }
     stoppedInfos.foreach({info => jobDao ! JobDAOActor.SaveJobInfo(info)})
   }
 

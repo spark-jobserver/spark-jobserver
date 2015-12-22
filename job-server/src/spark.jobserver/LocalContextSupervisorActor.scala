@@ -21,7 +21,7 @@ object ContextSupervisor {
   case object AddContextsFromConfig // Start up initial contexts
   case object ListContexts
   case class AddContext(name: String, contextConfig: Config)
-  case class GetAdHocContext(classPath: String, contextConfig: Config)
+  case class StartAdHocContext(classPath: String, contextConfig: Config)
   case class GetContext(name: String) // returns JobManager, JobResultActor
   case class GetResultActor(name: String)  // returns JobResultActor
   case class StopContext(name: String)
@@ -104,7 +104,7 @@ class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
         }
       }
 
-    case GetAdHocContext(classPath, contextConfig) =>
+    case StartAdHocContext(classPath, contextConfig) =>
       val originator = sender // Sender is a mutable reference, must capture in immutable val
       logger.info("Creating SparkContext for adhoc jobs.")
 

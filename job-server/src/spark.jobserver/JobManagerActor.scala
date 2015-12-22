@@ -106,7 +106,7 @@ class JobManagerActor extends InstrumentedActor {
   def wrappedReceive: Receive = {
     case Initialize(dao, resOpt, ctxName, ctxConf, adHoc, sup) =>
       daoActor = dao
-      statusActor = context.actorOf(Props(classOf[JobStatusActor], daoActor))
+      statusActor = context.actorOf(JobStatusActor.props(daoActor))
       resultActor = resOpt.getOrElse(context.actorOf(Props[JobResultActor]))
       contextName = ctxName
       contextConfig = ctxConf
@@ -172,6 +172,7 @@ class JobManagerActor extends InstrumentedActor {
       import scala.concurrent.Await
 
       val daoAskTimeout = Timeout(3 seconds)
+      // TODO: refactor so we don't need Await, instead flatmap into more futures
       val resp = Await.result(
         (daoActor ? JobDAOActor.GetLastUploadTime(appName))(daoAskTimeout).mapTo[JobDAOActor.LastUploadTime],
         daoAskTimeout.duration)

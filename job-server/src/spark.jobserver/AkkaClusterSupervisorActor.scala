@@ -15,7 +15,22 @@ import scala.util.{Try, Success, Failure}
 import scala.sys.process._
 
 /**
- * Created by ankits on 4/7/15.
+ * The AkkaClusterSupervisorActor launches Spark Contexts as external processes
+ * that connect back with the master node via Akka Cluster.
+ *
+ * Currently, when the Supervisor gets a MemberUp message from another actor,
+ * it is assumed to be one starting up, and it will be asked to identify itself,
+ * and then the Supervisor will try to initialize it.
+ *
+ * See the [[LocalContextSupervisorActor]] for normal config options.  Here are ones
+ * specific to this class.
+ *
+ * ==Configuration==
+ * {{{
+ *   deploy {
+ *     manager-start-cmd = "./manager_start.sh"
+ *   }
+ * }}}
  */
 class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
   import ContextSupervisor._
@@ -30,6 +45,9 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
   import context.dispatcher
 
   //actor name -> (context name, context config, context isadhoc)
+  //TODO: try to pass this state to the jobManager at start instead of having to track
+  //extra state.  What happens if the WebApi process dies before the forked process
+  //starts up?  Then it never gets initialized, and this state disappears.
   private val contextInitInfos = mutable.HashMap.empty[String, (String, Config, Boolean)]
   //actor name -> (success callback, failure callback)
   private val contextCallbacks = mutable.HashMap.empty[String, (ActorRef => Unit, Throwable => Unit)]
@@ -53,6 +71,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
 
   override def postStop(): Unit = {
     cluster.unsubscribe(self)
+    cluster.leave(selfAddress)
   }
 
   def wrappedReceive: Receive = {
@@ -67,18 +86,16 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
         val actorName = actorRef.path.name
         if (actorName.startsWith("jobManager")) {
           logger.info("Received identify response, attempting to initialize context at {}", memberActors)
-          val initInfoOpt = contextInitInfos.remove(actorName)
-          val callbackOpt = contextCallbacks.remove(actorName)
-          if (initInfoOpt.isDefined && callbackOpt.isDefined) {
-            val (ctxName, ctxConf, isAdHoc) = initInfoOpt.get
-            val (successFunc, failureFunc) = callbackOpt.get
-            initContext(actorName, actorRef, contextInitTimeout)(
-              ctxName, ctxConf, isAdHoc)(successFunc, failureFunc)
-          }
-          else {
+          (for { (ctxName, ctxConf, isAdHoc) <- contextInitInfos.remove(actorName)
+                 (successFunc, failureFunc)  <- contextCallbacks.remove(actorName) }
+           yield {
+             initContext(actorName, actorRef, contextInitTimeout)(
+               ctxName, ctxConf, isAdHoc)(successFunc, failureFunc)
+           }).getOrElse({
             logger.warn("No initialization or callback found for jobManager actor {}", actorRef.path)
             actorRef ! PoisonPill
-          }
+
+          })
         }
       }
 
@@ -102,13 +119,13 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
         }
       }
 
-    case GetAdHocContext(classPath, contextConfig) =>
+    case StartAdHocContext(classPath, contextConfig) =>
       val originator = sender()
       val mergedConfig = contextConfig.withFallback(defaultContextConfig)
 
       var contextName = ""
       do {
-        contextName = java.util.UUID.randomUUID().toString().substring(0, 8) + "-" + classPath
+        contextName = java.util.UUID.randomUUID().toString().take(8) + "-" + classPath
       } while (contexts contains contextName)
 
       startContext(contextName, mergedConfig, true) { ref =>
@@ -206,10 +223,9 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
       contexts.keySet().asScala.foreach { contextName =>
         val contextConfig = config.getConfig("spark.contexts." + contextName)
           .withFallback(defaultContextConfig)
-        startContext(contextName, contextConfig, false) { ref =>} {
+        startContext(contextName, contextConfig, false) { ref => } {
           e => logger.error("Unable to start context" + contextName, e)
         }
-        Thread sleep 1000 // Give some spacing so multiple contexts can be created
       }
     }
 
