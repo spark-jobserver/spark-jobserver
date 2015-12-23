@@ -43,7 +43,7 @@ if [ -z "$LOG_DIR" ]; then
 fi
 mkdir -p $LOG_DIR
 
-LOGGING_OPTS="-Dlog4j.configuration=log4j-server.properties
+LOGGING_OPTS="-Dlog4j.configuration=file:$appdir/log4j-server.properties
               -DLOG_DIR=$LOG_DIR"
 
 # For Mesos
