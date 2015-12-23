@@ -109,6 +109,9 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
     case AddContext(name, contextConfig) =>
       val originator = sender()
       val mergedConfig = contextConfig.withFallback(defaultContextConfig)
+      // TODO(velvia): This check is not atomic because contexts is only populated
+      // after SparkContext successfully created!  See
+      // https://github.com/spark-jobserver/spark-jobserver/issues/349
       if (contexts contains name) {
         originator ! ContextAlreadyExists
       } else {
@@ -127,6 +130,8 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
       do {
         contextName = java.util.UUID.randomUUID().toString().take(8) + "-" + classPath
       } while (contexts contains contextName)
+      // TODO(velvia): Make the check above atomic.  See
+      // https://github.com/spark-jobserver/spark-jobserver/issues/349
 
       startContext(contextName, mergedConfig, true) { ref =>
         originator ! (contexts(contextName), resultActors(contextName))
@@ -159,8 +164,8 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
     case Terminated(actorRef) =>
       val name: String = actorRef.path.name
       logger.info("Actor terminated: {}", name)
-      contexts.foreach { kv => if (kv._2 == actorRef) contexts.remove(kv._1) }
-      resultActors.foreach { kv => if (kv._2 == actorRef) resultActors.remove(kv._1) }
+      contexts.retain { case (k, v) => v != actorRef }
+      resultActors.retain { case (k, v) => v != actorRef }
   }
 
   private def initContext(actorName: String, ref: ActorRef, timeoutSecs: Long = 1)
@@ -185,7 +190,6 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
         resultActors(ctxName) = resultActor
         successFunc(ref)
     }
-
   }
 
   private def startContext(name: String, contextConfig: Config, isAdHoc: Boolean)
