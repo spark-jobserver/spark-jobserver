@@ -1,7 +1,7 @@
 package spark.jobserver
 
 import java.io.IOException
-import java.nio.file.Files
+import java.nio.file.{Files, Paths}
 import java.util.concurrent.TimeUnit
 
 import akka.actor._
@@ -220,8 +220,10 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
                                contextConfig: Config,
                                isAdHoc: Boolean,
                                actorName: String): java.io.File = {
-    // Create a temporary dir
-    val tmpDir = Files.createTempDirectory("jobserver")
+    // Create a temporary dir, preferably in the LOG_DIR
+    val tmpDir = Option(System.getProperty("LOG_DIR")).map { logDir =>
+      Files.createTempDirectory(Paths.get(logDir), "jobserver")
+    }.getOrElse(Files.createTempDirectory("jobserver"))
     logger.info("Created working directory {} for context {}", tmpDir: Any, name)
 
     // Now create the contextConfig merged with the values we need

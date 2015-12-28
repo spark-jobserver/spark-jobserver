@@ -1,6 +1,6 @@
 #!/bin/bash
 # Script to start the job manager
-# args: <job manager actor name> <cluster address>
+# args: <work dir for context> <cluster address>
 set -e
 
 get_abs_script_path() {
@@ -12,6 +12,10 @@ get_abs_script_path() {
 get_abs_script_path
 
 . $appdir/setenv.sh
+
+# Override logging options to provide per-context logging
+LOGGING_OPTS="-Dlog4j.configuration=file:$appdir/log4j-server.properties
+              -DLOG_DIR=$1"
 
 GC_OPTS="-XX:+UseConcMarkSweepGC
          -verbose:gc -XX:+PrintGCTimeStamps -Xloggc:$appdir/gc.out
