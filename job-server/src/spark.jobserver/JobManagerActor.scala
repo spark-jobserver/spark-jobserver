@@ -175,6 +175,7 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
       val lastUploadTime = resp.lastUploadTime
       if (!lastUploadTime.isDefined) {
         sender ! NoSuchApplication
+        postEachJob()
         break
       }
 
