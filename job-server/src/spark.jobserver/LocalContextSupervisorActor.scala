@@ -77,8 +77,7 @@ class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
   val contextTimeout = SparkJobUtils.getContextTimeout(config)
   import context.dispatcher   // to get ExecutionContext for futures
 
-  private val contexts = mutable.HashMap.empty[String, ActorRef]
-  private val resultActors = mutable.HashMap.empty[String, ActorRef]
+  private val contexts = mutable.HashMap.empty[String, (ActorRef, ActorRef)]
 
   // This is for capturing results for ad-hoc jobs. Otherwise when ad-hoc job dies, resultActor also dies,
   // and there is no way to retrieve results.
@@ -118,20 +117,20 @@ class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
 
       // Create JobManagerActor and JobResultActor
       startContext(contextName, mergedConfig, true, contextTimeout) { contextMgr =>
-        originator ! (contexts(contextName), resultActors(contextName))
+        originator ! contexts(contextName)
       } { err =>
         originator ! ContextInitError(err)
       }
 
     case GetResultActor(name) =>
-      sender ! resultActors.get(name).getOrElse(globalResultActor)
+      sender ! contexts.get(name).map(_._2).getOrElse(globalResultActor)
 
     case GetContext(name) =>
       if (contexts contains name) {
-        val future = (contexts(name) ? SparkContextStatus) (contextTimeout.seconds)
+        val future = (contexts(name)._1 ? SparkContextStatus) (contextTimeout.seconds)
         val originator = sender
         future.collect {
-          case SparkContextAlive => originator ! (contexts(name), resultActors(name))
+          case SparkContextAlive => originator ! contexts(name)
           case SparkContextDead =>
             logger.info("SparkContext {} is dead", name)
             self ! StopContext(name)
@@ -144,17 +143,14 @@ class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
     case StopContext(name) =>
       if (contexts contains name) {
         logger.info("Shutting down context {}", name)
-
-        context.watch(contexts(name))
-        contexts(name) ! PoisonPill
-        resultActors.remove(name)
+        contexts(name)._1 ! PoisonPill
         sender ! ContextStopped
       } else {
         sender ! NoSuchContext
       }
 
     case Terminated(actorRef) =>
-      val name :String = actorRef.path.name
+      val name = actorRef.path.name
       logger.info("Actor terminated: " + name)
       contexts.remove(name)
   }
@@ -181,8 +177,8 @@ class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
         failureFunc(e)
       case Success(JobManagerActor.Initialized(_, resultActor)) =>
         logger.info("SparkContext {} initialized", name)
-        contexts(name) = ref
-        resultActors(name) = resultActor
+        contexts(name) = (ref, resultActor)
+        context.watch(ref)
         successFunc(ref)
       case Success(JobManagerActor.InitError(t)) =>
         ref ! PoisonPill

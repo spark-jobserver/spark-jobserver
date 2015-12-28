@@ -95,7 +95,6 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
   private var statusActor: ActorRef = _
   protected var resultActor: ActorRef = _
   private var daoActor: ActorRef = _
-  private var supervisor: ActorRef = _
 
 
   override def postStop() {
@@ -108,7 +107,6 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
       daoActor = dao
       statusActor = context.actorOf(JobStatusActor.props(daoActor))
       resultActor = resOpt.getOrElse(context.actorOf(Props[JobResultActor]))
-      supervisor = sender
 
       try {
         // Load side jars first in case the ContextFactory comes from it
@@ -310,8 +308,8 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
 
   // This method should be called after each job is succeeded or failed
   private def postEachJob() {
-    // Delete the JobManagerActor after each adhoc job
-    if (isAdHoc) supervisor ! StopContext(contextName)
+    // Delete myself after each adhoc job
+    if (isAdHoc) self ! PoisonPill
   }
 
   // Protocol like "local" is supported in Spark for Jar loading, but not supported in Java.

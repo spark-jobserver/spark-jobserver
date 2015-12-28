@@ -51,8 +51,8 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
   //starts up?  Then it never gets initialized, and this state disappears.
   private val contextInitInfos = mutable.HashMap.empty[String, (Boolean, ActorRef => Unit, Throwable => Unit)]
 
-  private val contexts = mutable.HashMap.empty[String, ActorRef]
-  private val resultActors = mutable.HashMap.empty[String, ActorRef]
+  // actor name -> (JobManagerActor ref, ResultActor ref)
+  private val contexts = mutable.HashMap.empty[String, (ActorRef, ActorRef)]
 
   private val cluster = Cluster(context.system)
   private val selfAddress = cluster.selfAddress
@@ -131,17 +131,17 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
       // https://github.com/spark-jobserver/spark-jobserver/issues/349
 
       startContext(contextName, mergedConfig, true) { ref =>
-        originator ! (contexts(contextName), resultActors(contextName))
+        originator ! contexts(contextName)
       } { err =>
         originator ! ContextInitError(err)
       }
 
     case GetResultActor(name) =>
-      sender ! resultActors.get(name).getOrElse(globalResultActor)
+      sender ! contexts.get(name).map(_._2).getOrElse(globalResultActor)
 
     case GetContext(name) =>
       if (contexts contains name) {
-        sender ! (contexts(name), resultActors(name))
+        sender ! contexts(name)
       } else {
         sender ! NoSuchContext
       }
@@ -149,10 +149,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
     case StopContext(name) =>
       if (contexts contains name) {
         logger.info("Shutting down context {}", name)
-
-        context.watch(contexts(name))
-        contexts(name) ! PoisonPill
-        resultActors.remove(name)
+        contexts(name)._1 ! PoisonPill
         sender ! ContextStopped
       } else {
         sender ! NoSuchContext
@@ -161,8 +158,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
     case Terminated(actorRef) =>
       val name: String = actorRef.path.name
       logger.info("Actor terminated: {}", name)
-      contexts.retain { case (k, v) => v != actorRef }
-      resultActors.retain { case (k, v) => v != actorRef }
+      contexts.retain { case (name, (jobMgr, resActor)) => jobMgr != actorRef }
   }
 
   private def initContext(actorName: String, ref: ActorRef, timeoutSecs: Long = 1)
@@ -184,8 +180,8 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
         failureFunc(t)
       case Success(JobManagerActor.Initialized(ctxName, resActor)) =>
         logger.info("SparkContext {} joined", ctxName)
-        contexts(ctxName) = ref
-        resultActors(ctxName) = resActor
+        contexts(ctxName) = (ref, resActor)
+        context.watch(ref)
         successFunc(ref)
     }
   }
