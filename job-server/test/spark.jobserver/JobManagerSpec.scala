@@ -7,7 +7,7 @@ import spark.jobserver.io.JobDAO
 
 object JobManagerSpec extends JobSpecConfig
 
-abstract class JobManagerSpec(adhoc: Boolean) extends JobSpecBase(JobManagerSpec.getNewSystem) {
+abstract class JobManagerSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
   import scala.concurrent.duration._
   import CommonMessages._
   import JobManagerSpec.MaxJobsPerContext
@@ -24,7 +24,7 @@ abstract class JobManagerSpec(adhoc: Boolean) extends JobSpecBase(JobManagerSpec
   describe("error conditions") {
     it("should return errors if appName does not match") {
       uploadTestJar()
-      manager ! JobManagerActor.Initialize(daoActor, None, "ctx", JobManagerSpec.config, adhoc, supervisor)
+      manager ! JobManagerActor.Initialize(daoActor, None)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
       manager ! JobManagerActor.StartJob("demo2", wordCountClass, emptyConfig, Set.empty[Class[_]])
       expectMsg(startJobWait, CommonMessages.NoSuchApplication)
@@ -32,7 +32,7 @@ abstract class JobManagerSpec(adhoc: Boolean) extends JobSpecBase(JobManagerSpec
 
     it("should return error message if classPath does not match") {
       uploadTestJar()
-      manager ! JobManagerActor.Initialize(daoActor, None, "ctx", JobManagerSpec.config, adhoc, supervisor)
+      manager ! JobManagerActor.Initialize(daoActor, None)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
       manager ! JobManagerActor.StartJob("demo", "no.such.class", emptyConfig, Set.empty[Class[_]])
       expectMsg(startJobWait, CommonMessages.NoSuchClass)
@@ -40,14 +40,14 @@ abstract class JobManagerSpec(adhoc: Boolean) extends JobSpecBase(JobManagerSpec
 
     it("should error out if loading garbage jar") {
       uploadJar(dao, "../README.md", "notajar")
-      manager ! JobManagerActor.Initialize(daoActor, None, "ctx", JobManagerSpec.config, adhoc, supervisor)
+      manager ! JobManagerActor.Initialize(daoActor, None)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
       manager ! JobManagerActor.StartJob("notajar", "no.such.class", emptyConfig, Set.empty[Class[_]])
       expectMsg(startJobWait, CommonMessages.NoSuchClass)
     }
 
     it("should error out if job validation fails") {
-      manager ! JobManagerActor.Initialize(daoActor, None, "ctx", JobManagerSpec.config, adhoc, supervisor)
+      manager ! JobManagerActor.Initialize(daoActor, None)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
@@ -59,7 +59,7 @@ abstract class JobManagerSpec(adhoc: Boolean) extends JobSpecBase(JobManagerSpec
 
   describe("starting jobs") {
     it("should start job and return result successfully (all events)") {
-      manager ! JobManagerActor.Initialize(daoActor, None, "ctx", JobManagerSpec.config, adhoc, supervisor)
+      manager ! JobManagerActor.Initialize(daoActor, None)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
@@ -70,7 +70,7 @@ abstract class JobManagerSpec(adhoc: Boolean) extends JobSpecBase(JobManagerSpec
     }
 
     it("should start job more than one time and return result successfully (all events)") {
-      manager ! JobManagerActor.Initialize(daoActor, None, "ctx", JobManagerSpec.config, adhoc, supervisor)
+      manager ! JobManagerActor.Initialize(daoActor, None)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
@@ -87,7 +87,7 @@ abstract class JobManagerSpec(adhoc: Boolean) extends JobSpecBase(JobManagerSpec
     }
 
     it("should start job and return results (sync route)") {
-      manager ! JobManagerActor.Initialize(daoActor, None, "ctx", JobManagerSpec.config, adhoc, supervisor)
+      manager ! JobManagerActor.Initialize(daoActor, None)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
@@ -99,7 +99,7 @@ abstract class JobManagerSpec(adhoc: Boolean) extends JobSpecBase(JobManagerSpec
     }
 
     it("should start job and return JobStarted (async)") {
-      manager ! JobManagerActor.Initialize(daoActor, None, "ctx", JobManagerSpec.config, adhoc, supervisor)
+      manager ! JobManagerActor.Initialize(daoActor, None)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
@@ -109,7 +109,7 @@ abstract class JobManagerSpec(adhoc: Boolean) extends JobSpecBase(JobManagerSpec
     }
 
     it("should return error if job throws an error") {
-      manager ! JobManagerActor.Initialize(daoActor, None, "ctx", JobManagerSpec.config, adhoc, supervisor)
+      manager ! JobManagerActor.Initialize(daoActor, None)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
@@ -120,7 +120,7 @@ abstract class JobManagerSpec(adhoc: Boolean) extends JobSpecBase(JobManagerSpec
 
     it("job should get jobConfig passed in to StartJob message") {
       val jobConfig = ConfigFactory.parseString("foo.bar.baz = 3")
-      manager ! JobManagerActor.Initialize(daoActor, None, "ctx", JobManagerSpec.config, adhoc, supervisor)
+      manager ! JobManagerActor.Initialize(daoActor, None)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
@@ -133,7 +133,7 @@ abstract class JobManagerSpec(adhoc: Boolean) extends JobSpecBase(JobManagerSpec
     }
 
     it("should properly serialize case classes and other job jar classes") {
-      manager ! JobManagerActor.Initialize(daoActor, None, "ctx", JobManagerSpec.config, adhoc, supervisor)
+      manager ! JobManagerActor.Initialize(daoActor, None)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
@@ -151,7 +151,7 @@ abstract class JobManagerSpec(adhoc: Boolean) extends JobSpecBase(JobManagerSpec
       val jobSleepTimeMillis = 2000L
       val jobConfig = ConfigFactory.parseString("sleep.time.millis = " + jobSleepTimeMillis)
 
-      manager ! JobManagerActor.Initialize(daoActor, None, "ctx", JobManagerSpec.config, adhoc, supervisor)
+      manager ! JobManagerActor.Initialize(daoActor, None)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
@@ -183,7 +183,7 @@ abstract class JobManagerSpec(adhoc: Boolean) extends JobSpecBase(JobManagerSpec
     }
 
     it("should start a job that's an object rather than class") {
-      manager ! JobManagerActor.Initialize(daoActor, None, "ctx", JobManagerSpec.config, adhoc, supervisor)
+      manager ! JobManagerActor.Initialize(daoActor, None)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
@@ -195,7 +195,7 @@ abstract class JobManagerSpec(adhoc: Boolean) extends JobSpecBase(JobManagerSpec
     }
 
     it("should be able to cancel running job") {
-      manager ! JobManagerActor.Initialize(daoActor, None, "ctx", JobManagerSpec.config, adhoc, supervisor)
+      manager ! JobManagerActor.Initialize(daoActor, None)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
       uploadTestJar()

@@ -166,15 +166,20 @@ class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
     logger.info("Creating a SparkContext named {}", name)
 
     val resultActorRef = if (isAdHoc) Some(globalResultActor) else None
-    val ref = context.actorOf(Props(classOf[JobManagerActor]), name)
+    val mergedConfig = ConfigFactory.parseMap(
+                         Map("is-adhoc" -> isAdHoc.toString,
+                             "context.name" -> name,
+                             "context.actorname" -> name).asJava
+                       ).withFallback(contextConfig)
+    val ref = context.actorOf(JobManagerActor.props(mergedConfig), name)
     (ref ? JobManagerActor.Initialize(
-      dao, resultActorRef, name, contextConfig, isAdHoc, self))(Timeout(timeoutSecs.second)).onComplete {
+      dao, resultActorRef))(Timeout(timeoutSecs.second)).onComplete {
       case Failure(e: Exception) =>
         logger.error("Exception after sending Initialize to JobManagerActor", e)
         // Make sure we try to shut down the context in case it gets created anyways
         ref ! PoisonPill
         failureFunc(e)
-      case Success(JobManagerActor.Initialized(resultActor)) =>
+      case Success(JobManagerActor.Initialized(_, resultActor)) =>
         logger.info("SparkContext {} initialized", name)
         contexts(name) = ref
         resultActors(name) = resultActor

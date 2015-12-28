@@ -3,7 +3,7 @@ package spark.jobserver
 import akka.actor.{ActorSystem, ActorRef}
 import akka.testkit.ImplicitSender
 import akka.testkit.TestKit
-import com.typesafe.config.ConfigFactory
+import com.typesafe.config.{Config, ConfigFactory}
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 import spark.jobserver.context.DefaultSparkContextFactory
@@ -30,10 +30,15 @@ trait JobSpecConfig {
       "akka.log-dead-letters" -> Integer.valueOf(0),
       "spark.master" -> "local[4]",
       "context-factory" -> contextFactory,
+      "context.name" -> "ctx",
+      "context.actorname" -> "ctx",
       "spark.context-settings.test" -> ""
     )
     ConfigFactory.parseMap(ConfigMap.asJava).withFallback(ConfigFactory.defaultOverrides())
   }
+
+  def getContextConfig(adhoc: Boolean): Config =
+    ConfigFactory.parseMap(Map("is-adhoc" -> adhoc.toString).asJava).withFallback(config)
 
   lazy val contextConfig = {
     val ConfigMap = Map(

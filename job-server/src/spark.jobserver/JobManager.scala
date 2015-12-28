@@ -10,14 +10,28 @@ import ooyala.common.akka.actor.Reaper.WatchMe
 import org.slf4j.LoggerFactory
 import spark.jobserver.io.{JobDAOActor, JobDAO}
 
+/**
+ * The JobManager is the main entry point for the forked JVM process running an individual
+ * SparkContext.  It is passed $workDir $clusterAddr $configFile
+ *
+ * Each forked process has a working directory with log files for that context only, plus
+ * a file "context.conf" which contains context-specific settings.
+ */
 object JobManager {
   val logger = LoggerFactory.getLogger(getClass)
 
   // Allow custom function to create ActorSystem.  An example of why this is useful:
   // we can have something that stores the ActorSystem so it could be shut down easily later.
   def start(args: Array[String], makeSystem: Config => ActorSystem) {
-    val managerName = args(0)
     val clusterAddress = AddressFromURIString.parse(args(1))
+    val workDir = args(0)
+    val contextPath = new java.io.File(workDir + "/context.conf")
+    if (!contextPath.exists()) {
+      println(s"Could not find context configuration file $contextPath")
+      sys.exit(1)
+    }
+    val contextConfig = ConfigFactory.parseFile(contextPath)
+    val managerName = contextConfig.getString("context.actorname")
 
     val defaultConfig = ConfigFactory.load()
     val config = if (args.length > 2) {
@@ -32,9 +46,10 @@ object JobManager {
     }
     logger.info("Starting JobManager named " + managerName + " with config {}",
       config.getConfig("spark").root.render())
+    logger.info("..and context config:\n" + contextConfig.root.render)
 
     val system = makeSystem(config)
-    val jobManager = system.actorOf(Props(classOf[JobManagerActor]), managerName)
+    val jobManager = system.actorOf(JobManagerActor.props(contextConfig), managerName)
 
     //Join akka cluster
     logger.info("Joining cluster at address {}", clusterAddress)

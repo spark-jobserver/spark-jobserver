@@ -16,22 +16,21 @@ import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
 
 object JobManagerActor {
   // Messages
-  case class Initialize(daoActor: ActorRef, resultActorOpt: Option[ActorRef],
-                         contextName: String, contextConfig: Config, isAdHoc: Boolean, supervisor: ActorRef)
+  case class Initialize(daoActor: ActorRef, resultActorOpt: Option[ActorRef])
   case class StartJob(appName: String, classPath: String, config: Config,
                       subscribedEvents: Set[Class[_]])
   case class KillJob(jobId: String)
   case object SparkContextStatus
 
   // Results/Data
-  case class Initialized(resultActor: ActorRef)
+  case class Initialized(contextName: String, resultActor: ActorRef)
   case class InitError(t: Throwable)
   case class JobLoadingError(err: Throwable)
   case object SparkContextAlive
   case object SparkContextDead
 
   // Akka 2.2.x style actor props for actor creation
-  def props(): Props = Props(classOf[JobManagerActor])
+  def props(contextConfig: Config): Props = Props(classOf[JobManagerActor], contextConfig)
 }
 
 /**
@@ -49,6 +48,8 @@ object JobManagerActor {
  *  context-factory = "spark.jobserver.context.DefaultSparkContextFactory"
  *  spark.mesos.coarse = true  # per-context, rather than per-job, resource allocation
  *  rdd-ttl = 24 h            # time-to-live for RDDs in a SparkContext.  Don't specify = forever
+ *  is-adhoc = false          # true if context is ad-hoc context
+ *  context.name = "sql"      # Name of context
  * }}}
  *
  * == global configuration ==
@@ -60,7 +61,7 @@ object JobManagerActor {
  *   }
  * }}}
  */
-class JobManagerActor extends InstrumentedActor {
+class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
 
   import CommonMessages._
   import JobManagerActor._
@@ -85,6 +86,8 @@ class JobManagerActor extends InstrumentedActor {
   private val jobCacheEnabled = Try(config.getBoolean("spark.job-cache.enabled")).getOrElse(false)
   // Use Spark Context's built in classloader when SPARK-1230 is merged.
   private val jarLoader = new ContextURLClassLoader(Array[URL](), getClass.getClassLoader)
+  private val contextName = contextConfig.getString("context.name")
+  private val isAdHoc = Try(contextConfig.getBoolean("is-adhoc")).getOrElse(false)
 
   //NOTE: Must be initialized after sparkContext is created
   private var jobCache: JobCache = _
@@ -92,9 +95,6 @@ class JobManagerActor extends InstrumentedActor {
   private var statusActor: ActorRef = _
   protected var resultActor: ActorRef = _
   private var daoActor: ActorRef = _
-  private var contextName: String = _
-  private var contextConfig: Config = _
-  private var isAdHoc: Boolean = _
   private var supervisor: ActorRef = _
 
 
@@ -104,14 +104,11 @@ class JobManagerActor extends InstrumentedActor {
   }
 
   def wrappedReceive: Receive = {
-    case Initialize(dao, resOpt, ctxName, ctxConf, adHoc, sup) =>
+    case Initialize(dao, resOpt) =>
       daoActor = dao
       statusActor = context.actorOf(JobStatusActor.props(daoActor))
       resultActor = resOpt.getOrElse(context.actorOf(Props[JobResultActor]))
-      contextName = ctxName
-      contextConfig = ctxConf
-      isAdHoc = adHoc
-      supervisor = sup
+      supervisor = sender
 
       try {
         // Load side jars first in case the ContextFactory comes from it
@@ -124,7 +121,7 @@ class JobManagerActor extends InstrumentedActor {
                                           "rdd-manager-actor")
         jobCache = new JobCache(jobCacheSize, daoActor, jobContext.sparkContext, jarLoader)
         getSideJars(contextConfig).foreach { jarUri => jobContext.sparkContext.addJar(jarUri) }
-        sender ! Initialized(resultActor)
+        sender ! Initialized(contextName, resultActor)
       } catch {
         case t: Throwable =>
           logger.error("Failed to create context " + contextName + ", shutting down actor", t)
