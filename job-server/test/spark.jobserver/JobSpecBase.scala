@@ -30,15 +30,15 @@ trait JobSpecConfig {
       "akka.log-dead-letters" -> Integer.valueOf(0),
       "spark.master" -> "local[4]",
       "context-factory" -> contextFactory,
-      "context.name" -> "ctx",
-      "context.actorname" -> "ctx",
       "spark.context-settings.test" -> ""
     )
     ConfigFactory.parseMap(ConfigMap.asJava).withFallback(ConfigFactory.defaultOverrides())
   }
 
-  def getContextConfig(adhoc: Boolean): Config =
-    ConfigFactory.parseMap(Map("is-adhoc" -> adhoc.toString).asJava).withFallback(config)
+  def getContextConfig(adhoc: Boolean, baseConfig: Config = config): Config =
+    ConfigFactory.parseMap(Map("context.name" -> "ctx",
+                               "context.actorname" -> "ctx",
+                               "is-adhoc" -> adhoc.toString).asJava).withFallback(baseConfig)
 
   lazy val contextConfig = {
     val ConfigMap = Map(

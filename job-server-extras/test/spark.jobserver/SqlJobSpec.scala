@@ -24,20 +24,17 @@ class SqlJobSpec extends ExtrasJobSpecBase(SqlJobSpec.getNewSystem) {
   val queryConfig = ConfigFactory.parseString(
                       """sql = "SELECT firstName, lastName FROM addresses WHERE city = 'San Jose'" """)
 
-  val sqlContextConfig = JobManagerSpec.config
-                           .withValue("context-factory",
-                                      ConfigValueFactory.fromAnyRef(SqlJobSpec.contextFactory))
-
   before {
     dao = new InMemoryDAO
     daoActor = system.actorOf(JobDAOActor.props(dao))
-    manager = system.actorOf(JobManagerActor.props())
+    manager = system.actorOf(JobManagerActor.props(
+                             SqlJobSpec.getContextConfig(false, SqlJobSpec.contextConfig)))
     supervisor = TestProbe().ref
   }
 
   describe("Spark SQL Jobs") {
     it("should be able to create and cache a table, then query it using separate SQL jobs") {
-      manager ! JobManagerActor.Initialize(daoActor, None, "ctx", sqlContextConfig, true, supervisor)
+      manager ! JobManagerActor.Initialize(daoActor, None)
       expectMsgClass(classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
