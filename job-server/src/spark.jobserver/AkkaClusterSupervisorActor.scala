@@ -2,6 +2,7 @@ package spark.jobserver
 
 import java.io.IOException
 import java.nio.file.{Files, Paths}
+import java.nio.charset.Charset
 import java.util.concurrent.TimeUnit
 
 import akka.actor._
@@ -234,9 +235,9 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
                        ).withFallback(contextConfig)
 
     // Write out the config to the temp dir
-    val writer = Files.newBufferedWriter(tmpDir.resolve("context.conf"))
-    writer.write(mergedConfig.root.render(ConfigRenderOptions.concise))
-    writer.close()
+    Files.write(tmpDir.resolve("context.conf"),
+                Seq(mergedConfig.root.render(ConfigRenderOptions.concise)).asJava,
+                Charset.forName("UTF-8"))
 
     tmpDir.toFile
   }
