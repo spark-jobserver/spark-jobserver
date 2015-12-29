@@ -35,6 +35,7 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 - *"Spark as a Service"*: Simple REST interface (including HTTPS) for all aspects of job, context management
 - Support for Spark SQL, Hive, Streaming Contexts/jobs and custom job contexts!  See [Contexts](doc/contexts.md).
 - LDAP Auth support via Apache Shiro integration
+- Separate JVM per SparkContext for isolation
 - Supports sub-second low-latency jobs via long-running job contexts
 - Start and stop job contexts for RDD sharing and low-latency jobs; change resources on restart
 - Kill running jobs via stop context and delete job
@@ -73,6 +74,8 @@ Alternatives:
   - `server_deploy.sh`  deploys job server to a directory on a remote host.
   - `server_package.sh` deploys job server to a local directory, from which you can deploy the directory, or create a .tar.gz for Mesos or YARN deployment.
 * EC2 Deploy scripts - follow the instructions in [EC2](doc/EC2.md) to spin up a Spark cluster with job server and an example application.
+
+NOTE: Spark Job Server runs `SparkContext`s in their own, forked JVM process when the config option `spark.jobserver.context-per-jvm` is set to `true`.  In local development mode, this is set to false by default, while the deployment templates have this set to true for production deployment. See [Deployment](#deployment) section for more info.
 
 ## Development mode
 
@@ -337,6 +340,9 @@ NOTE: by default the assembly jar from `job-server-extras`, which includes suppo
 
 NOTE: Each context is a separate process launched using spark-submit, via the included `manager_start.sh` script.
 You may want to set `deploy.manager-start-cmd` to the correct path to your start script and customize the script.
+Also, the extra processes talk to the master HTTP process via random ports using the Akka Cluster gossip protocol.  If for some reason the separate processes causes issues, set `spark.jobserver.context-per-jvm` to `false`, which will cause the job server to use a single JVM for all contexts.
+
+Log files are separated out for each context (assuming `context-per-jvm` is `true`) in their own subdirs under the `LOG_DIR` configured in `settings.sh` in the deployed directory.
 
 Note: to test out the deploy to a local staging dir, or package the job server for Mesos,
 use `bin/server_package.sh <environment>`.
