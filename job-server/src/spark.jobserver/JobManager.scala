@@ -27,7 +27,7 @@ object JobManager {
     val workDir = args(0)
     val contextPath = new java.io.File(workDir + "/context.conf")
     if (!contextPath.exists()) {
-      println(s"Could not find context configuration file $contextPath")
+      System.err.println(s"Could not find context configuration file $contextPath")
       sys.exit(1)
     }
     val contextConfig = ConfigFactory.parseFile(contextPath)
@@ -37,7 +37,7 @@ object JobManager {
     val config = if (args.length > 2) {
       val configFile = new File(args(2))
       if (!configFile.exists()) {
-        println("Could not find configuration file " + configFile)
+        System.err.println("Could not find configuration file " + configFile)
         sys.exit(1)
       }
       ConfigFactory.parseFile(configFile).withFallback(defaultConfig)

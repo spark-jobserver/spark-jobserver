@@ -188,13 +188,19 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
   }
 
   private def startContext(name: String, contextConfig: Config, isAdHoc: Boolean)
-                          (successFunc: ActorRef => Unit)(failureFunc: Throwable => Unit) = {
+                          (successFunc: ActorRef => Unit)(failureFunc: Throwable => Unit): Unit = {
     require(!(contexts contains name), "There is already a context named " + name)
     val contextActorName = "jobManager-" + java.util.UUID.randomUUID().toString.substring(16)
 
     logger.info("Starting context with actor name {}", contextActorName)
 
-    val contextDir = createContextDir(name, contextConfig, isAdHoc, contextActorName)
+    val contextDir: java.io.File = try {
+        createContextDir(name, contextConfig, isAdHoc, contextActorName)
+      } catch {
+        case e: Exception =>
+          failureFunc(e)
+          return
+      }
     val pb = Process(s"$managerStartCommand $contextDir ${selfAddress.toString}")
     val pio = new ProcessIO(_ => (),
                         stdout => scala.io.Source.fromInputStream(stdout)
@@ -222,8 +228,9 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
                                isAdHoc: Boolean,
                                actorName: String): java.io.File = {
     // Create a temporary dir, preferably in the LOG_DIR
+    val encodedContextName = java.net.URLEncoder.encode(name, "UTF-8")
     val tmpDir = Option(System.getProperty("LOG_DIR")).map { logDir =>
-      Files.createTempDirectory(Paths.get(logDir), "jobserver")
+      Files.createTempDirectory(Paths.get(logDir), s"jobserver-$encodedContextName")
     }.getOrElse(Files.createTempDirectory("jobserver"))
     logger.info("Created working directory {} for context {}", tmpDir: Any, name)
 
