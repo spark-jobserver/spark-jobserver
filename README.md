@@ -10,6 +10,43 @@ See [Troubleshooting Tips](doc/troubleshooting.md) as well as [Yarn tips](doc/ya
 
 Also see [Chinese docs / 中文](doc/chinese/job-server.md).
 
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
+
+- [Users](#users)
+- [Features](#features)
+- [Version Information](#version-information)
+- [Getting Started with Spark Job Server](#getting-started-with-spark-job-server)
+- [Development mode](#development-mode)
+  - [WordCountExample walk-through](#wordcountexample-walk-through)
+    - [Package Jar - Send to Server](#package-jar---send-to-server)
+    - [Ad-hoc Mode - Single, Unrelated Jobs (Transient Context)](#ad-hoc-mode---single-unrelated-jobs-transient-context)
+    - [Persistent Context Mode - Faster & Required for Related Jobs](#persistent-context-mode---faster-&-required-for-related-jobs)
+- [Create a Job Server Project](#create-a-job-server-project)
+  - [Using Named RDDs](#using-named-rdds)
+  - [HTTPS / SSL Configuration](#https--ssl-configuration)
+  - [Authentication](#authentication)
+- [Deployment](#deployment)
+  - [Manual steps](#manual-steps)
+  - [Chef](#chef)
+- [Architecture](#architecture)
+- [API](#api)
+  - [Jars](#jars)
+  - [Contexts](#contexts)
+  - [Jobs](#jobs)
+  - [Data](#data)
+  - [Context configuration](#context-configuration)
+  - [Other configuration settings](#other-configuration-settings)
+  - [Job Result Serialization](#job-result-serialization)
+- [Contribution and Development](#contribution-and-development)
+  - [Publishing packages](#publishing-packages)
+- [Contact](#contact)
+- [License](#license)
+- [TODO](#todo)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 ## Users
 
 (Please add yourself to this list!)
