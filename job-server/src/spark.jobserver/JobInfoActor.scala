@@ -6,7 +6,7 @@ import akka.util.Timeout
 import com.typesafe.config.Config
 import ooyala.common.akka.InstrumentedActor
 import scala.concurrent.Await
-import spark.jobserver.ContextSupervisor.{GetContext, GetAdHocContext}
+import spark.jobserver.ContextSupervisor.{GetContext, StartAdHocContext}
 import spark.jobserver.io.JobDAO
 
 object JobInfoActor {

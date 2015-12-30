@@ -10,6 +10,43 @@ See [Troubleshooting Tips](doc/troubleshooting.md) as well as [Yarn tips](doc/ya
 
 Also see [Chinese docs / 中文](doc/chinese/job-server.md).
 
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
+
+- [Users](#users)
+- [Features](#features)
+- [Version Information](#version-information)
+- [Getting Started with Spark Job Server](#getting-started-with-spark-job-server)
+- [Development mode](#development-mode)
+  - [WordCountExample walk-through](#wordcountexample-walk-through)
+    - [Package Jar - Send to Server](#package-jar---send-to-server)
+    - [Ad-hoc Mode - Single, Unrelated Jobs (Transient Context)](#ad-hoc-mode---single-unrelated-jobs-transient-context)
+    - [Persistent Context Mode - Faster & Required for Related Jobs](#persistent-context-mode---faster-&-required-for-related-jobs)
+- [Create a Job Server Project](#create-a-job-server-project)
+  - [Using Named RDDs](#using-named-rdds)
+  - [HTTPS / SSL Configuration](#https--ssl-configuration)
+  - [Authentication](#authentication)
+- [Deployment](#deployment)
+  - [Manual steps](#manual-steps)
+  - [Chef](#chef)
+- [Architecture](#architecture)
+- [API](#api)
+  - [Jars](#jars)
+  - [Contexts](#contexts)
+  - [Jobs](#jobs)
+  - [Data](#data)
+  - [Context configuration](#context-configuration)
+  - [Other configuration settings](#other-configuration-settings)
+  - [Job Result Serialization](#job-result-serialization)
+- [Contribution and Development](#contribution-and-development)
+  - [Publishing packages](#publishing-packages)
+- [Contact](#contact)
+- [License](#license)
+- [TODO](#todo)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 ## Users
 
 (Please add yourself to this list!)
@@ -35,6 +72,7 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 - *"Spark as a Service"*: Simple REST interface (including HTTPS) for all aspects of job, context management
 - Support for Spark SQL, Hive, Streaming Contexts/jobs and custom job contexts!  See [Contexts](doc/contexts.md).
 - LDAP Auth support via Apache Shiro integration
+- Separate JVM per SparkContext for isolation
 - Supports sub-second low-latency jobs via long-running job contexts
 - Start and stop job contexts for RDD sharing and low-latency jobs; change resources on restart
 - Kill running jobs via stop context and delete job
@@ -74,6 +112,8 @@ Alternatives:
   - `server_package.sh` deploys job server to a local directory, from which you can deploy the directory, or create a .tar.gz for Mesos or YARN deployment.
 * EC2 Deploy scripts - follow the instructions in [EC2](doc/EC2.md) to spin up a Spark cluster with job server and an example application.
 * EMR Deploy instruction - follow the instruction in [EMR](doc/EMR.md)
+
+NOTE: Spark Job Server runs `SparkContext`s in their own, forked JVM process when the config option `spark.jobserver.context-per-jvm` is set to `true`.  In local development mode, this is set to false by default, while the deployment templates have this set to true for production deployment. See [Deployment](#deployment) section for more info.
 
 ## Development mode
 
@@ -335,6 +375,12 @@ curl -k --basic --user 'user:pw' https://localhost:8090/contexts
 The `server_start.sh` script uses `spark-submit` under the hood and may be passed any of the standard extra arguments from `spark-submit`.
 
 NOTE: by default the assembly jar from `job-server-extras`, which includes support for SQLContext and HiveContext, is used.  If you face issues with all the extra dependencies, consider modifying the install scripts to invoke `sbt job-server/assembly` instead, which doesn't include the extra dependencies.
+
+NOTE: Each context is a separate process launched using spark-submit, via the included `manager_start.sh` script.
+You may want to set `deploy.manager-start-cmd` to the correct path to your start script and customize the script.
+Also, the extra processes talk to the master HTTP process via random ports using the Akka Cluster gossip protocol.  If for some reason the separate processes causes issues, set `spark.jobserver.context-per-jvm` to `false`, which will cause the job server to use a single JVM for all contexts.
+
+Log files are separated out for each context (assuming `context-per-jvm` is `true`) in their own subdirs under the `LOG_DIR` configured in `settings.sh` in the deployed directory.
 
 Note: to test out the deploy to a local staging dir, or package the job server for Mesos,
 use `bin/server_package.sh <environment>`.

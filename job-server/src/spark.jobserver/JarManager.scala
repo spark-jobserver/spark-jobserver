@@ -1,7 +1,9 @@
 package spark.jobserver
 
+import akka.actor.ActorRef
+import akka.util.Timeout
 import ooyala.common.akka.InstrumentedActor
-import spark.jobserver.io.JobDAO
+import spark.jobserver.io.{JobDAOActor, JobDAO}
 import spark.jobserver.util.JarUtils
 import org.joda.time.DateTime
 
@@ -28,14 +30,24 @@ case object JarStored
  * An Actor that manages the jars stored by the job server.   It's important that threads do not try to
  * load a class from a jar as a new one is replacing it, so using an actor to serialize requests is perfect.
  */
-class JarManager(jobDao: JobDAO) extends InstrumentedActor {
+class JarManager(jobDao: ActorRef) extends InstrumentedActor {
+  import scala.concurrent.duration._
+  val daoAskTimeout = Timeout(3 seconds)
+
   private def saveJar(appName: String, jarBytes: Array[Byte]): Unit = {
     val uploadTime = DateTime.now()
-    jobDao.saveJar(appName, uploadTime, jarBytes)
+    jobDao ! JobDAOActor.SaveJar(appName, uploadTime, jarBytes)
   }
 
   override def wrappedReceive: Receive = {
-    case ListJars => sender ! createJarsList()
+    case ListJars =>
+      import akka.pattern.{ask, pipe}
+      import context.dispatcher
+
+      val requestor = sender
+      val resp = (jobDao ? JobDAOActor.GetApps)(daoAskTimeout).mapTo[JobDAOActor.Apps]
+      resp.map { msg => msg.apps } pipeTo requestor
+
 
     case StoreLocalJars(localJars) =>
       val success =
@@ -69,5 +81,4 @@ class JarManager(jobDao: JobDAO) extends InstrumentedActor {
       }
   }
 
-  private def createJarsList() = jobDao.getApps
 }

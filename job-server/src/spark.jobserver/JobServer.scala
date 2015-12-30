@@ -3,11 +3,10 @@ package spark.jobserver
 import akka.actor.{ActorSystem, ActorRef}
 import akka.actor.Props
 import akka.pattern.ask
+import com.typesafe.config.{ConfigValueFactory, Config, ConfigFactory}
 
-import com.typesafe.config.{Config, ConfigFactory}
 import java.io.File
-import spark.jobserver.io.JobDAO
-import spark.jobserver.io.DataFileDAO
+import spark.jobserver.io.{JobDAOActor, JobDAO, DataFileDAO}
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
@@ -57,11 +56,15 @@ object JobServer {
     val ctor = clazz.getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
     try {
       val jobDAO = ctor.newInstance(config).asInstanceOf[JobDAO]
-      val jarManager = system.actorOf(Props(classOf[JarManager], jobDAO), "jar-manager")
+      val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO), "dao-manager")
       val dataManager = system.actorOf(Props(classOf[DataManagerActor],
           new DataFileDAO(config)), "data-manager")
-      val supervisor = system.actorOf(Props(classOf[LocalContextSupervisorActor], jobDAO),
-        "context-supervisor")
+      val jarManager = system.actorOf(Props(classOf[JarManager], daoActor), "jar-manager")
+      val contextPerJvm = config.getBoolean("spark.jobserver.context-per-jvm")
+      val supervisor =
+        system.actorOf(Props(if (contextPerJvm) { classOf[AkkaClusterSupervisorActor] }
+                             else               { classOf[LocalContextSupervisorActor] }, daoActor),
+                       "context-supervisor")
       val jobInfo = system.actorOf(Props(classOf[JobInfoActor], jobDAO, supervisor), "job-info")
 
       // Add initial job JARs, if specified in configuration.
@@ -118,6 +121,14 @@ object JobServer {
   }
 
   def main(args: Array[String]) {
-    start(args, config => ActorSystem("JobServer", config))
+    import scala.collection.JavaConverters._
+    def makeSupervisorSystem(name: String)(config: Config): ActorSystem = {
+      val configWithRole = config.withValue("akka.cluster.roles",
+        ConfigValueFactory.fromIterable(List("supervisor").asJava))
+      ActorSystem(name, configWithRole)
+    }
+    start(args, makeSupervisorSystem("JobServer")(_))
   }
+
+
 }
