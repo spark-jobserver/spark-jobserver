@@ -70,6 +70,10 @@ object Dependencies {
      "org.apache.shiro" % "shiro-core" % "1.2.4"
   )
 
+  lazy val dseConnectorDeps = Seq(
+    "com.datastax.spark" %% "spark-cassandra-connector" % "1.4.0"
+  )
+
   lazy val serverDeps = apiDeps ++ yodaDeps
   lazy val apiDeps = sparkDeps :+ typeSafeConfigDeps
 
