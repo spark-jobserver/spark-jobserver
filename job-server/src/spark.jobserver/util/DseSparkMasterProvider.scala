@@ -52,10 +52,9 @@ class DseSparkMasterProvider extends SparkMasterProvider {
     val sparkConf = getSparkConfForCassandraConnector(config)
 
     def getSparkMasterIP(): Option[String] = {
-      CassandraConnector(sparkConf).withSessionDo {
-        session => {
+      CassandraConnector(sparkConf).withSessionDo { session =>
           getSparkDCName(session) match {
-            case Some(datacenter) => {
+            case Some(datacenter) =>
               /**
                * Logic is to get all rows from real_leaders table and filter for that DC.
                * Instead if we need to use where clause, we need army name as input.
@@ -63,33 +62,18 @@ class DseSparkMasterProvider extends SparkMasterProvider {
                * to have as less configuration as possible.
                */
               val queryResult = Try(session.execute(sparkMasterIPQuery))
-              val result = queryResult match {
-                case Success(s) => {
-                  parseRealLeadersTableRows(datacenter, s) match {
-                    case Some(ip) => {
-                      logger.info("Spark master IP -- %s".format(ip))
-                      Some(ip)
-                    }
-                    case None => {
-                      logger.error("No matching DC name in real leaders table")
-                      None
-                    }
-                  }
-                }
-                case Failure(e) => {
+              queryResult match {
+                case Success(s) =>
+                  parseRealLeadersTableRows(datacenter, s)
+                case Failure(e) =>
                   // return empty string
                   logger.error("Querying spark master ip failed", e)
                   None
-                }
               }
-              result
-            }
-            case None => {
+            case None =>
               logger.error("No matching host found in Cluster")
               None
-            }
           }
-        }
       }
     }
 
@@ -104,11 +88,20 @@ class DseSparkMasterProvider extends SparkMasterProvider {
     }
 
     def parseRealLeadersTableRows(datacenter: String, rs: ResultSet): Option[String] = {
-      rs.all().asScala.filter(row =>
+      val ip = rs.all().asScala.filter(row =>
         datacenter == row.getString("datacenter")
       ).map(
         _.getInet("address").getHostAddress
       ).headOption
+
+      ip match {
+        case Some(ip) =>
+          logger.info("Spark master IP -- %s".format(ip))
+        case None =>
+          logger.error("No matching DC name in real leaders table")
+      }
+
+      ip
     }
 
     def fallbackToDefaultMaster(config: Config): String = {
@@ -118,11 +111,10 @@ class DseSparkMasterProvider extends SparkMasterProvider {
     }
 
     getSparkMasterIP() match {
-      case Some(ip) => {
+      case Some(ip) =>
         val sparkMasterUrl = """spark://%s:7077""".format(ip)
         logger.info("Spark Master URL -- %s".format(sparkMasterUrl))
         sparkMasterUrl
-      }
       case None => fallbackToDefaultMaster(config)
     }
   }
