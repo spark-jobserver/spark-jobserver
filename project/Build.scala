@@ -44,6 +44,7 @@ object JobServerBuild extends Build {
         extraJarPaths ++ classpath
       },
       // Must disable this due to a bug with sbt-assembly 0.14's shading.... :(
+      // See https://github.com/sbt/sbt-assembly/issues/172#issuecomment-169013214
       test in assembly := {},
       // Must run the examples and tests in separate JVMs to avoid mysterious
       // scala.reflect.internal.MissingRequirementError errors. (TODO)
