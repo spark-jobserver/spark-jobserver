@@ -1,0 +1,54 @@
+    <!DOCTYPE html>
+    <meta charset="utf-8">
+    <body>
+      <div>
+        <div>
+        <input name="startButton" 
+        type="button" 
+        value="Start Context" 
+        onclick="startContext()" 
+        class = "btn btn-default enableWhileStopped" 
+        disabled />
+
+        <input name="updateButton"
+        type="button" 
+        value="Resample" 
+        onclick="runSampling()"
+        class = "btn btn-default enableWhileRunning" 
+        disabled />
+
+        <input name="stopButton" 
+        type="button" 
+        value="Stop Context" 
+        onclick="stopContext()" 
+        class = "btn btn-default enableWhileRunning" 
+        disabled />
+
+        <input name="filterButton" 
+        type="button" 
+        value="Filter Categories" 
+        onclick="drawData()"
+        class = "btn btn-default" />
+        <select multiple="multiple" id="multiSelect">
+
+        </select>
+        </div>
+        <div id="state">
+          Syncing with server.
+        </div>
+        <div id="filter_options">
+        </div>
+      </div>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.6/d3.min.js"></script>
+      <script src="js/colorbrewer.v1.min.js"></script>
+      <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/URI.js/1.16.0/URI.min.js"></script>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.0.0-alpha1/jquery.min.js"></script>
+      <link rel="stylesheet" property='stylesheet' href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.5/css/bootstrap.min.css" type="text/css"/>
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.5/js/bootstrap.min.js"></script>
+      <script type="text/javascript" src="js/bootstrap-multiselect.js"></script>
+      <link rel="stylesheet" property='stylesheet' href="css/bootstrap-multiselect.css" type="text/css"/>
+
+      <link rel="stylesheet" property='stylesheet' href="css/scatterplot.css" type="text/css"/>
+      <script type="text/javascript" src="js/graphics.js"></script>
+      <script type="text/javascript" src="js/jobserver.js"></script>
+    </body>

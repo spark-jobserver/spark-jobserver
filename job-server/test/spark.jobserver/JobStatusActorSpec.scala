@@ -2,7 +2,7 @@ package spark.jobserver
 
 import akka.actor.{Props, PoisonPill, ActorRef, ActorSystem}
 import akka.testkit.{TestKit, ImplicitSender}
-import spark.jobserver.io.{JarInfo, JobInfo, JobDAO}
+import spark.jobserver.io.{JobDAOActor, JarInfo, JobInfo, JobDAO}
 import org.joda.time.DateTime
 import org.scalatest.matchers.ShouldMatchers
 import org.scalatest.{FunSpecLike, FunSpec, BeforeAndAfter, BeforeAndAfterAll}
@@ -33,10 +33,12 @@ with FunSpecLike with ShouldMatchers with BeforeAndAfter with BeforeAndAfterAll 
   var actor: ActorRef = _
   var receiver: ActorRef = _
   var dao: JobDAO = _
+  var daoActor: ActorRef = _
 
   before {
     dao = new InMemoryDAO
-    actor = system.actorOf(Props(classOf[JobStatusActor], dao))
+    daoActor = system.actorOf(JobDAOActor.props(dao))
+    actor = system.actorOf(Props(classOf[JobStatusActor], daoActor))
     receiver = system.actorOf(Props[JobResultActor])
   }
 

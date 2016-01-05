@@ -1,0 +1,58 @@
+svg {
+  font: 10px sans-serif;
+  padding: 10px;
+}
+
+.axis,
+.frame {
+  shape-rendering: crispEdges;
+}
+
+.axis line {
+  stroke: #ddd;
+}
+
+.axis path {
+  display: none;
+}
+
+.frame {
+  fill: none;
+  stroke: #aaa;
+}
+
+circle {
+  fill-opacity: .4;
+}
+
+circle.hidden {
+  fill: #ccc !important;
+  fill-opacity: .2;
+}
+
+.extent {
+  fill: #000;
+  fill-opacity: .125;
+  stroke: #fff;
+}
+
+.palette {
+  //cursor: pointer;
+  display: inline-block;
+  vertical-align: top;
+  margin: 200px 0 4px 6px;
+  padding: 4px;
+  background: #fff;
+  //border: solid 1px #aaa;
+}
+
+.swatch {
+  cursor: pointer;
+  display: block;
+  vertical-align: middle;
+  width: 40px;
+  color: white;
+  text-align: center;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}

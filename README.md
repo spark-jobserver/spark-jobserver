@@ -8,6 +8,45 @@ It was originally started at [Ooyala](http://www.ooyala.com), but this is now th
 
 See [Troubleshooting Tips](doc/troubleshooting.md) as well as [Yarn tips](doc/yarn.md).
 
+Also see [Chinese docs / 中文](doc/chinese/job-server.md).
+
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
+
+- [Users](#users)
+- [Features](#features)
+- [Version Information](#version-information)
+- [Getting Started with Spark Job Server](#getting-started-with-spark-job-server)
+- [Development mode](#development-mode)
+  - [WordCountExample walk-through](#wordcountexample-walk-through)
+    - [Package Jar - Send to Server](#package-jar---send-to-server)
+    - [Ad-hoc Mode - Single, Unrelated Jobs (Transient Context)](#ad-hoc-mode---single-unrelated-jobs-transient-context)
+    - [Persistent Context Mode - Faster & Required for Related Jobs](#persistent-context-mode---faster-&-required-for-related-jobs)
+- [Create a Job Server Project](#create-a-job-server-project)
+  - [Using Named RDDs](#using-named-rdds)
+  - [HTTPS / SSL Configuration](#https--ssl-configuration)
+  - [Authentication](#authentication)
+- [Deployment](#deployment)
+  - [Manual steps](#manual-steps)
+  - [Chef](#chef)
+- [Architecture](#architecture)
+- [API](#api)
+  - [Jars](#jars)
+  - [Contexts](#contexts)
+  - [Jobs](#jobs)
+  - [Data](#data)
+  - [Context configuration](#context-configuration)
+  - [Other configuration settings](#other-configuration-settings)
+  - [Job Result Serialization](#job-result-serialization)
+- [Contribution and Development](#contribution-and-development)
+  - [Publishing packages](#publishing-packages)
+- [Contact](#contact)
+- [License](#license)
+- [TODO](#todo)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 ## Users
 
 (Please add yourself to this list!)
@@ -20,18 +59,20 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 - GumGum
 - Fuse Elements
 - Frontline Solvers
-- Aruba Networks
+- [Aruba Networks](http://www.arubanetworks.com/)
 - [Zed Worldwide](http://www.zed.com)
 - [KNIME](https://www.knime.org/)
 - [Azavea](http://azavea.com)
 - [Maana](http://maana.io/)
 - [Newsweaver](https://www.newsweaver.com)
+- [Instaclustr](http://www.instaclustr.com)
 
 ## Features
 
 - *"Spark as a Service"*: Simple REST interface (including HTTPS) for all aspects of job, context management
 - Support for Spark SQL, Hive, Streaming Contexts/jobs and custom job contexts!  See [Contexts](doc/contexts.md).
 - LDAP Auth support via Apache Shiro integration
+- Separate JVM per SparkContext for isolation
 - Supports sub-second low-latency jobs via long-running job contexts
 - Start and stop job contexts for RDD sharing and low-latency jobs; change resources on restart
 - Kill running jobs via stop context and delete job
@@ -54,13 +95,25 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 | 0.5.1       | 1.3.0         |
 | 0.5.2       | 1.3.1         |
 | 0.6.0       | 1.4.1         |
-| master      | 1.5.0         |
+| 0.6.1       | 1.5.2         |
+| master      | 1.5.2         |
 
-For release notes, look in the `notes/` directory.  They should also be up on [ls.implicit.ly](http://ls.implicit.ly/spark-jobserver/spark-jobserver).
+For release notes, look in the `notes/` directory.  They should also be up on [notes.implicit.ly](http://notes.implicit.ly/search/spark-jobserver).
 
-## Quick Start
+## Getting Started with Spark Job Server
 
 The easiest way to get started is to try the [Docker container](doc/docker.md) which prepackages a Spark distribution with the job server and lets you start and deploy it.
+
+Alternatives:
+
+* Build and run Job Server in local [development mode](#development-mode) within SBT.  NOTE:  This does NOT work for YARN, and in fact is only recommended with `spark.master` set to `local[*]`.  Please deploy if you want to try with YARN or other real cluster.
+* Deploy job server to a cluster.  There are two alternatives (see the [deployment section](#deployment)):
+  - `server_deploy.sh`  deploys job server to a directory on a remote host.
+  - `server_package.sh` deploys job server to a local directory, from which you can deploy the directory, or create a .tar.gz for Mesos or YARN deployment.
+* EC2 Deploy scripts - follow the instructions in [EC2](doc/EC2.md) to spin up a Spark cluster with job server and an example application.
+* EMR Deploy instruction - follow the instruction in [EMR](doc/EMR.md)
+
+NOTE: Spark Job Server runs `SparkContext`s in their own, forked JVM process when the config option `spark.jobserver.context-per-jvm` is set to `true`.  In local development mode, this is set to false by default, while the deployment templates have this set to true for production deployment. See [Deployment](#deployment) section for more info.
 
 ## Development mode
 
@@ -118,17 +171,24 @@ curl will munge your line separator chars.  Like:
 
     curl --data-binary @my-job-config.json 'localhost:8090/jobs?appNam=...'
 
+NOTE2: If you want to send in UTF-8 chars, make sure you pass in a proper header to CURL for the encoding, otherwise it may assume an encoding which is not what you expect.
+
 From this point, you could asynchronously query the status and results:
 
     curl localhost:8090/jobs/5453779a-f004-45fc-a11d-a39dae0f9bf4
     {
-      "status": "OK",
+      "duration": "6.341 secs",
+      "classPath": "spark.jobserver.WordCountExample",
+      "startTime": "2015-10-16T03:17:03.127Z",
+      "context": "b7ea0eb5-spark.jobserver.WordCountExample",
       "result": {
         "a": 2,
         "b": 2,
         "c": 1,
         "see": 1
-      }
+      },
+      "status": "FINISHED",
+      "jobId": "5453779a-f004-45fc-a11d-a39dae0f9bf4"
     }⏎
 
 Note that you could append `&sync=true` when you POST to /jobs to get the results back in one request, but for
@@ -151,7 +211,6 @@ Now let's run the job in the context and get the results back right away:
 
     curl -d "input.string = a b c a b see" 'localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample&context=test-context&sync=true'
     {
-      "status": "OK",
       "result": {
         "a": 2,
         "b": 2,
@@ -165,13 +224,13 @@ Note the addition of `context=` and `sync=true`.
 ## Create a Job Server Project
 In your `build.sbt`, add this to use the job server jar:
 
-	resolvers += "Job Server Bintray" at "https://dl.bintray.com/spark-jobserver/maven"
+        resolvers += "Job Server Bintray" at "https://dl.bintray.com/spark-jobserver/maven"
 
-	libraryDependencies += "spark.jobserver" %% "job-server-api" % "0.6.0" % "provided"
+        libraryDependencies += "spark.jobserver" %% "job-server-api" % "0.6.1" % "provided"
 
 If a SQL or Hive job/context is desired, you also want to pull in `job-server-extras`:
 
-    libraryDependencies += "spark.jobserver" %% "job-server-extras" % "0.6.0" % "provided"
+    libraryDependencies += "spark.jobserver" %% "job-server-extras" % "0.6.1" % "provided"
 
 For most use cases it's better to have the dependencies be "provided" because you don't want SBT assembly to include the whole job server jar.
 
@@ -306,7 +365,7 @@ curl -k --basic --user 'user:pw' https://localhost:8090/contexts
 
 ### Manual steps
 
-1. Copy `config/local.sh.template` to `<environment>.sh` and edit as appropriate.  NOTE: be sure to set SPARK_VERSION if you need to compile against a different version, ie. 1.4.1 for job server 0.6.0
+1. Copy `config/local.sh.template` to `<environment>.sh` and edit as appropriate.  NOTE: be sure to set SPARK_VERSION if you need to compile against a different version.
 2. Copy `config/shiro.ini.template` to `shiro.ini` and edit as appropriate. NOTE: only required when `authentication = on`
 3. Copy `config/local.conf.template` to `<environment>.conf` and edit as appropriate.
 4. `bin/server_deploy.sh <environment>` -- this packages the job server along with config files and pushes
@@ -316,6 +375,12 @@ curl -k --basic --user 'user:pw' https://localhost:8090/contexts
 The `server_start.sh` script uses `spark-submit` under the hood and may be passed any of the standard extra arguments from `spark-submit`.
 
 NOTE: by default the assembly jar from `job-server-extras`, which includes support for SQLContext and HiveContext, is used.  If you face issues with all the extra dependencies, consider modifying the install scripts to invoke `sbt job-server/assembly` instead, which doesn't include the extra dependencies.
+
+NOTE: Each context is a separate process launched using spark-submit, via the included `manager_start.sh` script.
+You may want to set `deploy.manager-start-cmd` to the correct path to your start script and customize the script.
+Also, the extra processes talk to the master HTTP process via random ports using the Akka Cluster gossip protocol.  If for some reason the separate processes causes issues, set `spark.jobserver.context-per-jvm` to `false`, which will cause the job server to use a single JVM for all contexts.
+
+Log files are separated out for each context (assuming `context-per-jvm` is `true`) in their own subdirs under the `LOG_DIR` configured in `settings.sh` in the deployed directory.
 
 Note: to test out the deploy to a local staging dir, or package the job server for Mesos,
 use `bin/server_package.sh <environment>`.
@@ -347,9 +412,10 @@ Flow diagrams are checked in in the doc/ subdirectory.  .diagram files are for w
 
 ### Contexts
 
-    GET /contexts           - lists all current contexts
-    POST /contexts/<name>   - creates a new context
-    DELETE /contexts/<name> - stops a context and all jobs running in it
+    GET /contexts               - lists all current contexts
+    POST /contexts/<name>       - creates a new context
+    DELETE /contexts/<name>     - stops a context and all jobs running in it
+    PUT /contexts?reload=reboot - kills all contexts and re-loads only the contexts from config
 
 ### Jobs
 
@@ -372,17 +438,17 @@ It is sometime necessary to programmatically upload files to the server. Use the
     GET /data                - Lists previously uploaded files that were not yet deleted
     POST /data/<prefix>      - Uploads a new file, the full path of the file on the server is returned, the 
                                prefix is the prefix of the actual filename used on the server (a timestamp is 
-                               added to ensure uniqueness)							   
+                               added to ensure uniqueness)                                                         
     DELETE /data/<filename>  - Deletes the specified file (only if under control of the JobServer)
 
 These files are uploaded to the server and are stored in a local temporary 
 directory on the server where the JobServer runs. The POST command returns the full 
 pathname and filename of the uploaded file so that later jobs can work with this 
 just the same as with any other server-local file. A job could therefore add this file to HDFS or distribute 
-it to worker nodes via the SparkContext.addFile command.  	
+it to worker nodes via the SparkContext.addFile command.        
 For files that are larger than a few hundred MB, it is recommended to manually upload these files to the server or 
 to directly add them to your HDFS.
-	
+        
 ### Context configuration
 
 A number of context-specific settings can be controlled when creating a context (POST /contexts) or running an
@@ -428,6 +494,10 @@ For the exact context configuration parameters, see JobManagerActor docs as well
 
 Also see the [yarn doc](doc/yarn.md) for more tips.
 
+### Other configuration settings
+
+For all of the Spark Job Server configuration settings, see `job-server/src/main/resources/application.conf`.
+
 ### Job Result Serialization
 
 The result returned by the `SparkJob` `runJob` method is serialized by the job server into JSON for routes
@@ -442,6 +512,13 @@ serialized properly:
 - Maps and Seqs may contain nested values of any of the above
 
 If we encounter a data type that is not supported, then the entire result will be serialized to a string.
+
+## Clients
+
+Spark Jobserver project has a
+[python binding](https://github.com/spark-jobserver/python-sjsclient) package.
+This can be used to quickly develop python applications that can interact with
+Spark Jobserver programmatically.
 
 ## Contribution and Development
 Contributions via Github Pull Request are welcome.  See the TODO for some ideas.
@@ -479,7 +556,7 @@ Apache 2.0, see LICENSE.md
 ## TODO
 
 - More debugging for classpath issues
-- Update .g8 template, consider creating Activator template for sample job	
+- Update .g8 template, consider creating Activator template for sample job      
 - Add Swagger support.  See the spray-swagger project.
 - Implement an interactive SQL window.  See: [spark-admin](https://github.com/adatao/spark-admin)
 
