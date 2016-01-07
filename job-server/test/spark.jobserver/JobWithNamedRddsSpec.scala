@@ -9,7 +9,9 @@ import org.scalatest.{ FunSpecLike, FunSpec, BeforeAndAfterAll, BeforeAndAfter }
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import spark.jobserver.CommonMessages.{ JobErroredOut, JobResult }
-
+import java.util.concurrent.TimeoutException
+import scala.concurrent.duration._
+import org.apache.spark.rdd.RDD
 class JobWithNamedRddsSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
 
   System.setProperty("spark.cores.max", Runtime.getRuntime.availableProcessors.toString)
@@ -56,7 +58,39 @@ class JobWithNamedRddsSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
     it("get() should return Some(RDD) when it exists") {
       val rdd = sc.parallelize(Seq(1, 2, 3))
       namedTestRdds.update("rdd1", rdd)
-      namedTestRdds.get[Int]("rdd1") should equal(Some(rdd))
+      namedTestRdds.get[Int]("rdd1")(Some(8)) should equal(Some(rdd))
+    }
+
+    it("get() should ignore timeout when rdd is not known") {
+      namedTestRdds.get[Int]("rddXXX")(Some(0)) should equal(None)
+    }
+
+    it("get() should respect timeout when rdd is known, but not yet available") {
+
+      var rdd : Option[RDD[Int]] = None
+      val thread = new Thread {
+        override def run {
+          namedTestRdds.getOrElseCreate("rdd-sleep", {
+            val t1 = System.currentTimeMillis()
+            var x = 0d
+            for (i <- 1 to 1000000) { x = x + Math.exp(1d + i) }
+            val t2 = System.currentTimeMillis()
+            //System.err.println("waking up: " + x + ", duration: " + (t2 - t1))
+            val r = sc.parallelize(Seq(1, 2, 3))
+            rdd = Some(r)
+            r
+          })(Some(1.milliseconds))
+        }
+      }
+      thread.start
+      Thread.sleep(11)
+      //don't wait
+      val err = intercept[TimeoutException] { namedTestRdds.get[Int]("rdd-sleep")(Some(1.milliseconds)) }
+      err.getClass should equal(classOf[TimeoutException])
+      //now wait
+      namedTestRdds.get[Int]("rdd-sleep")(Some(5000)) should equal(Some(rdd.get))
+      //clean-up
+      namedTestRdds.destroy("rdd-sleep")
     }
 
     it("destroy() should do nothing when RDD with given name doesn't exist") {

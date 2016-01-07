@@ -8,6 +8,8 @@ import org.apache.spark.storage.StorageLevel
 import scala.concurrent.duration.Duration
 import org.apache.spark.SparkContext
 
+case class NamedRDD[T](rdd: RDD[T], storageLevel: StorageLevel) extends NamedObject
+
 /**
  * @note please use NamedObjectSupport instead !
  */
@@ -24,10 +26,6 @@ trait NamedRddSupport extends NamedObjectSupport { self: SparkJob =>
    * the native RDD `cache()`, otherwise we will not know about the names.
    */
   trait _NamedRdds {
-
-    // Default timeout is 60 seconds. Hopefully that is enough
-    // to let most RDD/DataFrame generator functions finish.
-    val defaultTimeout = akka.util.Timeout(Duration(60, java.util.concurrent.TimeUnit.SECONDS))
 
     // Default level to cache RDDs at.
     val defaultStorageLevel = StorageLevel.MEMORY_ONLY
@@ -58,7 +56,7 @@ trait NamedRddSupport extends NamedObjectSupport { self: SparkJob =>
                            rddGen: => RDD[T],
                            forceComputation: Boolean = true,
                            storageLevel: StorageLevel = defaultStorageLevel)
-                           (implicit timeout: Timeout = defaultTimeout): RDD[T]
+                           (implicit timeout: Option[Timeout] = None): RDD[T]
 
     /**
      * Gets an RDD with the given name if it already exists and is cached by the RddManager.
@@ -73,7 +71,7 @@ trait NamedRddSupport extends NamedObjectSupport { self: SparkJob =>
      * @return the RDD with the given name.
      * @throws java.util.concurrent.TimeoutException if the request to the RddManager times out.
      */
-    def get[T](name: String)(implicit timeout: Timeout = defaultTimeout): Option[RDD[T]]
+    def get[T](name: String)(implicit timeout: Option[Timeout] = None): Option[RDD[T]]
 
     /**
      * Replaces an existing RDD with a given name with a new RDD. If an old RDD for the given name existed,
@@ -96,7 +94,8 @@ trait NamedRddSupport extends NamedObjectSupport { self: SparkJob =>
     def update[T](name: String,
                   rddGen: => RDD[T],
                   forceComputation: Boolean = true,
-                  storageLevel: StorageLevel = defaultStorageLevel): RDD[T]
+                  storageLevel: StorageLevel = defaultStorageLevel)
+                  (implicit timeout: Option[Timeout] = None): RDD[T]
 
     /**
      * Destroys an RDD with the given name, if one existed. Has no effect if no RDD with this name exists.
@@ -111,10 +110,9 @@ trait NamedRddSupport extends NamedObjectSupport { self: SparkJob =>
      * Note: this returns a snapshot of RDD names at one point in time. The caller should always expect
      * that the data returned from this method may be stale and incorrect.
      *
-     * @param timeout if the RddManager doesn't respond within this timeout, an error will be thrown.
      * @return a collection of RDD names representing RDDs managed by the RddManager.
      */
-    def getNames()(implicit timeout: Timeout = defaultTimeout): Iterable[String]
+    def getNames(): Iterable[String]
   }
 
   private def rddPersister[T](forceComputation: Boolean) = new NamedObjectPersister[NamedRDD[T]] {
@@ -152,20 +150,36 @@ trait NamedRddSupport extends NamedObjectSupport { self: SparkJob =>
   }
 
   def namedRdds: _NamedRdds = new _NamedRdds {
+
     override def getOrElseCreate[T](name: String,
-                           rddGen: => RDD[T],
+                                    rddGen: => RDD[T],
                            forceComputation: Boolean = true,
                            storageLevel: StorageLevel = defaultStorageLevel)
-                           (implicit timeout: Timeout = defaultTimeout): RDD[T] = {
+                           (implicit timeout: Option[Timeout] = None): RDD[T] = {
       namedObjects.getOrElseCreate(name, NamedRDD(rddGen, storageLevel))(timeout,
         rddPersister(forceComputation)) match {
           case NamedRDD(namedRdd: RDD[T], _) => namedRdd
         }
     }
 
-    override def get[T](name: String)(implicit timeout: Timeout = defaultTimeout): Option[RDD[T]] = {
-      namedObjects.get(name)(timeout) match {
+    override def get[T](name: String)(implicit timeout: Option[Timeout] = None): Option[RDD[T]] = {
+      val namedObj : Option[NamedRDD[T]] = namedObjects.get(name)(timeout)
+      namedObj match {
         case Some(NamedRDD(namedRdd: RDD[T], _)) => Some(namedRdd)
+              //TODO - the implementation for NamedRDDs checked here as follows. Do
+      // we still need to do this?
+      //        sparkContext.getPersistentRDDs.get(rdd.id) match {
+      //          case Some(rdd) => Some(rdd)
+      //          case None =>
+      //            // If this happens, maybe we never knew about this RDD,
+      // or maybe we had a name -> id mapping, but
+      //            // spark's MetadataCleaner has evicted this RDD from
+      //the cache because it was too old, and we need
+      //            // to forget about it. Remove it from our names -> ids map
+      //            // and respond as if we never knew about it.
+      //            namesToRDDs.remove(name)
+      //            None
+      //        }
         case _                                   => None
       }
     }
@@ -173,23 +187,25 @@ trait NamedRddSupport extends NamedObjectSupport { self: SparkJob =>
     override def update[T](name: String,
                   rddGen: => RDD[T],
                   forceComputation: Boolean = true,
-                  storageLevel: StorageLevel = defaultStorageLevel): RDD[T] = {
+                  storageLevel: StorageLevel = defaultStorageLevel)
+                  (implicit timeout: Option[Timeout] = None): RDD[T] = {
       namedObjects.update(name, NamedRDD(rddGen, storageLevel))(
-        rddPersister(forceComputation)) match {
+          timeout,rddPersister(forceComputation)) match {
           case NamedRDD(namedRdd: RDD[T], _) => namedRdd
         }
     }
 
     override def destroy(name: String): Unit = {
-      get(name) match {
-        case Some(rdd) =>
-           rdd.unpersist(blocking = false)
+      val namedObj : Option[NamedRDD[_]] = namedObjects.get(name)
+      namedObj match {
+        case Some(NamedRDD(namedRdd: RDD[_], _)) =>
+           namedRdd.unpersist(blocking = false)
         case _ =>
       }
       namedObjects.destroy(name)
     }
 
-    override def getNames()(implicit timeout: Timeout = defaultTimeout): Iterable[String] = {
+    override def getNames(): Iterable[String] = {
       namedObjects.getNames
     }
   }

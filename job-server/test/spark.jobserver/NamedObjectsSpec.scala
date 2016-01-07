@@ -77,7 +77,8 @@ class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with Fun
     it("get() should return Some(RDD) when it exists") {
       val rdd = sc.parallelize(Seq(1, 2, 3))
       namedObjects.update("rdd1", NamedRDD(rdd, StorageLevel.MEMORY_ONLY))
-      namedObjects.get("rdd1") should equal(Some(NamedRDD(rdd, StorageLevel.MEMORY_ONLY)))
+      val rdd1 : Option[NamedRDD[Int]] = namedObjects.get("rdd1")
+      rdd1 should equal(Some(NamedRDD(rdd, StorageLevel.MEMORY_ONLY)))
     }
 
     it("destroy() should do nothing when RDD with given name doesn't exist") {

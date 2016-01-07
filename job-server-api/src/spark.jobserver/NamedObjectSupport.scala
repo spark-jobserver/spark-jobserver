@@ -3,17 +3,14 @@ package spark.jobserver
 import akka.util.Timeout
 import java.lang.ThreadLocal
 import java.util.concurrent.atomic.AtomicReference
-import org.apache.spark.rdd.RDD
-import org.apache.spark.SparkContext
 
-import org.apache.spark.sql.DataFrame
-import org.apache.spark.storage.StorageLevel
 import scala.concurrent.duration.Duration
 
-sealed trait NamedObject
-case class NamedRDD[T](rdd: RDD[T], storageLevel: StorageLevel) extends NamedObject
-case class NamedDataFrame(df: DataFrame) extends NamedObject
+trait NamedObject
 
+/**
+ * TODO - documentation
+ */
 abstract class NamedObjectPersister[O <: NamedObject] {
   //TODO what is the context needed for? c: ContextLike,
   def saveToContext(namedObj: O, name: String): Unit
@@ -23,7 +20,7 @@ abstract class NamedObjectPersister[O <: NamedObject] {
    * update reference to named object so that it does not get GCed
    */
   def refresh(namedObject: O): O
-  //TODO - what about 'unpersist' ?
+  //TODO - what about 'unpersist' / removeFromContext / destroy?
 }
 
 /**
@@ -38,9 +35,6 @@ abstract class NamedObjectPersister[O <: NamedObject] {
  * the native DataFrame/RDD `cache()`, otherwise we will not know about the names.
  */
 trait NamedObjects {
-  // Default timeout is 60 seconds. Hopefully that is enough
-  // to let most RDD/DataFrame generator functions finish.
-  val defaultTimeout = akka.util.Timeout(Duration(60, java.util.concurrent.TimeUnit.SECONDS))
 
   /**
    * Gets a named object (NObj) with the given name, or creates it if one doesn't already exist.
@@ -63,7 +57,7 @@ trait NamedObjects {
    * @throws java.lang.RuntimeException wrapping any error that occurs within the generator function.
    */
   def getOrElseCreate[O <: NamedObject](name: String,
-                         objGen: => O)(implicit timeout: Timeout = defaultTimeout,
+                         objGen: => O)(implicit timeout: Option[Timeout] = None,
                                        persister: NamedObjectPersister[O]): O
 
   /**
@@ -78,7 +72,7 @@ trait NamedObjects {
    * @return the NObj with the given name.
    * @throws java.util.concurrent.TimeoutException if the request to the RddManager times out.
    */
-  def get(name: String)(implicit timeout: Timeout = defaultTimeout): Option[NamedObject]
+  def get[O <: NamedObject](name: String)(implicit timeout: Option[Timeout] = None): Option[O]
 
   /**
    * Replaces an existing named object (NObj) with a given name with a new object.
@@ -98,7 +92,9 @@ trait NamedObjects {
    * @tparam O <: NamedObject the generic type of the object.
    * @return the object with the given name.
    */
-  def update[O <: NamedObject](name: String, objGen: => O)(implicit persister: NamedObjectPersister[O]): O
+  def update[O <: NamedObject](name: String, objGen: => O)
+                  (implicit timeout: Option[Timeout] = None,
+                      persister: NamedObjectPersister[O]): O
 
   /**
    * Destroys an named object (NObj) with the given name, if one existed.
@@ -114,10 +110,9 @@ trait NamedObjects {
    * Note: this returns a snapshot of object names at one point in time. The caller should always expect
    * that the data returned from this method may be stale and incorrect.
    *
-   * @param timeout if the implementation doesn't respond within this timeout, an error will be thrown.
    * @return a collection of object names representing object managed by the NamedObjects implementation.
    */
-  def getNames()(implicit timeout: Timeout = defaultTimeout): Iterable[String]
+  def getNames(): Iterable[String]
 }
 
 trait NamedObjectSupport { self: SparkJob =>

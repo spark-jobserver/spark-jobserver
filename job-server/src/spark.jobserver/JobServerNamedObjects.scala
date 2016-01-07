@@ -2,10 +2,11 @@ package spark.jobserver
 
 import akka.actor.{ ActorRef, ActorSystem }
 import akka.util.Timeout
-import scala.concurrent.Await
+import scala.concurrent.{Await, TimeoutException}
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
+import scala.util.Try
 import org.apache.spark.SparkContext
 import org.slf4j.LoggerFactory
 import spray.caching.{ LruCache, Cache }
@@ -18,9 +19,18 @@ import spray.util._
  * avoid that the same object is created multiple times
  */
 class JobServerNamedObjects(system: ActorSystem) extends NamedObjects {
+
   val logger = LoggerFactory.getLogger(getClass)
 
   implicit val ec: ExecutionContext = system.dispatcher
+
+  val config = system.settings.config
+
+  // Default timeout is 60 seconds. Hopefully that is enough
+  // to let most RDD/DataFrame generator functions finish.
+  val defaultTimeout = Timeout(Duration(
+                Try(config.getInt("spark.jobserver.named-object-creation-timeout")).getOrElse(60),
+                                         java.util.concurrent.TimeUnit.SECONDS))
 
   // we must store a reference to each NamedObject even though only its ID is used here
   // this reference prevents the object from being GCed and cleaned by sparks ContextCleaner
@@ -28,32 +38,25 @@ class JobServerNamedObjects(system: ActorSystem) extends NamedObjects {
   private val namesToObjects: Cache[NamedObject] = LruCache()
 
   override def getOrElseCreate[O <: NamedObject](name: String, objGen: => O)
-                                (implicit timeout: Timeout = defaultTimeout,
-                                    persister: NamedObjectPersister[O]): O = {
-
-    val res : Option[O] = getExistingObject(name)
-    res match {
-      case Some(namedObject) =>
-        namedObject
-      case None =>
-        logger.info("Named object [{}] not found, starting creation", name)
-        val f = cachedOp(name, createObject(objGen, name))
-        f.await match {
-          case obj : O => obj
-          case NamedRDD(_, _) => throw new IllegalArgumentException("Incorrect type for named object")
-        }
+                                 (implicit timeoutOpt: Option[Timeout] = None,
+                                           persister: NamedObjectPersister[O]): O = {
+    implicit val timeout = getTimeout(timeoutOpt)
+    cachedOp(name, createObject(objGen, name)).await(timeout) match {
+      case obj: O @unchecked => obj
+      case NamedRDD(_, _)    => throw new IllegalArgumentException("Incorrect type for named object")
     }
   }
 
   // we can wrap the operation with caching support
   // (providing a caching key)
-  private def cachedOp[O <: NamedObject](name: String, f: () => O):
-                           Future[NamedObject] = namesToObjects(name) {
-    f()
+  private def cachedOp[O <: NamedObject](name: String, f: () => O): Future[NamedObject] =
+    namesToObjects(name) {
+       logger.info("Named object [{}] not found, starting creation")
+       f()
   }
 
   private def createObject[O <: NamedObject](objGen: => O, name: String)
-               (implicit persister: NamedObjectPersister[O]): () => O = {
+                  (implicit persister: NamedObjectPersister[O]): () => O = {
     () =>
       {
         val namedObj: O = objGen
@@ -62,34 +65,17 @@ class JobServerNamedObjects(system: ActorSystem) extends NamedObjects {
       }
   }
 
-  private def getExistingObject[O](name: String): Option[O] = {
-    //get:  retrieves the future instance that is currently in the cache for the given key.
+  override def get[O <: NamedObject](name: String)(implicit timeoutOpt: Option[Timeout] = None): Option[O] = {
+    implicit val timeout = getTimeout(timeoutOpt)
+    //namesToObjects.get:  retrieves the future instance that is currently in the cache for the given key.
     // Returns None if the key has no corresponding cache entry.
     namesToObjects.get(name) match {
-      case Some(f : Future[O]) =>
-        Some(f.await)
-        //TODO - the implementation for NamedRDDs checked here as follows. Do
-        // we still need to do this?
-      //        sparkContext.getPersistentRDDs.get(rdd.id) match {
-      //          case Some(rdd) => Some(rdd)
-      //          case None =>
-      //            // If this happens, maybe we never knew about this RDD,
-      // or maybe we had a name -> id mapping, but
-      //            // spark's MetadataCleaner has evicted this RDD from
-      //the cache because it was too old, and we need
-      //            // to forget about it. Remove it from our names -> ids map
-      //            // and respond as if we never knew about it.
-      //            namesToRDDs.remove(name)
-      //            None
-      //        }
+      case Some(f: Future[O]) =>
+        Some(f.await(timeout))
+        //TODO - refresh?
       case None =>
         //appears that we have never seen this named object before or that it was removed
         None
-    }
-  }
-  override def get(name: String)(implicit timeout: Timeout = defaultTimeout): Option[NamedObject] = {
-    getExistingObject(name) match {
-      case objectOpt: Option[NamedObject] @unchecked => objectOpt //TODO  rddOpt.map { rdd=> refresh(rdd) }
     }
   }
 
@@ -97,8 +83,9 @@ class JobServerNamedObjects(system: ActorSystem) extends NamedObjects {
   // only that the object may already exist and we need to remove it - unless the old
   // object (rdd) has the same id TODO - is that even possible? The API does not
   // mention that special case either
-  override def update[O <: NamedObject](name: String,
-                                        objGen: => O)(implicit persister: NamedObjectPersister[O]): O = {
+  override def update[O <: NamedObject](name: String, objGen: => O)
+                                        (implicit timeoutOpt: Option[Timeout] = None,
+                                            persister: NamedObjectPersister[O]): O = {
     get(name) match {
       case Some(namedObject) =>
         destroy(name)
@@ -108,14 +95,21 @@ class JobServerNamedObjects(system: ActorSystem) extends NamedObjects {
   }
 
   override def destroy(name: String) {
-     namesToObjects.remove(name)
-     //TODO do we need some call to the persister?
-     // was: rdd.unpersist(blocking = false)
+    namesToObjects.remove(name)
+    //TODO do we need some call to the persister?
+    // was: rdd.unpersist(blocking = false)
   }
 
-  override def getNames()(implicit timeout: Timeout = defaultTimeout): Iterable[String] = {
+  override def getNames(): Iterable[String] = {
     namesToObjects.keys match {
       case answer: Iterable[String] @unchecked => answer
+    }
+  }
+
+  private def getTimeout(timeoutOpt: Option[Timeout]) : Timeout = {
+    timeoutOpt match {
+      case Some(t) => t
+      case _ => defaultTimeout
     }
   }
 }
