@@ -2,7 +2,7 @@ package spark.jobserver
 
 import akka.actor.{Actor, Props}
 import com.typesafe.config.ConfigFactory
-import spark.jobserver.io.{JobInfo, JarInfo}
+import spark.jobserver.io.{JobDAOActor, JobInfo, JarInfo}
 import org.joda.time.DateTime
 import org.scalatest.{Matchers, FunSpec, BeforeAndAfterAll}
 import spray.http.StatusCodes._
@@ -42,7 +42,8 @@ with ScalatestRouteTest with HttpService {
   // See http://doc.akka.io/docs/akka/2.2.4/scala/actors.html#Deprecated_Variants;
   // for actors declared as inner classes we need to pass this as first arg
   val dummyActor = system.actorOf(Props(classOf[DummyActor], this))
-  val statusActor = system.actorOf(Props(classOf[JobStatusActor], new InMemoryDAO))
+  val jobDaoActor = system.actorOf(JobDAOActor.props(new InMemoryDAO))
+  val statusActor = system.actorOf(JobStatusActor.props(jobDaoActor))
 
   val api = new WebApi(system, config, dummyPort, dummyActor, dummyActor, dummyActor, dummyActor)
   val routes = api.myRoutes
@@ -107,7 +108,7 @@ with ScalatestRouteTest with HttpService {
       case GetContext("no-context") => sender ! NoSuchContext
       case GetContext(_)            => sender ! (self, self)
 
-      case GetAdHocContext(_, _) => sender ! (self, self)
+      case StartAdHocContext(_, _) => sender ! (self, self)
 
       // These routes are part of JobManagerActor
       case StartJob("no-app", _, _, _)   =>  sender ! NoSuchApplication

@@ -52,3 +52,9 @@ Logging goes to stdout, as per standard Docker conventions.  Therefore:
 * Use Docker logging drivers to redirect logs to syslog, SumoLogic, etc.
 
 ## Marathon
+
+## Issues
+
+### I can't access a textfile
+
+You might not be able to access HDFS, or whatever shared file system your data files are on.  Make sure the right ports are open.  Also see https://github.com/spark-jobserver/spark-jobserver/issues/243#issuecomment-168242345.

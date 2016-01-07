@@ -11,28 +11,26 @@ import org.joda.time.DateTime
 import scala.concurrent.{ Future, ExecutionContext }
 import scala.util.{Failure, Success, Try}
 import spark.jobserver.ContextSupervisor.StopContext
-import spark.jobserver.io.{ JobDAO, JobInfo, JarInfo }
+import spark.jobserver.io.{JobDAOActor, JobDAO, JobInfo, JarInfo}
 import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
 
 object JobManagerActor {
   // Messages
-  case object Initialize
+  case class Initialize(daoActor: ActorRef, resultActorOpt: Option[ActorRef])
   case class StartJob(appName: String, classPath: String, config: Config,
                       subscribedEvents: Set[Class[_]])
   case class KillJob(jobId: String)
   case object SparkContextStatus
 
   // Results/Data
-  case class Initialized(resultActor: ActorRef)
+  case class Initialized(contextName: String, resultActor: ActorRef)
   case class InitError(t: Throwable)
   case class JobLoadingError(err: Throwable)
   case object SparkContextAlive
   case object SparkContextDead
 
   // Akka 2.2.x style actor props for actor creation
-  def props(dao: JobDAO, name: String, config: Config, isAdHoc: Boolean,
-            resultActorRef: Option[ActorRef] = None): Props =
-    Props(classOf[JobManagerActor], dao, name, config, isAdHoc, resultActorRef)
+  def props(contextConfig: Config): Props = Props(classOf[JobManagerActor], contextConfig)
 }
 
 /**
@@ -50,6 +48,8 @@ object JobManagerActor {
  *  context-factory = "spark.jobserver.context.DefaultSparkContextFactory"
  *  spark.mesos.coarse = true  # per-context, rather than per-job, resource allocation
  *  rdd-ttl = 24 h            # time-to-live for RDDs in a SparkContext.  Don't specify = forever
+ *  is-adhoc = false          # true if context is ad-hoc context
+ *  context.name = "sql"      # Name of context
  * }}}
  *
  * == global configuration ==
@@ -61,11 +61,7 @@ object JobManagerActor {
  *   }
  * }}}
  */
-class JobManagerActor(dao: JobDAO,
-                      contextName: String,
-                      contextConfig: Config,
-                      isAdHoc: Boolean,
-                      resultActorRef: Option[ActorRef] = None) extends InstrumentedActor {
+class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
 
   import CommonMessages._
   import JobManagerActor._
@@ -84,14 +80,21 @@ class JobManagerActor(dao: JobDAO,
   // When the job cache retrieves a jar from the DAO, it also adds it to the SparkContext for distribution
   // to executors.  We do not want to add the same jar every time we start a new job, as that will cause
   // the executors to re-download the jar every time, and causes race conditions.
-  // NOTE: It's important that jobCache be lazy as sparkContext is not initialized until later
+
   private val jobCacheSize = Try(config.getInt("spark.job-cache.max-entries")).getOrElse(10000)
+  private val jobCacheEnabled = Try(config.getBoolean("spark.job-cache.enabled")).getOrElse(false)
   // Use Spark Context's built in classloader when SPARK-1230 is merged.
   private val jarLoader = new ContextURLClassLoader(Array[URL](), getClass.getClassLoader)
-  lazy val jobCache = new JobCache(jobCacheSize, dao, jobContext.sparkContext, jarLoader)
+  private val contextName = contextConfig.getString("context.name")
+  private val isAdHoc = Try(contextConfig.getBoolean("is-adhoc")).getOrElse(false)
 
-  private val statusActor = context.actorOf(Props(classOf[JobStatusActor], dao), "status-actor")
-  protected val resultActor = resultActorRef.getOrElse(context.actorOf(Props[JobResultActor], "result-actor"))
+  //NOTE: Must be initialized after sparkContext is created
+  private var jobCache: JobCache = _
+
+  private var statusActor: ActorRef = _
+  protected var resultActor: ActorRef = _
+  private var daoActor: ActorRef = _
+
 
   override def postStop() {
     logger.info("Shutting down SparkContext {}", contextName)
@@ -99,7 +102,11 @@ class JobManagerActor(dao: JobDAO,
   }
 
   def wrappedReceive: Receive = {
-    case Initialize =>
+    case Initialize(dao, resOpt) =>
+      daoActor = dao
+      statusActor = context.actorOf(JobStatusActor.props(daoActor))
+      resultActor = resOpt.getOrElse(context.actorOf(Props[JobResultActor]))
+
       try {
         // Load side jars first in case the ContextFactory comes from it
         getSideJars(contextConfig).foreach { jarUri =>
@@ -107,8 +114,9 @@ class JobManagerActor(dao: JobDAO,
         }
         jobContext = createContextFromConfig()
         sparkEnv = SparkEnv.get
+        jobCache = new JobCache(jobCacheSize, daoActor, jobContext.sparkContext, jarLoader)
         getSideJars(contextConfig).foreach { jarUri => jobContext.sparkContext.addJar(jarUri) }
-        sender ! Initialized(resultActor)
+        sender ! Initialized(contextName, resultActor)
       } catch {
         case t: Throwable =>
           logger.error("Failed to create context " + contextName + ", shutting down actor", t)
@@ -149,9 +157,21 @@ class JobManagerActor(dao: JobDAO,
                        sparkEnv: SparkEnv): Option[Future[Any]] = {
     var future: Option[Future[Any]] = None
     breakable {
-      val lastUploadTime = dao.getLastUploadTime(appName)
+      import akka.pattern.ask
+      import akka.util.Timeout
+      import scala.concurrent.duration._
+      import scala.concurrent.Await
+
+      val daoAskTimeout = Timeout(3 seconds)
+      // TODO: refactor so we don't need Await, instead flatmap into more futures
+      val resp = Await.result(
+        (daoActor ? JobDAOActor.GetLastUploadTime(appName))(daoAskTimeout).mapTo[JobDAOActor.LastUploadTime],
+        daoAskTimeout.duration)
+
+      val lastUploadTime = resp.lastUploadTime
       if (!lastUploadTime.isDefined) {
         sender ! NoSuchApplication
+        postEachJob()
         break
       }
 
@@ -283,8 +303,8 @@ class JobManagerActor(dao: JobDAO,
 
   // This method should be called after each job is succeeded or failed
   private def postEachJob() {
-    // Delete the JobManagerActor after each adhoc job
-    if (isAdHoc) context.parent ! StopContext(contextName) // its parent is LocalContextSupervisorActor
+    // Delete myself after each adhoc job
+    if (isAdHoc) self ! PoisonPill
   }
 
   // Protocol like "local" is supported in Spark for Jar loading, but not supported in Java.

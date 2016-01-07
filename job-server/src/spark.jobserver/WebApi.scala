@@ -515,7 +515,7 @@ class WebApi(system: ActorSystem,
       if (context.isDefined) {
         GetContext(context.get)
       } else {
-        GetAdHocContext(classPath, contextConfig)
+        StartAdHocContext(classPath, contextConfig)
       }
     val future = (supervisor ? msg)(contextTimeout.seconds)
     Await.result(future, contextTimeout.seconds) match {
