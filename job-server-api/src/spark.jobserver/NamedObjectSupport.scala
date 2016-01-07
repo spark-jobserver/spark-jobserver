@@ -9,18 +9,39 @@ import scala.concurrent.duration.Duration
 trait NamedObject
 
 /**
- * TODO - documentation
+ * implementations of this abstract class should handle the specifics
+ * of each named object's persistence
  */
 abstract class NamedObjectPersister[O <: NamedObject] {
+
+  /**
+   * persists an object with the given name in
+   * the context
   //TODO what is the context needed for? c: ContextLike,
+   * @param c - context to store the object in
+   * @param name - name of the object
+   */
   def saveToContext(namedObj: O, name: String): Unit
-  //TODO - what is this for?
+
+  //TODO - what is this for? Is this comment correct?
+  /**
+   * tries to retrieve an object with the given name from
+   * the context so that is can be stored in the list of named objects
+   * @param c - context to retrieve the object from
+   * @param name - name of the object
+   * @return the named object with the given name. TODO - wouldn't it be better to
+   * return Option[O] ?
+   */
   //def getFromContext(c: ContextLike, name: String): O
+
   /**
    * update reference to named object so that it does not get GCed
    */
   def refresh(namedObject: O): O
+
   //TODO - what about 'unpersist' / removeFromContext / destroy?
+  //proposal:
+  // def removeFromContext(c: ContextLike, name: String): Unit
 }
 
 /**
