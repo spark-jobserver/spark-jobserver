@@ -2,10 +2,10 @@ package spark.jobserver
 
 import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.testkit.{ImplicitSender, TestKit}
-import org.apache.spark.SparkContext
+import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.storage.StorageLevel
 import org.scalatest.matchers.ShouldMatchers
-import org.scalatest.{FunSpecLike, FunSpec, BeforeAndAfterAll, BeforeAndAfter}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike}
 
 class NamedRddsSpec extends TestKit(ActorSystem("NamedRddsSpec")) with FunSpecLike
 with ImplicitSender with ShouldMatchers with BeforeAndAfter with BeforeAndAfterAll {
@@ -17,7 +17,8 @@ with ImplicitSender with ShouldMatchers with BeforeAndAfter with BeforeAndAfterA
   System.clearProperty("spark.driver.port")
   System.clearProperty("spark.hostPort")
 
-  val sc = new SparkContext("local[4]", getClass.getSimpleName)
+  val conf = new SparkConf().setMaster("local[4]").setAppName(getClass.getSimpleName)
+  val sc = new SparkContext(conf)
   val rddManager: ActorRef = system.actorOf(Props(classOf[RddManagerActor], sc))
   val namedRdds: NamedRdds = new JobServerNamedRdds(rddManager)
 
