@@ -5,12 +5,12 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.SparkContext
 
-case class NamedRDD[T](rdd: RDD[T], storageLevel: StorageLevel) extends NamedObject
+case class NamedRDD[T](rdd: RDD[T], forceComputation: Boolean, storageLevel: StorageLevel) extends NamedObject
 
-class RDDPersister[T](forceComputation: Boolean) extends NamedObjectPersister[NamedRDD[T]] {
+class RDDPersister[T] extends NamedObjectPersister[NamedRDD[T]] {
   override def saveToContext(namedObj: NamedRDD[T], name: String) {
     namedObj match {
-      case NamedRDD(rdd, storageLevel) =>
+      case NamedRDD(rdd, forceComputation, storageLevel) =>
         require(!forceComputation || storageLevel != StorageLevel.NONE,
           "forceComputation implies storageLevel != NONE")
         rdd.setName(name)
@@ -36,7 +36,7 @@ class RDDPersister[T](forceComputation: Boolean) extends NamedObjectPersister[Na
    * @param rdd the RDD
    */
   override def refresh(namedRDD: NamedRDD[T]): NamedRDD[T] = namedRDD match {
-    case NamedRDD(rdd, _) =>
+    case NamedRDD(rdd, _, _) =>
       rdd.persist(rdd.getStorageLevel)
       namedRDD
   }
@@ -154,16 +154,16 @@ trait NamedRddSupport extends NamedObjectSupport { self: SparkJob =>
                            forceComputation: Boolean = true,
                            storageLevel: StorageLevel = defaultStorageLevel)
                            (implicit timeout: Option[Timeout] = None): RDD[T] = {
-      namedObjects.getOrElseCreate(name, NamedRDD(rddGen, storageLevel))(timeout,
-        new RDDPersister(forceComputation)) match {
-          case NamedRDD(namedRdd: RDD[T], _) => namedRdd
+      namedObjects.getOrElseCreate(name, NamedRDD(rddGen, forceComputation, storageLevel))(timeout,
+        new RDDPersister) match {
+          case NamedRDD(namedRdd: RDD[T], _, _) => namedRdd
         }
     }
 
     override def get[T](name: String)(implicit timeout: Option[Timeout] = None): Option[RDD[T]] = {
       val namedObj : Option[NamedRDD[T]] = namedObjects.get(name)(timeout)
       namedObj match {
-        case Some(NamedRDD(namedRdd: RDD[T], _)) => Some(namedRdd)
+        case Some(NamedRDD(namedRdd: RDD[T], _, _)) => Some(namedRdd)
               //TODO - the implementation for NamedRDDs checked here as follows. Do
       // we still need to do this?
       //        sparkContext.getPersistentRDDs.get(rdd.id) match {
@@ -187,16 +187,16 @@ trait NamedRddSupport extends NamedObjectSupport { self: SparkJob =>
                   forceComputation: Boolean = true,
                   storageLevel: StorageLevel = defaultStorageLevel)
                   (implicit timeout: Option[Timeout] = None): RDD[T] = {
-      namedObjects.update(name, NamedRDD(rddGen, storageLevel))(
-          timeout,new RDDPersister(forceComputation)) match {
-          case NamedRDD(namedRdd: RDD[T], _) => namedRdd
+      namedObjects.update(name, NamedRDD(rddGen, forceComputation, storageLevel))(
+          timeout,new RDDPersister) match {
+          case NamedRDD(namedRdd: RDD[T], _, _) => namedRdd
         }
     }
 
     override def destroy(name: String): Unit = {
       val namedObj : Option[NamedRDD[_]] = namedObjects.get(name)
       namedObj match {
-        case Some(NamedRDD(namedRdd: RDD[_], _)) =>
+        case Some(NamedRDD(namedRdd: RDD[_], _, _)) =>
            namedRdd.unpersist(blocking = false)
         case _ =>
       }

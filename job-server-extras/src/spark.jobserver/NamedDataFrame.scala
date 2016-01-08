@@ -3,12 +3,13 @@ package spark.jobserver
 import org.apache.spark.sql.{ SQLContext, DataFrame }
 import org.apache.spark.storage.StorageLevel
 
-case class NamedDataFrame(df: DataFrame, storageLevel: StorageLevel) extends NamedObject
+case class NamedDataFrame(df: DataFrame, forceComputation: Boolean,
+                          storageLevel: StorageLevel) extends NamedObject
 
-class DataFramePersister(forceComputation: Boolean) extends NamedObjectPersister[NamedDataFrame] {
+class DataFramePersister extends NamedObjectPersister[NamedDataFrame] {
   override def saveToContext(namedObj: NamedDataFrame, name: String) {
     namedObj match {
-      case NamedDataFrame(df, storageLevel) =>
+      case NamedDataFrame(df, forceComputation, storageLevel) =>
         require(!forceComputation || storageLevel != StorageLevel.NONE,
           "forceComputation implies storageLevel != NONE")
         //these are not supported by DataFrame:
@@ -23,7 +24,7 @@ class DataFramePersister(forceComputation: Boolean) extends NamedObjectPersister
   def getFromContext(c: ContextLike, name: String): NamedDataFrame = {
     val df = c.asInstanceOf[SQLContext].table(name)
     //TODO - which StorageLevel ?
-    NamedDataFrame(df, StorageLevel.NONE)
+    NamedDataFrame(df, false, StorageLevel.NONE)
   }
 
   /**
@@ -32,7 +33,7 @@ class DataFramePersister(forceComputation: Boolean) extends NamedObjectPersister
    * @param namedDF the NamedDataFrame to refresh
    */
   override def refresh(namedDF: NamedDataFrame): NamedDataFrame = namedDF match {
-    case NamedDataFrame(df, storageLevel) =>
+    case NamedDataFrame(df, _, storageLevel) =>
       df.persist(storageLevel)
       namedDF
   }

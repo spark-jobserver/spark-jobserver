@@ -40,8 +40,10 @@ class JobServerNamedObjects(system: ActorSystem) extends NamedObjects {
                                            persister: NamedObjectPersister[O]): O = {
     implicit val timeout = getTimeout(timeoutOpt)
     cachedOp(name, createObject(objGen, name)).await(timeout) match {
-      case obj: O @unchecked => obj
-      case NamedRDD(_, _)    => throw new IllegalArgumentException("Incorrect type for named object")
+      case obj: O @unchecked =>
+        logger.info("Named object [{}] of type [{}] created", name, obj.getClass)
+        obj
+      case NamedRDD(_, _, _)    => throw new IllegalArgumentException("Incorrect type for named object")
     }
   }
 
@@ -49,7 +51,7 @@ class JobServerNamedObjects(system: ActorSystem) extends NamedObjects {
   // (providing a caching key)
   private def cachedOp[O <: NamedObject](name: String, f: () => O): Future[NamedObject] =
     namesToObjects(name) {
-       logger.info("Named object [{}] not found, starting creation")
+       logger.info("Named object [{}] not found, starting creation", name)
        f()
   }
 

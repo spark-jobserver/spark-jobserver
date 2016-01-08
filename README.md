@@ -24,7 +24,7 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
     - [Ad-hoc Mode - Single, Unrelated Jobs (Transient Context)](#ad-hoc-mode---single-unrelated-jobs-transient-context)
     - [Persistent Context Mode - Faster & Required for Related Jobs](#persistent-context-mode---faster-&-required-for-related-jobs)
 - [Create a Job Server Project](#create-a-job-server-project)
-  - [Using Named RDDs](#using-named-rdds)
+  - [Using Named Objects](#using-named-rdds)
   - [HTTPS / SSL Configuration](#https--ssl-configuration)
   - [Authentication](#authentication)
 - [Deployment](#deployment)
@@ -81,7 +81,7 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 - Preliminary support for Java (see `JavaSparkJob`)
 - Works with Standalone Spark as well as Mesos and yarn-client
 - Job and jar info is persisted via a pluggable DAO interface
-- Named RDDs to cache and retrieve RDDs by name, improving RDD sharing and reuse among jobs. 
+- Named Objects (such as RDDs or DataFrames) to cache and retrieve RDDs or DataFrames by name, improving object sharing and reuse among jobs. 
 - Supports Scala 2.10 and 2.11
 
 ## Version Information
@@ -276,8 +276,11 @@ Let's try running our sample job with an invalid configuration:
       }
     }
 
-### Using Named RDDs
-Named RDDs are a way to easily share RDDs among job. Using this facility, computed RDDs can be cached with a given name and later on retrieved.
+### Named Objects 
+#### Using Named RDDs
+Initially, the job server only supported Named RDDs. For backwards compatibility and convenience, the following is still supported even though it is now possible to use the more generic Named Object support described in the next section.
+
+Named RDDs are a way to easily share RDDs among jobs. Using this facility, computed RDDs can be cached with a given name and later on retrieved.
 To use this feature, the SparkJob needs to mixin `NamedRddSupport`:
 ```scala
 object SampleNamedRDDJob  extends SparkJob with NamedRddSupport {
@@ -304,6 +307,57 @@ def validate(sc:SparkContext, config: Contig): SparkJobValidation = {
   if (rdd.isDefined) SparkJobValid else SparkJobInvalid(s"Missing named RDD [dictionary]")
 }
 ```
+#### Using Named Objects
+Named Objects are a way to easily share RDDs, DataFrames or other objects among jobs. Using this facility, computed objects can be cached with a given name and later on retrieved.
+To use this feature, the SparkJob needs to mixin `NamedObjectSupport`. It is also necessary to define implicit persisters for each desired type of named objects. For convencience, we have provided implementations for RDD persistence and for DataFrame persistence (defined in `job-server-extras`):
+```scala
+object SampleNamedObjectJob  extends SparkJob with NamedObjectSupport {
+  
+  implicit def rddPersister[T] : NamedObjectPersister[NamedRDD[T]] = new RDDPersister[T]
+  implicit val dataFramePersister = new DataFramePersister
+  
+    override def runJob(sc:SparkContext, jobConfig: Config): Any = ???
+    override def validate(sc:SparkContext, config: Config): SparkJobValidation = ???
+}
+```
+
+Then in the implementation of the job, RDDs can be stored with a given name:
+```scala
+this.namedObjects.update("french_dictionary", NamedRDD(frenchDictionaryRDD, forceComputation = false, storageLevel = StorageLevel.NONE))
+```
+DataFrames can be stored like so:
+```scala
+this.namedObjects.update("some df", NamedDataFrame(frenchDictionaryDF, forceComputation = false, storageLevel = StorageLevel.NONE))
+```
+It is advisable to use different name prefixes for different types of objects to avoid confusion. 
+
+Another job running in the same context can retrieve and use these objects later on:
+```scala
+val frenchDictionaryRDD : RDD[Int] = {
+        val obj: Option[NamedRDD[Int]] = namedObjects.get("french_dictionary")
+        obj.get match {
+          case NamedRDD(rdd, _, _) => rdd
+        }
+      }
+      
+val frenchDictionaryDF: DataFrame = {
+        val obj: Option[NamedDataFrame] = namedObjects.get("some df")
+        obj.get match {
+          case NamedDataFrame(df, _, _) => df
+        }
+      }
+```
+(note the explicit type declaration for `obj`. This will allow to cast the retrieved object to the proper result type.
+
+For jobs that depends on a named objects it's a good practice to check for the existence of the NamedObject in the `validate` method as explained earlier:
+```scala   
+def validate(sc:SparkContext, config: Contig): SparkJobValidation = {
+  ...
+  val obj = this.namedObjects.get("dictionary")
+  if (obj.isDefined) SparkJobValid else SparkJobInvalid(s"Missing named object [dictionary]")
+}
+```
+
 
 ### HTTPS / SSL Configuration
 To activate ssl communication, set these flags in your application.conf file (Section 'spray.can.server'):

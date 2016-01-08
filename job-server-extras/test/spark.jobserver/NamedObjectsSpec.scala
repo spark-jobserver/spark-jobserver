@@ -28,8 +28,8 @@ class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with Fun
   val sqlContext = new SQLContext(sc)
   val namedObjects: NamedObjects = new JobServerNamedObjects(system)
 
-  implicit def rddPersister: NamedObjectPersister[NamedRDD[Int]] = new RDDPersister[Int](false)
-  implicit def dataFramePersister = new DataFramePersister(false)
+  implicit def rddPersister: NamedObjectPersister[NamedRDD[Int]] = new RDDPersister[Int]
+  implicit def dataFramePersister = new DataFramePersister
 
   val struct = StructType(
     StructField("i", IntegerType, true) ::
@@ -54,23 +54,23 @@ class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with Fun
 
     it("get() should return Some(RDD) and Some(DF) when they exist") {
       val rdd = sc.parallelize(Seq(1, 2, 3))
-      namedObjects.update("rdd1", NamedRDD(rdd, StorageLevel.MEMORY_ONLY))
+      namedObjects.update("rdd1", NamedRDD(rdd, true, StorageLevel.MEMORY_ONLY))
 
       val df = sqlContext.createDataFrame(rows, struct)
-      namedObjects.update("df1", NamedDataFrame(df, StorageLevel.MEMORY_AND_DISK))
+      namedObjects.update("df1", NamedDataFrame(df, true, StorageLevel.MEMORY_AND_DISK))
 
       val rdd1: Option[NamedRDD[Int]] = namedObjects.get("rdd1")
-      rdd1 should equal(Some(NamedRDD(rdd, StorageLevel.MEMORY_ONLY)))
+      rdd1 should equal(Some(NamedRDD(rdd, true, StorageLevel.MEMORY_ONLY)))
 
       val df1: Option[NamedRDD[Int]] = namedObjects.get("df1")
-      df1 should equal(Some(NamedDataFrame(df, StorageLevel.MEMORY_AND_DISK)))
+      df1 should equal(Some(NamedDataFrame(df, true, StorageLevel.MEMORY_AND_DISK)))
 
     }
 
     it("destroy() should destroy an object that exists") {
-      namedObjects.update("rdd1", NamedRDD(sc.parallelize(Seq(1, 2, 3)), StorageLevel.MEMORY_ONLY))
+      namedObjects.update("rdd1", NamedRDD(sc.parallelize(Seq(1, 2, 3)), false, StorageLevel.MEMORY_ONLY))
       val df = sqlContext.createDataFrame(rows, struct)
-      namedObjects.update("df1", NamedDataFrame(df, StorageLevel.MEMORY_AND_DISK))
+      namedObjects.update("df1", NamedDataFrame(df, false, StorageLevel.MEMORY_AND_DISK))
 
       namedObjects.get("rdd1") should not equal None
       namedObjects.get("df1") should not equal None
@@ -87,9 +87,9 @@ class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with Fun
 
     it("getNames() should return names of all managed Objects") {
       namedObjects.getNames().size should equal(0)
-      namedObjects.update("rdd1", NamedRDD(sc.parallelize(Seq(1, 2, 3)), StorageLevel.MEMORY_ONLY))
+      namedObjects.update("rdd1", NamedRDD(sc.parallelize(Seq(1, 2, 3)), true, StorageLevel.MEMORY_ONLY))
       val df = sqlContext.createDataFrame(rows, struct)
-      namedObjects.update("df1", NamedDataFrame(df, StorageLevel.MEMORY_AND_DISK))
+      namedObjects.update("df1", NamedDataFrame(df, true, StorageLevel.MEMORY_AND_DISK))
 
       namedObjects.getNames().toSeq.sorted should equal(Seq("df1", "rdd1"))
       namedObjects.destroy("rdd1")
@@ -103,7 +103,7 @@ class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with Fun
       var generatorCalled = false
       val df = namedObjects.getOrElseCreate("df1", {
         generatorCalled = true
-        NamedDataFrame(sqlContext.createDataFrame(rows, struct), StorageLevel.MEMORY_ONLY)
+        NamedDataFrame(sqlContext.createDataFrame(rows, struct), true, StorageLevel.MEMORY_ONLY)
       })
       generatorCalled should equal(true)
       namedObjects.destroy("df1")
@@ -112,7 +112,7 @@ class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with Fun
     //corresponding test case for RDDs is in job-server project
     it("getOrElseCreate() should not call generator function, should return existing DataFrame") {
       var generatorCalled = false
-      val df1 = NamedDataFrame(sqlContext.createDataFrame(rows, struct), StorageLevel.MEMORY_ONLY)
+      val df1 = NamedDataFrame(sqlContext.createDataFrame(rows, struct), true, StorageLevel.MEMORY_ONLY)
       namedObjects.update("df", df1)
       val df2: NamedDataFrame = namedObjects.getOrElseCreate("df", {
         generatorCalled = true
@@ -124,15 +124,20 @@ class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with Fun
 
     it("update() should not be bothered by different object types") {
       val rdd = sc.parallelize(Seq(1, 2, 3))
-      namedObjects.update("o1", NamedRDD(rdd, StorageLevel.MEMORY_ONLY))
+      namedObjects.update("o1", NamedRDD(rdd, true, StorageLevel.MEMORY_ONLY))
       val rdd1: Option[NamedRDD[Int]] = namedObjects.get("o1")
-      rdd1 should equal(Some(NamedRDD(rdd, StorageLevel.MEMORY_ONLY)))
+      rdd1 should equal(Some(NamedRDD(rdd, true, StorageLevel.MEMORY_ONLY)))
 
       val df = sqlContext.createDataFrame(rows, struct)
-      namedObjects.update("o1", NamedDataFrame(df, StorageLevel.MEMORY_AND_DISK))
+      namedObjects.update("o1", NamedDataFrame(df, true, StorageLevel.MEMORY_AND_DISK))
 
-      val df1: Option[NamedRDD[Int]] = namedObjects.get("o1")
-      df1 should equal(Some(NamedDataFrame(df, StorageLevel.MEMORY_AND_DISK)))
+      val df1 = {
+        val obj: Option[NamedDataFrame] = namedObjects.get("o1")
+        obj.get match {
+          case NamedDataFrame(df, _, _) => df
+        }
+      }
+      df1 should equal(df)
 
       namedObjects.destroy("o1")
       namedObjects.get("o1") should equal(None)
@@ -142,15 +147,15 @@ class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with Fun
       val df = sqlContext.createDataFrame(rows, struct)
       val rdd2 = sc.parallelize(Seq(4, 5, 6))
 
-      namedObjects.getOrElseCreate("o1", NamedDataFrame(df, StorageLevel.MEMORY_AND_DISK)) should equal(NamedDataFrame(df, StorageLevel.MEMORY_AND_DISK))
-      namedObjects.update("o1", NamedRDD(rdd2, StorageLevel.MEMORY_ONLY))
-      namedObjects.get("o1") should equal(Some(NamedRDD(rdd2, StorageLevel.MEMORY_ONLY)))
+      namedObjects.getOrElseCreate("o1", NamedDataFrame(df, true, StorageLevel.MEMORY_AND_DISK)) should equal(NamedDataFrame(df, true, StorageLevel.MEMORY_AND_DISK))
+      namedObjects.update("o1", NamedRDD(rdd2, true, StorageLevel.MEMORY_ONLY))
+      namedObjects.get("o1") should equal(Some(NamedRDD(rdd2, true, StorageLevel.MEMORY_ONLY)))
     }
 
     it("should include underlying exception when error occurs") {
       def errorFunc = {
         throw new IllegalArgumentException("boo!")
-        NamedDataFrame(sqlContext.createDataFrame(rows, struct), StorageLevel.MEMORY_ONLY)
+        NamedDataFrame(sqlContext.createDataFrame(rows, struct), false, StorageLevel.MEMORY_ONLY)
       }
       val err = intercept[RuntimeException] { namedObjects.getOrElseCreate("xx", errorFunc) }
       err.getClass should equal(classOf[IllegalArgumentException])
@@ -164,7 +169,7 @@ class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with Fun
           namedObjects.getOrElseCreate("sleep", {
             //wait so that other threads have a chance to start
             Thread.sleep(50)
-            val r = NamedDataFrame(sqlContext.createDataFrame(rows, struct), StorageLevel.MEMORY_ONLY)
+            val r = NamedDataFrame(sqlContext.createDataFrame(rows, struct), false, StorageLevel.MEMORY_ONLY)
             obj = Some(r)
             //System.err.println("creator finished")
             r
@@ -172,7 +177,7 @@ class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with Fun
         }
       }
 
-      def otherThreads(ix : Int) = new Thread {
+      def otherThreads(ix: Int) = new Thread {
         override def run {
           //System.err.println(ix + " started")
           namedObjects.getOrElseCreate("sleep", {
