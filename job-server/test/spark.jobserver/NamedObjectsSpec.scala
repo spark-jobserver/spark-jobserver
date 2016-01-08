@@ -8,6 +8,10 @@ import org.apache.spark.storage.StorageLevel
 import org.scalatest.matchers.ShouldMatchers
 import org.scalatest.{ FunSpecLike, FunSpec, BeforeAndAfterAll, BeforeAndAfter }
 
+/**
+ * please note that this test only uses RDDs as named objects, there exists another test class
+ * in job-server-extras that uses a combination of RDDs and DataFrames
+ */
 class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with FunSpecLike
     with ImplicitSender with ShouldMatchers with BeforeAndAfter with BeforeAndAfterAll {
   System.setProperty("spark.cores.max", Runtime.getRuntime.availableProcessors.toString)
@@ -40,12 +44,6 @@ class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with Fun
           if (forceComputation) rdd.count()
       }
     }
-
-//    override def getFromContext(c: ContextLike, name: String): NamedRDD[T] = {
-//      c.sparkContext.getPersistentRDDs.filter(_._2.name.equals(name)).map(_._2).headOption match {
-//        case Some(rdd: RDD[T]) => NamedRDD(rdd, rdd.getStorageLevel)
-//      }
-//    }
 
     /**
      * Calls rdd.persist(), which updates the RDD's cached timestamp, meaning it won't get

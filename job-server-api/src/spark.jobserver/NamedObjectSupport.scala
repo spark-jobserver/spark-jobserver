@@ -1,7 +1,6 @@
 package spark.jobserver
 
 import akka.util.Timeout
-import java.lang.ThreadLocal
 import java.util.concurrent.atomic.AtomicReference
 
 import scala.concurrent.duration.Duration

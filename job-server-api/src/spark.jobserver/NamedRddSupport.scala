@@ -1,14 +1,46 @@
 package spark.jobserver
 
 import akka.util.Timeout
-import java.lang.ThreadLocal
-import java.util.concurrent.atomic.AtomicReference
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
-import scala.concurrent.duration.Duration
 import org.apache.spark.SparkContext
 
 case class NamedRDD[T](rdd: RDD[T], storageLevel: StorageLevel) extends NamedObject
+
+class RDDPersister[T](forceComputation: Boolean) extends NamedObjectPersister[NamedRDD[T]] {
+  override def saveToContext(namedObj: NamedRDD[T], name: String) {
+    namedObj match {
+      case NamedRDD(rdd, storageLevel) =>
+        require(!forceComputation || storageLevel != StorageLevel.NONE,
+          "forceComputation implies storageLevel != NONE")
+        rdd.setName(name)
+        rdd.getStorageLevel match {
+          case StorageLevel.NONE => rdd.persist(storageLevel)
+          case currentLevel      => rdd.persist(currentLevel)
+        }
+        // TODO: figure out if there is a better way to force the RDD to be computed
+        if (forceComputation) rdd.count()
+    }
+  }
+
+  //    override def getFromContext(c: ContextLike, name: String): NamedRDD[T] = {
+  //      c.asInstanceOf[SparkContext].getPersistentRDDs.
+  //          filter(_._2.name.equals(name)).map(_._2).headOption match {
+  //        case Some(rdd: RDD[T]) => NamedRDD(rdd, rdd.getStorageLevel)
+  //      }
+  //    }
+
+  /**
+   * Calls rdd.persist(), which updates the RDD's cached timestamp, meaning it won't get
+   * garbage collected by Spark for some time.
+   * @param rdd the RDD
+   */
+  override def refresh(namedRDD: NamedRDD[T]): NamedRDD[T] = namedRDD match {
+    case NamedRDD(rdd, _) =>
+      rdd.persist(rdd.getStorageLevel)
+      namedRDD
+  }
+}
 
 /**
  * @note please use NamedObjectSupport instead !
@@ -115,40 +147,6 @@ trait NamedRddSupport extends NamedObjectSupport { self: SparkJob =>
     def getNames(): Iterable[String]
   }
 
-  private def rddPersister[T](forceComputation: Boolean) = new NamedObjectPersister[NamedRDD[T]] {
-    override def saveToContext(namedObj: NamedRDD[T], name: String) {
-      namedObj match {
-        case NamedRDD(rdd, storageLevel) =>
-          require(!forceComputation || storageLevel != StorageLevel.NONE,
-            "forceComputation implies storageLevel != NONE")
-          rdd.setName(name)
-          rdd.getStorageLevel match {
-            case StorageLevel.NONE => rdd.persist(storageLevel)
-            case currentLevel      => rdd.persist(currentLevel)
-          }
-          // TODO: figure out if there is a better way to force the RDD to be computed
-          if (forceComputation) rdd.count()
-      }
-    }
-
-//    override def getFromContext(c: ContextLike, name: String): NamedRDD[T] = {
-//      c.sparkContext.getPersistentRDDs.filter(_._2.name.equals(name)).map(_._2).headOption match {
-//        case Some(rdd: RDD[T]) => NamedRDD(rdd, rdd.getStorageLevel)
-//      }
-//    }
-
-    /**
-     * Calls rdd.persist(), which updates the RDD's cached timestamp, meaning it won't get
-     * garbage collected by Spark for some time.
-     * @param rdd the RDD
-     */
-    override def refresh(namedRDD: NamedRDD[T]): NamedRDD[T] = namedRDD match {
-      case NamedRDD(rdd, _) =>
-        rdd.persist(rdd.getStorageLevel)
-        namedRDD
-    }
-  }
-
   def namedRdds: _NamedRdds = new _NamedRdds {
 
     override def getOrElseCreate[T](name: String,
@@ -157,7 +155,7 @@ trait NamedRddSupport extends NamedObjectSupport { self: SparkJob =>
                            storageLevel: StorageLevel = defaultStorageLevel)
                            (implicit timeout: Option[Timeout] = None): RDD[T] = {
       namedObjects.getOrElseCreate(name, NamedRDD(rddGen, storageLevel))(timeout,
-        rddPersister(forceComputation)) match {
+        new RDDPersister(forceComputation)) match {
           case NamedRDD(namedRdd: RDD[T], _) => namedRdd
         }
     }
@@ -190,7 +188,7 @@ trait NamedRddSupport extends NamedObjectSupport { self: SparkJob =>
                   storageLevel: StorageLevel = defaultStorageLevel)
                   (implicit timeout: Option[Timeout] = None): RDD[T] = {
       namedObjects.update(name, NamedRDD(rddGen, storageLevel))(
-          timeout,rddPersister(forceComputation)) match {
+          timeout,new RDDPersister(forceComputation)) match {
           case NamedRDD(namedRdd: RDD[T], _) => namedRdd
         }
     }

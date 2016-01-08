@@ -1,13 +1,11 @@
 package spark.jobserver
 
-import akka.actor.{ ActorRef, ActorSystem }
+import akka.actor.ActorSystem
 import akka.util.Timeout
-import scala.concurrent.{Await, TimeoutException}
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.util.Try
-import org.apache.spark.SparkContext
 import org.slf4j.LoggerFactory
 import spray.caching.{ LruCache, Cache }
 import spray.util._
