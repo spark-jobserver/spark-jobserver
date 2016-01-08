@@ -41,7 +41,7 @@ class JobServerNamedObjects(system: ActorSystem) extends NamedObjects {
     implicit val timeout = getTimeout(timeoutOpt)
     cachedOp(name, createObject(objGen, name)).await(timeout) match {
       case obj: O @unchecked =>
-        logger.info("Named object [{}] of type [{}] created", name, obj.getClass)
+        logger.info(s"Named object [$name] of type [${obj.getClass.toString}] created")
         obj
       case NamedRDD(_, _, _)    => throw new IllegalArgumentException("Incorrect type for named object")
     }
