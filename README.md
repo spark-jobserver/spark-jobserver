@@ -323,31 +323,22 @@ object SampleNamedObjectJob  extends SparkJob with NamedObjectSupport {
 
 Then in the implementation of the job, RDDs can be stored with a given name:
 ```scala
-this.namedObjects.update("french_dictionary", NamedRDD(frenchDictionaryRDD, forceComputation = false, storageLevel = StorageLevel.NONE))
+this.namedObjects.update("rdd:french_dictionary", NamedRDD(frenchDictionaryRDD, forceComputation = false, storageLevel = StorageLevel.NONE))
 ```
 DataFrames can be stored like so:
 ```scala
-this.namedObjects.update("some df", NamedDataFrame(frenchDictionaryDF, forceComputation = false, storageLevel = StorageLevel.NONE))
+this.namedObjects.update("df:some df", NamedDataFrame(frenchDictionaryDF, forceComputation = false, storageLevel = StorageLevel.NONE))
 ```
 It is advisable to use different name prefixes for different types of objects to avoid confusion. 
 
 Another job running in the same context can retrieve and use these objects later on:
 ```scala
-val frenchDictionaryRDD : RDD[Int] = {
-        val obj: Option[NamedRDD[Int]] = namedObjects.get("french_dictionary")
-        obj.get match {
-          case NamedRDD(rdd, _, _) => rdd
-        }
-      }
-      
-val frenchDictionaryDF: DataFrame = {
-        val obj: Option[NamedDataFrame] = namedObjects.get("some df")
-        obj.get match {
-          case NamedDataFrame(df, _, _) => df
-        }
-      }
+val NamedRDD(frenchDictionaryRDD, _ ,_) = namedObjects.get[NamedRDD[(String, String)]]("rdd:french_dictionary").get
+
+val NamedDataFrame(frenchDictionaryDF, _, _) = namedObjects.get[NamedDataFrame]("df:some df").get
+
 ```
-(note the explicit type declaration for `obj`. This will allow to cast the retrieved object to the proper result type.
+(Note the explicit type provided to get. This will allow to cast the retrieved RDD/DataFrame object to the proper result type.)
 
 For jobs that depends on a named objects it's a good practice to check for the existence of the NamedObject in the `validate` method as explained earlier:
 ```scala   

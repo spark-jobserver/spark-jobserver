@@ -3,7 +3,7 @@ package spark.jobserver
 import akka.actor.{ ActorRef, ActorSystem, Props }
 import akka.testkit.{ ImplicitSender, TestKit }
 import org.apache.spark.SparkContext
-import org.apache.spark.sql.{ SQLContext, Row }
+import org.apache.spark.sql.{ SQLContext, Row, DataFrame}
 import org.apache.spark.sql.types._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
@@ -59,8 +59,8 @@ class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with Fun
       val df = sqlContext.createDataFrame(rows, struct)
       namedObjects.update("df1", NamedDataFrame(df, true, StorageLevel.MEMORY_AND_DISK))
 
-      val rdd1: Option[NamedRDD[Int]] = namedObjects.get("rdd1")
-      rdd1 should equal(Some(NamedRDD(rdd, true, StorageLevel.MEMORY_ONLY)))
+      val NamedRDD(rdd1, _ ,_) = namedObjects.get[NamedRDD[Int]]("rdd1").get
+      rdd1 should equal(rdd)
 
       val df1: Option[NamedRDD[Int]] = namedObjects.get("df1")
       df1 should equal(Some(NamedDataFrame(df, true, StorageLevel.MEMORY_AND_DISK)))
@@ -131,13 +131,9 @@ class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with Fun
       val df = sqlContext.createDataFrame(rows, struct)
       namedObjects.update("o1", NamedDataFrame(df, true, StorageLevel.MEMORY_AND_DISK))
 
-      val df1 = {
-        val obj: Option[NamedDataFrame] = namedObjects.get("o1")
-        obj.get match {
-          case NamedDataFrame(df, _, _) => df
-        }
-      }
-      df1 should equal(df)
+      val NamedDataFrame(df2, _, _) = namedObjects.get[NamedDataFrame]("o1").get
+        
+      df2 should equal(df)
 
       namedObjects.destroy("o1")
       namedObjects.get("o1") should equal(None)
@@ -187,7 +183,7 @@ class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with Fun
       }
       creatorThread.start
       //give creator thread a bit of a head start
-      Thread.sleep(11)
+      Thread.sleep(21)
       //now fire more threads
       otherThreads(1).start
       otherThreads(2).start
