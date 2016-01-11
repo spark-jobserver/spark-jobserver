@@ -21,4 +21,7 @@ SPARK_EXECUTOR_URI=/home/spark/spark-1.5.2.tar.gz
 # Normally these are kept on the cluster in /etc/hadoop/conf
 # YARN_CONF_DIR=/pathToRemoteConf/conf
 # HADOOP_CONF_DIR=/pathToRemoteConf/conf
+#
+# Also optional: extra JVM args for spark-submit
+# export SPARK_SUBMIT_OPTS+="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5433"
 SCALA_VERSION=2.10.4 # or 2.11.6
