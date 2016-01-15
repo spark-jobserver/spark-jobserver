@@ -10,7 +10,7 @@ function getJobs() {
       $.each(jobs, function(key, job) {
         var items = [];
         items.push("<tr>");
-        items.push("<td>" + job.jobId + "</td>");
+        items.push("<td><a href='./jobs/" + job.jobId + "'>" + job.jobId + "</a> (<a href='./jobs/" + job.jobId + "/config'>C</a>)</td>");
         items.push("<td>" + job.classPath + "</td>");
         items.push("<td>" + job.context + "</td>");
         items.push("<td>" + job.startTime + "</td>");
