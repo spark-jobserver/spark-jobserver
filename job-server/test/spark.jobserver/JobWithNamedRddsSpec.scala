@@ -4,7 +4,6 @@ import akka.actor.{ ActorRef, ActorSystem, Props }
 import akka.testkit.{ ImplicitSender, TestKit }
 import org.apache.spark.SparkContext
 import org.apache.spark.storage.StorageLevel
-import org.scalatest.matchers.ShouldMatchers
 import org.scalatest.{ FunSpecLike, FunSpec, BeforeAndAfterAll, BeforeAndAfter }
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
@@ -14,7 +13,7 @@ import scala.concurrent.duration._
 import org.apache.spark.rdd.RDD
 class JobWithNamedRddsSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
 
-  private val emptyConfig = ConfigFactory.parseString("spark.master = bar")
+  private val emptyConfig = ConfigFactory.parseString("spark.jobserver.named-object-creation-timeout = 60 s")
 
   val sc = new SparkContext("local[4]", getClass.getSimpleName)
 
