@@ -24,6 +24,7 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
     - [Ad-hoc Mode - Single, Unrelated Jobs (Transient Context)](#ad-hoc-mode---single-unrelated-jobs-transient-context)
     - [Persistent Context Mode - Faster & Required for Related Jobs](#persistent-context-mode---faster-&-required-for-related-jobs)
 - [Create a Job Server Project](#create-a-job-server-project)
+  - [Dependency Jars](#dependency-jars)
   - [Using Named RDDs](#using-named-rdds)
   - [HTTPS / SSL Configuration](#https--ssl-configuration)
   - [Authentication](#authentication)
@@ -276,6 +277,16 @@ Let's try running our sample job with an invalid configuration:
       }
     }
 
+### Dependency jars
+
+You have a couple options to package and upload dependency jars.
+
+* The easiest is to use something like [sbt-assembly](https://github.com/sbt/sbt-assembly) to produce a fat jar.  Be sure to mark the Spark and job-server dependencies as "provided" so it won't blow up the jar size.  This works well if the number of dependencies is not large.
+* When the dependencies are sizeable and/or you don't want to load them with every different job, you can package the dependencies separately and use one of several options:
+    - Use the `dependent-jar-uris` context configuration param.  Then the jar gets loaded for every job
+    - Use the `--package` option with Maven coordinates with `server_start.sh`.
+    - Put the extra jars in the SPARK_CLASSPATH
+
 ### Using Named RDDs
 Named RDDs are a way to easily share RDDs among job. Using this facility, computed RDDs can be cached with a given name and later on retrieved.
 To use this feature, the SparkJob needs to mixin `NamedRddSupport`:
@@ -417,6 +428,8 @@ Flow diagrams are checked in in the doc/ subdirectory.  .diagram files are for w
     DELETE /contexts/<name>     - stops a context and all jobs running in it
     PUT /contexts?reload=reboot - kills all contexts and re-loads only the contexts from config
 
+Spark context configuration params can follow `POST /contexts/<name>` as query params. See section below for more details.
+
 ### Jobs
 
 Jobs submitted to the job server must implement a `SparkJob` trait.  It has a main `runJob` method which is
@@ -455,6 +468,10 @@ A number of context-specific settings can be controlled when creating a context 
 ad-hoc job (which creates a context on the spot).  For example, add urls of dependent jars for a context.
 
     POST '/contexts/my-new-context?dependent-jar-uris=file:///some/path/of/my-foo-lib.jar'
+
+NOTE: Only the latest `dependent-jar-uris` (btw it’s jar-uris, not jars-uri) takes effect.  You can specify multiple URIs by comma-separating them.  So like this:
+
+    &dependent-jar-uris=file:///path/a.jar,file:///path/b.jar
 
 When creating a context via POST /contexts, the query params are used to override the default configuration in
 spark.context-settings.  For example,
