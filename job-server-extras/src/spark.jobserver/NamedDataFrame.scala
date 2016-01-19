@@ -3,11 +3,18 @@ package spark.jobserver
 import org.apache.spark.sql.{ SQLContext, DataFrame }
 import org.apache.spark.storage.StorageLevel
 
+/**
+ * wrapper for named objects of type DataFrame
+ */
 case class NamedDataFrame(df: DataFrame, forceComputation: Boolean,
                           storageLevel: StorageLevel) extends NamedObject
 
+/**
+ * implementation of a NamedObjectPersister for DataFrame objects
+ *
+ */
 class DataFramePersister extends NamedObjectPersister[NamedDataFrame] {
-  override def saveToContext(namedObj: NamedDataFrame, name: String) {
+  override def persist(namedObj: NamedDataFrame, name: String) {
     namedObj match {
       case NamedDataFrame(df, forceComputation, storageLevel) =>
         require(!forceComputation || storageLevel != StorageLevel.NONE,
@@ -21,10 +28,11 @@ class DataFramePersister extends NamedObjectPersister[NamedDataFrame] {
     }
   }
 
-  def getFromContext(c: ContextLike, name: String): NamedDataFrame = {
-    val df = c.asInstanceOf[SQLContext].table(name)
-    //TODO - which StorageLevel ?
-    NamedDataFrame(df, false, StorageLevel.NONE)
+  override def unpersist(namedObj: NamedDataFrame) {
+    namedObj match {
+      case NamedDataFrame(df, _, _) =>
+        df.unpersist(blocking = false)
+    }
   }
 
   /**

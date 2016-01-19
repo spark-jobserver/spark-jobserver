@@ -14,14 +14,6 @@ import scala.concurrent.duration._
 import org.apache.spark.rdd.RDD
 class JobWithNamedRddsSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
 
-  System.setProperty("spark.cores.max", Runtime.getRuntime.availableProcessors.toString)
-  System.setProperty("spark.executor.memory", "512m")
-  System.setProperty("spark.akka.threads", Runtime.getRuntime.availableProcessors.toString)
-
-  // To avoid Akka rebinding to the same port, since it doesn't unbind immediately on shutdown
-  System.clearProperty("spark.driver.port")
-  System.clearProperty("spark.hostPort")
-
   private val emptyConfig = ConfigFactory.parseString("spark.master = bar")
 
   val sc = new SparkContext("local[4]", getClass.getSimpleName)
@@ -58,11 +50,11 @@ class JobWithNamedRddsSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
     it("get() should return Some(RDD) when it exists") {
       val rdd = sc.parallelize(Seq(1, 2, 3))
       namedTestRdds.update("rdd1", rdd)
-      namedTestRdds.get[Int]("rdd1")(Some(8)) should equal(Some(rdd))
+      namedTestRdds.get[Int]("rdd1")(8) should equal(Some(rdd))
     }
 
     it("get() should ignore timeout when rdd is not known") {
-      namedTestRdds.get[Int]("rddXXX")(Some(0)) should equal(None)
+      namedTestRdds.get[Int]("rddXXX")(0) should equal(None)
     }
 
     it("get() should respect timeout when rdd is known, but not yet available") {
@@ -79,16 +71,16 @@ class JobWithNamedRddsSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
             val r = sc.parallelize(Seq(1, 2, 3))
             rdd = Some(r)
             r
-          })(Some(1.milliseconds))
+          })(1.milliseconds)
         }
       }
       thread.start
       Thread.sleep(11)
       //don't wait
-      val err = intercept[TimeoutException] { namedTestRdds.get[Int]("rdd-sleep")(Some(1.milliseconds)) }
+      val err = intercept[TimeoutException] { namedTestRdds.get[Int]("rdd-sleep")(1.milliseconds) }
       err.getClass should equal(classOf[TimeoutException])
       //now wait
-      namedTestRdds.get[Int]("rdd-sleep")(Some(5000)) should equal(Some(rdd.get))
+      namedTestRdds.get[Int]("rdd-sleep")(5000) should equal(Some(rdd.get))
       //clean-up
       namedTestRdds.destroy("rdd-sleep")
     }

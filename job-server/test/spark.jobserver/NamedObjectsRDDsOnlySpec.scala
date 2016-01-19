@@ -5,30 +5,22 @@ import akka.testkit.{ ImplicitSender, TestKit }
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
-import org.scalatest.matchers.ShouldMatchers
-import org.scalatest.{ FunSpecLike, FunSpec, BeforeAndAfterAll, BeforeAndAfter }
+import org.scalatest.{ Matchers, FunSpecLike, FunSpec, BeforeAndAfterAll, BeforeAndAfter }
 
 /**
  * please note that this test only uses RDDs as named objects, there exists another test class
  * in job-server-extras that uses a combination of RDDs and DataFrames
  */
-class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with FunSpecLike
-    with ImplicitSender with ShouldMatchers with BeforeAndAfter with BeforeAndAfterAll {
-  System.setProperty("spark.cores.max", Runtime.getRuntime.availableProcessors.toString)
-  System.setProperty("spark.executor.memory", "512m")
-  System.setProperty("spark.akka.threads", Runtime.getRuntime.availableProcessors.toString)
-
-  // To avoid Akka rebinding to the same port, since it doesn't unbind immediately on shutdown
-  System.clearProperty("spark.driver.port")
-  System.clearProperty("spark.hostPort")
-
+class NamedObjectsRDDsOnlySpec extends TestKit(ActorSystem("NamedObjectsSpec")) with FunSpecLike
+    with ImplicitSender with Matchers with BeforeAndAfter with BeforeAndAfterAll {
+  
   val sc = new SparkContext("local[4]", getClass.getSimpleName)
   val namedObjects: NamedObjects = new JobServerNamedObjects(system)
 
   implicit def rddPersister[T] = new RDDPersister[T]
 
   before {
-    namedObjects.getNames.foreach { namedObjects.destroy(_) }
+    namedObjects.getNames.foreach { namedObjects.forget(_) }
   }
 
   override def afterAll() {
@@ -49,26 +41,29 @@ class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with Fun
       rdd1 should equal(Some(NamedRDD(rdd, true, StorageLevel.MEMORY_ONLY)))
     }
 
-    it("destroy() should do nothing when RDD with given name doesn't exist") {
+    it("forget() should do nothing when RDD with given name doesn't exist") {
       namedObjects.update("rdd1", NamedRDD(sc.parallelize(Seq(1, 2, 3)), false, StorageLevel.MEMORY_ONLY))
       namedObjects.get("rdd1") should not equal None
-      namedObjects.destroy("rdd2")
+      namedObjects.forget("rdd2")
       namedObjects.get("rdd1") should not equal None
     }
 
     it("destroy() should destroy an RDD that exists") {
-      namedObjects.update("rdd1", NamedRDD(sc.parallelize(Seq(1, 2, 3)), false, StorageLevel.MEMORY_ONLY))
+      val rdd1 = NamedRDD(sc.parallelize(Seq(1, 2, 3)), false, StorageLevel.MEMORY_ONLY)
+      namedObjects.update("rdd1", rdd1)
+      
       namedObjects.get("rdd1") should not equal None
-      namedObjects.destroy("rdd1")
+      namedObjects.destroy(rdd1, "rdd1")
       namedObjects.get("rdd1") should equal(None)
     }
 
     it("getNames() should return names of all managed Objects") {
       namedObjects.getNames().size should equal(0)
-      namedObjects.update("rdd1", NamedRDD(sc.parallelize(Seq(1, 2, 3)), false, StorageLevel.MEMORY_ONLY))
+      val rdd1 = NamedRDD(sc.parallelize(Seq(1, 2, 3)), false, StorageLevel.MEMORY_ONLY)
+      namedObjects.update("rdd1", rdd1)
       namedObjects.update("rdd2", NamedRDD(sc.parallelize(Seq(4, 5, 6)), false, StorageLevel.MEMORY_ONLY))
       namedObjects.getNames().toSeq.sorted should equal(Seq("rdd1", "rdd2"))
-      namedObjects.destroy("rdd1")
+      namedObjects.destroy(rdd1, "rdd1")
       namedObjects.getNames().toSeq.sorted should equal(Seq("rdd2"))
     }
 

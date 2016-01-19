@@ -2,7 +2,7 @@ package spark.jobserver
 
 import akka.util.Timeout
 import java.util.concurrent.atomic.AtomicReference
-
+import scala.concurrent.Future
 import scala.concurrent.duration.Duration
 
 trait NamedObject
@@ -14,33 +14,23 @@ trait NamedObject
 abstract class NamedObjectPersister[O <: NamedObject] {
 
   /**
-   * persists an object with the given name in
-   * the context
-  //TODO what is the context needed for? c: ContextLike,
-   * @param c - context to store the object in
+   * persists an object with the given name
+   * @param namedObj - object to be persisted
    * @param name - name of the object
    */
-  def saveToContext(namedObj: O, name: String): Unit
-
-  //TODO - what is this for? Is this comment correct?
-  /**
-   * tries to retrieve an object with the given name from
-   * the context so that is can be stored in the list of named objects
-   * @param c - context to retrieve the object from
-   * @param name - name of the object
-   * @return the named object with the given name. TODO - wouldn't it be better to
-   * return Option[O] ?
-   */
-  //def getFromContext(c: ContextLike, name: String): O
+  def persist(namedObj: O, name: String): Unit
 
   /**
    * update reference to named object so that it does not get GCed
+   * @param namedObj - reference to this object is to be refreshed
    */
   def refresh(namedObject: O): O
 
-  //TODO - what about 'unpersist' / removeFromContext / destroy?
-  //proposal:
-  // def removeFromContext(c: ContextLike, name: String): Unit
+  /**
+   * unpersist the given object
+   * @param namedObj - object to be unpersisted
+   */
+  def unpersist(namedObject: O): Unit
 }
 
 /**
@@ -55,6 +45,8 @@ abstract class NamedObjectPersister[O <: NamedObject] {
  * the native DataFrame/RDD `cache()`, otherwise we will not know about the names.
  */
 trait NamedObjects {
+
+  def defaultTimeout : Timeout
 
   /**
    * Gets a named object (NObj) with the given name, or creates it if one doesn't already exist.
@@ -77,7 +69,7 @@ trait NamedObjects {
    * @throws java.lang.RuntimeException wrapping any error that occurs within the generator function.
    */
   def getOrElseCreate[O <: NamedObject](name: String,
-                         objGen: => O)(implicit timeout: Option[Timeout] = None,
+                         objGen: => O)(implicit timeout: Timeout = defaultTimeout,
                                        persister: NamedObjectPersister[O]): O
 
   /**
@@ -92,7 +84,7 @@ trait NamedObjects {
    * @return the NObj with the given name.
    * @throws java.util.concurrent.TimeoutException if the request to the RddManager times out.
    */
-  def get[O <: NamedObject](name: String)(implicit timeout: Option[Timeout] = None): Option[O]
+  def get[O <: NamedObject](name: String)(implicit timeout: Timeout = defaultTimeout): Option[O]
 
   /**
    * Replaces an existing named object (NObj) with a given name with a new object.
@@ -113,16 +105,28 @@ trait NamedObjects {
    * @return the object with the given name.
    */
   def update[O <: NamedObject](name: String, objGen: => O)
-                  (implicit timeout: Option[Timeout] = None,
+                  (implicit timeout: Timeout = defaultTimeout,
                       persister: NamedObjectPersister[O]): O
 
   /**
-   * Destroys an named object (NObj) with the given name, if one existed.
-   * Has no effect if no name object with this name exists.
+   * removes the named object with the given name, if one existed, from the cache
+   * Has no effect if no named object with this name exists.
+   *
+   * The persister is not (!) asked to unpersist the object, use destroy instead if that is desired
+   * @param name the unique name of the object. The uniqueness is scoped to the current SparkContext.
+   */
+  def forget(name: String): Unit
+
+  /**
+   * Destroys the named object with the given name, if one existed. The reference to the object
+   * is removed from the cache and the persister is asked asynchronously to unpersist the
+   * object iff it was found in the list of named objects.
+   * Has no effect if no named object with this name is known to the cache.
    *
    * @param name the unique name of the object. The uniqueness is scoped to the current SparkContext.
    */
-  def destroy(name: String): Unit
+  def destroy[O <: NamedObject](objOfType: O, name: String)
+                      (implicit persister: NamedObjectPersister[O]) : Unit
 
   /**
    * Returns the names of all named object that are managed by the named objects implementation.
