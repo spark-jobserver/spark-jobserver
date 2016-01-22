@@ -18,9 +18,12 @@ object Assembly {
       case m if m.toLowerCase.matches("meta-inf.*\\.sf$") => MergeStrategy.discard
       case "reference.conf" => MergeStrategy.concat
       case _ => MergeStrategy.first
-    },
-    assemblyShadeRules in assembly := Seq(
-      ShadeRule.rename("shapeless.**" -> "sjs.shapeless.@1").inAll
-    )
+    }//,
+    // NOTE(velvia): Some users have reported NoClassDefFound errors due to this shading.
+    // java.lang.NoClassDefFoundError: sjs/shapeless/Poly2$Case2Builder$$anon$3
+    // This is disabled for now, if you really need it, re-enable it and good luck!
+    // assemblyShadeRules in assembly := Seq(
+    //   ShadeRule.rename("shapeless.**" -> "sjs.shapeless.@1").inAll
+    // )
   )
 }
