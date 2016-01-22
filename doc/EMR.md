@@ -1,4 +1,4 @@
-## Step by step instruction on how to run Spark Job Server on EMR 4.2.0 (Spark 1.5.2)
+## Step by step instruction on how to run Spark Job Server on EMR 4.2.0 (Spark 1.6.0)
 
 ### Create EMR 4.2.0 cluster
 
@@ -65,7 +65,7 @@ InstanceCount=10,BidPrice=2.99,Name=sparkSlave,InstanceGroupType=CORE,InstanceTy
  LOG_DIR=/mnt/var/log/spark-jobserver
  PIDFILE=spark-jobserver.pid
  JOBSERVER_MEMORY=1G
- SPARK_VERSION=1.5.2
+ SPARK_VERSION=1.6.0
  SPARK_HOME=/usr/lib/spark
  SPARK_CONF_DIR=/etc/spark/conf
  HADOOP_CONF_DIR=/etc/hadoop/conf

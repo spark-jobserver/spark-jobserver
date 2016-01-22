@@ -15,7 +15,8 @@ import scala.util.Try
  */
 object WordCountExample extends SparkJob {
   def main(args: Array[String]) {
-    val sc = new SparkContext("local[4]", "WordCountExample")
+    val conf = new SparkConf().setMaster("local[4]").setAppName("WordCountExample")
+    val sc = new SparkContext(conf)
     val config = ConfigFactory.parseString("")
     val results = runJob(sc, config)
     println("Result is " + results)

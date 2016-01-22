@@ -31,11 +31,11 @@ object Dependencies {
 
   val mesosVersion = sys.env.getOrElse("MESOS_VERSION", "0.25.0-0.2.70.ubuntu1404")
 
-  val sparkVersion = sys.env.getOrElse("SPARK_VERSION", "1.5.2")
+  val sparkVersion = sys.env.getOrElse("SPARK_VERSION", "1.6.0")
   lazy val sparkDeps = Seq(
     "org.apache.spark" %% "spark-core" % sparkVersion % "provided" excludeAll(excludeNettyIo, excludeQQ),
     // Force netty version.  This avoids some Spark netty dependency problem.
-    "io.netty" % "netty-all" % "4.0.23.Final"
+    "io.netty" % "netty-all" % "4.0.29.Final"
   )
 
   lazy val scalaLib = if (scala.util.Properties.versionString.split(" ")(1).startsWith("2.10"))
