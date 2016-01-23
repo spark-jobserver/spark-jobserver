@@ -4,7 +4,7 @@ import akka.util.Timeout
 import scala.concurrent.duration._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
-import org.apache.spark.SparkContext
+import com.typesafe.config.Config
 
 /**
  * wrapper for named objects of type RDD[T]
@@ -67,7 +67,7 @@ trait NamedRddSupport extends NamedObjectSupport { self: SparkJob =>
    */
   trait _NamedRdds {
 
-    val defaultTimeout = Timeout(Duration(60, java.util.concurrent.TimeUnit.SECONDS))
+    def defaultTimeout : Timeout
 
     // Default level to cache RDDs at.
     val defaultStorageLevel = StorageLevel.MEMORY_ONLY
@@ -158,6 +158,8 @@ trait NamedRddSupport extends NamedObjectSupport { self: SparkJob =>
   }
 
   def namedRdds: _NamedRdds = new _NamedRdds {
+
+    val defaultTimeout = namedObjects.defaultTimeout
 
     override def getOrElseCreate[T](name: String,
                                     rddGen: => RDD[T],
