@@ -21,7 +21,8 @@ object LongPiJob extends SparkJob {
   private val rand = new Random(now)
 
   def main(args: Array[String]) {
-    val sc = new SparkContext("local[4]", "LongPiJob")
+    val conf = new SparkConf().setMaster("local[4]").setAppName("LongPiJob")
+    val sc = new SparkContext(conf)
     val config = ConfigFactory.parseString("")
     val results = runJob(sc, config)
     println("Result is " + results)
