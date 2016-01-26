@@ -127,8 +127,14 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
           self ! PoisonPill
       }
 
-    case StartJob(appName, classPath, jobConfig, events) =>
+    case StartJob(appName, classPath, jobConfig, events) => {
+      getSideJars(jobConfig).foreach { jarUri =>{
+        logger.info("Adding {} to Current Job JarLoader", jarUri)
+        jarLoader.addURL(new URL(convertJarUriSparkToJava(jarUri)))
+      }
+      }
       startJobInternal(appName, classPath, jobConfig, events, jobContext, sparkEnv, rddManagerActor)
+    }
 
     case KillJob(jobId: String) => {
       jobContext.sparkContext.cancelJobGroup(jobId)
