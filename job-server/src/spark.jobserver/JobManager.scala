@@ -48,7 +48,7 @@ object JobManager {
       config.getConfig("spark").root.render())
     logger.info("..and context config:\n" + contextConfig.root.render)
 
-    val system = makeSystem(config)
+    val system = makeSystem(config.resolve())
     val jobManager = system.actorOf(JobManagerActor.props(contextConfig), managerName)
 
     //Join akka cluster
