@@ -4,13 +4,12 @@ import akka.util.Timeout
 import scala.concurrent.duration._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
-import com.typesafe.config.Config
 
 /**
  * wrapper for named objects of type RDD[T]
  */
 case class NamedRDD[T](rdd: RDD[T], forceComputation: Boolean, storageLevel: StorageLevel)
-                                                                      extends NamedObject
+extends NamedObject
 
 /**
  * implementation of a NamedObjectPersister for RDD[T] objects
