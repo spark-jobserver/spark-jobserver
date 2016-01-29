@@ -70,6 +70,7 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 - [Maana](http://maana.io/)
 - [Newsweaver](https://www.newsweaver.com)
 - [Instaclustr](http://www.instaclustr.com)
+- [SnappyData](http://www.snappydata.io)
 
 ## Features
 
