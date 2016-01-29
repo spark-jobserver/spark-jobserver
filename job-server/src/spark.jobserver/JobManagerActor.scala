@@ -74,7 +74,6 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
 
   var jobContext: ContextLike = _
   var sparkEnv: SparkEnv = _
-  protected var rddManagerActor: ActorRef = _
 
   private val currentRunningJobs = new AtomicInteger(0)
 
@@ -115,8 +114,6 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
         }
         jobContext = createContextFromConfig()
         sparkEnv = SparkEnv.get
-        rddManagerActor = context.actorOf(Props(classOf[RddManagerActor], jobContext.sparkContext),
-                                          "rdd-manager-actor")
         jobCache = new JobCache(jobCacheSize, daoActor, jobContext.sparkContext, jarLoader)
         getSideJars(contextConfig).foreach { jarUri => jobContext.sparkContext.addJar(jarUri) }
         sender ! Initialized(contextName, resultActor)
@@ -128,7 +125,7 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
       }
 
     case StartJob(appName, classPath, jobConfig, events) =>
-      startJobInternal(appName, classPath, jobConfig, events, jobContext, sparkEnv, rddManagerActor)
+      startJobInternal(appName, classPath, jobConfig, events, jobContext, sparkEnv)
 
     case KillJob(jobId: String) => {
       jobContext.sparkContext.cancelJobGroup(jobId)
@@ -157,8 +154,7 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
                        jobConfig: Config,
                        events: Set[Class[_]],
                        jobContext: ContextLike,
-                       sparkEnv: SparkEnv,
-                       rddManagerActor: ActorRef): Option[Future[Any]] = {
+                       sparkEnv: SparkEnv): Option[Future[Any]] = {
     var future: Option[Future[Any]] = None
     breakable {
       import akka.pattern.ask
@@ -211,8 +207,7 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
 
       val jobInfo = JobInfo(jobId, contextName, jarInfo, classPath, DateTime.now(), None, None)
       future =
-        Option(getJobFuture(jobJarInfo, jobInfo, jobConfig, sender, jobContext, sparkEnv,
-                            rddManagerActor))
+        Option(getJobFuture(jobJarInfo, jobInfo, jobConfig, sender, jobContext, sparkEnv))
     }
 
     future
@@ -223,8 +218,7 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
                            jobConfig: Config,
                            subscriber: ActorRef,
                            jobContext: ContextLike,
-                           sparkEnv: SparkEnv,
-                           rddManagerActor: ActorRef): Future[Any] = {
+                           sparkEnv: SparkEnv): Future[Any] = {
 
     val jobId = jobInfo.jobId
     val constructor = jobJarInfo.constructor
@@ -250,10 +244,10 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
       // NOTE: This may not even be necessary if we set the driver ActorSystem classloader correctly
       Thread.currentThread.setContextClassLoader(jarLoader)
       val job = constructor()
-      if (job.isInstanceOf[NamedRddSupport]) {
-        val namedRdds = job.asInstanceOf[NamedRddSupport].namedRddsPrivate
-        if (namedRdds.get() == null) {
-          namedRdds.compareAndSet(null, new JobServerNamedRdds(rddManagerActor))
+      if (job.isInstanceOf[NamedObjectSupport]) {
+        val namedObjects = job.asInstanceOf[NamedObjectSupport].namedObjectsPrivate
+        if (namedObjects.get() == null) {
+          namedObjects.compareAndSet(null, new JobServerNamedObjects(context.system))
         }
       }
 
