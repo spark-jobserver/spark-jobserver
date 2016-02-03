@@ -27,6 +27,7 @@ trait JobSpecConfig {
       "num-cpu-cores" -> NumCpuCores,
       "memory-per-node" -> MemoryPerNode,
       "spark.jobserver.max-jobs-per-context" -> MaxJobsPerContext,
+      "spark.jobserver.named-object-creation-timeout" -> "60 s",
       "akka.log-dead-letters" -> Integer.valueOf(0),
       "spark.master" -> "local[4]",
       "context-factory" -> contextFactory,
