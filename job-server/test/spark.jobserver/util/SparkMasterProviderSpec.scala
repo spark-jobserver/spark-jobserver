@@ -41,7 +41,7 @@ class SparkMasterProviderSpec extends FunSpec with Matchers {
       intercept[Exception] {
         val config = ConfigFactory.parseMap(Map(
           "spark.home" -> "/etc/spark",
-          "spark.master.provider" -> "not.exists.provider"
+          "spark.ha.provider" -> "not.exists.provider"
         ).asJava)
         val sparkConf = getSparkConf(config)
       }
