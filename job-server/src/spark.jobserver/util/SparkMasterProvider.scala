@@ -18,11 +18,11 @@ trait SparkMasterProvider {
 
 object SparkMasterProvider {
   val logger = LoggerFactory.getLogger(getClass)
-  val SparkMasterProperty = "spark.ha.provider"
+  val SparkMasterProperty = "spark.master-provider"
 
   /**
    * Will look for an Object with the name provided in the Config file and return it
-   * or the DefaultSparkMasterProvider if no spark.ha.provider was specified
+   * or the DefaultSparkMasterProvider if no spark.master-provider was specified
    * @param config SparkJobserver Config
    * @return A SparkMasterProvider
    */
