@@ -82,3 +82,15 @@ object SimpleObjectJob extends SparkTestJob {
 
   }
 }
+
+class jobJarDependenciesJob extends SparkTestJob {
+  def runJob(sc: SparkContext, config: Config): Any = {
+    val loadedClasses = Seq(
+      getClass.getClassLoader.loadClass("spark.jobserver.context.SQLContextFactory").getName(),
+      getClass.getClassLoader.loadClass("spark.jobserver.context.HiveContextFactory").getName(),
+      getClass.getClassLoader.loadClass("spark.jobserver.context.StreamingContextFactory").getName()
+      )
+    val input = sc.parallelize(loadedClasses)
+    input.countByValue()
+  }
+}

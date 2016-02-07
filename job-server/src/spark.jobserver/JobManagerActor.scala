@@ -123,12 +123,12 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
           sender ! InitError(t)
           self ! PoisonPill
       }
-      
+
     case StartJob(appName, classPath, jobConfig, events) => {
-      getSideJars(jobConfig).foreach { jarUri =>{
-        logger.info("Adding {} to Current Job JarLoader", jarUri)
+      getSideJars(jobConfig).foreach { jarUri =>
+        logger.info("Adding {} to Current Job Class path", jarUri)
         jarLoader.addURL(new URL(convertJarUriSparkToJava(jarUri)))
-      }
+        jobContext.sparkContext.addJar(jarUri)
       }
       startJobInternal(appName, classPath, jobConfig, events, jobContext, sparkEnv)
     }
