@@ -40,7 +40,7 @@ object Dependencies {
   )
 
   lazy val scalaLib = if (scala.util.Properties.versionString.split(" ")(1).startsWith("2.10"))
-      Seq("org.scala-lang" % "scala-library" % "2.10.3")
+      Seq("org.scala-lang" % "scala-library" % "2.10.5")
     else Seq()
 
   lazy val sparkExtraDeps = Seq(
