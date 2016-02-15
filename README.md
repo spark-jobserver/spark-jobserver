@@ -287,22 +287,21 @@ You have a couple options to package and upload dependency jars.
 
 * The easiest is to use something like [sbt-assembly](https://github.com/sbt/sbt-assembly) to produce a fat jar.  Be sure to mark the Spark and job-server dependencies as "provided" so it won't blow up the jar size.  This works well if the number of dependencies is not large.
 * When the dependencies are sizeable and/or you don't want to load them with every different job, you can package the dependencies separately and use one of several options:
-    - Use the `dependent-jar-uris` context configuration param.  Then the jar gets loaded for every job
-    - Use the `--package` option with Maven coordinates with `server_start.sh`.
-    - Put the extra jars in the SPARK_CLASSPATH
-    - Use the `dependent-jar-uris` job configuration param when submitting a job. On an ad-hoc context this has the same effect as `dependent-jar-uris` context configuration param. On a persistent context the jars will be loaded for the current job and then for every job that will be executed on the persistent context.
+    - Use the `dependent-jar-uris` context configuration param. Then the jar gets loaded for every job.
+    - The `dependent-jar-uris` can also be used in job configuration param when submitting a job. On an ad-hoc context this has the same effect as `dependent-jar-uris` context configuration param. On a persistent context the jars will be loaded for the current job and then for every job that will be executed on the persistent context.
         ````
         curl -d "" 'localhost:8090/contexts/test-context?num-cpu-cores=4&memory-per-node=512m'
-            OK⏎
-        ````
-        
+        OK⏎
+        ````      
         ````
         curl 'localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample&context=test-context&sync=true' -d '{
             dependent-jar-uris = ["file:///myjars/deps01.jar", "file:///myjars/deps02.jar"],
             input.string = "a b c a b see"
         }'
         ````
-        The jars /myjars/deps01.jar & /myjars/deps02.jar will be loaded and made available for the Spark driver & executors. 
+        The jars /myjars/deps01.jar & /myjars/deps02.jar (present only on the SJS node) will be loaded and made available for the Spark driver & executors. 
+    - Use the `--package` option with Maven coordinates with `server_start.sh`.
+    - Put the extra jars in the SPARK_CLASSPATH
 
 ### Named Objects 
 #### Using Named RDDs

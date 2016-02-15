@@ -214,13 +214,11 @@ abstract class JobManagerSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
       manager ! JobManagerActor.Initialize(daoActor, None)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
+
       uploadTestJar()
-      val extrasJarPath = Paths.get(".").toAbsolutePath().normalize().toString() +
-        "/../job-server-extras/target/scala-2.10/job-server-extras_2.10-0.6.2-SNAPSHOT.jar"
-      
       val jobJarDepsConfigs = ConfigFactory.parseString(
         s"""
-          |dependent-jar-uris = ["file://$extrasJarPath"]
+          |dependent-jar-uris = ["file://$getExtrasJarPath"]
         """.stripMargin)
 
       manager ! JobManagerActor.StartJob("demo", classPrefix + "jobJarDependenciesJob", jobJarDepsConfigs,
@@ -229,6 +227,22 @@ abstract class JobManagerSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
         case JobResult(_, result: Map[String, Long]) => println("I got results! " + result)
       }
       expectNoMsg()
+    }
+
+    it("should fail a job that requires job jar dependencies but doesn't provide the jar"){
+      manager ! JobManagerActor.Initialize(daoActor, None)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+
+
+      uploadTestJar()
+      val jobJarDepsConfigs = ConfigFactory.parseString(
+        s"""
+           |dependent-jar-uris = []
+        """.stripMargin)
+
+      manager ! JobManagerActor.StartJob("demo", classPrefix + "jobJarDependenciesJob", jobJarDepsConfigs,
+        syncEvents ++ errorEvents)
+      expectMsg(startJobWait, CommonMessages.JobErroredOut)
     }
 
   }

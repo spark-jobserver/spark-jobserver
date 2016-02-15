@@ -61,6 +61,7 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
   var manager: ActorRef = _
   def testJar: java.io.File
   var supervisor: ActorRef = _
+  def extrasJar: java.io.File
 
   after {
     ooyala.common.akka.AkkaTestUtils.shutdownAndWait(manager)
@@ -76,6 +77,8 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
   }
 
   protected def uploadTestJar(appName: String = "demo") { uploadJar(dao, testJar.getAbsolutePath, appName) }
+
+  protected def getExtrasJarPath: String = extrasJar.getAbsolutePath
 
   import CommonMessages._
 
