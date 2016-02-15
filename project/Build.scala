@@ -178,7 +178,8 @@ object JobServerBuild extends Build {
   lazy val commonSettings = Defaults.defaultSettings ++ dirSettings ++ implicitlySettings ++ Seq(
     organization := "spark.jobserver",
     crossPaths   := true,
-    crossScalaVersions := Seq("2.10.4","2.11.6"),
+    crossScalaVersions := Seq("2.10.5","2.11.6"),
+    scalaVersion := "2.10.5",
     publishTo    := Some(Resolver.file("Unused repo", file("target/unusedrepo"))),
 
     // scalastyleFailOnError := true,
