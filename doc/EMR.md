@@ -70,7 +70,7 @@ InstanceCount=10,BidPrice=2.99,Name=sparkSlave,InstanceGroupType=CORE,InstanceTy
  SPARK_CONF_DIR=/etc/spark/conf
  HADOOP_CONF_DIR=/etc/hadoop/conf
  YARN_CONF_DIR=/etc/hadoop/conf
- SCALA_VERSION=2.10.4
+ SCALA_VERSION=2.10.5
  ```
 
 6. Create config/emr.conf

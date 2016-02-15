@@ -39,16 +39,12 @@ object Dependencies {
     "io.netty" % "netty-all" % "4.0.29.Final"
   )
 
-  lazy val scalaLib = if (scala.util.Properties.versionString.split(" ")(1).startsWith("2.10"))
-      Seq("org.scala-lang" % "scala-library" % "2.10.3")
-    else Seq()
-
   lazy val sparkExtraDeps = Seq(
     "org.apache.spark" %% "spark-mllib" % sparkVersion % "provided" excludeAll(excludeNettyIo, excludeQQ),
     "org.apache.spark" %% "spark-sql" % sparkVersion % "provided" excludeAll(excludeNettyIo, excludeQQ),
     "org.apache.spark" %% "spark-streaming" % sparkVersion % "provided" excludeAll(excludeNettyIo, excludeQQ),
     "org.apache.spark" %% "spark-hive" % sparkVersion % "provided" excludeAll(excludeNettyIo, excludeQQ, excludeScalaTest)
-  ) ++ scalaLib
+  )
 
   lazy val slickDeps = Seq(
     "com.typesafe.slick" %% "slick" % "2.1.0",
