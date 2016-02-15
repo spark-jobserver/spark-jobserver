@@ -242,7 +242,8 @@ abstract class JobManagerSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
 
       manager ! JobManagerActor.StartJob("demo", classPrefix + "jobJarDependenciesJob", jobJarDepsConfigs,
         syncEvents ++ errorEvents)
-      expectMsg(startJobWait, CommonMessages.JobErroredOut)
+
+      expectMsgClass(startJobWait, classOf[JobErroredOut])
     }
 
   }
