@@ -1,5 +1,7 @@
 package spark.jobserver
 
+import java.nio.file.Paths
+
 import com.typesafe.config.ConfigFactory
 import spark.jobserver.JobManagerActor.KillJob
 import scala.collection.mutable
@@ -206,6 +208,42 @@ abstract class JobManagerSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
           expectMsgClass(classOf[JobKilled])
         }
       }
+    }
+
+    it("should be able to start a job with job jar dependencies and return results"){
+      manager ! JobManagerActor.Initialize(daoActor, None)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+
+
+      uploadTestJar()
+      val jobJarDepsConfigs = ConfigFactory.parseString(
+        s"""
+          |dependent-jar-uris = ["file://$getExtrasJarPath"]
+        """.stripMargin)
+
+      manager ! JobManagerActor.StartJob("demo", classPrefix + "jobJarDependenciesJob", jobJarDepsConfigs,
+        syncEvents ++ errorEvents)
+      expectMsgPF(startJobWait, "Did not get JobResult") {
+        case JobResult(_, result: Map[String, Long]) => println("I got results! " + result)
+      }
+      expectNoMsg()
+    }
+
+    it("should fail a job that requires job jar dependencies but doesn't provide the jar"){
+      manager ! JobManagerActor.Initialize(daoActor, None)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+
+
+      uploadTestJar()
+      val jobJarDepsConfigs = ConfigFactory.parseString(
+        s"""
+           |dependent-jar-uris = []
+        """.stripMargin)
+
+      manager ! JobManagerActor.StartJob("demo", classPrefix + "jobJarDependenciesJob", jobJarDepsConfigs,
+        syncEvents ++ errorEvents)
+
+      expectMsgClass(startJobWait, classOf[JobErroredOut])
     }
 
   }
