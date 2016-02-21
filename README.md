@@ -32,6 +32,7 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
   - [Authentication](#authentication)
 - [Deployment](#deployment)
   - [Manual steps](#manual-steps)
+    - [Configuring Spark Jobserver meta data Database backend](#configuring-spark-jobserver-meta-data-database-backend)
   - [Chef](#chef)
 - [Architecture](#architecture)
 - [API](#api)
