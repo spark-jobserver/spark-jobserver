@@ -32,6 +32,7 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
   - [Authentication](#authentication)
 - [Deployment](#deployment)
   - [Manual steps](#manual-steps)
+    - [Configuring Spark Jobserver meta data Database backend](#configuring-spark-jobserver-meta-data-database-backend)
   - [Chef](#chef)
 - [Architecture](#architecture)
 - [API](#api)
@@ -455,6 +456,38 @@ Log files are separated out for each context (assuming `context-per-jvm` is `tru
 
 Note: to test out the deploy to a local staging dir, or package the job server for Mesos,
 use `bin/server_package.sh <environment>`.
+
+#### Configuring Spark Jobserver meta data Database backend
+
+By default, H2 database is used for storing Spark Jobserver related meta data.
+But this can be overridden. For example, to use PostgreSQL as backend add the
+following configuration to local.conf. Ensure that you have spark_jobserver
+database created with necessary rights granted to user.
+
+    sqldao {
+      # Slick database driver, full classpath
+      slick-driver = scala.slick.driver.PostgresDriver
+
+      # JDBC driver, full classpath
+      jdbc-driver = org.postgresql.Driver
+
+      # Directory where default H2 driver stores its data. Only needed for H2.
+      rootdir = "/var/spark-jobserver/sqldao/data"
+
+      jdbc {
+        url = "jdbc:postgresql://db_host/spark_jobserver"
+        user = "secret"
+        password = "secret"
+      }
+
+      dbcp {
+        maxactive = 20
+        maxidle = 10
+        initialsize = 10
+      }
+    }
+
+It is also important that any dependent jars are to be added to Job Server class path.
 
 ### Chef
 
