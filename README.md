@@ -643,6 +643,10 @@ for instance: `sbt ++2.11.6 job-server/compile`
 - Do "reStart" from SBT for quick restarts of the job server process
 - Please update the g8 template if you change the SparkJob API
 
+Profiling software generously provided by ![](https://www.yourkit.com/images/yklogo.png)
+
+YourKit supports open source projects with its full-featured [Java Profiler](https://www.yourkit.com/java/profiler/index.jsp).
+
 ### Publishing packages
 
 In the root project, do `release cross`.
