@@ -31,7 +31,7 @@ Note that the idle-timeout must be higher than request-timeout, or Spray and the
 
 ## Timeout getting large job results
 
-If your job returns a large job result, it may exceed Akka's maximum network message frame size, in which case the result is dropped and you may get a network timeout.  Change the following configuration, which defaults to 10 MB:
+If your job returns a large job result, it may exceed Akka's maximum network message frame size, in which case the result is dropped and you may get a network timeout.  Change the following configuration, which defaults to 10 MiB:
 
     akka.remote.netty.tcp.maximum-frame-size = 100 MiB
 
