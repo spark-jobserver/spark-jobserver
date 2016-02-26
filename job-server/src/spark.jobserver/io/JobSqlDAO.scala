@@ -4,10 +4,10 @@ import com.typesafe.config.{ConfigRenderOptions, Config, ConfigFactory}
 import java.io.{FileOutputStream, BufferedOutputStream, File}
 import java.sql.Timestamp
 import javax.sql.DataSource
+import org.flywaydb.core.Flyway
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import scala.slick.driver.JdbcProfile
-import scala.slick.jdbc.meta.MTable
 import scala.reflect.runtime.universe
 import org.apache.commons.dbcp.BasicDataSource
 
@@ -49,14 +49,14 @@ class JobSqlDAO(config: Config) extends JobDAO {
     def classPath = column[String]("CLASSPATH")
     def startTime = column[Timestamp]("START_TIME")
     def endTime = column[Option[Timestamp]]("END_TIME")
-    def error = column[Option[String]]("ERROR", O.DBType("varchar"))
+    def error = column[Option[String]]("ERROR")
     def * = (jobId, contextName, jarId, classPath, startTime, endTime, error)
   }
   val jobs = TableQuery[Jobs]
 
   class Configs(tag: Tag) extends Table[(String, String)](tag, "CONFIGS") {
     def jobId = column[String]("JOB_ID", O.PrimaryKey)
-    def jobConfig = column[String]("JOB_CONFIG", O.DBType("varchar"))
+    def jobConfig = column[String]("JOB_CONFIG")
     def * = (jobId, jobConfig)
   }
   //scalastyle:on
@@ -81,6 +81,8 @@ class JobSqlDAO(config: Config) extends JobDAO {
     ds
   }
   val db = Database.forDataSource(dataSource)
+  // TODO: migrateLocations should be removed when tests have a running configuration
+  val migrateLocations = config.getString("flyway.locations")
 
   // Server initialization
   init()
@@ -93,37 +95,13 @@ class JobSqlDAO(config: Config) extends JobDAO {
       }
     }
 
-    // Create the tables if they don't exist
-    db withSession {
-      implicit session =>
-
-        if (isAllTablesNotExist()) {
-          // All tables don't exist. It's the first time the Job Server runs. So, create all tables.
-          logger.info("Creating JARS, CONFIGS and JOBS tables ...")
-          jars.ddl.create
-          configs.ddl.create
-          jobs.ddl.create
-        } else if (isSomeTablesNotExist()) {
-          // Only some tables exist, not all. It means there is data corruption in the metadata-store.
-          // Exit the Job Server now.
-          throw new RuntimeException("Some tables in metadata-store are missing. Please recover it first.")
-        }
-
-        // If the cases above are not true, it means all tables exit. No need to initialize the database.
-    }
+    // Flyway migration
+    val flyway = new Flyway()
+    flyway.setDataSource(jdbcUrl, jdbcUser, jdbcPassword)
+    // TODO: flyway.setLocations(migrateLocations) should be removed when tests have a running configuration
+    flyway.setLocations(migrateLocations)
+    flyway.migrate()
   }
-
-  // Check if a single exist
-  private def isTableExist(tableName: String)(implicit session: Session): Boolean =
-    !MTable.getTables(tableName).list.isEmpty
-
-  // Check if "all tables don't exist" is true
-  private def isAllTablesNotExist()(implicit session: Session): Boolean =
-    !isTableExist("JARS") && !isTableExist("CONFIGS") && !isTableExist("JOBS")
-
-  // Check if "some tables don't exist" is true
-  private def isSomeTablesNotExist()(implicit session: Session): Boolean =
-    !isTableExist("JARS") || !isTableExist("CONFIGS") || !isTableExist("JOBS")
 
   override def saveJar(appName: String, uploadTime: DateTime, jarBytes: Array[Byte]) {
     // The order is important. Save the jar file first and then log it into database.

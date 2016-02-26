@@ -3,7 +3,7 @@ package spark.jobserver
 import akka.actor.{ActorSystem, ActorRef}
 import akka.testkit.ImplicitSender
 import akka.testkit.TestKit
-import com.typesafe.config.ConfigFactory
+import com.typesafe.config.{Config, ConfigFactory}
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 import spark.jobserver.context.DefaultSparkContextFactory
@@ -27,6 +27,7 @@ trait JobSpecConfig {
       "num-cpu-cores" -> NumCpuCores,
       "memory-per-node" -> MemoryPerNode,
       "spark.jobserver.max-jobs-per-context" -> MaxJobsPerContext,
+      "spark.jobserver.named-object-creation-timeout" -> "60 s",
       "akka.log-dead-letters" -> Integer.valueOf(0),
       "spark.master" -> "local[4]",
       "context-factory" -> contextFactory,
@@ -34,6 +35,11 @@ trait JobSpecConfig {
     )
     ConfigFactory.parseMap(ConfigMap.asJava).withFallback(ConfigFactory.defaultOverrides())
   }
+
+  def getContextConfig(adhoc: Boolean, baseConfig: Config = config): Config =
+    ConfigFactory.parseMap(Map("context.name" -> "ctx",
+                               "context.actorname" -> "ctx",
+                               "is-adhoc" -> adhoc.toString).asJava).withFallback(baseConfig)
 
   lazy val contextConfig = {
     val ConfigMap = Map(
@@ -51,8 +57,11 @@ trait JobSpecConfig {
 abstract class JobSpecBaseBase(system: ActorSystem) extends TestKit(system) with ImplicitSender
 with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
   var dao: JobDAO = _
+  var daoActor: ActorRef = _
   var manager: ActorRef = _
   def testJar: java.io.File
+  var supervisor: ActorRef = _
+  def extrasJar: java.io.File
 
   after {
     ooyala.common.akka.AkkaTestUtils.shutdownAndWait(manager)
@@ -68,6 +77,8 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
   }
 
   protected def uploadTestJar(appName: String = "demo") { uploadJar(dao, testJar.getAbsolutePath, appName) }
+
+  protected def getExtrasJarPath: String = extrasJar.getAbsolutePath
 
   import CommonMessages._
 

@@ -54,7 +54,7 @@ Example docker.conf (important settings are marked with # important):
         # choose a port that is free on your system and also the 16 (depends on max retries for submitting the job) next portnumbers should be free 
         spark.driver.port = 32456 # important
         # defines the place where your spark-assembly jar is located in your hdfs
-        spark.yarn.jar = "hdfs://hadoopHDFSCluster/spark_jars/spark-assembly-1.5.0-hadoop2.6.0.jar" # important
+        spark.yarn.jar = "hdfs://hadoopHDFSCluster/spark_jars/spark-assembly-1.6.0-hadoop2.6.0.jar" # important
 
         num-cpu-cores = 2           # Number of cores to allocate.  Required.
         memory-per-node = 512m         # Executor memory per node, -Xmx style eg 512m, #1G, etc.
@@ -80,7 +80,7 @@ Now that we have a docker.conf that should work we can create our dockerfile to 
 
 dockerfile:
 
-    FROM velvia/spark-jobserver:0.5.2
+    FROM velvia/spark-jobserver:0.6.1
     EXPOSE 32456-32472                                    # Expose driver port range (spark.driver.port + 16)
     ADD /path/to/your/docker.conf /app/docker.conf        # Add the docker.conf to the container
     ADD /path/to/your/cluster-config /app/cluster-config  # Add the yarn-site.xml and hfds-site.xml to the container
@@ -117,6 +117,14 @@ The last step to your jarn-client is to run the docker container that you have j
   
 Your Spark-Jobserver should now be up and running
 
+### Modifying the start-server.sh script
+
+The _start-server.sh_ script does not contain a ```--master``` option. In some clusters this means that the job will be launched in _cluster_ mode. To prevent this modify the start script and add: 
+
+```
+--master yarn-client
+```
+
 ### Important Context Settings for yarn
 
 I recently responded to a private question about configuring job-server AWS EMR running Spark and wanted to share with the group.
@@ -138,3 +146,19 @@ contexts {
 ```
 
 It was trial and error to find the best memory-per-node setting. If you over allocate memory per node, YARN will not allocate the expected executors.
+
+### ClassNotFoundException: org.apache.spark.deploy.yarn.YarnSparkHadoopUtil
+
+(Thanks to user @apivovarov - I believe solution is for non-Docker)
+
+I defined the following env vars in ~/.bashrc
+
+```bash
+export HADOOP_CONF_DIR=/etc/hadoop/conf
+export YARN_CONF_DIR=/etc/hadoop/conf
+export SPARK_HOME=/usr/lib/spark
+```
+
+I solved it by adding `export EXTRA_JAR=$SPARK_HOME/lib/spark-assembly-1.6.0-hadoop2.6.0.jar`.
+
+Ok, I solved my issues with jobserver. I use bin/server_package.sh ec2 script to build tar.gz distribution. I extracted dist on the server and run jobserver using server_start.sh script. Now Yarn works.

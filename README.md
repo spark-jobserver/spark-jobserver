@@ -8,6 +8,50 @@ It was originally started at [Ooyala](http://www.ooyala.com), but this is now th
 
 See [Troubleshooting Tips](doc/troubleshooting.md) as well as [Yarn tips](doc/yarn.md).
 
+Also see [Chinese docs / 中文](doc/chinese/job-server.md).
+
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
+
+- [Users](#users)
+- [Features](#features)
+- [Version Information](#version-information)
+- [Getting Started with Spark Job Server](#getting-started-with-spark-job-server)
+- [Development mode](#development-mode)
+  - [WordCountExample walk-through](#wordcountexample-walk-through)
+    - [Package Jar - Send to Server](#package-jar---send-to-server)
+    - [Ad-hoc Mode - Single, Unrelated Jobs (Transient Context)](#ad-hoc-mode---single-unrelated-jobs-transient-context)
+    - [Persistent Context Mode - Faster & Required for Related Jobs](#persistent-context-mode---faster-&-required-for-related-jobs)
+- [Create a Job Server Project](#create-a-job-server-project)
+  - [Dependency jars](#dependency-jars)
+  - [Named Objects](#named-objects)
+    - [Using Named RDDs](#using-named-rdds)
+    - [Using Named Objects](#using-named-objects)
+  - [HTTPS / SSL Configuration](#https--ssl-configuration)
+  - [Authentication](#authentication)
+- [Deployment](#deployment)
+  - [Manual steps](#manual-steps)
+    - [Configuring Spark Jobserver meta data Database backend](#configuring-spark-jobserver-meta-data-database-backend)
+  - [Chef](#chef)
+- [Architecture](#architecture)
+- [API](#api)
+  - [Jars](#jars)
+  - [Contexts](#contexts)
+  - [Jobs](#jobs)
+  - [Data](#data)
+  - [Context configuration](#context-configuration)
+  - [Other configuration settings](#other-configuration-settings)
+  - [Job Result Serialization](#job-result-serialization)
+- [Clients](#clients)
+- [Contribution and Development](#contribution-and-development)
+  - [Publishing packages](#publishing-packages)
+- [Contact](#contact)
+- [License](#license)
+- [TODO](#todo)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 ## Users
 
 (Please add yourself to this list!)
@@ -20,18 +64,21 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 - GumGum
 - Fuse Elements
 - Frontline Solvers
-- Aruba Networks
+- [Aruba Networks](http://www.arubanetworks.com/)
 - [Zed Worldwide](http://www.zed.com)
 - [KNIME](https://www.knime.org/)
 - [Azavea](http://azavea.com)
 - [Maana](http://maana.io/)
 - [Newsweaver](https://www.newsweaver.com)
+- [Instaclustr](http://www.instaclustr.com)
+- [SnappyData](http://www.snappydata.io)
 
 ## Features
 
 - *"Spark as a Service"*: Simple REST interface (including HTTPS) for all aspects of job, context management
 - Support for Spark SQL, Hive, Streaming Contexts/jobs and custom job contexts!  See [Contexts](doc/contexts.md).
 - LDAP Auth support via Apache Shiro integration
+- Separate JVM per SparkContext for isolation
 - Supports sub-second low-latency jobs via long-running job contexts
 - Start and stop job contexts for RDD sharing and low-latency jobs; change resources on restart
 - Kill running jobs via stop context and delete job
@@ -40,7 +87,7 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 - Preliminary support for Java (see `JavaSparkJob`)
 - Works with Standalone Spark as well as Mesos and yarn-client
 - Job and jar info is persisted via a pluggable DAO interface
-- Named RDDs to cache and retrieve RDDs by name, improving RDD sharing and reuse among jobs. 
+- Named Objects (such as RDDs or DataFrames) to cache and retrieve RDDs or DataFrames by name, improving object sharing and reuse among jobs.
 - Supports Scala 2.10 and 2.11
 
 ## Version Information
@@ -54,17 +101,25 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 | 0.5.1       | 1.3.0         |
 | 0.5.2       | 1.3.1         |
 | 0.6.0       | 1.4.1         |
-| master      | 1.5.1         |
+| 0.6.1       | 1.5.2         |
+| master      | 1.6.0         |
 
-For release notes, look in the `notes/` directory.  They should also be up on [ls.implicit.ly](http://ls.implicit.ly/spark-jobserver/spark-jobserver).
+For release notes, look in the `notes/` directory.  They should also be up on [notes.implicit.ly](http://notes.implicit.ly/search/spark-jobserver).
 
-## Quick Start
+## Getting Started with Spark Job Server
 
 The easiest way to get started is to try the [Docker container](doc/docker.md) which prepackages a Spark distribution with the job server and lets you start and deploy it.
 
-## EC2 Start
+Alternatives:
 
-Follow the instructions in [EC2](doc/EC2.md) to spin up a Spark cluster with job server and an example application.
+* Build and run Job Server in local [development mode](#development-mode) within SBT.  NOTE:  This does NOT work for YARN, and in fact is only recommended with `spark.master` set to `local[*]`.  Please deploy if you want to try with YARN or other real cluster.
+* Deploy job server to a cluster.  There are two alternatives (see the [deployment section](#deployment)):
+  - `server_deploy.sh`  deploys job server to a directory on a remote host.
+  - `server_package.sh` deploys job server to a local directory, from which you can deploy the directory, or create a .tar.gz for Mesos or YARN deployment.
+* EC2 Deploy scripts - follow the instructions in [EC2](doc/EC2.md) to spin up a Spark cluster with job server and an example application.
+* EMR Deploy instruction - follow the instruction in [EMR](doc/EMR.md)
+
+NOTE: Spark Job Server runs `SparkContext`s in their own, forked JVM process when the config option `spark.jobserver.context-per-jvm` is set to `true`.  In local development mode, this is set to false by default, while the deployment templates have this set to true for production deployment. See [Deployment](#deployment) section for more info.
 
 ## Development mode
 
@@ -177,11 +232,11 @@ In your `build.sbt`, add this to use the job server jar:
 
         resolvers += "Job Server Bintray" at "https://dl.bintray.com/spark-jobserver/maven"
 
-        libraryDependencies += "spark.jobserver" %% "job-server-api" % "0.6.0" % "provided"
+        libraryDependencies += "spark.jobserver" %% "job-server-api" % "0.6.1" % "provided"
 
 If a SQL or Hive job/context is desired, you also want to pull in `job-server-extras`:
 
-    libraryDependencies += "spark.jobserver" %% "job-server-extras" % "0.6.0" % "provided"
+    libraryDependencies += "spark.jobserver" %% "job-server-extras" % "0.6.1" % "provided"
 
 For most use cases it's better to have the dependencies be "provided" because you don't want SBT assembly to include the whole job server jar.
 
@@ -227,8 +282,33 @@ Let's try running our sample job with an invalid configuration:
       }
     }
 
-### Using Named RDDs
-Named RDDs are a way to easily share RDDs among job. Using this facility, computed RDDs can be cached with a given name and later on retrieved.
+### Dependency jars
+
+You have a couple options to package and upload dependency jars.
+
+* The easiest is to use something like [sbt-assembly](https://github.com/sbt/sbt-assembly) to produce a fat jar.  Be sure to mark the Spark and job-server dependencies as "provided" so it won't blow up the jar size.  This works well if the number of dependencies is not large.
+* When the dependencies are sizeable and/or you don't want to load them with every different job, you can package the dependencies separately and use one of several options:
+    - Use the `dependent-jar-uris` context configuration param. Then the jar gets loaded for every job.
+    - The `dependent-jar-uris` can also be used in job configuration param when submitting a job. On an ad-hoc context this has the same effect as `dependent-jar-uris` context configuration param. On a persistent context the jars will be loaded for the current job and then for every job that will be executed on the persistent context.
+        ````
+        curl -d "" 'localhost:8090/contexts/test-context?num-cpu-cores=4&memory-per-node=512m'
+        OK⏎
+        ````      
+        ````
+        curl 'localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample&context=test-context&sync=true' -d '{
+            dependent-jar-uris = ["file:///myjars/deps01.jar", "file:///myjars/deps02.jar"],
+            input.string = "a b c a b see"
+        }'
+        ````
+        The jars /myjars/deps01.jar & /myjars/deps02.jar (present only on the SJS node) will be loaded and made available for the Spark driver & executors. 
+    - Use the `--package` option with Maven coordinates with `server_start.sh`.
+    - Put the extra jars in the SPARK_CLASSPATH
+
+### Named Objects 
+#### Using Named RDDs
+Initially, the job server only supported Named RDDs. For backwards compatibility and convenience, the following is still supported even though it is now possible to use the more generic Named Object support described in the next section.
+
+Named RDDs are a way to easily share RDDs among jobs. Using this facility, computed RDDs can be cached with a given name and later on retrieved.
 To use this feature, the SparkJob needs to mixin `NamedRddSupport`:
 ```scala
 object SampleNamedRDDJob  extends SparkJob with NamedRddSupport {
@@ -253,6 +333,47 @@ def validate(sc:SparkContext, config: Contig): SparkJobValidation = {
   ...
   val rdd = this.namedRdds.get[(Long, scala.Seq[String])]("dictionary")
   if (rdd.isDefined) SparkJobValid else SparkJobInvalid(s"Missing named RDD [dictionary]")
+}
+```
+#### Using Named Objects
+Named Objects are a way to easily share RDDs, DataFrames or other objects among jobs. Using this facility, computed objects can be cached with a given name and later on retrieved.
+To use this feature, the SparkJob needs to mixin `NamedObjectSupport`. It is also necessary to define implicit persisters for each desired type of named objects. For convencience, we have provided implementations for RDD persistence and for DataFrame persistence (defined in `job-server-extras`):
+```scala
+object SampleNamedObjectJob  extends SparkJob with NamedObjectSupport {
+  
+  implicit def rddPersister[T] : NamedObjectPersister[NamedRDD[T]] = new RDDPersister[T]
+  implicit val dataFramePersister = new DataFramePersister
+  
+    override def runJob(sc:SparkContext, jobConfig: Config): Any = ???
+    override def validate(sc:SparkContext, config: Config): SparkJobValidation = ???
+}
+```
+
+Then in the implementation of the job, RDDs can be stored with a given name:
+```scala
+this.namedObjects.update("rdd:french_dictionary", NamedRDD(frenchDictionaryRDD, forceComputation = false, storageLevel = StorageLevel.NONE))
+```
+DataFrames can be stored like so:
+```scala
+this.namedObjects.update("df:some df", NamedDataFrame(frenchDictionaryDF, forceComputation = false, storageLevel = StorageLevel.NONE))
+```
+It is advisable to use different name prefixes for different types of objects to avoid confusion. 
+
+Another job running in the same context can retrieve and use these objects later on:
+```scala
+val NamedRDD(frenchDictionaryRDD, _ ,_) = namedObjects.get[NamedRDD[(String, String)]]("rdd:french_dictionary").get
+
+val NamedDataFrame(frenchDictionaryDF, _, _) = namedObjects.get[NamedDataFrame]("df:some df").get
+
+```
+(Note the explicit type provided to get. This will allow to cast the retrieved RDD/DataFrame object to the proper result type.)
+
+For jobs that depends on a named objects it's a good practice to check for the existence of the NamedObject in the `validate` method as explained earlier:
+```scala   
+def validate(sc:SparkContext, config: Contig): SparkJobValidation = {
+  ...
+  val obj = this.namedObjects.get("dictionary")
+  if (obj.isDefined) SparkJobValid else SparkJobInvalid(s"Missing named object [dictionary]")
 }
 ```
 
@@ -316,7 +437,7 @@ curl -k --basic --user 'user:pw' https://localhost:8090/contexts
 
 ### Manual steps
 
-1. Copy `config/local.sh.template` to `<environment>.sh` and edit as appropriate.  NOTE: be sure to set SPARK_VERSION if you need to compile against a different version, ie. 1.4.1 for job server 0.6.0
+1. Copy `config/local.sh.template` to `<environment>.sh` and edit as appropriate.  NOTE: be sure to set SPARK_VERSION if you need to compile against a different version.
 2. Copy `config/shiro.ini.template` to `shiro.ini` and edit as appropriate. NOTE: only required when `authentication = on`
 3. Copy `config/local.conf.template` to `<environment>.conf` and edit as appropriate.
 4. `bin/server_deploy.sh <environment>` -- this packages the job server along with config files and pushes
@@ -327,8 +448,46 @@ The `server_start.sh` script uses `spark-submit` under the hood and may be passe
 
 NOTE: by default the assembly jar from `job-server-extras`, which includes support for SQLContext and HiveContext, is used.  If you face issues with all the extra dependencies, consider modifying the install scripts to invoke `sbt job-server/assembly` instead, which doesn't include the extra dependencies.
 
+NOTE: Each context is a separate process launched using spark-submit, via the included `manager_start.sh` script.
+You may want to set `deploy.manager-start-cmd` to the correct path to your start script and customize the script.
+Also, the extra processes talk to the master HTTP process via random ports using the Akka Cluster gossip protocol.  If for some reason the separate processes causes issues, set `spark.jobserver.context-per-jvm` to `false`, which will cause the job server to use a single JVM for all contexts.
+
+Log files are separated out for each context (assuming `context-per-jvm` is `true`) in their own subdirs under the `LOG_DIR` configured in `settings.sh` in the deployed directory.
+
 Note: to test out the deploy to a local staging dir, or package the job server for Mesos,
 use `bin/server_package.sh <environment>`.
+
+#### Configuring Spark Jobserver meta data Database backend
+
+By default, H2 database is used for storing Spark Jobserver related meta data.
+But this can be overridden. For example, to use PostgreSQL as backend add the
+following configuration to local.conf. Ensure that you have spark_jobserver
+database created with necessary rights granted to user.
+
+    sqldao {
+      # Slick database driver, full classpath
+      slick-driver = scala.slick.driver.PostgresDriver
+
+      # JDBC driver, full classpath
+      jdbc-driver = org.postgresql.Driver
+
+      # Directory where default H2 driver stores its data. Only needed for H2.
+      rootdir = "/var/spark-jobserver/sqldao/data"
+
+      jdbc {
+        url = "jdbc:postgresql://db_host/spark_jobserver"
+        user = "secret"
+        password = "secret"
+      }
+
+      dbcp {
+        maxactive = 20
+        maxidle = 10
+        initialsize = 10
+      }
+    }
+
+It is also important that any dependent jars are to be added to Job Server class path.
 
 ### Chef
 
@@ -361,6 +520,8 @@ Flow diagrams are checked in in the doc/ subdirectory.  .diagram files are for w
     POST /contexts/<name>       - creates a new context
     DELETE /contexts/<name>     - stops a context and all jobs running in it
     PUT /contexts?reload=reboot - kills all contexts and re-loads only the contexts from config
+
+Spark context configuration params can follow `POST /contexts/<name>` as query params. See section below for more details.
 
 ### Jobs
 
@@ -400,6 +561,10 @@ A number of context-specific settings can be controlled when creating a context 
 ad-hoc job (which creates a context on the spot).  For example, add urls of dependent jars for a context.
 
     POST '/contexts/my-new-context?dependent-jar-uris=file:///some/path/of/my-foo-lib.jar'
+
+NOTE: Only the latest `dependent-jar-uris` (btw it’s jar-uris, not jars-uri) takes effect.  You can specify multiple URIs by comma-separating them.  So like this:
+
+    &dependent-jar-uris=file:///path/a.jar,file:///path/b.jar
 
 When creating a context via POST /contexts, the query params are used to override the default configuration in
 spark.context-settings.  For example,
@@ -458,6 +623,13 @@ serialized properly:
 
 If we encounter a data type that is not supported, then the entire result will be serialized to a string.
 
+## Clients
+
+Spark Jobserver project has a
+[python binding](https://github.com/spark-jobserver/python-sjsclient) package.
+This can be used to quickly develop python applications that can interact with
+Spark Jobserver programmatically.
+
 ## Contribution and Development
 Contributions via Github Pull Request are welcome.  See the TODO for some ideas.
 
@@ -470,6 +642,10 @@ for instance: `sbt ++2.11.6 job-server/compile`
 - Please run scalastyle to ensure your code changes don't break the style guide
 - Do "reStart" from SBT for quick restarts of the job server process
 - Please update the g8 template if you change the SparkJob API
+
+Profiling software generously provided by ![](https://www.yourkit.com/images/yklogo.png)
+
+YourKit supports open source projects with its full-featured [Java Profiler](https://www.yourkit.com/java/profiler/index.jsp).
 
 ### Publishing packages
 

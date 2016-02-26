@@ -29,6 +29,14 @@ Then simply restart the job server.
 
 Note that the idle-timeout must be higher than request-timeout, or Spray and the job server won't start.
 
+## AskTimeout when starting job server or contexts
+
+If you are loading large jars or dependent jars, either at startup or when creating a large context, the database such as H2 may take a really long time to write those bytes to disk.  You need to adjust the context timeout setting:
+
+    spark.jobserver.context-creation-timeout
+
+Set it to 60 seconds or longer, especially if your jars are in the many MBs.
+
 ## Job server won't start / cannot bind to 0.0.0.0:8090
 
 Check that another process isn't already using that port.  If it is, you may want to start it on another port:
@@ -86,3 +94,9 @@ You start from SBT using `reStart`, and when try to create a HiveContext or SQLC
 Solution:
 
 Before typing `reStart` in sbt, type `project job-server-extras` and only then start it using `reStart` 
+
+## Accessing a config file in my job jar
+
+```scala
+ConfigFactory.parseReader(paramReader = new InputStreamReader(getClass().getResourceAsStream(s"/$myPassedConfigPath"))
+```

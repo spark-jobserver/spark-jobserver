@@ -1,0 +1,13 @@
+#Scala #akka @ApacheSpark
+
+* 1 context per JVM.  This forks off a separate process for each SparkContext, and is a major change in architecture.  (@velvia, @Ankit1010, many others)
+* Update to Spark 1.6.0 (@RaafatAkkad, @apivovarov)
+* NamedObjects, an abstraction of NamedRDDs to other types of things (@TimMaltGermany / KNIME)
+* Per-job dependent jars (@amarouni)
+* UI links to status/config (@h0ke)
+* Fix bug - invalid error w no user/pass #329 (@slater-ben)
+* Redirect /dev/null to stdin in server_start.sh (@apivovarov)
+* Database migration scripts and better table definitions (@v-gerasimov)
+* Chinese doc updates (@zp-j, @liujuncheng)
+* Minor improvements in style (@apivovarov)
+* README change to document overriding default meta data DB backend (@noorul)
