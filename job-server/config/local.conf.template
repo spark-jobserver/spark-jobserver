@@ -57,3 +57,10 @@ spark {
 
 # Note that you can use this file to define settings not only for job server,
 # but for your Spark jobs as well.  Spark job configuration merges with this configuration file as defaults.
+
+akka {
+  remote.netty.tcp {
+    # This controls the maximum message size, including job results, that can be sent
+    # maximum-frame-size = 10 MiB
+  }
+}

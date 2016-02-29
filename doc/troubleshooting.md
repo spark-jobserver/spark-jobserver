@@ -29,6 +29,12 @@ Then simply restart the job server.
 
 Note that the idle-timeout must be higher than request-timeout, or Spray and the job server won't start.
 
+## Timeout getting large job results
+
+If your job returns a large job result, it may exceed Akka's maximum network message frame size, in which case the result is dropped and you may get a network timeout.  Change the following configuration, which defaults to 10 MiB:
+
+    akka.remote.netty.tcp.maximum-frame-size = 100 MiB
+
 ## AskTimeout when starting job server or contexts
 
 If you are loading large jars or dependent jars, either at startup or when creating a large context, the database such as H2 may take a really long time to write those bytes to disk.  You need to adjust the context timeout setting:
