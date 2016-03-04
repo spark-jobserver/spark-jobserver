@@ -329,7 +329,7 @@ val rdd = this.namedRdds.get[(String, String)]("french_dictionary").get
 
 For jobs that depends on a named RDDs it's a good practice to check for the existence of the NamedRDD in the `validate` method as explained earlier:
 ```scala   
-def validate(sc:SparkContext, config: Contig): SparkJobValidation = {
+def validate(sc:SparkContext, config: Config): SparkJobValidation = {
   ...
   val rdd = this.namedRdds.get[(Long, scala.Seq[String])]("dictionary")
   if (rdd.isDefined) SparkJobValid else SparkJobInvalid(s"Missing named RDD [dictionary]")
@@ -370,7 +370,7 @@ val NamedDataFrame(frenchDictionaryDF, _, _) = namedObjects.get[NamedDataFrame](
 
 For jobs that depends on a named objects it's a good practice to check for the existence of the NamedObject in the `validate` method as explained earlier:
 ```scala   
-def validate(sc:SparkContext, config: Contig): SparkJobValidation = {
+def validate(sc:SparkContext, config: Config): SparkJobValidation = {
   ...
   val obj = this.namedObjects.get("dictionary")
   if (obj.isDefined) SparkJobValid else SparkJobInvalid(s"Missing named object [dictionary]")
