@@ -11,3 +11,4 @@
 * Chinese doc updates (@zp-j, @liujuncheng)
 * Minor improvements in style (@apivovarov)
 * README change to document overriding default meta data DB backend (@noorul)
+* README typo fix (@qayshp)
