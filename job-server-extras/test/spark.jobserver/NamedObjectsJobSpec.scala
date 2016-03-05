@@ -32,14 +32,15 @@ class NamedObjectsJobSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
         .withValue(NamedObjectsTestJobConfig.CREATE_RDD, ConfigValueFactory.fromAnyRef(true)),
         errorEvents ++ syncEvents)
       val JobResult(_, names: Array[String]) = expectMsgClass(classOf[JobResult])
-      names should equal(Array("rdd1"))
+      names should contain("rdd1")
 
       manager ! JobManagerActor.StartJob("demo", jobName, emptyConfig.withValue(NamedObjectsTestJobConfig.CREATE_DF, ConfigValueFactory.fromAnyRef(false))
         .withValue(NamedObjectsTestJobConfig.CREATE_RDD, ConfigValueFactory.fromAnyRef(false)),
         errorEvents ++ syncEvents)
       val JobResult(_, names2: Array[String]) = expectMsgClass(classOf[JobResult])
 
-      names2 should equal(names)
+      names2 should contain("rdd1")
+      names2 should not contain("df1")
 
       //clean-up
       manager ! JobManagerActor.StartJob("demo", jobName, emptyConfig.withValue(NamedObjectsTestJobConfig.DELETE, ConfigValueFactory.fromIterable(names.toList))
@@ -47,7 +48,8 @@ class NamedObjectsJobSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
         errorEvents ++ syncEvents)
       val JobResult(_, names3: Array[String]) = expectMsgClass(classOf[JobResult])
 
-      names3.size should equal(0)
+      names3 should not contain("rdd1")
+      names3 should not contain("df1")
     }
   }
 
@@ -61,7 +63,8 @@ class NamedObjectsJobSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
         .withValue(NamedObjectsTestJobConfig.CREATE_RDD, ConfigValueFactory.fromAnyRef(false)),
         errorEvents ++ syncEvents)
       val JobResult(_, names: Array[String]) = expectMsgClass(classOf[JobResult])
-      names should equal(Array("df1"))
+
+      names should contain("df1")
 
       manager ! JobManagerActor.StartJob("demo", jobName, emptyConfig.withValue(NamedObjectsTestJobConfig.CREATE_DF, ConfigValueFactory.fromAnyRef(false))
         .withValue(NamedObjectsTestJobConfig.CREATE_RDD, ConfigValueFactory.fromAnyRef(false)),
@@ -69,6 +72,12 @@ class NamedObjectsJobSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
       val JobResult(_, names2: Array[String]) = expectMsgClass(classOf[JobResult])
 
       names2 should equal(names)
+      
+      //clean-up
+      manager ! JobManagerActor.StartJob("demo", jobName, emptyConfig.withValue(NamedObjectsTestJobConfig.DELETE, ConfigValueFactory.fromIterable(names.toList))
+        .withValue(NamedObjectsTestJobConfig.CREATE_RDD, ConfigValueFactory.fromAnyRef(false)),
+        errorEvents ++ syncEvents)
+      val JobResult(_, names3: Array[String]) = expectMsgClass(classOf[JobResult])
     }
   }
 
