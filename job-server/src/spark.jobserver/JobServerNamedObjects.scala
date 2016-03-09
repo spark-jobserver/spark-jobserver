@@ -18,8 +18,6 @@ import spray.util._
  */
 class JobServerNamedObjects(system: ActorSystem) extends NamedObjects {
 
-  import JobServerNamedObjects._
-
   val logger = LoggerFactory.getLogger(getClass)
 
   implicit val ec: ExecutionContext = system.dispatcher
@@ -31,6 +29,11 @@ class JobServerNamedObjects(system: ActorSystem) extends NamedObjects {
   val defaultTimeout = Timeout(
     config.getDuration("spark.jobserver.named-object-creation-timeout",
       SECONDS), SECONDS)
+
+  // we must store a reference to each NamedObject even though only its ID is used here
+  // this reference prevents the object from being GCed and cleaned by sparks ContextCleaner
+  // or some other GC for other types of objects
+  private val namesToObjects: Cache[NamedObject] = LruCache()
 
   override def getOrElseCreate[O <: NamedObject](name: String, objGen: => O)
                                  (implicit timeout: Timeout = defaultTimeout,
@@ -93,15 +96,5 @@ class JobServerNamedObjects(system: ActorSystem) extends NamedObjects {
       case answer: Iterable[String] @unchecked => answer
     }
   }
-}
 
-/**
- * companion object that hold reference to cache with named object so that we can reference
- * named objects across jobs
- */
-object JobServerNamedObjects {
-  // we must store a reference to each NamedObject even though only its ID is used here
-  // this reference prevents the object from being GCed and cleaned by sparks ContextCleaner
-  // or some other GC for other types of objects
-  val namesToObjects: Cache[NamedObject] = LruCache()
 }
