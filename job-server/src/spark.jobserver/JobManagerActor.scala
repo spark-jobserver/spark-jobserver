@@ -95,6 +95,7 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
   protected var resultActor: ActorRef = _
   private var daoActor: ActorRef = _
 
+  private val jobServerNamedObjects = new JobServerNamedObjects(context.system)
 
   override def postStop() {
     logger.info("Shutting down SparkContext {}", contextName)
@@ -257,7 +258,7 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
       if (job.isInstanceOf[NamedObjectSupport]) {
         val namedObjects = job.asInstanceOf[NamedObjectSupport].namedObjectsPrivate
         if (namedObjects.get() == null) {
-          namedObjects.compareAndSet(null, new JobServerNamedObjects(context.system))
+          namedObjects.compareAndSet(null, jobServerNamedObjects)
         }
       }
 

@@ -2,7 +2,7 @@ package spark.jobserver
 
 import akka.actor.{ ActorRef, ActorSystem, Props }
 import akka.testkit.{ ImplicitSender, TestKit }
-import org.apache.spark.SparkContext
+import org.apache.spark.{ SparkContext, SparkConf }
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
 import org.scalatest.{ Matchers, FunSpecLike, FunSpec, BeforeAndAfterAll, BeforeAndAfter }
@@ -14,7 +14,7 @@ import org.scalatest.{ Matchers, FunSpecLike, FunSpec, BeforeAndAfterAll, Before
 class NamedObjectsRDDsOnlySpec extends TestKit(ActorSystem("NamedObjectsSpec")) with FunSpecLike
     with ImplicitSender with Matchers with BeforeAndAfter with BeforeAndAfterAll {
   
-  val sc = new SparkContext("local[4]", getClass.getSimpleName)
+  val sc = new SparkContext("local[2]", getClass.getSimpleName, new SparkConf)
   val namedObjects: NamedObjects = new JobServerNamedObjects(system)
 
   implicit def rddPersister[T] = new RDDPersister[T]

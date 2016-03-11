@@ -2,7 +2,7 @@ package spark.jobserver
 
 import akka.actor.{ ActorRef, ActorSystem, Props }
 import akka.testkit.{ ImplicitSender, TestKit }
-import org.apache.spark.SparkContext
+import org.apache.spark.{ SparkContext, SparkConf }
 import org.apache.spark.storage.StorageLevel
 import org.scalatest.{ FunSpecLike, FunSpec, BeforeAndAfterAll, BeforeAndAfter }
 import com.typesafe.config.Config
@@ -15,7 +15,7 @@ class JobWithNamedRddsSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
 
   private val emptyConfig = ConfigFactory.parseString("spark.jobserver.named-object-creation-timeout = 60 s")
 
-  val sc = new SparkContext("local[4]", getClass.getSimpleName)
+  val sc = new SparkContext("local[4]", getClass.getSimpleName, new SparkConf)
 
   class TestJob1 extends SparkJob with NamedRddSupport {
     def validate(sc: SparkContext, config: Config): SparkJobValidation = SparkJobValid
