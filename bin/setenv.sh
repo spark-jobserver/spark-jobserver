@@ -53,6 +53,10 @@ if [ "$PORT" != "" ]; then
   CONFIG_OVERRIDES+="-Dspark.jobserver.port=$PORT "
 fi
 
+if [ "$DEBUG_PORT" != "" ]; then
+  CONFIG_OVERRIDES+="-Xdebug -Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=$DEBUG_PORT "
+fi
+
 if [ -z "$JOBSERVER_MEMORY" ]; then
   JOBSERVER_MEMORY=1G
 fi

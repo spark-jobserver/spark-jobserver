@@ -2,7 +2,7 @@ package spark.jobserver
 
 import akka.actor.{ ActorRef, ActorSystem, Props }
 import akka.testkit.{ ImplicitSender, TestKit }
-import org.apache.spark.SparkContext
+import org.apache.spark.{ SparkContext, SparkConf }
 import org.apache.spark.sql.{ SQLContext, Row, DataFrame}
 import org.apache.spark.sql.types._
 import org.apache.spark.rdd.RDD
@@ -16,7 +16,7 @@ import org.scalatest.{ Matchers, FunSpecLike, FunSpec, BeforeAndAfterAll, Before
 class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with FunSpecLike
     with ImplicitSender with Matchers with BeforeAndAfter with BeforeAndAfterAll {
   
-  val sc = new SparkContext("local[4]", getClass.getSimpleName)
+  val sc = new SparkContext("local[3]", getClass.getSimpleName, new SparkConf)
   val sqlContext = new SQLContext(sc)
   val namedObjects: NamedObjects = new JobServerNamedObjects(system)
 
