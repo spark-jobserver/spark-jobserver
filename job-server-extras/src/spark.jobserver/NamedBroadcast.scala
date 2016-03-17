@@ -12,9 +12,6 @@ case class NamedBroadcast[T](broadcast: Broadcast[T]) extends NamedObject
   */
 class BroadcastPersister[T] extends NamedObjectPersister[NamedBroadcast[T]] {
   override def persist(namedObj: NamedBroadcast[T], name: String) {
-    namedObj match {
-      case NamedBroadcast(broadcast) =>{}
-    }
   }
   override def unpersist(namedObj: NamedBroadcast[T]) {
     namedObj match {
