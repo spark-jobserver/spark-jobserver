@@ -15,6 +15,7 @@ class NamedObjectsTestJob extends SparkJob with NamedObjectSupport {
   import NamedObjectsTestJobConfig._
   implicit def rddPersister: NamedObjectPersister[NamedRDD[Row]] = new RDDPersister[Row]
   implicit def dataFramePersister: NamedObjectPersister[NamedDataFrame] = new DataFramePersister
+  implicit def broadcastPersister[U]: NamedObjectPersister[NamedBroadcast[U]] = new BroadcastPersister[U]
 
   def validate(sql: SparkContext, config: Config): SparkJobValidation = SparkJobValid
 
@@ -35,6 +36,11 @@ class NamedObjectsTestJob extends SparkJob with NamedObjectSupport {
       namedObjects.update("rdd1", NamedRDD(rows(sc), true, StorageLevel.MEMORY_ONLY))
     }
 
+    if (config.hasPath(CREATE_BROADCAST)){
+      val broadcast = sc.broadcast(Set(1,2,3,4,5))
+      namedObjects.update("broadcast1", NamedBroadcast(broadcast))
+    }
+
     if (config.hasPath(DELETE)) {
       val iter = config.getStringList(DELETE).iterator
       while (iter.hasNext) {
@@ -49,6 +55,7 @@ class NamedObjectsTestJob extends SparkJob with NamedObjectSupport {
 object NamedObjectsTestJobConfig {
   val CREATE_DF = "createDF"
   val CREATE_RDD = "createRDD"
+  val CREATE_BROADCAST = "createBroadcast"
   val DELETE = "delete"
 }
 
