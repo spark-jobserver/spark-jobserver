@@ -3,6 +3,7 @@
 * 1 context per JVM.  This forks off a separate process for each SparkContext, and is a major change in architecture.  (@velvia, @Ankit1010, many others)
 * Update to Spark 1.6.0 (@RaafatAkkad, @apivovarov)
 * NamedObjects, an abstraction of NamedRDDs to other types of things (@TimMaltGermany / KNIME)
+* NamedBroadcasts (@CBribiescas)
 * Per-job dependent jars (@amarouni)
 * DEBUG_PORT env var allows remote debugging (@addisonj)
 * UI links to status/config (@h0ke)
