@@ -287,8 +287,10 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
         statusActor ! JobFinished(jobId, DateTime.now())
         resultActor ! JobResult(jobId, result)
       case Failure(error: Throwable) =>
+        // Wrapping the error inside a RuntimeException to handle the case of throwing custom exceptions.
+        val wrappedError = wrapInRuntimeException(error)
         // If and only if job validation fails, JobErroredOut message is dropped silently in JobStatusActor.
-        statusActor ! JobErroredOut(jobId, DateTime.now(), error)
+        statusActor ! JobErroredOut(jobId, DateTime.now(), wrappedError)
         logger.warn("Exception from job " + jobId + ": ", error)
     }(executionContext).andThen {
       case _ =>
@@ -299,6 +301,28 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
         currentRunningJobs.getAndDecrement()
         postEachJob()
     }(executionContext)
+  }
+
+  // Wraps a Throwable object into a RuntimeException. This is useful in case
+  // a custom exception is thrown. Currently, throwing a custom exception doesn't
+  // work and this is a workaround to wrap it into a standard exception.
+  protected def wrapInRuntimeException(t: Throwable): RuntimeException = {
+    val cause : Throwable = getRootCause(t)
+    val e : RuntimeException = new RuntimeException("%s: %s"
+      .format(cause.getClass().getName() ,cause.getMessage))
+    e.setStackTrace(cause.getStackTrace())
+    return e
+  }
+
+  // Gets the very first exception that caused the current exception to be thrown.
+  protected def getRootCause(t: Throwable): Throwable = {
+    var result : Throwable = t
+    var cause : Throwable = result.getCause()
+    while(cause != null  && (result != cause) ) {
+      result = cause
+      cause = result.getCause()
+    }
+    return result
   }
 
   // Use our classloader and a factory to create the SparkContext.  This ensures the SparkContext will use
