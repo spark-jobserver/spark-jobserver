@@ -2,6 +2,9 @@ package spark.jobserver
 
 import com.typesafe.config.Config
 import org.apache.spark.SparkContext
+import org.scalactic._
+
+import spark.jobserver.api.{SparkJobBase => NewSparkJob, JobEnvironment, ValidationProblem}
 
 sealed trait SparkJobValidation {
   // NOTE(harish): We tried using lazy eval here by passing in a function
@@ -13,13 +16,24 @@ sealed trait SparkJobValidation {
   }
 }
 case object SparkJobValid extends SparkJobValidation
-case class SparkJobInvalid(reason: String) extends SparkJobValidation
+case class SparkJobInvalid(reason: String) extends SparkJobValidation with ValidationProblem
 
 /**
- *  This trait is the main API for Spark jobs submitted to the Job Server.
+ *  This is the deprecated trait is the main API for Spark jobs submitted to the Job Server.
  */
-trait SparkJobBase {
-  type C
+@Deprecated
+trait SparkJobBase extends NewSparkJob {
+  type JobOutput = Any
+  type JobData = Config
+
+  def runJob(sc: C, runtime: JobEnvironment, data: JobData): JobOutput = runJob(sc, data)
+
+  def validate(sc: C, runtime: JobEnvironment, config: Config): JobData Or Every[ValidationProblem] = {
+    validate(sc, config) match {
+      case SparkJobValid      => Good(config)
+      case i: SparkJobInvalid => Bad(One(i))
+    }
+  }
 
   /**
    * This is the entry point for a Spark Job Server to execute Spark jobs.
