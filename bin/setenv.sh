@@ -61,6 +61,10 @@ if [ -z "$JOBSERVER_MEMORY" ]; then
   JOBSERVER_MEMORY=1G
 fi
 
+if [ -z "$MAX_DIRECT_MEMORY" ]; then
+  MAX_DIRECT_MEMORY=512M
+fi
+
 # This needs to be exported for standalone mode so drivers can connect to the Spark cluster
 export SPARK_HOME
 export YARN_CONF_DIR
