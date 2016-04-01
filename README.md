@@ -519,7 +519,7 @@ Flow diagrams are checked in in the doc/ subdirectory.  .diagram files are for w
     GET /contexts               - lists all current contexts
     POST /contexts/<name>       - creates a new context
     DELETE /contexts/<name>     - stops a context and all jobs running in it
-    PUT /contexts?reload=reboot - kills all contexts and re-loads only the contexts from config
+    PUT /contexts?reset=reboot  - kills all contexts and re-loads only the contexts from config
 
 Spark context configuration params can follow `POST /contexts/<name>` as query params. See section below for more details.
 
