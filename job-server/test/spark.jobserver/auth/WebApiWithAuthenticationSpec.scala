@@ -158,7 +158,7 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
   }
 
   describe("routes with timeout") {
-    it("jobs should not allow user with valid authorization when timeout") {
+    ignore("jobs should not allow user with valid authorization when timeout") {
       Get("/jobs/foobar").withHeaders(authorization) ~>
         sealRoute(routesWithTimeout("0 s")) ~> check {
           status should be(InternalServerError)
