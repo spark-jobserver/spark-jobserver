@@ -1,17 +1,21 @@
 package spark.jobserver
 
 import java.util.concurrent.Executors._
-import akka.actor.{ActorRef, Props, PoisonPill}
+
+import akka.actor.{ActorRef, PoisonPill, Props}
 import com.typesafe.config.Config
 import java.net.{URI, URL}
 import java.util.concurrent.atomic.AtomicInteger
+
 import ooyala.common.akka.InstrumentedActor
-import org.apache.spark.{ SparkEnv, SparkContext }
+import org.apache.hadoop.conf.Configuration
+import org.apache.spark.{SparkConf, SparkContext, SparkEnv}
 import org.joda.time.DateTime
-import scala.concurrent.{ Future, ExecutionContext }
+
+import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 import spark.jobserver.ContextSupervisor.StopContext
-import spark.jobserver.io.{JobDAOActor, JobDAO, JobInfo, JarInfo}
+import spark.jobserver.io.{JarInfo, JobDAO, JobDAOActor, JobInfo}
 import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
 
 object JobManagerActor {
@@ -20,9 +24,11 @@ object JobManagerActor {
   case class StartJob(appName: String, classPath: String, config: Config,
                       subscribedEvents: Set[Class[_]])
   case class KillJob(jobId: String)
+  case object ContextConfig
   case object SparkContextStatus
 
   // Results/Data
+  case class ContextConfig(contextName: String, contextConfig: SparkConf, hadoopConfig: Configuration)
   case class Initialized(contextName: String, resultActor: ActorRef)
   case class InitError(t: Throwable)
   case class JobLoadingError(err: Throwable)
@@ -152,7 +158,23 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
           sender ! SparkContextAlive
         } catch {
           case e: Exception => {
-            logger.error("SparkContext is not exist!")
+            logger.error("SparkContext does not exist!")
+            sender ! SparkContextDead
+          }
+        }
+      }
+    }
+    case ContextConfig => {
+      if (jobContext.sparkContext == null){
+        sender ! SparkContextDead
+      }else{
+        try {
+          val conf: SparkConf = jobContext.sparkContext.getConf
+          val hadoopConf: Configuration = jobContext.sparkContext.hadoopConfiguration
+          sender ! ContextConfig(jobContext.sparkContext.appName, conf, hadoopConf)
+        } catch {
+          case e: Exception => {
+            logger.error("SparkContext does not exist!")
             sender ! SparkContextDead
           }
         }
