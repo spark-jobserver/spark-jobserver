@@ -201,7 +201,13 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
           failureFunc(e)
           return
       }
-    val pb = Process(s"$managerStartCommand $contextDir ${selfAddress.toString}")
+
+    val driverMemory = new StringBuilder
+    if (contextConfig.hasPath("spark.driver.memory")) {
+      driverMemory.append(contextConfig.getString("spark.driver.memory"))
+    }
+
+    val pb = Process(s"$managerStartCommand $contextDir ${selfAddress.toString} $driverMemory")
     val pio = new ProcessIO(_ => (),
                         stdout => scala.io.Source.fromInputStream(stdout)
                           .getLines.foreach(println),
