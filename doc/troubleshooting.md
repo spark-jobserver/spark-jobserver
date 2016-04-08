@@ -43,6 +43,8 @@ If you are loading large jars or dependent jars, either at startup or when creat
 
 Set it to 60 seconds or longer, especially if your jars are in the many MBs.
 
+NOTE: if you are running SJS in Docker, esp on AWS, you might need to enable host-only networking.
+
 ## Job server won't start / cannot bind to 0.0.0.0:8090
 
 Check that another process isn't already using that port.  If it is, you may want to start it on another port:
