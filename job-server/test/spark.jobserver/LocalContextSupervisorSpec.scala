@@ -111,7 +111,7 @@ class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.syst
       supervisor ! GetContext("c1")
       expectMsgPF(5 seconds, "I can't find that context :'-(") {
         case (contextActor: ActorRef, resultActor: ActorRef) => {
-          contextActor ! ContextConfig
+          contextActor ! GetContextConfig
           val cc = expectMsgClass(classOf[ContextConfig])
           cc.contextName shouldBe "c1"
           cc.contextConfig.get("spark.ui.enabled") shouldBe "false"

@@ -600,6 +600,14 @@ To pass settings directly to the sparkConf that do not use the "spark." prefix "
         }
     }
 
+To add to the underlying Hadoop configuration in a Spark context, add the hadoop section to the context settings
+
+    spark.context-settings {
+        hadoop {
+            mapreduce.framework.name = "Foo"
+        }
+    }
+
 For the exact context configuration parameters, see JobManagerActor docs as well as application.conf.
 
 Also see the [yarn doc](doc/yarn.md) for more tips.

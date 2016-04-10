@@ -24,7 +24,7 @@ object JobManagerActor {
   case class StartJob(appName: String, classPath: String, config: Config,
                       subscribedEvents: Set[Class[_]])
   case class KillJob(jobId: String)
-  case object ContextConfig
+  case object GetContextConfig
   case object SparkContextStatus
 
   // Results/Data
@@ -164,10 +164,10 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
         }
       }
     }
-    case ContextConfig => {
-      if (jobContext.sparkContext == null){
+    case GetContextConfig => {
+      if (jobContext.sparkContext == null) {
         sender ! SparkContextDead
-      }else{
+      } else {
         try {
           val conf: SparkConf = jobContext.sparkContext.getConf
           val hadoopConf: Configuration = jobContext.sparkContext.hadoopConfiguration
