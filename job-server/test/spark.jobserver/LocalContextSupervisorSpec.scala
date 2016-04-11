@@ -1,10 +1,12 @@
 package spark.jobserver
 
 import akka.actor._
-import akka.testkit.{TestKit, ImplicitSender}
+import akka.testkit.{ImplicitSender, TestKit}
 import com.typesafe.config.ConfigFactory
-import spark.jobserver.io.{JobDAOActor, JobDAO}
-import org.scalatest.{Matchers, FunSpecLike, BeforeAndAfterAll, BeforeAndAfter}
+import org.apache.hadoop.conf.Configuration
+import org.apache.spark.SparkConf
+import spark.jobserver.io.{JobDAO, JobDAOActor}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 
 import scala.concurrent.duration._
 
@@ -35,6 +37,9 @@ object LocalContextSupervisorSpec {
         passthrough {
           spark.driver.allowMultipleContexts = true
           spark.ui.enabled = false
+        }
+        hadoop {
+          mapreduce.framework.name = "ayylmao"
         }
       }
     }
@@ -71,6 +76,7 @@ class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.syst
   }
 
   import ContextSupervisor._
+  import JobManagerActor._
 
   describe("context management") {
     it("should list empty contexts at startup") {
@@ -97,6 +103,21 @@ class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.syst
       supervisor ! GetResultActor("c1")
       val rActor = expectMsgClass(classOf[ActorRef])
       rActor.path.toString should not include ("global")
+    }
+
+    it("should be able to get context configs") {
+      supervisor ! AddContext("c1", contextConfig)
+      expectMsg(ContextInitialized)
+      supervisor ! GetContext("c1")
+      expectMsgPF(5 seconds, "I can't find that context :'-(") {
+        case (contextActor: ActorRef, resultActor: ActorRef) => {
+          contextActor ! GetContextConfig
+          val cc = expectMsgClass(classOf[ContextConfig])
+          cc.contextName shouldBe "c1"
+          cc.contextConfig.get("spark.ui.enabled") shouldBe "false"
+          cc.hadoopConfig.get("mapreduce.framework.name") shouldBe "ayylmao"
+        }
+      }
     }
 
     it("should be able to stop contexts already running") {

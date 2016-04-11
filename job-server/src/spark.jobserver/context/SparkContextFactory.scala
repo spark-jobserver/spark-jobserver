@@ -50,9 +50,11 @@ class DefaultSparkContextFactory extends SparkContextFactory {
   type C = SparkContext with ContextLike
 
   def makeContext(sparkConf: SparkConf, config: Config,  contextName: String): C = {
-    new SparkContext(sparkConf) with ContextLike {
+    val sc = new SparkContext(sparkConf) with ContextLike {
       def sparkContext: SparkContext = this
       def isValidJob(job: SparkJobBase): Boolean = job.isInstanceOf[SparkJob]
     }
+    for ((k, v) <- SparkJobUtils.getHadoopConfig(config)) sc.hadoopConfiguration.set(k, v)
+    sc
   }
 }
