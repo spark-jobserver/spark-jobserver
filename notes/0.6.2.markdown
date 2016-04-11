@@ -9,6 +9,7 @@
 * UI links to status/config (@h0ke)
 * Fix bug - invalid error w no user/pass #329 (@slater-ben)
 * Workaround - custom error classes for context-per-jvm (@ishassan)
+* Spark Hadoop configuration in spark.context-settings.hadoop (@hntd187)
 * Expose MAX_DIRECT_MEMORY to adjust direct memory buffer size (@addisonj)
 * Redirect /dev/null to stdin in server_start.sh (@apivovarov)
 * Database migration scripts and better table definitions (@v-gerasimov)
