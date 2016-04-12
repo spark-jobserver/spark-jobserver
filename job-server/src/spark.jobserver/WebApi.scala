@@ -4,7 +4,7 @@ import java.util.NoSuchElementException
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLContext
 
-import akka.actor.{Actor, ActorLogging, ActorRef, ActorSystem, Props}
+import akka.actor.{ActorRef, ActorSystem}
 import akka.pattern.ask
 import akka.util.Timeout
 import com.typesafe.config.{Config, ConfigException, ConfigFactory, ConfigRenderOptions}
@@ -18,7 +18,6 @@ import spark.jobserver.auth._
 import spark.jobserver.io.JobInfo
 import spark.jobserver.routes.DataRoutes
 import spark.jobserver.util.{SSLContextFactory, SparkJobUtils}
-import spray.can.Http
 import spray.http._
 import spray.httpx.SprayJsonSupport.sprayJsonMarshaller
 import spray.io.ServerSSLEngineProvider
@@ -106,7 +105,8 @@ class WebApi(system: ActorSystem,
              dataManager: ActorRef,
              supervisor: ActorRef,
              jobInfo: ActorRef)
-    extends HttpService with CommonRoutes with DataRoutes with SJSAuthenticator with CORSSupport {
+    extends HttpService with CommonRoutes with DataRoutes with SJSAuthenticator with CORSSupport
+                        with ChunkEncodedStreamingSupport {
   import CommonMessages._
   import ContextSupervisor._
   import scala.concurrent.duration._
@@ -123,12 +123,8 @@ class WebApi(system: ActorSystem,
   val DefaultJobLimit = 50
   val StatusKey = "status"
   val ResultKey = "result"
-  val ResultChunkSize = if (config.hasPath("spark.jobserver.result-chunk-size")) {
-    config.getBytes("spark.jobserver.result-chunk-size").toInt
-  }
-  else {
-    100 * 1024
-  }
+  val ResultChunkSize = Option("spark.jobserver.result-chunk-size").filter(config.hasPath)
+      .fold(100 * 1024)(config.getBytes(_).toInt)
 
   val contextTimeout = SparkJobUtils.getContextTimeout(config)
   val bindAddress = config.getString("spark.jobserver.bind-address")
@@ -489,13 +485,12 @@ class WebApi(system: ActorSystem,
                       JobManagerActor.StartJob(appName, classPath, jobConfig, events))(timeout)
                     respondWithMediaType(MediaTypes.`application/json`) { ctx =>
                       future.map {
-                        case JobResult(_, res) => {
+                        case JobResult(_, res) =>
                           res match {
                             case s: Stream[_] => sendStreamingResponse(ctx, ResultChunkSize,
                               resultToByteIterator(Map.empty, s.toIterator))
                             case _ => ctx.complete(resultToTable(res))
                           }
-                        }
                         case JobErroredOut(_, _, ex) => ctx.complete(errMap(ex, "ERROR"))
                         case JobStarted(jobId, context, _) =>
                           jobInfo ! StoreJobConfig(jobId, postedJobConfig)
@@ -530,43 +525,6 @@ class WebApi(system: ActorSystem,
               }
           }
         }
-    }
-  }
-
-  private def sendStreamingResponse(ctx: RequestContext,
-                                    chunkSize: Int,
-                                    byteIterator: Iterator[_]): Unit = {
-    // simple case class whose instances we use as send confirmation message for streaming chunks
-    case class Ok(remaining: Iterator[_])
-    actorRefFactory.actorOf {
-      Props {
-        new Actor with ActorLogging {
-          // we use the successful sending of a chunk as trigger for sending the next chunk
-          ctx.responder ! ChunkedResponseStart(
-            HttpResponse(entity = HttpEntity(MediaTypes.`application/json`,
-              byteIterator.take(chunkSize).map {
-                case c: Byte => c
-              }.toArray))).withAck(Ok(byteIterator))
-
-          def receive: Receive = {
-            case Ok(remaining) =>
-              val arr = remaining.take(chunkSize).map {
-                case c: Byte => c
-              }.toArray
-              if (arr.nonEmpty) {
-                ctx.responder ! MessageChunk(arr).withAck(Ok(remaining))
-              }
-              else {
-                ctx.responder ! ChunkedMessageEnd
-                context.stop(self)
-              }
-            case ev: Http.ConnectionClosed => {
-              log.warning("Stopping response streaming due to {}", ev)
-              context.stop(self)
-            }
-          }
-        }
-      }
     }
   }
 
