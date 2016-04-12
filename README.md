@@ -620,6 +620,8 @@ serialized properly:
 - Array's
 - Anything that implements Product (Option, case classes) -- they will be serialized as lists
 - Maps and Seqs may contain nested values of any of the above
+- If a job result is of scala's Stream[Byte] type it will be serialised directly as a chunk encoded stream.
+  This is useful if your job result payload is large and may cause a timeout serialising as objects.
 
 If we encounter a data type that is not supported, then the entire result will be serialized to a string.
 

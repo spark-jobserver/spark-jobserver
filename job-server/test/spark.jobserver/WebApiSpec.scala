@@ -4,8 +4,8 @@ import akka.actor.{Actor, Props}
 import com.typesafe.config.ConfigFactory
 import spark.jobserver.io.{JobDAOActor, JobInfo, JarInfo}
 import org.joda.time.DateTime
-import org.scalatest.{Matchers, FunSpec, BeforeAndAfterAll}
-import spray.http.StatusCodes._
+import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
+import spark.jobserver.io.{JarInfo, JobInfo}
 import spray.routing.HttpService
 import spray.testkit.ScalatestRouteTest
 
@@ -75,7 +75,11 @@ with ScalatestRouteTest with HttpService {
         sender ! finishedJobInfo
       case GetJobResult("_seq") =>
         sender ! JobResult("_seq", Seq(1, 2, Map("3" -> "three")))
+      case GetJobResult("_stream") =>
+        sender ! JobResult("_stream", "\"1, 2, 3, 4, 5, 6, 7\"".getBytes().toStream)
       case GetJobStatus("_num") =>
+        sender ! finishedJobInfo
+      case GetJobStatus("_stream") =>
         sender ! finishedJobInfo
       case GetJobResult("_num") =>
         sender ! JobResult("_num", 5000)
@@ -117,13 +121,21 @@ with ScalatestRouteTest with HttpService {
       case StartJob("err", _, config, _) =>  sender ! JobErroredOut("foo", dt,
                                                         new RuntimeException("oops",
                                                           new IllegalArgumentException("foo")))
-      case StartJob(_, _, config, events)     =>
+      case StartJob("foo", _, config, events)     =>
         statusActor ! Subscribe("foo", sender, events)
         statusActor ! JobStatusActor.JobInit(JobInfo("foo", "context", null, "", dt, None, None))
         statusActor ! JobStarted("foo", "context1", dt)
         val map = config.entrySet().asScala.map { entry => (entry.getKey -> entry.getValue.unwrapped) }.toMap
         if (events.contains(classOf[JobResult])) sender ! JobResult("foo", map)
         statusActor ! Unsubscribe("foo", sender)
+
+      case StartJob("foo.stream", _, config, events)     =>
+        statusActor ! Subscribe("foo.stream", sender, events)
+        statusActor ! JobStatusActor.JobInit(JobInfo("foo.stream", "context", null, "", dt, None, None))
+        statusActor ! JobStarted("foo.stream", "context1", dt)
+        val result = "\"1, 2, 3, 4, 5, 6\"".getBytes().toStream
+        if (events.contains(classOf[JobResult])) sender ! JobResult("foo.stream", result)
+        statusActor ! Unsubscribe("foo.stream", sender)
 
       case GetJobConfig("badjobid") => sender ! NoSuchJobId
       case GetJobConfig(_)          => sender ! config
