@@ -105,7 +105,7 @@ object JobServerBuild extends Build {
       val artifact = (outputPath in assembly in jobServerExtras).value
       val artifactTargetPath = s"/app/${artifact.name}"
       new sbtdocker.mutable.Dockerfile {
-        from("java:7-jre")
+        from(s"java:${javaVersion}")
         // Dockerfile best practices: https://docs.docker.com/articles/dockerfile_best-practices/
         expose(8090)
         expose(9999)    // for JMX
