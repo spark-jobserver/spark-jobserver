@@ -1,20 +1,19 @@
 package spark.jobserver
 
-import akka.actor.{Props, PoisonPill, ActorRef, ActorSystem}
+import akka.actor.{Props, ActorRef, ActorSystem}
 import akka.testkit.{TestKit, ImplicitSender}
 import spark.jobserver.io.{JobDAOActor, JarInfo, JobInfo, JobDAO}
 import org.joda.time.DateTime
-import org.scalatest.matchers.ShouldMatchers
-import org.scalatest.{FunSpecLike, FunSpec, BeforeAndAfter, BeforeAndAfterAll}
+import org.scalatest.Matchers
+import org.scalatest.{FunSpecLike, BeforeAndAfter, BeforeAndAfterAll}
 
 object JobStatusActorSpec {
   val system = ActorSystem("test")
 }
 
 class JobStatusActorSpec extends TestKit(JobStatusActorSpec.system) with ImplicitSender
-with FunSpecLike with ShouldMatchers with BeforeAndAfter with BeforeAndAfterAll {
+with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
-  import com.typesafe.config._
   import CommonMessages._
   import JobStatusActor._
 
@@ -24,7 +23,6 @@ with FunSpecLike with ShouldMatchers with BeforeAndAfter with BeforeAndAfterAll 
   private val jarInfo = JarInfo(appName, DateTime.now)
   private val classPath = "classPath"
   private val jobInfo = JobInfo(jobId, contextName, jarInfo, classPath, DateTime.now, None, None)
-  private val jobConfig = ConfigFactory.empty()
 
   override def afterAll() {
     ooyala.common.akka.AkkaTestUtils.shutdownAndWait(JobStatusActorSpec.system)

@@ -1,10 +1,11 @@
+import scalariform.formatter.preferences._
+
+import bintray.Plugin.bintrayPublishSettings
+import com.typesafe.sbt.SbtScalariform._
+import sbt.Keys._
 import sbt._
-import Keys._
 import sbtassembly.AssemblyPlugin.autoImport._
 import spray.revolver.RevolverPlugin._
-import com.typesafe.sbt.SbtScalariform._
-import scalariform.formatter.preferences._
-import bintray.Plugin.bintrayPublishSettings
 
 // There are advantages to using real Scala build files with SBT:
 //  - Multi-JVM testing won't work without it, for now
@@ -176,11 +177,11 @@ object JobServerBuild extends Build {
   // Create a default Scala style task to run with compiles
   lazy val runScalaStyle = taskKey[Unit]("testScalaStyle")
 
-  lazy val commonSettings = Defaults.defaultSettings ++ dirSettings ++ implicitlySettings ++ Seq(
+  lazy val commonSettings = Defaults.coreDefaultSettings ++ dirSettings ++ implicitlySettings ++ Seq(
     organization := "spark.jobserver",
     crossPaths   := true,
-    crossScalaVersions := Seq("2.10.5","2.11.6"),
-    scalaVersion := "2.10.5",
+    crossScalaVersions := Seq("2.10.6","2.11.8"),
+    scalaVersion := "2.10.6",
     publishTo    := Some(Resolver.file("Unused repo", file("target/unusedrepo"))),
 
     // scalastyleFailOnError := true,
