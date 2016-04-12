@@ -1,11 +1,10 @@
 package spark.jobserver
 
-import akka.actor.{Actor, Props}
+import akka.actor.{Actor, ActorSystem, Props}
 import com.typesafe.config.ConfigFactory
-import spark.jobserver.io.{JobDAOActor, JobInfo, JarInfo}
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
-import spark.jobserver.io.{JarInfo, JobInfo}
+import spark.jobserver.io.{JarInfo, JobDAOActor, JobInfo}
 import spray.routing.HttpService
 import spray.testkit.ScalatestRouteTest
 
@@ -16,11 +15,8 @@ import spray.testkit.ScalatestRouteTest
 class WebApiSpec extends FunSpec with Matchers with BeforeAndAfterAll
 with ScalatestRouteTest with HttpService {
   import scala.collection.JavaConverters._
-  import spray.httpx.SprayJsonSupport._
-  import spray.json.DefaultJsonProtocol._
-  import ooyala.common.akka.web.JsonUtils._
 
-  def actorRefFactory = system
+  def actorRefFactory: ActorSystem = system
 
   val bindConfKey = "spark.jobserver.bind-address"
   val bindConfVal = "127.0.0.1"
@@ -28,8 +24,8 @@ with ScalatestRouteTest with HttpService {
   val masterConfVal = "spark://localhost:7077"
   val config = ConfigFactory.parseString(s"""
     spark {
-      master = "${masterConfVal}"
-      jobserver.bind-address = "${bindConfVal}"
+      master = "$masterConfVal"
+      jobserver.bind-address = "$bindConfVal"
       jobserver.short-timeout = 3 s
     }
     shiro {
@@ -60,7 +56,7 @@ with ScalatestRouteTest with HttpService {
     import JobInfoActor._
     import JobManagerActor._
 
-    def receive = {
+    def receive: PartialFunction[Any, Unit] = {
       case GetJobStatus("_mapseq") =>
         sender ! finishedJobInfo
       case GetJobResult("_mapseq") =>
@@ -125,7 +121,7 @@ with ScalatestRouteTest with HttpService {
         statusActor ! Subscribe("foo", sender, events)
         statusActor ! JobStatusActor.JobInit(JobInfo("foo", "context", null, "", dt, None, None))
         statusActor ! JobStarted("foo", "context1", dt)
-        val map = config.entrySet().asScala.map { entry => (entry.getKey -> entry.getValue.unwrapped) }.toMap
+        val map = config.entrySet().asScala.map { entry => entry.getKey -> entry.getValue.unwrapped }.toMap
         if (events.contains(classOf[JobResult])) sender ! JobResult("foo", map)
         statusActor ! Unsubscribe("foo", sender)
 

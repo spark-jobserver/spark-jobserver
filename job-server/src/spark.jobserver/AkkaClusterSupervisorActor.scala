@@ -184,6 +184,9 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
         contexts(ctxName) = (ref, resActor)
         context.watch(ref)
         successFunc(ref)
+      case _ => logger.info("Failed for unknown reason.")
+        ref ! PoisonPill
+        failureFunc(new RuntimeException("Failed for unknown reason."))
     }
   }
 
