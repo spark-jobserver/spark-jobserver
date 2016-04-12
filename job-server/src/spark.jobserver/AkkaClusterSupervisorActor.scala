@@ -203,7 +203,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
       }
 
     val driverMemory = new StringBuilder
-    if (contextConfig.hasPath("spark.driver.memory")) {
+    if (contextConfig.hasPath("spark.driver") && contextConfig.hasPath("spark.driver.memory")) {
       driverMemory.append(contextConfig.getString("spark.driver.memory"))
     }
 
