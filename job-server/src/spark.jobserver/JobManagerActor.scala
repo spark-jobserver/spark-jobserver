@@ -269,20 +269,20 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
     Future {
       org.slf4j.MDC.put("jobId", jobId)
       logger.info("Starting job future thread")
+      try {
+        // Need to re-set the SparkEnv because it's thread-local and the Future runs on a diff thread
+        SparkEnv.set(sparkEnv)
 
-      // Need to re-set the SparkEnv because it's thread-local and the Future runs on a diff thread
-      SparkEnv.set(sparkEnv)
-
-      // Use the Spark driver's class loader as it knows about all our jars already
-      // NOTE: This may not even be necessary if we set the driver ActorSystem classloader correctly
-      Thread.currentThread.setContextClassLoader(jarLoader)
-      val job = constructor()
-      if (job.isInstanceOf[NamedObjectSupport]) {
-        val namedObjects = job.asInstanceOf[NamedObjectSupport].namedObjectsPrivate
-        if (namedObjects.get() == null) {
-          namedObjects.compareAndSet(null, jobServerNamedObjects)
+        // Use the Spark driver's class loader as it knows about all our jars already
+        // NOTE: This may not even be necessary if we set the driver ActorSystem classloader correctly
+        Thread.currentThread.setContextClassLoader(jarLoader)
+        val job = constructor()
+        if (job.isInstanceOf[NamedObjectSupport]) {
+          val namedObjects = job.asInstanceOf[NamedObjectSupport].namedObjectsPrivate
+          if (namedObjects.get() == null) {
+            namedObjects.compareAndSet(null, jobServerNamedObjects)
+          }
         }
-      }
 
       try {
         statusActor ! JobStatusActor.JobInit(jobInfo)
@@ -304,6 +304,17 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
       } finally {
         org.slf4j.MDC.remove("jobId")
       }
+        } catch {
+        case e: java.lang.AbstractMethodError => {
+          logger.error("Oops, there's an AbstractMethodError... maybe you compiled " +
+            "your code with an older version of SJS? here's the exception:", e)
+          throw e
+        }
+        case e: Throwable => {
+          logger.error("Got Throwable", e)
+          throw e
+        };
+      }
     }(executionContext).andThen {
       case Success(result: Any) =>
         statusActor ! JobFinished(jobId, DateTime.now())
@@ -313,7 +324,7 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
         val wrappedError = wrapInRuntimeException(error)
         // If and only if job validation fails, JobErroredOut message is dropped silently in JobStatusActor.
         statusActor ! JobErroredOut(jobId, DateTime.now(), wrappedError)
-        logger.warn("Exception from job " + jobId + ": ", error)
+        logger.error("Exception from job " + jobId + ": ", error)
     }(executionContext).andThen {
       case _ =>
         // Make sure to decrement the count of running jobs when a job finishes, in both success and failure
