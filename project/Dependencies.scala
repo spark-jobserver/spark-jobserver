@@ -8,9 +8,9 @@ object Dependencies {
   val excludeNettyIo = ExclusionRule(organization = "io.netty", artifact= "netty-all")
   val excludeAsm = ExclusionRule(organization = "asm")
   val excludeQQ = ExclusionRule(organization = "org.scalamacros")
-  val javaVersion = scala.util.Properties.isJavaAtLeast("1.8")
+  val jdkVersion = scala.util.Properties.isJavaAtLeast("1.8")
 
-  lazy val typeSafeConfigDeps = if(javaVersion){
+  lazy val typeSafeConfigDeps = if(jdkVersion){
     "com.typesafe" % "config" % "1.3.0"
   } else {
     "com.typesafe" % "config" % "1.2.1"
