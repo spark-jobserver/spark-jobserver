@@ -1,3 +1,5 @@
+addSbtPlugin("com.timushev.sbt" % "sbt-updates" % "0.1.10")
+
 addSbtPlugin("io.spray" % "sbt-revolver" % "0.7.2")       // For quick restarts for web development
 
 addSbtPlugin("com.typesafe.sbt" % "sbt-scalariform" % "1.3.0")
@@ -8,7 +10,7 @@ addSbtPlugin("org.scalastyle" %% "scalastyle-sbt-plugin" % "0.8.0")
 
 resolvers += Classpaths.sbtPluginReleases
 
-addSbtPlugin("org.scoverage" %% "sbt-scoverage" % "1.2.0")
+addSbtPlugin("org.scoverage" %% "sbt-scoverage" % "1.3.5")
 
 addSbtPlugin("me.lessis" % "bintray-sbt" % "0.2.1")
 

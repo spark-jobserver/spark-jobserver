@@ -8,20 +8,25 @@ object Dependencies {
   val excludeNettyIo = ExclusionRule(organization = "io.netty", artifact= "netty-all")
   val excludeAsm = ExclusionRule(organization = "asm")
   val excludeQQ = ExclusionRule(organization = "org.scalamacros")
+  val javaVersion = scala.util.Properties.isJavaAtLeast("1.8")
 
-  lazy val typeSafeConfigDeps = "com.typesafe" % "config" % "1.3.0"
+  lazy val typeSafeConfigDeps = if(javaVersion){
+    "com.typesafe" % "config" % "1.3.0"
+  } else {
+    "com.typesafe" % "config" % "1.2.1"
+  }
   lazy val yammerDeps = "com.yammer.metrics" % "metrics-core" % "2.2.0"
 
   lazy val jodaDeps = Seq(
     "org.joda" % "joda-convert" % "1.8.1",
-    "joda-time" % "joda-time" % "2.9.2"
+    "joda-time" % "joda-time" % "2.9.3"
   )
 
   lazy val akkaDeps = Seq(
     // Akka is provided because Spark already includes it, and Spark's version is shaded so it's not safe
     // to use this one
-    "com.typesafe.akka" %% "akka-slf4j" % "2.3.14" % "provided",
-    "com.typesafe.akka" %% "akka-cluster" % "2.3.14" exclude("com.typesafe.akka", "akka-remote"),
+    "com.typesafe.akka" %% "akka-slf4j" % "2.3.15" % "provided",
+    "com.typesafe.akka" %% "akka-cluster" % "2.3.15" exclude("com.typesafe.akka", "akka-remote"),
     "io.spray" %% "spray-json" % "1.3.2",
     "io.spray" %% "spray-can" % "1.3.3",
     "io.spray" %% "spray-caching" % "1.3.3",
@@ -61,7 +66,7 @@ object Dependencies {
 
   lazy val coreTestDeps = Seq(
     "org.scalatest" %% "scalatest" % "2.2.6" % "test",
-    "com.typesafe.akka" %% "akka-testkit" % "2.3.14" % "test",
+    "com.typesafe.akka" %% "akka-testkit" % "2.3.15" % "test",
     "io.spray" %% "spray-testkit" % "1.3.3" % "test"
   )
 
