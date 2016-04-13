@@ -284,27 +284,27 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
           }
         }
 
-      try {
-        statusActor ! JobStatusActor.JobInit(jobInfo)
+        try {
+          statusActor ! JobStatusActor.JobInit(jobInfo)
 
-        val jobC = jobContext.asInstanceOf[job.C]
-        job.validate(jobC, jobConfig) match {
-          case SparkJobInvalid(reason) => {
-            val err = new Throwable(reason)
-            statusActor ! JobValidationFailed(jobId, DateTime.now(), err)
-            throw err
+          val jobC = jobContext.asInstanceOf[job.C]
+          job.validate(jobC, jobConfig) match {
+            case SparkJobInvalid(reason) => {
+              val err = new Throwable(reason)
+              statusActor ! JobValidationFailed(jobId, DateTime.now(), err)
+              throw err
+            }
+            case SparkJobValid => {
+              statusActor ! JobStarted(jobId: String, contextName, jobInfo.startTime)
+              val sc = jobContext.sparkContext
+              sc.setJobGroup(jobId, s"Job group for $jobId and spark context ${sc.applicationId}", true)
+              job.runJob(jobC, jobConfig)
+            }
           }
-          case SparkJobValid => {
-            statusActor ! JobStarted(jobId: String, contextName, jobInfo.startTime)
-            val sc = jobContext.sparkContext
-            sc.setJobGroup(jobId, s"Job group for $jobId and spark context ${sc.applicationId}", true)
-            job.runJob(jobC, jobConfig)
-          }
+        } finally {
+          org.slf4j.MDC.remove("jobId")
         }
-      } finally {
-        org.slf4j.MDC.remove("jobId")
-      }
-        } catch {
+      } catch {
         case e: java.lang.AbstractMethodError => {
           logger.error("Oops, there's an AbstractMethodError... maybe you compiled " +
             "your code with an older version of SJS? here's the exception:", e)
