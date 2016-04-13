@@ -1,11 +1,12 @@
 import scalariform.formatter.preferences._
 
-import bintray.Plugin.bintrayPublishSettings
 import com.typesafe.sbt.SbtScalariform._
 import sbt.Keys._
 import sbt._
 import sbtassembly.AssemblyPlugin.autoImport._
 import spray.revolver.RevolverPlugin._
+import bintray.Plugin.bintrayPublishSettings
+import scoverage.ScoverageKeys._
 
 // There are advantages to using real Scala build files with SBT:
 //  - Multi-JVM testing won't work without it, for now
@@ -198,6 +199,7 @@ object JobServerBuild extends Build {
     resolvers    ++= Dependencies.repos,
     libraryDependencies ++= apiDeps,
     parallelExecution in Test := false,
+
     // We need to exclude jms/jmxtools/etc because it causes undecipherable SBT errors  :(
     ivyXML :=
       <dependencies>
@@ -208,9 +210,8 @@ object JobServerBuild extends Build {
   ) ++ scalariformPrefs ++ scoverageSettings
 
   lazy val scoverageSettings = {
-    import scoverage.ScoverageSbtPlugin
     // Semicolon-separated list of regexs matching classes to exclude
-    ScoverageSbtPlugin.ScoverageKeys.coverageExcludedPackages := ".+Benchmark.*"
+    coverageExcludedPackages := ".+Benchmark.*"
   }
 
   lazy val publishSettings = bintrayPublishSettings ++ Seq(
@@ -225,7 +226,8 @@ object JobServerBuild extends Build {
       .setPreference(AlignParameters, true)
       .setPreference(AlignSingleLineCaseStatements, true)
       .setPreference(DoubleIndentClassDeclaration, true)
-      .setPreference(PreserveDanglingCloseParenthesis, false)
+      // This was deprecated.
+      //.setPreference(PreserveDanglingCloseParenthesis, false)
   )
 
   // This is here so we can easily switch back to Logback when Spark fixes its log4j dependency.
