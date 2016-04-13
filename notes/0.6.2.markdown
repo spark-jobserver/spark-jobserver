@@ -11,6 +11,8 @@
 * Workaround - custom error classes for context-per-jvm (@ishassan)
 * Spark Hadoop configuration in spark.context-settings.hadoop (@hntd187)
 * Expose MAX_DIRECT_MEMORY to adjust direct memory buffer size (@addisonj)
+* Expose JAVA_VERSION for building with say JDK8 (@stannie42)
+* Fix docker build (@stannie42)
 * Redirect /dev/null to stdin in server_start.sh (@apivovarov)
 * Database migration scripts and better table definitions (@v-gerasimov)
 * Chinese doc updates (@zp-j, @liujuncheng)
