@@ -307,6 +307,15 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
     }(executionContext).andThen {
       case Success(result: Any) =>
         statusActor ! JobFinished(jobId, DateTime.now())
+        // TODO: If the result is Stream[_] and this is running with context-per-jvm=true configuration
+        // serializing a Stream[_] blob across process boundaries is not desirable.
+        // In that scenario an enhancement is required here to chunk stream results back.
+        // Something like ChunkedJobResultStart, ChunkJobResultMessage, and ChunkJobResultEnd messages
+        // might be a better way to send results back and then on the other side use chunked encoding
+        // transfer to send the chunks back. Alternatively the stream could be persisted here to HDFS
+        // and the streamed out of InputStream on the other side.
+        // Either way an enhancement would be required here to make Stream[_] responses work
+        // with context-per-jvm=true configuration
         resultActor ! JobResult(jobId, result)
       case Failure(error: Throwable) =>
         // Wrapping the error inside a RuntimeException to handle the case of throwing custom exceptions.
