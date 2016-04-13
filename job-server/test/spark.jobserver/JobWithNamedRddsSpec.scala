@@ -21,13 +21,7 @@ class JobWithNamedRddsSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
   }
 
   val job = new TestJob1
-
-  if (job.isInstanceOf[NamedObjectSupport]) {
-    val namedObjects = job.asInstanceOf[NamedObjectSupport].namedObjectsPrivate
-    if (namedObjects.get() == null) {
-      namedObjects.compareAndSet(null, new JobServerNamedObjects(system))
-    }
-  }
+  job.namedObjects = new JobServerNamedObjects(system)
   val namedTestRdds = job.namedRdds
 
   override def afterAll() {

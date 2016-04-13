@@ -138,15 +138,7 @@ trait NamedObjects {
   def getNames(): Iterable[String]
 }
 
-trait NamedObjectSupport { self: SparkJobBase =>
-
-  // Note: the JobManagerActor sets the correct NamedObjects instance here before before running our job.
-  val namedObjectsPrivate: AtomicReference[NamedObjects] =
-    new AtomicReference[NamedObjects](null)
-
-  def namedObjects: NamedObjects = namedObjectsPrivate.get() match {
-    case null            => throw new NullPointerException("namedObjects value is null!")
-    case namedObjects: NamedObjects => namedObjects
-  }
-
-}
+// NamedObjectSupport is not needed anymore due to JobEnvironment in api.SparkJobBase.  It is also
+// imported into the old spark.jobserver.SparkJobBase automatically for compatibility.
+@Deprecated
+trait NamedObjectSupport

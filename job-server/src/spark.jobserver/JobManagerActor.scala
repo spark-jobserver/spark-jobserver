@@ -1,22 +1,22 @@
 package spark.jobserver
 
+import java.net.{URI, URL}
 import java.util.concurrent.Executors._
+import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor.{ActorRef, PoisonPill, Props}
 import com.typesafe.config.Config
-import java.net.{URI, URL}
-import java.util.concurrent.atomic.AtomicInteger
-
 import ooyala.common.akka.InstrumentedActor
 import org.apache.hadoop.conf.Configuration
-import org.apache.spark.{SparkConf, SparkContext, SparkEnv}
+import org.apache.spark.{SparkConf, SparkEnv}
 import org.joda.time.DateTime
+import org.scalactic._
+import spark.jobserver.api.JobEnvironment
+import spark.jobserver.io.{JarInfo, JobDAOActor, JobInfo}
+import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
-import spark.jobserver.ContextSupervisor.StopContext
-import spark.jobserver.io.{JarInfo, JobDAO, JobDAOActor, JobInfo}
-import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
 
 object JobManagerActor {
   // Messages
@@ -71,8 +71,9 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
 
   import CommonMessages._
   import JobManagerActor._
-  import scala.util.control.Breaks._
+
   import collection.JavaConverters._
+  import scala.util.control.Breaks._
 
   val config = context.system.settings.config
   private val maxRunningJobs = SparkJobUtils.getMaxRunningJobs(config)
@@ -102,6 +103,15 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
   private var daoActor: ActorRef = _
 
   private val jobServerNamedObjects = new JobServerNamedObjects(context.system)
+
+  private def getEnvironment(_jobId: String): JobEnvironment = {
+    val _contextCfg = contextConfig
+    new JobEnvironment {
+      def jobId: String = _jobId
+      def namedObjects: NamedObjects = jobServerNamedObjects
+      def contextConfig: Config = _contextCfg
+    }
+  }
 
   override def postStop() {
     logger.info("Shutting down SparkContext {}", contextName)
@@ -192,8 +202,9 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
     breakable {
       import akka.pattern.ask
       import akka.util.Timeout
-      import scala.concurrent.duration._
+
       import scala.concurrent.Await
+      import scala.concurrent.duration._
 
       val daoAskTimeout = Timeout(3 seconds)
       // TODO: refactor so we don't need Await, instead flatmap into more futures
@@ -269,37 +280,28 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
     Future {
       org.slf4j.MDC.put("jobId", jobId)
       logger.info("Starting job future thread")
+      // Need to re-set the SparkEnv because it's thread-local and the Future runs on a diff thread
+      SparkEnv.set(sparkEnv)
+      // Use the Spark driver's class loader as it knows about all our jars already
+      // NOTE: This may not even be necessary if we set the driver ActorSystem classloader correctly
+      Thread.currentThread.setContextClassLoader(jarLoader)
+      val job = constructor()
       try {
-        // Need to re-set the SparkEnv because it's thread-local and the Future runs on a diff thread
-        SparkEnv.set(sparkEnv)
+        statusActor ! JobStatusActor.JobInit(jobInfo)
 
-        // Use the Spark driver's class loader as it knows about all our jars already
-        // NOTE: This may not even be necessary if we set the driver ActorSystem classloader correctly
-        Thread.currentThread.setContextClassLoader(jarLoader)
-        val job = constructor()
-        if (job.isInstanceOf[NamedObjectSupport]) {
-          val namedObjects = job.asInstanceOf[NamedObjectSupport].namedObjectsPrivate
-          if (namedObjects.get() == null) {
-            namedObjects.compareAndSet(null, jobServerNamedObjects)
+        val jobC = jobContext.asInstanceOf[job.C]
+        val jobEnv = getEnvironment(jobId)
+        job.validate(jobC, jobEnv, jobConfig) match {
+          case Bad(reasons) => {
+            val err = new Throwable(reasons.toString)
+            statusActor ! JobValidationFailed(jobId, DateTime.now(), err)
+            throw err
           }
-        }
-
-        try {
-          statusActor ! JobStatusActor.JobInit(jobInfo)
-
-          val jobC = jobContext.asInstanceOf[job.C]
-          job.validate(jobC, jobConfig) match {
-            case SparkJobInvalid(reason) => {
-              val err = new Throwable(reason)
-              statusActor ! JobValidationFailed(jobId, DateTime.now(), err)
-              throw err
-            }
-            case SparkJobValid => {
-              statusActor ! JobStarted(jobId: String, contextName, jobInfo.startTime)
-              val sc = jobContext.sparkContext
-              sc.setJobGroup(jobId, s"Job group for $jobId and spark context ${sc.applicationId}", true)
-              job.runJob(jobC, jobConfig)
-            }
+          case Good(jobData) => {
+            statusActor ! JobStarted(jobId: String, contextName, jobInfo.startTime)
+            val sc = jobContext.sparkContext
+            sc.setJobGroup(jobId, s"Job group for $jobId and spark context ${sc.applicationId}", true)
+            job.runJob(jobC, jobEnv, jobData)
           }
         } finally {
           org.slf4j.MDC.remove("jobId")

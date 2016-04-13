@@ -22,7 +22,7 @@ trait ContextLike {
    * The recommendation is to define a trait for each type of context job;  the standard
    * [[DefaultSparkContextFactory]] checks to see if the job is of type [[SparkJob]].
    */
-  def isValidJob(job: SparkJobBase): Boolean
+  def isValidJob(job: spark.jobserver.api.SparkJobBase): Boolean
 
   /**
    * Responsible for performing any cleanup, including calling the underlying context's

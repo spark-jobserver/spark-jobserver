@@ -2,7 +2,8 @@ package spark.jobserver.context
 
 import com.typesafe.config.Config
 import org.apache.spark.{SparkConf, SparkContext}
-import spark.jobserver.{ContextLike, SparkJob, SparkJobBase}
+import spark.jobserver.{ContextLike, SparkJob}
+import spark.jobserver.api.SparkJobBase
 import spark.jobserver.util.SparkJobUtils
 
 /**

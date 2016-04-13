@@ -11,7 +11,7 @@ import spark.jobserver.util.{ContextURLClassLoader, JarUtils, LRUCache}
 
 import scala.util.{Success, Failure}
 
-case class JobJarInfo(constructor: () => SparkJobBase,
+case class JobJarInfo(constructor: () => spark.jobserver.api.SparkJobBase,
                       className: String,
                       jarFilePath: String)
 
@@ -43,7 +43,7 @@ class JobCache(maxEntries: Int, dao: ActorRef, sparkContext: SparkContext, loade
       val jarFilePath = new java.io.File(jarPath).getAbsolutePath()
       sparkContext.addJar(jarFilePath) // Adds jar for remote executors
       loader.addURL(new URL("file:" + jarFilePath)) // Now jar added for local loader
-      val constructor = JarUtils.loadClassOrObject[SparkJobBase](classPath, loader)
+      val constructor = JarUtils.loadClassOrObject[spark.jobserver.api.SparkJobBase](classPath, loader)
       JobJarInfo(constructor, classPath, jarFilePath)
     })
   }

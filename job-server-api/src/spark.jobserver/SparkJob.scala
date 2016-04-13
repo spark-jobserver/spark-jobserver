@@ -26,9 +26,12 @@ trait SparkJobBase extends NewSparkJob {
   type JobOutput = Any
   type JobData = Config
 
+  var namedObjects: NamedObjects = null
+
   def runJob(sc: C, runtime: JobEnvironment, data: JobData): JobOutput = runJob(sc, data)
 
   def validate(sc: C, runtime: JobEnvironment, config: Config): JobData Or Every[ValidationProblem] = {
+    namedObjects = runtime.namedObjects
     validate(sc, config) match {
       case SparkJobValid      => Good(config)
       case i: SparkJobInvalid => Bad(One(i))
