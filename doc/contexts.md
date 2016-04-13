@@ -67,7 +67,9 @@ NOTE: The above also works on DSE 4.8, which packages Job Server 0.5.2, but you 
 
 ## Extending Job Server for Custom Contexts
 
-This can be done easily by extending the `SparkContextFactory` trait, like `SQLContextFactory` does.  Then, extend the `SparkJobBase` trait in a job with a type matching your factory.
+This can be done easily by extending the `SparkContextFactory` trait, like `SQLContextFactory` does.  Then, extend the `api.SparkJobBase` trait in a job with a type matching your factory.
+
+NOTE: If you have defined custom `ContextFactory`s from before 0.7.0, you will need to modify them as the `isValidJob` signature has changed.
 
 ## Jars
 
