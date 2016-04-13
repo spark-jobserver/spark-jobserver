@@ -208,7 +208,7 @@ abstract class JobManagerSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
 
       }
     }
-    
+
     it("should fail a job that requires job jar dependencies but doesn't provide the jar"){
       manager ! JobManagerActor.Initialize(daoActor, None)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])

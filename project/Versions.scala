@@ -16,5 +16,6 @@ object Versions {
   lazy val flyway = "3.2.1"
   lazy val logback = "1.0.7"
   lazy val scalaTest = "2.2.6"
+  lazy val scalatic = "2.2.6"
   lazy val shiro = "1.2.4"
 }
