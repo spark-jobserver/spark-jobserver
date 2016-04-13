@@ -3,5 +3,5 @@ env:
   global:
     _JAVA_OPTIONS="-Xmx1500m -XX:MaxPermSize=512m -Dakka.test.timefactor=3"
 scala:
-   - 2.10.4
-   - 2.11.6
+   - 2.10.6
+   - 2.11.8
