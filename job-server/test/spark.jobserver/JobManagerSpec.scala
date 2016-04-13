@@ -208,27 +208,7 @@ abstract class JobManagerSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
 
       }
     }
-
-    it("should be able to start a job with job jar dependencies and return results"){
-      manager ! JobManagerActor.Initialize(daoActor, None)
-      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
-
-
-      uploadTestJar()
-      val jobJarDepsConfigs = ConfigFactory.parseString(
-        s"""
-          |dependent-jar-uris = ["file://$getExtrasJarPath"]
-        """.stripMargin
-      )
-
-      manager ! JobManagerActor.StartJob("demo", classPrefix + "jobJarDependenciesJob", jobJarDepsConfigs,
-        syncEvents ++ errorEvents)
-      expectMsgPF(startJobWait, "Did not get JobResult") {
-        case JobResult(_, result) => println("I got results! " + result)
-      }
-      expectNoMsg()
-    }
-
+    
     it("should fail a job that requires job jar dependencies but doesn't provide the jar"){
       manager ! JobManagerActor.Initialize(daoActor, None)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
