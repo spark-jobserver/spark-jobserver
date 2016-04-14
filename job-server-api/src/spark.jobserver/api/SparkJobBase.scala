@@ -14,6 +14,8 @@ trait JobEnvironment {
 
 trait ValidationProblem
 
+case class SingleProblem(problem: String) extends ValidationProblem
+
 /**
  *  This trait is the main API for Spark jobs submitted to the Job Server.
  *

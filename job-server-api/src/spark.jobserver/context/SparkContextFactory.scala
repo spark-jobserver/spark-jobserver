@@ -3,7 +3,7 @@ package spark.jobserver.context
 import com.typesafe.config.Config
 import org.apache.spark.{SparkConf, SparkContext}
 import spark.jobserver.{ContextLike, SparkJob}
-import spark.jobserver.api.SparkJobBase
+import spark.jobserver.api
 import spark.jobserver.util.SparkJobUtils
 
 /**
@@ -53,7 +53,8 @@ class DefaultSparkContextFactory extends SparkContextFactory {
   def makeContext(sparkConf: SparkConf, config: Config,  contextName: String): C = {
     val sc = new SparkContext(sparkConf) with ContextLike {
       def sparkContext: SparkContext = this
-      def isValidJob(job: SparkJobBase): Boolean = job.isInstanceOf[SparkJob]
+      def isValidJob(job: api.SparkJobBase): Boolean =
+        job.isInstanceOf[SparkJob] || job.isInstanceOf[api.SparkJob]
     }
     for ((k, v) <- SparkJobUtils.getHadoopConfig(config)) sc.hadoopConfiguration.set(k, v)
     sc
