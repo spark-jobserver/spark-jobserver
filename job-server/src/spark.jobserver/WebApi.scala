@@ -1,38 +1,40 @@
 package spark.jobserver
 
+import java.util.NoSuchElementException
 import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLContext
 
-import akka.actor.{ ActorSystem, ActorRef }
+import akka.actor.{ActorRef, ActorSystem}
 import akka.pattern.ask
 import akka.util.Timeout
-import com.typesafe.config.{ Config, ConfigFactory, ConfigException, ConfigRenderOptions }
-import java.util.NoSuchElementException
-import javax.net.ssl.SSLContext
-import ooyala.common.akka.web.{ WebService, CommonRoutes }
+import com.typesafe.config.{Config, ConfigException, ConfigFactory, ConfigRenderOptions}
+import ooyala.common.akka.web.JsonUtils.AnyJsonFormat
+import ooyala.common.akka.web.{CommonRoutes, WebService}
+import org.apache.shiro.SecurityUtils
+import org.apache.shiro.config.IniSecurityManagerFactory
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
-import spark.jobserver.util.SparkJobUtils
-import spark.jobserver.util.SSLContextFactory
+import spark.jobserver.auth._
+import spark.jobserver.io.JobInfo
 import spark.jobserver.routes.DataRoutes
+import spark.jobserver.util.{SSLContextFactory, SparkJobUtils}
+import spray.http._
+import spray.httpx.SprayJsonSupport.sprayJsonMarshaller
+import spray.io.ServerSSLEngineProvider
+import spray.json.DefaultJsonProtocol._
+import spray.routing.directives.AuthMagnet
+import spray.routing.{HttpService, RequestContext, Route}
+
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.Try
-import spark.jobserver.io.JobInfo
-import spark.jobserver.auth._
-import spray.http.HttpResponse
-import spray.http.MediaTypes
-import spray.http.StatusCodes
-import spray.httpx.SprayJsonSupport.sprayJsonMarshaller
-import spray.json.DefaultJsonProtocol._
-import spray.routing.{ HttpService, Route, RequestContext }
-import spray.routing.directives.AuthMagnet
-import spray.io.ServerSSLEngineProvider
-import org.apache.shiro.config.IniSecurityManagerFactory
-import org.apache.shiro.mgt.SecurityManager
-import org.apache.shiro.SecurityUtils
+
 
 object WebApi {
   val StatusKey = "status"
   val ResultKey = "result"
+  val ResultKeyStartBytes = "{\n".getBytes
+  val ResultKeyEndBytes = "}".getBytes
+  val ResultKeyBytes = ("\"" + ResultKey + "\":").getBytes
 
   def badRequest(ctx: RequestContext, msg: String) {
     ctx.complete(StatusCodes.BadRequest, errMap(msg))
@@ -59,6 +61,14 @@ object WebApi {
 
   def resultToTable(result: Any): Map[String, Any] = {
     Map(ResultKey -> result)
+  }
+
+  def resultToByteIterator(jobReport: Map[String, Any], result: Iterator[_]): Iterator[_] = {
+    ResultKeyStartBytes.toIterator ++
+      (jobReport.map(t => Seq(AnyJsonFormat.write(t._1).toString(),
+                AnyJsonFormat.write(t._2).toString()).mkString(":") ).mkString(",") ++
+        (if(jobReport.nonEmpty) "," else "")).getBytes().toIterator ++
+      ResultKeyBytes.toIterator ++ result ++ ResultKeyEndBytes.toIterator
   }
 
   def formatException(t: Throwable): Any =
@@ -95,7 +105,8 @@ class WebApi(system: ActorSystem,
              dataManager: ActorRef,
              supervisor: ActorRef,
              jobInfo: ActorRef)
-    extends HttpService with CommonRoutes with DataRoutes with SJSAuthenticator with CORSSupport {
+    extends HttpService with CommonRoutes with DataRoutes with SJSAuthenticator with CORSSupport
+                        with ChunkEncodedStreamingSupport {
   import CommonMessages._
   import ContextSupervisor._
   import scala.concurrent.duration._
@@ -112,6 +123,8 @@ class WebApi(system: ActorSystem,
   val DefaultJobLimit = 50
   val StatusKey = "status"
   val ResultKey = "result"
+  val ResultChunkSize = Option("spark.jobserver.result-chunk-size").filter(config.hasPath)
+      .fold(100 * 1024)(config.getBytes(_).toInt)
 
   val contextTimeout = SparkJobUtils.getContextTimeout(config)
   val bindAddress = config.getString("spark.jobserver.bind-address")
@@ -228,6 +241,7 @@ class WebApi(system: ActorSystem,
    */
   def contextRoutes: Route = pathPrefix("contexts") {
     import ContextSupervisor._
+
     import collection.JavaConverters._
     // user authentication
     authenticate(authenticator) { authInfo =>
@@ -384,7 +398,12 @@ class WebApi(system: ActorSystem,
                 val resultFuture = jobInfo ? GetJobResult(jobId)
                 resultFuture.map {
                   case JobResult(_, result) =>
-                    ctx.complete(jobReport ++ resultToTable(result))
+                    result match {
+                      case s: Stream[_] =>
+                        sendStreamingResponse(ctx, ResultChunkSize,
+                          resultToByteIterator(jobReport, s.toIterator))
+                      case _ => ctx.complete(jobReport ++ resultToTable(result))
+                    }
                   case _ =>
                     ctx.complete(jobReport)
                 }
@@ -466,7 +485,12 @@ class WebApi(system: ActorSystem,
                       JobManagerActor.StartJob(appName, classPath, jobConfig, events))(timeout)
                     respondWithMediaType(MediaTypes.`application/json`) { ctx =>
                       future.map {
-                        case JobResult(_, res)       => ctx.complete(resultToTable(res))
+                        case JobResult(_, res) =>
+                          res match {
+                            case s: Stream[_] => sendStreamingResponse(ctx, ResultChunkSize,
+                              resultToByteIterator(Map.empty, s.toIterator))
+                            case _ => ctx.complete(resultToTable(res))
+                          }
                         case JobErroredOut(_, _, ex) => ctx.complete(errMap(ex, "ERROR"))
                         case JobStarted(jobId, context, _) =>
                           jobInfo ! StoreJobConfig(jobId, postedJobConfig)
