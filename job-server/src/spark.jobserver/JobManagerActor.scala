@@ -1,34 +1,34 @@
 package spark.jobserver
 
 import java.util.concurrent.Executors._
-import akka.actor.{ActorRef, Props, PoisonPill}
+
+import akka.actor.{ActorRef, PoisonPill, Props}
 import com.typesafe.config.Config
 import java.net.{URI, URL}
 import java.util.concurrent.atomic.AtomicInteger
+
 import ooyala.common.akka.InstrumentedActor
-import org.apache.spark.{ SparkEnv, SparkContext }
+import org.apache.hadoop.conf.Configuration
+import org.apache.spark.{SparkConf, SparkContext, SparkEnv}
 import org.joda.time.DateTime
-import scala.collection.mutable
-import scala.concurrent.{ Future, ExecutionContext }
+
+import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 import spark.jobserver.ContextSupervisor.StopContext
-import spark.jobserver.io.{JobDAOActor, JobDAO, JobInfo, JarInfo}
+import spark.jobserver.io.{JarInfo, JobDAO, JobDAOActor, JobInfo}
 import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
-//每个上下文进来，都要创建 JobManagerActor 对象
+
 object JobManagerActor {
   // Messages
   case class Initialize(daoActor: ActorRef, resultActorOpt: Option[ActorRef])
   case class StartJob(appName: String, classPath: String, config: Config,
                       subscribedEvents: Set[Class[_]])
   case class KillJob(jobId: String)
+  case object GetContextConfig
   case object SparkContextStatus
-  //记录当前有多少条sql在运行
-  case object SparkContextSqlNum
-  case class ContextContainSqlNum(contextName: String, sqlNum: Int, maxRunningJobs :Int)
-//显示出当前的context中的信息
-  case object SparkContextInfo
-  case class ContextInfoMsg(contextName: String, sqlNum: Int ,maxRunningJobs :Int ,applicationId:String)
+
   // Results/Data
+  case class ContextConfig(contextName: String, contextConfig: SparkConf, hadoopConfig: Configuration)
   case class Initialized(contextName: String, resultActor: ActorRef)
   case class InitError(t: Throwable)
   case class JobLoadingError(err: Throwable)
@@ -40,33 +40,33 @@ object JobManagerActor {
 }
 
 /**
- * The JobManager actor supervises jobs running in a single SparkContext, as well as shared metadata.
- * It creates a SparkContext (or a StreamingContext etc. depending on the factory class)
- * It also creates and supervises a JobResultActor and JobStatusActor, although an existing JobResultActor
- * can be passed in as well.
- *
- * == contextConfig ==
- * {{{
- *  num-cpu-cores = 4         # Total # of CPU cores to allocate across the cluster
- *  memory-per-node = 512m    # -Xmx style memory string for total memory to use for executor on one node
- *  dependent-jar-uris = ["local://opt/foo/my-foo-lib.jar"]
- *                            # URIs for dependent jars to load for entire context
- *  context-factory = "spark.jobserver.context.DefaultSparkContextFactory"
- *  spark.mesos.coarse = true  # per-context, rather than per-job, resource allocation
- *  rdd-ttl = 24 h            # time-to-live for RDDs in a SparkContext.  Don't specify = forever
- *  is-adhoc = false          # true if context is ad-hoc context
- *  context.name = "sql"      # Name of context
- * }}}
- *
- * == global configuration ==
- * {{{
- *   spark {
- *     jobserver {
- *       max-jobs-per-context = 16      # Number of jobs that can be run simultaneously per context
- *     }
- *   }
- * }}}
- */
+  * The JobManager actor supervises jobs running in a single SparkContext, as well as shared metadata.
+  * It creates a SparkContext (or a StreamingContext etc. depending on the factory class)
+  * It also creates and supervises a JobResultActor and JobStatusActor, although an existing JobResultActor
+  * can be passed in as well.
+  *
+  * == contextConfig ==
+  * {{{
+  *  num-cpu-cores = 4         # Total # of CPU cores to allocate across the cluster
+  *  memory-per-node = 512m    # -Xmx style memory string for total memory to use for executor on one node
+  *  dependent-jar-uris = ["local://opt/foo/my-foo-lib.jar"]
+  *                            # URIs for dependent jars to load for entire context
+  *  context-factory = "spark.jobserver.context.DefaultSparkContextFactory"
+  *  spark.mesos.coarse = true  # per-context, rather than per-job, resource allocation
+  *  rdd-ttl = 24 h            # time-to-live for RDDs in a SparkContext.  Don't specify = forever
+  *  is-adhoc = false          # true if context is ad-hoc context
+  *  context.name = "sql"      # Name of context
+  * }}}
+  *
+  * == global configuration ==
+  * {{{
+  *   spark {
+  *     jobserver {
+  *       max-jobs-per-context = 16      # Number of jobs that can be run simultaneously per context
+  *     }
+  *   }
+  * }}}
+  */
 class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
 
   import CommonMessages._
@@ -80,7 +80,6 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
 
   var jobContext: ContextLike = _
   var sparkEnv: SparkEnv = _
-  protected var rddManagerActor: ActorRef = _
 
   private val currentRunningJobs = new AtomicInteger(0)
 
@@ -92,7 +91,6 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
   private val jobCacheEnabled = Try(config.getBoolean("spark.job-cache.enabled")).getOrElse(false)
   // Use Spark Context's built in classloader when SPARK-1230 is merged.
   private val jarLoader = new ContextURLClassLoader(Array[URL](), getClass.getClassLoader)
-  //这个就是上下文名称
   private val contextName = contextConfig.getString("context.name")
   private val isAdHoc = Try(contextConfig.getBoolean("is-adhoc")).getOrElse(false)
 
@@ -103,19 +101,15 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
   protected var resultActor: ActorRef = _
   private var daoActor: ActorRef = _
 
+  private val jobServerNamedObjects = new JobServerNamedObjects(context.system)
 
   override def postStop() {
     logger.info("Shutting down SparkContext {}", contextName)
     Option(jobContext).foreach(_.stop())
   }
 
-  /**
-    * 这里接收 job的任务动作，如果是多进程，其实是运行于spark 的那个进程当中
-    * @return
-    */
   def wrappedReceive: Receive = {
     case Initialize(dao, resOpt) =>
-      //在这里进行初始化上下文了
       daoActor = dao
       statusActor = context.actorOf(JobStatusActor.props(daoActor))
       resultActor = resOpt.getOrElse(context.actorOf(Props[JobResultActor]))
@@ -125,11 +119,8 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
         getSideJars(contextConfig).foreach { jarUri =>
           jarLoader.addURL(new URL(convertJarUriSparkToJava(jarUri)))
         }
-        //动态上下文就是在这里了
         jobContext = createContextFromConfig()
         sparkEnv = SparkEnv.get
-        rddManagerActor = context.actorOf(Props(classOf[RddManagerActor], jobContext.sparkContext),
-                                          "rdd-manager-actor")
         jobCache = new JobCache(jobCacheSize, daoActor, jobContext.sparkContext, jarLoader)
         getSideJars(contextConfig).foreach { jarUri => jobContext.sparkContext.addJar(jarUri) }
         sender ! Initialized(contextName, resultActor)
@@ -140,14 +131,21 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
           self ! PoisonPill
       }
 
-    case StartJob(appName, classPath, jobConfig, events) =>
-      startJobInternal(appName, classPath, jobConfig, events, jobContext, sparkEnv, rddManagerActor)
+    case StartJob(appName, classPath, jobConfig, events) => {
+      val loadedJars = jarLoader.getURLs
+      getSideJars(jobConfig).foreach { jarUri =>
+        val jarToLoad = new URL(convertJarUriSparkToJava(jarUri))
+        if(! loadedJars.contains(jarToLoad)){
+          logger.info("Adding {} to Current Job Class path", jarUri)
+          jarLoader.addURL(new URL(convertJarUriSparkToJava(jarUri)))
+          jobContext.sparkContext.addJar(jarUri)
+        }
+      }
+      startJobInternal(appName, classPath, jobConfig, events, jobContext, sparkEnv)
+    }
 
     case KillJob(jobId: String) => {
-      //开始kill job了
       jobContext.sparkContext.cancelJobGroup(jobId)
-      logger.info("stop spark  job id {}",jobId)
-      //其实这里未必真正能kill的掉的
       statusActor ! JobKilled(jobId, DateTime.now())
     }
 
@@ -160,41 +158,36 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
           sender ! SparkContextAlive
         } catch {
           case e: Exception => {
-            logger.error("SparkContext is not exist!")
+            logger.error("SparkContext does not exist!")
             sender ! SparkContextDead
           }
         }
       }
     }
-
-    case SparkContextSqlNum => {
-        sender ! ContextContainSqlNum(contextName , currentRunningJobs.get() ,maxRunningJobs)
+    case GetContextConfig => {
+      if (jobContext.sparkContext == null) {
+        sender ! SparkContextDead
+      } else {
+        try {
+          val conf: SparkConf = jobContext.sparkContext.getConf
+          val hadoopConf: Configuration = jobContext.sparkContext.hadoopConfiguration
+          sender ! ContextConfig(jobContext.sparkContext.appName, conf, hadoopConf)
+        } catch {
+          case e: Exception => {
+            logger.error("SparkContext does not exist!")
+            sender ! SparkContextDead
+          }
+        }
+      }
     }
-    case SparkContextInfo => {
-      sender ! ContextInfoMsg(contextName , currentRunningJobs.get() ,maxRunningJobs ,
-        jobContext.sparkContext.applicationId)
-    }
-
   }
 
-  /**
-    * 这里就是入口了
-    * @param appName
-    * @param classPath
-    * @param jobConfig
-    * @param events
-    * @param jobContext
-    * @param sparkEnv
-    * @param rddManagerActor
-    * @return
-    */
   def startJobInternal(appName: String,
                        classPath: String,
                        jobConfig: Config,
                        events: Set[Class[_]],
                        jobContext: ContextLike,
-                       sparkEnv: SparkEnv,
-                       rddManagerActor: ActorRef): Option[Future[Any]] = {
+                       sparkEnv: SparkEnv): Option[Future[Any]] = {
     var future: Option[Future[Any]] = None
     breakable {
       import akka.pattern.ask
@@ -210,7 +203,6 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
 
       val lastUploadTime = resp.lastUploadTime
       if (!lastUploadTime.isDefined) {
-        //通过Actor模型进行发送信息
         sender ! NoSuchApplication
         postEachJob()
         break
@@ -219,7 +211,7 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
       // Check appName, classPath from jar
       val jarInfo = JarInfo(appName, lastUploadTime.get)
       val jobId = java.util.UUID.randomUUID().toString()
-    //  logger.info("Loading class {} for app {}", classPath, appName: Any)
+      logger.info("Loading class {} for app {}", classPath, appName: Any)
       val jobJarInfo = try {
         jobCache.getSparkJob(jarInfo.appName, jarInfo.uploadTime, classPath)
       } catch {
@@ -236,7 +228,6 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
       }
 
       // Validate that job fits the type of context we launched
-      //通过Actor模型进行发送信息，这里创建对象，并且validate
       val job = jobJarInfo.constructor()
       if (!jobContext.isValidJob(job)) {
         sender ! WrongJobType
@@ -244,50 +235,33 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
       }
 
       // Automatically subscribe the sender to events so it starts getting them right away
-      //定阅消息
       resultActor ! Subscribe(jobId, sender, events)
       statusActor ! Subscribe(jobId, sender, events)
 
       val jobInfo = JobInfo(jobId, contextName, jarInfo, classPath, DateTime.now(), None, None,None)
-      //开始跑了
       future =
-        Option(getJobFuture(jobJarInfo, jobInfo, jobConfig, sender, jobContext, sparkEnv,
-                            rddManagerActor))
+        Option(getJobFuture(jobJarInfo, jobInfo, jobConfig, sender, jobContext, sparkEnv))
     }
 
     future
   }
 
-  /**
-    * 这里就是直接运行job的地方
-    * @param jobJarInfo
-    * @param jobInfo
-    * @param jobConfig
-    * @param subscriber
-    * @param jobContext
-    * @param sparkEnv
-    * @param rddManagerActor
-    * @return
-    */
   private def getJobFuture(jobJarInfo: JobJarInfo,
                            jobInfo: JobInfo,
                            jobConfig: Config,
                            subscriber: ActorRef,
                            jobContext: ContextLike,
-                           sparkEnv: SparkEnv,
-                           rddManagerActor: ActorRef): Future[Any] = {
+                           sparkEnv: SparkEnv): Future[Any] = {
 
     val jobId = jobInfo.jobId
     val constructor = jobJarInfo.constructor
-    //开始跑了
-   // logger.info("Starting Spark job {} [{}]...", jobId: Any, jobJarInfo.className)
+    logger.info("Starting Spark job {} [{}]...", jobId: Any, jobJarInfo.className)
 
     // Atomically increment the number of currently running jobs. If the old value already exceeded the
     // limit, decrement it back, send an error message to the sender, and return a dummy future with
     // nothing in it.
     if (currentRunningJobs.getAndIncrement() >= maxRunningJobs) {
       currentRunningJobs.decrementAndGet()
-      //发送消息，现在太多job在跑了，失败
       sender ! NoJobSlotsAvailable(maxRunningJobs)
       return Future[Any](None)(context.dispatcher)
     }
@@ -295,76 +269,102 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
     Future {
       org.slf4j.MDC.put("jobId", jobId)
       logger.info("Starting job future thread")
-
-      // Need to re-set the SparkEnv because it's thread-local and the Future runs on a diff thread
-      SparkEnv.set(sparkEnv)
-
-      // Use the Spark driver's class loader as it knows about all our jars already
-      // NOTE: This may not even be necessary if we set the driver ActorSystem classloader correctly
-      Thread.currentThread.setContextClassLoader(jarLoader)
-      val job = constructor()
-      if (job.isInstanceOf[NamedRddSupport]) {
-        //如果是可复用rdd的job
-        val namedRdds = job.asInstanceOf[NamedRddSupport].namedRddsPrivate
-        if (namedRdds.get() == null) {
-          namedRdds.compareAndSet(null, new JobServerNamedRdds(rddManagerActor))
-        }
-      }
-
       try {
+        // Need to re-set the SparkEnv because it's thread-local and the Future runs on a diff thread
+        SparkEnv.set(sparkEnv)
 
-        val jobC = jobContext.asInstanceOf[job.C]
-        //发送job初始化
-        statusActor ! JobStatusActor.JobInit(jobInfo)
-
-
-        //这里进行了validate
-        job.validate(jobC, jobConfig) match {
-          case SparkJobInvalid(reason) => {
-            val err = new Throwable(reason)
-            statusActor ! JobValidationFailed(jobId, DateTime.now(), err)
-            throw err
+        // Use the Spark driver's class loader as it knows about all our jars already
+        // NOTE: This may not even be necessary if we set the driver ActorSystem classloader correctly
+        Thread.currentThread.setContextClassLoader(jarLoader)
+        val job = constructor()
+        if (job.isInstanceOf[NamedObjectSupport]) {
+          val namedObjects = job.asInstanceOf[NamedObjectSupport].namedObjectsPrivate
+          if (namedObjects.get() == null) {
+            namedObjects.compareAndSet(null, jobServerNamedObjects)
           }
-          case SparkJobValid => {
-            statusActor ! JobStarted(jobId: String, contextName, jobInfo.startTime)
-            val sc = jobContext.sparkContext
-            sc.setJobGroup(jobId, s"Job group for $jobId and spark context ${sc.applicationId}", true)
-            logger.info(String.format("start a new job %s in application %s ",jobId,sc.applicationId))
-            try {
-              //这里真正开始跑了
-             job.runJob(jobC, jobConfig)
-            } catch {
-              case e: Throwable =>
-                logger.error("run jon error msg:" + e.getMessage,e)
-                val err = new Throwable(e.getMessage ,e)
-                throw err
+        }
+
+        try {
+          statusActor ! JobStatusActor.JobInit(jobInfo)
+
+          val jobC = jobContext.asInstanceOf[job.C]
+          job.validate(jobC, jobConfig) match {
+            case SparkJobInvalid(reason) => {
+              val err = new Throwable(reason)
+              statusActor ! JobValidationFailed(jobId, DateTime.now(), err)
+              throw err
+            }
+            case SparkJobValid => {
+              statusActor ! JobStarted(jobId: String, contextName, jobInfo.startTime)
+              val sc = jobContext.sparkContext
+              sc.setJobGroup(jobId, s"Job group for $jobId and spark context ${sc.applicationId}", true)
+              job.runJob(jobC, jobConfig)
             }
           }
+        } finally {
+          org.slf4j.MDC.remove("jobId")
         }
-      } finally {
-        org.slf4j.MDC.remove("jobId")
+      } catch {
+        case e: java.lang.AbstractMethodError => {
+          logger.error("Oops, there's an AbstractMethodError... maybe you compiled " +
+            "your code with an older version of SJS? here's the exception:", e)
+          throw e
+        }
+        case e: Throwable => {
+          logger.error("Got Throwable", e)
+          throw e
+        };
       }
     }(executionContext).andThen {
       case Success(result: Any) =>
         statusActor ! JobFinished(jobId, DateTime.now())
+        // TODO: If the result is Stream[_] and this is running with context-per-jvm=true configuration
+        // serializing a Stream[_] blob across process boundaries is not desirable.
+        // In that scenario an enhancement is required here to chunk stream results back.
+        // Something like ChunkedJobResultStart, ChunkJobResultMessage, and ChunkJobResultEnd messages
+        // might be a better way to send results back and then on the other side use chunked encoding
+        // transfer to send the chunks back. Alternatively the stream could be persisted here to HDFS
+        // and the streamed out of InputStream on the other side.
+        // Either way an enhancement would be required here to make Stream[_] responses work
+        // with context-per-jvm=true configuration
         resultActor ! JobResult(jobId, result)
       case Failure(error: Throwable) =>
+        // Wrapping the error inside a RuntimeException to handle the case of throwing custom exceptions.
+        val wrappedError = wrapInRuntimeException(error)
         // If and only if job validation fails, JobErroredOut message is dropped silently in JobStatusActor.
-        statusActor ! JobErroredOut(jobId, DateTime.now(), error)
-        logger.warn("Exception from job " + jobId + ": ", error)
-
+        statusActor ! JobErroredOut(jobId, DateTime.now(), wrappedError)
+        logger.error("Exception from job " + jobId + ": ", error)
     }(executionContext).andThen {
       case _ =>
         // Make sure to decrement the count of running jobs when a job finishes, in both success and failure
         // cases.
-
-
-        logger.info("decrement count ,the job {} finish",jobId)
         resultActor ! Unsubscribe(jobId, subscriber)
         statusActor ! Unsubscribe(jobId, subscriber)
         currentRunningJobs.getAndDecrement()
         postEachJob()
     }(executionContext)
+  }
+
+  // Wraps a Throwable object into a RuntimeException. This is useful in case
+  // a custom exception is thrown. Currently, throwing a custom exception doesn't
+  // work and this is a workaround to wrap it into a standard exception.
+  protected def wrapInRuntimeException(t: Throwable): RuntimeException = {
+    val cause : Throwable = getRootCause(t)
+    val e : RuntimeException = new RuntimeException("%s: %s"
+      .format(cause.getClass().getName() ,cause.getMessage))
+    e.setStackTrace(cause.getStackTrace())
+    return e
+  }
+
+  // Gets the very first exception that caused the current exception to be thrown.
+  protected def getRootCause(t: Throwable): Throwable = {
+    var result : Throwable = t
+    var cause : Throwable = result.getCause()
+    while(cause != null  && (result != cause) ) {
+      result = cause
+      cause = result.getCause()
+    }
+    return result
   }
 
   // Use our classloader and a factory to create the SparkContext.  This ensures the SparkContext will use
@@ -403,5 +403,5 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
   // present on every node, whereas file:// will be assumed only present on driver node
   private def getSideJars(config: Config): Seq[String] =
     Try(config.getStringList("dependent-jar-uris").asScala.toSeq).
-     orElse(Try(config.getString("dependent-jar-uris").split(",").toSeq)).getOrElse(Nil)
+      orElse(Try(config.getString("dependent-jar-uris").split(",").toSeq)).getOrElse(Nil)
 }
