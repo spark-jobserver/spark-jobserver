@@ -269,40 +269,51 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
     Future {
       org.slf4j.MDC.put("jobId", jobId)
       logger.info("Starting job future thread")
-
-      // Need to re-set the SparkEnv because it's thread-local and the Future runs on a diff thread
-      SparkEnv.set(sparkEnv)
-
-      // Use the Spark driver's class loader as it knows about all our jars already
-      // NOTE: This may not even be necessary if we set the driver ActorSystem classloader correctly
-      Thread.currentThread.setContextClassLoader(jarLoader)
-      val job = constructor()
-      if (job.isInstanceOf[NamedObjectSupport]) {
-        val namedObjects = job.asInstanceOf[NamedObjectSupport].namedObjectsPrivate
-        if (namedObjects.get() == null) {
-          namedObjects.compareAndSet(null, jobServerNamedObjects)
-        }
-      }
-
       try {
-        statusActor ! JobStatusActor.JobInit(jobInfo)
+        // Need to re-set the SparkEnv because it's thread-local and the Future runs on a diff thread
+        SparkEnv.set(sparkEnv)
 
-        val jobC = jobContext.asInstanceOf[job.C]
-        job.validate(jobC, jobConfig) match {
-          case SparkJobInvalid(reason) => {
-            val err = new Throwable(reason)
-            statusActor ! JobValidationFailed(jobId, DateTime.now(), err)
-            throw err
-          }
-          case SparkJobValid => {
-            statusActor ! JobStarted(jobId: String, contextName, jobInfo.startTime)
-            val sc = jobContext.sparkContext
-            sc.setJobGroup(jobId, s"Job group for $jobId and spark context ${sc.applicationId}", true)
-            job.runJob(jobC, jobConfig)
+        // Use the Spark driver's class loader as it knows about all our jars already
+        // NOTE: This may not even be necessary if we set the driver ActorSystem classloader correctly
+        Thread.currentThread.setContextClassLoader(jarLoader)
+        val job = constructor()
+        if (job.isInstanceOf[NamedObjectSupport]) {
+          val namedObjects = job.asInstanceOf[NamedObjectSupport].namedObjectsPrivate
+          if (namedObjects.get() == null) {
+            namedObjects.compareAndSet(null, jobServerNamedObjects)
           }
         }
-      } finally {
-        org.slf4j.MDC.remove("jobId")
+
+        try {
+          statusActor ! JobStatusActor.JobInit(jobInfo)
+
+          val jobC = jobContext.asInstanceOf[job.C]
+          job.validate(jobC, jobConfig) match {
+            case SparkJobInvalid(reason) => {
+              val err = new Throwable(reason)
+              statusActor ! JobValidationFailed(jobId, DateTime.now(), err)
+              throw err
+            }
+            case SparkJobValid => {
+              statusActor ! JobStarted(jobId: String, contextName, jobInfo.startTime)
+              val sc = jobContext.sparkContext
+              sc.setJobGroup(jobId, s"Job group for $jobId and spark context ${sc.applicationId}", true)
+              job.runJob(jobC, jobConfig)
+            }
+          }
+        } finally {
+          org.slf4j.MDC.remove("jobId")
+        }
+      } catch {
+        case e: java.lang.AbstractMethodError => {
+          logger.error("Oops, there's an AbstractMethodError... maybe you compiled " +
+            "your code with an older version of SJS? here's the exception:", e)
+          throw e
+        }
+        case e: Throwable => {
+          logger.error("Got Throwable", e)
+          throw e
+        };
       }
     }(executionContext).andThen {
       case Success(result: Any) =>
@@ -322,7 +333,7 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
         val wrappedError = wrapInRuntimeException(error)
         // If and only if job validation fails, JobErroredOut message is dropped silently in JobStatusActor.
         statusActor ! JobErroredOut(jobId, DateTime.now(), wrappedError)
-        logger.warn("Exception from job " + jobId + ": ", error)
+        logger.error("Exception from job " + jobId + ": ", error)
     }(executionContext).andThen {
       case _ =>
         // Make sure to decrement the count of running jobs when a job finishes, in both success and failure
