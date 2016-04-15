@@ -74,17 +74,6 @@ object SparkJobUtils {
   }
 
   /**
-    *
-    * @param config the specific context configuration
-    * @return a map of the hadoop configuration values or an empty Map
-    */
-  def getHadoopConfig(config: Config): Map[String, String] = {
-    Try(config.getConfig("hadoop").entrySet().asScala.map { e =>
-      e.getKey -> e.getValue.unwrapped().toString
-    }.toMap).getOrElse(Map())
-  }
-
-  /**
    * Returns the maximum number of jobs that can run at the same time
    */
   def getMaxRunningJobs(config: Config): Int = {

@@ -23,6 +23,7 @@ object JobManager {
   // Allow custom function to create ActorSystem.  An example of why this is useful:
   // we can have something that stores the ActorSystem so it could be shut down easily later.
   def start(args: Array[String], makeSystem: Config => ActorSystem) {
+    //这里就是那个远程的actor的连接地址了
     val clusterAddress = AddressFromURIString.parse(args(1))
     val workDir = args(0)
     val contextPath = new java.io.File(workDir + "/context.conf")
@@ -48,11 +49,12 @@ object JobManager {
       config.getConfig("spark").root.render())
     logger.info("..and context config:\n" + contextConfig.root.render)
 
-    val system = makeSystem(config.resolve())
+    val system = makeSystem(config)
     val jobManager = system.actorOf(JobManagerActor.props(contextConfig), managerName)
 
     //Join akka cluster
     logger.info("Joining cluster at address {}", clusterAddress)
+    //连接到远程地址里面去了
     Cluster(system).join(clusterAddress)
 
     //Kill process on actor system shutdown
@@ -60,12 +62,13 @@ object JobManager {
     system.registerOnTermination(System.exit(0))
     reaper ! WatchMe(jobManager)
   }
-
+//通过spark/submit 起动进程的入口就是在这里了
   def main(args: Array[String]) {
     import scala.collection.JavaConverters._
     def makeManagerSystem(name: String)(config: Config): ActorSystem = {
       val configWithRole = config.withValue("akka.cluster.roles",
         ConfigValueFactory.fromIterable(List("manager").asJava))
+      //起动actor的远程通信
       ActorSystem(name, configWithRole)
     }
     start(args, makeManagerSystem("JobServer")(_))

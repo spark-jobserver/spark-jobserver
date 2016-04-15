@@ -66,6 +66,7 @@ class DataFileDAO(config: Config) {
   /**
    * save the given data into a new file with the given prefix, a time stamp is appended to
    * ensure uniqueness
+    * 上传真正的数据在这里
    */
   def saveFile(aNamePrefix: String, uploadTime: DateTime, aBytes: Array[Byte]): String = {
     // The order is important. Save the file first and then log it into meta data file.

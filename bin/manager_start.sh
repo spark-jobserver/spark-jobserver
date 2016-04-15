@@ -22,7 +22,7 @@ GC_OPTS="-XX:+UseConcMarkSweepGC
          -XX:MaxPermSize=512m
          -XX:+CMSClassUnloadingEnabled "
 
-JAVA_OPTS="-XX:MaxDirectMemorySize=$MAX_DIRECT_MEMORY
+JAVA_OPTS="-XX:MaxDirectMemorySize=512M
            -XX:+HeapDumpOnOutOfMemoryError -Djava.net.preferIPv4Stack=true"
 
 MAIN="spark.jobserver.JobManager"

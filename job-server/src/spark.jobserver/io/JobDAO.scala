@@ -11,7 +11,7 @@ case class JarInfo(appName: String, uploadTime: DateTime)
 case class JobInfo(jobId: String, contextName: String,
                    jarInfo: JarInfo, classPath: String,
                    startTime: DateTime, endTime: Option[DateTime],
-                   error: Option[Throwable]) {
+                   error: Option[Throwable],logstatus: Option[String]  ) {
   def jobLengthMillis: Option[Long] = endTime.map { end => new Duration(startTime, end).getMillis() }
 
   def isRunning: Boolean = !endTime.isDefined

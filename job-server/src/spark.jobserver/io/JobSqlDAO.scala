@@ -239,7 +239,7 @@ class JobSqlDAO(config: Config) extends JobDAO {
         val jarId = queryJarId(jobInfo.jarInfo.appName, jobInfo.jarInfo.uploadTime)
 
         // Extract out the the JobInfo members and convert any members to appropriate SQL types
-        val JobInfo(jobId, contextName, _, classPath, startTime, endTime, error) = jobInfo
+        val JobInfo(jobId, contextName, _, classPath, startTime, endTime, error,logstatus) = jobInfo
         val (start, endOpt, errOpt) = (convertDateJodaToSql(startTime),
           endTime.map(convertDateJodaToSql(_)),
           error.map(_.getMessage))
@@ -277,7 +277,7 @@ class JobSqlDAO(config: Config) extends JobDAO {
               classpath,
               convertDateSqlToJoda(start),
               end.map(convertDateSqlToJoda(_)),
-              err.map(new Throwable(_)))
+              err.map(new Throwable(_)) ,None)
         }.toSeq
     }
   }
@@ -300,7 +300,7 @@ class JobSqlDAO(config: Config) extends JobDAO {
             classpath,
             convertDateSqlToJoda(start),
             end.map(convertDateSqlToJoda(_)),
-            err.map(new Throwable(_)))
+            err.map(new Throwable(_)),None)
         }.headOption
     }
   }

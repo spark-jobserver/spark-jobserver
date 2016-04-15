@@ -29,4 +29,5 @@ else
 fi
 
 
+"$(dirname "$0")"/kill_all_spark_job_proc.sh
 
