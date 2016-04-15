@@ -15,6 +15,9 @@ function getJobs() {
         items.push("<td>" + job.context + "</td>");
         items.push("<td>" + job.startTime + "</td>");
         items.push("<td>" + job.duration + "</td>");
+        items.push("<td>" + job.endTime + "</td>");
+        items.push("<td>" + job.status + "</td>");
+        items.push("<td>" + job.logstatus + "</td>");
         items.push("</tr>");
 
         if(job.status == 'ERROR') {
@@ -30,14 +33,14 @@ function getJobs() {
 
 function getContexts() {
   $.getJSON(
-    '/contexts',
+    '/continfo',
     '',
     function(contexts) {
       $('#contextsTable tbody').empty();
 
-      $.each(contexts, function(key, contextName) {
+      $.each(contexts, function(key, nodes) {
         var items = [];
-        items.push("<tr><td>" + contextName + "</td></tr>");
+        items.push("<tr><td>" + nodes[0] + "</td><td>" + nodes[1] + "</td><td>" + nodes[2] + "</td><td>" + nodes[3] + "</td></tr>");
         $('#contextsTable > tbody:last').append(items.join(""));
       });
     });
