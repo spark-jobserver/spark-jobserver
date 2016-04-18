@@ -39,7 +39,7 @@ class JobFileDAO(config: Config) extends JobDAO {
       }
     }
 
-    // read back all apps info during startup
+    // read back all apps info during startup 读取上传的jar包
     if (jarsFile.exists()) {
       val in = new DataInputStream(new BufferedInputStream(new FileInputStream(jarsFile)))
       try {
