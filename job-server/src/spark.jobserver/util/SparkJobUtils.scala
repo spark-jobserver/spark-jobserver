@@ -7,22 +7,22 @@ import org.apache.spark.SparkConf
 import scala.util.Try
 
 /**
- * Holds a few functions common to Job Server SparkJob's and SparkContext's
- */
+  * Holds a few functions common to Job Server SparkJob's and SparkContext's
+  */
 object SparkJobUtils {
   import collection.JavaConverters._
 
   /**
-   * Creates a SparkConf for initializing a SparkContext based on various configs.
-   * Note that anything in contextConfig with keys beginning with spark. get
-   * put directly in the SparkConf.
-   *
-   * @param config the overall Job Server configuration (Typesafe Config)
-   * @param contextConfig the Typesafe Config specific to initializing this context
-   *                      (typically based on particular context/job)
-   * @param contextName the context name
-   * @return a SparkConf with everything properly configured
-   */
+    * Creates a SparkConf for initializing a SparkContext based on various configs.
+    * Note that anything in contextConfig with keys beginning with spark. get
+    * put directly in the SparkConf.
+    *
+    * @param config the overall Job Server configuration (Typesafe Config)
+    * @param contextConfig the Typesafe Config specific to initializing this context
+    *                      (typically based on particular context/job)
+    * @param contextName the context name
+    * @return a SparkConf with everything properly configured
+    */
   def configToSparkConf(config: Config, contextConfig: Config,
                         contextName: String): SparkConf = {
 
@@ -65,33 +65,44 @@ object SparkJobUtils {
     // This is useful for setting configurations for hadoop connectors such as
     // elasticsearch, cassandra, etc.
     for (e <- Try(contextConfig.getConfig("passthrough"))) {
-         e.entrySet().asScala.map { s=>
-            conf.set(s.getKey, s.getValue.unwrapped.toString)
-         }
+      e.entrySet().asScala.map { s=>
+        conf.set(s.getKey, s.getValue.unwrapped.toString)
+      }
     }
 
     conf
   }
 
   /**
-   * Returns the maximum number of jobs that can run at the same time
-   */
+    *
+    * @param config the specific context configuration
+    * @return a map of the hadoop configuration values or an empty Map
+    */
+  def getHadoopConfig(config: Config): Map[String, String] = {
+    Try(config.getConfig("hadoop").entrySet().asScala.map { e =>
+      e.getKey -> e.getValue.unwrapped().toString
+    }.toMap).getOrElse(Map())
+  }
+
+  /**
+    * Returns the maximum number of jobs that can run at the same time
+    */
   def getMaxRunningJobs(config: Config): Int = {
     val cpuCores = Runtime.getRuntime.availableProcessors
     Try(config.getInt("spark.jobserver.max-jobs-per-context")).getOrElse(cpuCores)
   }
 
   /**
-   * According "spark.master", returns the timeout of create sparkContext
-   */
+    * According "spark.master", returns the timeout of create sparkContext
+    */
   def getContextTimeout(config: Config): Int = {
     config.getString("spark.master") match {
       case "yarn-client" =>
         Try(config.getDuration("spark.jobserver.yarn-context-creation-timeout",
-              TimeUnit.MILLISECONDS).toInt / 1000).getOrElse(40)
+          TimeUnit.MILLISECONDS).toInt / 1000).getOrElse(40)
       case _               =>
         Try(config.getDuration("spark.jobserver.context-creation-timeout",
-              TimeUnit.MILLISECONDS).toInt / 1000).getOrElse(15)
+          TimeUnit.MILLISECONDS).toInt / 1000).getOrElse(15)
     }
   }
 }

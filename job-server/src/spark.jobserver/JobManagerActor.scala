@@ -19,7 +19,6 @@ import spark.jobserver.io.{JarInfo, JobDAO, JobDAOActor, JobInfo}
 import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
 
 object JobManagerActor {
-  // Messages
   case class Initialize(daoActor: ActorRef, resultActorOpt: Option[ActorRef])
   case class StartJob(appName: String, classPath: String, config: Config,
                       subscribedEvents: Set[Class[_]])
@@ -27,6 +26,11 @@ object JobManagerActor {
   case object GetContextConfig
   case object SparkContextStatus
 
+  case object SparkContextSqlNum
+  case class ContextContainSqlNum(contextName: String, sqlNum: Int, maxRunningJobs :Int)
+
+  case object SparkContextInfo
+  case class ContextInfoMsg(contextName: String, sqlNum: Int ,maxRunningJobs :Int ,applicationId:String)
   // Results/Data
   case class ContextConfig(contextName: String, contextConfig: SparkConf, hadoopConfig: Configuration)
   case class Initialized(contextName: String, resultActor: ActorRef)
