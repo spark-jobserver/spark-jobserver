@@ -74,7 +74,8 @@ trait NamedRddSupport extends NamedObjectSupport { self: SparkJob =>
     /**
       * Gets an RDD with the given name, or creates it if one doesn't already exist.
       *
-      * If the given RDD has already been computed by another job and cached in memory, this method will return
+      * If the given RDD has already been computed by another job and cached in memory,
+      * this method will return
       * a reference to the cached RDD. If the RDD has never been computed, then the generator will be called
       * to compute it, in the caller's thread, and the result will be cached and returned to the caller.
       *
