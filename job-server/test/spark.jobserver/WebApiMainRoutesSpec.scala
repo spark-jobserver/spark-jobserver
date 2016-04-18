@@ -17,7 +17,9 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       "jobId" -> "foo-1",
       "startTime" -> "2013-05-29T00:00:00.000Z",
       "classPath" -> "com.abc.meme",
-      "context"  -> "context",
+      "context"  -> "context"
+      , "logstatus" -> "",
+      "endTime" -> "2013-05-29T00:05:00.000Z",
       "duration" -> "300.0 secs",
       StatusKey -> "FINISHED")
   }
@@ -53,11 +55,15 @@ class WebApiMainRoutesSpec extends WebApiSpec {
               "startTime" -> "2013-05-29T00:00:00.000Z",
               "classPath" -> "com.abc.meme",
               "context"  -> "context",
+            "logstatus" -> "",
+            "endTime" -> "",
               "duration" -> "Job not done yet",
               StatusKey -> "RUNNING"),
           Map("jobId" -> "foo-1",
               "startTime" -> "2013-05-29T00:00:00.000Z",
               "classPath" -> "com.abc.meme",
+             "logstatus" -> "",
+            "endTime" -> "2013-05-29T00:05:00.000Z",
               "context"  -> "context",
               "duration" -> "300.0 secs",
               StatusKey -> "FINISHED")
@@ -174,6 +180,8 @@ class WebApiMainRoutesSpec extends WebApiSpec {
           "startTime" -> "2013-05-29T00:00:00.000Z",
           "classPath" -> "com.abc.meme",
           "context"  -> "context",
+            "logstatus" -> "",
+          "endTime" -> "",
           "duration" -> "Job not done yet",
           StatusKey -> "RUNNING",
           ResultKey -> "foobar!!!"
