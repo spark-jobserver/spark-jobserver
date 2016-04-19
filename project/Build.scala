@@ -5,6 +5,8 @@ import sbt.Keys._
 import sbt._
 import sbtassembly.AssemblyPlugin.autoImport._
 import spray.revolver.RevolverPlugin._
+import com.typesafe.sbt.SbtScalariform._
+import scalariform.formatter.preferences._
 import bintray.Plugin.bintrayPublishSettings
 import scoverage.ScoverageKeys._
 
@@ -159,14 +161,15 @@ object JobServerBuild extends Build {
       Tags.limitSum(1, Tags.Test, Tags.Untagged))
   )
 
-  lazy val revolverSettings = Revolver.settings ++ Seq(
-    javaOptions in Revolver.reStart += jobServerLogging,
+  import spray.revolver.RevolverPlugin.autoImport._
+  lazy val revolverSettings = Seq(
+    javaOptions in reStart += jobServerLogging,
     // Give job server a bit more PermGen since it does classloading
-    javaOptions in Revolver.reStart += "-XX:MaxPermSize=256m",
-    javaOptions in Revolver.reStart += "-Djava.security.krb5.realm= -Djava.security.krb5.kdc=",
+    javaOptions in reStart += "-XX:MaxPermSize=256m",
+    javaOptions in reStart += "-Djava.security.krb5.realm= -Djava.security.krb5.kdc=",
     // This lets us add Spark back to the classpath without assembly barfing
-    fullClasspath in Revolver.reStart := (fullClasspath in Compile).value,
-    mainClass in Revolver.reStart := Some("spark.jobserver.JobServer")
+    fullClasspath in reStart := (fullClasspath in Compile).value,
+    mainClass in reStart := Some("spark.jobserver.JobServer")
   )
 
   // To add an extra jar to the classpath when doing "re-start" for quick development, set the
