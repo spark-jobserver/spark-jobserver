@@ -19,7 +19,6 @@ import spark.jobserver.io.{JarInfo, JobDAO, JobDAOActor, JobInfo}
 import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
 
 object JobManagerActor {
-  // Messages
   case class Initialize(daoActor: ActorRef, resultActorOpt: Option[ActorRef])
   case class StartJob(appName: String, classPath: String, config: Config,
                       subscribedEvents: Set[Class[_]])
@@ -27,6 +26,11 @@ object JobManagerActor {
   case object GetContextConfig
   case object SparkContextStatus
 
+  case object SparkContextSqlNum
+  case class ContextContainSqlNum(contextName: String, sqlNum: Int, maxRunningJobs :Int)
+
+  case object SparkContextInfo
+  case class ContextInfoMsg(contextName: String, sqlNum: Int ,maxRunningJobs :Int ,applicationId:String)
   // Results/Data
   case class ContextConfig(contextName: String, contextConfig: SparkConf, hadoopConfig: Configuration)
   case class Initialized(contextName: String, resultActor: ActorRef)
@@ -40,33 +44,33 @@ object JobManagerActor {
 }
 
 /**
- * The JobManager actor supervises jobs running in a single SparkContext, as well as shared metadata.
- * It creates a SparkContext (or a StreamingContext etc. depending on the factory class)
- * It also creates and supervises a JobResultActor and JobStatusActor, although an existing JobResultActor
- * can be passed in as well.
- *
- * == contextConfig ==
- * {{{
- *  num-cpu-cores = 4         # Total # of CPU cores to allocate across the cluster
- *  memory-per-node = 512m    # -Xmx style memory string for total memory to use for executor on one node
- *  dependent-jar-uris = ["local://opt/foo/my-foo-lib.jar"]
- *                            # URIs for dependent jars to load for entire context
- *  context-factory = "spark.jobserver.context.DefaultSparkContextFactory"
- *  spark.mesos.coarse = true  # per-context, rather than per-job, resource allocation
- *  rdd-ttl = 24 h            # time-to-live for RDDs in a SparkContext.  Don't specify = forever
- *  is-adhoc = false          # true if context is ad-hoc context
- *  context.name = "sql"      # Name of context
- * }}}
- *
- * == global configuration ==
- * {{{
- *   spark {
- *     jobserver {
- *       max-jobs-per-context = 16      # Number of jobs that can be run simultaneously per context
- *     }
- *   }
- * }}}
- */
+  * The JobManager actor supervises jobs running in a single SparkContext, as well as shared metadata.
+  * It creates a SparkContext (or a StreamingContext etc. depending on the factory class)
+  * It also creates and supervises a JobResultActor and JobStatusActor, although an existing JobResultActor
+  * can be passed in as well.
+  *
+  * == contextConfig ==
+  * {{{
+  *  num-cpu-cores = 4         # Total # of CPU cores to allocate across the cluster
+  *  memory-per-node = 512m    # -Xmx style memory string for total memory to use for executor on one node
+  *  dependent-jar-uris = ["local://opt/foo/my-foo-lib.jar"]
+  *                            # URIs for dependent jars to load for entire context
+  *  context-factory = "spark.jobserver.context.DefaultSparkContextFactory"
+  *  spark.mesos.coarse = true  # per-context, rather than per-job, resource allocation
+  *  rdd-ttl = 24 h            # time-to-live for RDDs in a SparkContext.  Don't specify = forever
+  *  is-adhoc = false          # true if context is ad-hoc context
+  *  context.name = "sql"      # Name of context
+  * }}}
+  *
+  * == global configuration ==
+  * {{{
+  *   spark {
+  *     jobserver {
+  *       max-jobs-per-context = 16      # Number of jobs that can be run simultaneously per context
+  *     }
+  *   }
+  * }}}
+  */
 class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
 
   import CommonMessages._
@@ -238,7 +242,7 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
       resultActor ! Subscribe(jobId, sender, events)
       statusActor ! Subscribe(jobId, sender, events)
 
-      val jobInfo = JobInfo(jobId, contextName, jarInfo, classPath, DateTime.now(), None, None)
+      val jobInfo = JobInfo(jobId, contextName, jarInfo, classPath, DateTime.now(), None, None,None)
       future =
         Option(getJobFuture(jobJarInfo, jobInfo, jobConfig, sender, jobContext, sparkEnv))
     }
@@ -403,5 +407,5 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
   // present on every node, whereas file:// will be assumed only present on driver node
   private def getSideJars(config: Config): Seq[String] =
     Try(config.getStringList("dependent-jar-uris").asScala.toSeq).
-     orElse(Try(config.getString("dependent-jar-uris").split(",").toSeq)).getOrElse(Nil)
+      orElse(Try(config.getString("dependent-jar-uris").split(",").toSeq)).getOrElse(Nil)
 }

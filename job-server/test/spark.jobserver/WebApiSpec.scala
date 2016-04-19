@@ -49,7 +49,7 @@ with ScalatestRouteTest with HttpService {
   val routes = api.myRoutes
 
   val dt = DateTime.parse("2013-05-29T00Z")
-  val baseJobInfo = JobInfo("foo-1", "context", JarInfo("demo", dt), "com.abc.meme", dt, None, None)
+  val baseJobInfo = JobInfo("foo-1", "context", JarInfo("demo", dt), "com.abc.meme", dt, None, None, None)
   val finishedJobInfo = baseJobInfo.copy(endTime = Some(dt.plusMinutes(5)))
   val StatusKey = "status"
   val ResultKey = "result"
@@ -123,7 +123,7 @@ with ScalatestRouteTest with HttpService {
                                                           new IllegalArgumentException("foo")))
       case StartJob("foo", _, config, events)     =>
         statusActor ! Subscribe("foo", sender, events)
-        statusActor ! JobStatusActor.JobInit(JobInfo("foo", "context", null, "", dt, None, None))
+        statusActor ! JobStatusActor.JobInit(JobInfo("foo", "context", null, "", dt, None, None, None))
         statusActor ! JobStarted("foo", "context1", dt)
         val map = config.entrySet().asScala.map { entry => (entry.getKey -> entry.getValue.unwrapped) }.toMap
         if (events.contains(classOf[JobResult])) sender ! JobResult("foo", map)
@@ -131,7 +131,7 @@ with ScalatestRouteTest with HttpService {
 
       case StartJob("foo.stream", _, config, events)     =>
         statusActor ! Subscribe("foo.stream", sender, events)
-        statusActor ! JobStatusActor.JobInit(JobInfo("foo.stream", "context", null, "", dt, None, None))
+        statusActor ! JobStatusActor.JobInit(JobInfo("foo.stream", "context", null, "", dt, None, None, None))
         statusActor ! JobStarted("foo.stream", "context1", dt)
         val result = "\"1, 2, 3, 4, 5, 6\"".getBytes().toStream
         if (events.contains(classOf[JobResult])) sender ! JobResult("foo.stream", result)

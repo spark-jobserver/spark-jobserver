@@ -61,6 +61,7 @@ object JobServer {
           new DataFileDAO(config)), "data-manager")
       val jarManager = system.actorOf(Props(classOf[JarManager], daoActor), "jar-manager")
       val contextPerJvm = config.getBoolean("spark.jobserver.context-per-jvm")
+      //每个context一个jvm后面可能要进行这样的优化
       val supervisor =
         system.actorOf(Props(if (contextPerJvm) { classOf[AkkaClusterSupervisorActor] }
                              else               { classOf[LocalContextSupervisorActor] }, daoActor),
@@ -70,7 +71,7 @@ object JobServer {
       // Add initial job JARs, if specified in configuration.
       storeInitialJars(config, jarManager)
 
-      // Create initial contexts
+      // Create initial contexts 起动上下文
       supervisor ! ContextSupervisor.AddContextsFromConfig
       new WebApi(system, config, port, jarManager, dataManager, supervisor, jobInfo).start()
     } catch {
@@ -121,12 +122,20 @@ object JobServer {
   }
 
   def main(args: Array[String]) {
+
     import scala.collection.JavaConverters._
+   // System.setProperty("LOG_DIR","/tmp/log/")
+   // System.setProperty("spark.driver.allowMultipleContexts","true")
+
     def makeSupervisorSystem(name: String)(config: Config): ActorSystem = {
       val configWithRole = config.withValue("akka.cluster.roles",
         ConfigValueFactory.fromIterable(List("supervisor").asJava))
       ActorSystem(name, configWithRole)
     }
+    logger.info(" start " )
+    print("START SPARK JOB SERVER FOR REAL MONITOR "  )
+    val logdir = System.getProperty("LOG_DIR")
+    logger.info("start get log_dir" )
     start(args, makeSupervisorSystem("JobServer")(_))
   }
 

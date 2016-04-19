@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ivy-module version="2.0" xmlns:e="http://ant.apache.org/ivy/extra">
+	<info organisation="spark.jobserver"
+		module="root_2.10"
+		revision="0.6.2-SNAPSHOT"
+		status="integration"
+		publication="20160415202938"
+	>
+		<description homepage="https://github.com/spark-jobserver/spark-jobserver">
+		root
+		</description>
+	</info>
+	<configurations>
+		<conf name="compile" visibility="public" description=""/>
+		<conf name="runtime" visibility="public" description="" extends="compile"/>
+		<conf name="test" visibility="public" description="" extends="runtime"/>
+		<conf name="provided" visibility="public" description=""/>
+		<conf name="optional" visibility="public" description=""/>
+		<conf name="compile-internal" visibility="private" description="" extends="compile,optional,provided"/>
+		<conf name="runtime-internal" visibility="private" description="" extends="runtime,optional"/>
+		<conf name="test-internal" visibility="private" description="" extends="test,optional,provided"/>
+		<conf name="plugin" visibility="private" description=""/>
+		<conf name="sources" visibility="public" description=""/>
+		<conf name="docs" visibility="public" description=""/>
+		<conf name="pom" visibility="public" description=""/>
+		<conf name="scala-tool" visibility="private" description=""/>
+	</configurations>
+	<publications>
+	</publications>
+	<dependencies>
+		<dependency org="org.scala-lang" name="scala-compiler" rev="2.10.5" conf="scala-tool->default,optional(default)"/>
+		<dependency org="org.scala-lang" name="scala-library" rev="2.10.5" conf="scala-tool->default,optional(default);compile->default(compile)"/>
+		<dependency org="spark.jobserver" name="job-server_2.10" rev="0.6.2-SNAPSHOT" conf="compile->default(compile)"/>
+		<dependency org="spark.jobserver" name="job-server-extras_2.10" rev="0.6.2-SNAPSHOT" conf="compile->default(compile)"/>
+		<dependency org="org.scoverage" name="scalac-scoverage-runtime_2.10" rev="1.1.0" transitive="false" conf="provided->default(compile)"/>
+		<dependency org="org.scoverage" name="scalac-scoverage-plugin_2.10" rev="1.1.0" transitive="false" conf="provided->default(compile)"/>
+		<dependency org="org.apache.spark" name="spark-core_2.10" rev="1.6.0" conf="provided->default(compile)">
+			<exclude org="io.netty" module="*" name="*" type="netty-all" ext="*" conf="" matcher="exact"/>
+			<exclude org="org.scalamacros" module="*" name="*" type="*" ext="*" conf="" matcher="exact"/>
+		</dependency>
+		<dependency org="io.netty" name="netty-all" rev="4.0.29.Final" conf="compile->default(compile)"/>
+		<dependency org="com.typesafe" name="config" rev="1.2.1" conf="compile->default(compile)"/>
+		<exclude org="*" module="jms" artifact="*" type="*" ext="*" matcher="exact"/>
+		<exclude org="*" module="jmxtools" artifact="*" type="*" ext="*" matcher="exact"/>
+		<exclude org="*" module="jmxri" artifact="*" type="*" ext="*" matcher="exact"/>
+	</dependencies>
+</ivy-module>

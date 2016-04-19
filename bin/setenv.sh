@@ -53,16 +53,8 @@ if [ "$PORT" != "" ]; then
   CONFIG_OVERRIDES+="-Dspark.jobserver.port=$PORT "
 fi
 
-if [ "$DEBUG_PORT" != "" ]; then
-  CONFIG_OVERRIDES+="-Xdebug -Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=$DEBUG_PORT "
-fi
-
 if [ -z "$JOBSERVER_MEMORY" ]; then
   JOBSERVER_MEMORY=1G
-fi
-
-if [ -z "$MAX_DIRECT_MEMORY" ]; then
-  MAX_DIRECT_MEMORY=512M
 fi
 
 # This needs to be exported for standalone mode so drivers can connect to the Spark cluster

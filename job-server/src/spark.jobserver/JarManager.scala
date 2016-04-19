@@ -34,8 +34,14 @@ class JarManager(jobDao: ActorRef) extends InstrumentedActor {
   import scala.concurrent.duration._
   val daoAskTimeout = Timeout(3 seconds)
 
+  /**
+    * 存放数据文件
+    * @param appName
+    * @param jarBytes
+    */
   private def saveJar(appName: String, jarBytes: Array[Byte]): Unit = {
     val uploadTime = DateTime.now()
+    //存储结果
     jobDao ! JobDAOActor.SaveJar(appName, uploadTime, jarBytes)
   }
 
@@ -71,6 +77,7 @@ class JarManager(jobDao: ActorRef) extends InstrumentedActor {
 
       sender ! (if (success) { JarStored } else { InvalidJar })
 
+      //进行存储结果
     case StoreJar(appName, jarBytes) =>
       logger.info("Storing jar for app {}, {} bytes", appName, jarBytes.size)
       if (!JarUtils.validateJarBytes(jarBytes)) {

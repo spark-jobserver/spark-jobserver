@@ -37,10 +37,12 @@ class JobStatusActor(jobDao: ActorRef) extends InstrumentedActor with YammerMetr
 
   override def postStop(): Unit = {
     val stopTime = DateTime.now()
-    val stoppedInfos = infos.values.map { info =>
-      info.copy(endTime = Some(stopTime),
-                error = Some(new Exception(s"Context (${info.contextName}) for this job was terminated"))) }
-    stoppedInfos.foreach({info => jobDao ! JobDAOActor.SaveJobInfo(info)})
+
+      val stoppedInfos = infos.values.map { info =>
+        info.copy(endTime = Some(stopTime),
+          error = Some(new Exception(s"Context (${info.contextName}) for this job was terminated"))) }
+      stoppedInfos.foreach({info => jobDao ! JobDAOActor.SaveJobInfo(info)})
+
   }
 
   override def wrappedReceive: Receive = {
@@ -69,9 +71,11 @@ class JobStatusActor(jobDao: ActorRef) extends InstrumentedActor with YammerMetr
       // TODO (kelvinchu): Check if the jobId exists in the persistence store already
       if (!infos.contains(jobInfo.jobId)) {
         infos(jobInfo.jobId) = jobInfo
+
       } else {
         sender ! JobInitAlready
       }
+
 
     case msg: JobStarted =>
       processStatus(msg, "started") {
@@ -79,41 +83,59 @@ class JobStatusActor(jobDao: ActorRef) extends InstrumentedActor with YammerMetr
           info.copy(startTime = msg.startTime)
       }
 
+
     case msg: JobFinished =>
       processStatus(msg, "finished OK", remove = true) {
         case (info, msg) =>
-          info.copy(endTime = Some(msg.endTime))
+          info.copy(endTime = Some(msg.endTime) , logstatus =
+            Some(info.logstatus.getOrElse("") + "finished OK"))
       }
+
 
     case msg: JobValidationFailed =>
       processStatus(msg, "validation failed", remove = true) {
         case (info, msg) =>
-          info.copy(endTime = Some(msg.endTime), error = Some(msg.err))
+          info.copy(endTime = Some(msg.endTime), error = Some(msg.err) ,
+            logstatus = Some(info.logstatus.getOrElse("") + "validation failed"))
       }
 
     case msg: JobErroredOut =>
+
+      logger.info("JobErroredOut {} {}  ", msg.endTime: Any, Some(msg.err).get.toString )
       processStatus(msg, "finished with an error", remove = true) {
         case (info, msg) =>
-          info.copy(endTime = Some(msg.endTime), error = Some(msg.err))
+          info.copy(endTime = Some(msg.endTime), error = Some(msg.err),
+            logstatus = Some(info.logstatus.getOrElse("") + "finished with an error"))
       }
 
     case msg: JobKilled =>
-      processStatus(msg, "killed", remove = true) {
+      //可以是kill失败的，先不要从info里面删除
+      processStatus(msg, "killed", remove = false) {
         case (info, msg) =>
-          info.copy(endTime = Some(msg.endTime))
+          info.copy(endTime = Some(msg.endTime), logstatus = Some(info.logstatus.getOrElse("") + "killed "))
       }
   }
 
+  /**
+    * 记录一下状态
+    * @param msg
+    * @param logMessage
+    * @param remove
+    * @param infoModifier
+    * @tparam M
+    */
   private def processStatus[M <: StatusMessage](msg: M, logMessage: String, remove: Boolean = false)
                                                (infoModifier: (JobInfo, M) => JobInfo) {
     if (infos.contains(msg.jobId)) {
       infos(msg.jobId) = infoModifier(infos(msg.jobId), msg)
-      logger.info("Job {} {}", msg.jobId: Any, logMessage)
-      jobDao ! JobDAOActor.SaveJobInfo(infos(msg.jobId))
+      logger.info("Job {} {}  ", msg.jobId: Any, logMessage )
+      var jobInfo = infos(msg.jobId)
+
+      jobDao ! JobDAOActor.SaveJobInfo(jobInfo)
       publishMessage(msg.jobId, msg)
       updateMessageRate(msg)
       if (remove) infos.remove(msg.jobId)
-    } else {
+    }  else {
       logger.error("No such job id " + msg.jobId)
       sender ! NoSuchJobId
     }

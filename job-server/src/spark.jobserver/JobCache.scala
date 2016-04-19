@@ -28,6 +28,7 @@ class JobCache(maxEntries: Int, dao: ActorRef, sparkContext: SparkContext, loade
   implicit val daoAskTimeout: Timeout = Timeout(3 seconds)
 
   /**
+    * 实现相同的app名称，共用同一个对象，classpath 加入到相同的内存中
    * Retrieves the given SparkJob class from the cache if it's there, otherwise use the DAO to retrieve it.
    * @param appName the appName under which the jar was uploaded
    * @param uploadTime the upload time for the version of the jar wanted

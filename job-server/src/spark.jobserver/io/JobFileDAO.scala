@@ -4,12 +4,14 @@ import com.typesafe.config._
 import java.io._
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
+import spark.jobserver.io.JobInfo
 import scala.collection.mutable
 
 class JobFileDAO(config: Config) extends JobDAO {
   private val logger = LoggerFactory.getLogger(getClass)
 
   // appName to its set of upload times. Decreasing times in the seq.
+  //存储当前上传了那些jar
   private val apps = mutable.HashMap.empty[String, Seq[DateTime]]
   // jobId to its JobInfo
   private val jobs = mutable.HashMap.empty[String, JobInfo]
@@ -37,7 +39,7 @@ class JobFileDAO(config: Config) extends JobDAO {
       }
     }
 
-    // read back all apps info during startup
+    // read back all apps info during startup 读取上传的jar包
     if (jarsFile.exists()) {
       val in = new DataInputStream(new BufferedInputStream(new FileInputStream(jarsFile)))
       try {
@@ -92,6 +94,12 @@ class JobFileDAO(config: Config) extends JobDAO {
     jobConfigsOutputStream = new DataOutputStream(new FileOutputStream(jobConfigsFile, true))
   }
 
+  /**
+    * 保存jar的过程
+    * @param appName
+    * @param uploadTime
+    * @param jarBytes
+    */
   override def saveJar(appName: String, uploadTime: DateTime, jarBytes: Array[Byte]) {
     // The order is important. Save the jar file first and then log it into jobsFile.
     val outFile = new File(rootDir, createJarName(appName, uploadTime) + ".jar")
@@ -118,6 +126,7 @@ class JobFileDAO(config: Config) extends JobDAO {
 
   private def readJarInfo(in: DataInputStream) = JarInfo(in.readUTF, new DateTime(in.readLong))
 
+  //把结果存放在这个对象中
   private def addJar(appName: String, uploadTime: DateTime) {
     if (apps.contains(appName)) {
       apps(appName) = uploadTime +: apps(appName) // latest time comes first
@@ -138,11 +147,14 @@ class JobFileDAO(config: Config) extends JobDAO {
     appName + "-" + uploadTime.toString().replace(':', '_')
 
   override def saveJobInfo(jobInfo: JobInfo) {
+
     writeJobInfo(jobsOutputStream, jobInfo)
     jobs(jobInfo.jobId) = jobInfo
+
   }
 
   private def writeJobInfo(out: DataOutputStream, jobInfo: JobInfo) {
+
     out.writeUTF(jobInfo.jobId)
     out.writeUTF(jobInfo.contextName)
     writeJarInfo(out, jobInfo.jarInfo)
@@ -152,12 +164,22 @@ class JobFileDAO(config: Config) extends JobDAO {
     out.writeLong(time)
     val errorStr = if (jobInfo.error.isEmpty) "" else jobInfo.error.get.toString
     out.writeUTF(errorStr)
+    val logstatus = if (jobInfo.logstatus.isEmpty) "" else jobInfo.logstatus.get.toString
+    out.writeUTF( logstatus)
+
   }
 
   private def readError(in: DataInputStream) = {
     val error = in.readUTF()
     if (error == "") None else Some(new Throwable(error))
   }
+
+
+  private def readLogstatus(in: DataInputStream) = {
+    val error = in.readUTF()
+    if (error == "") None else Some( error )
+  }
+
 
   private def readJobInfo(in: DataInputStream) = JobInfo(
     in.readUTF,
@@ -166,7 +188,7 @@ class JobFileDAO(config: Config) extends JobDAO {
     in.readUTF,
     new DateTime(in.readLong),
     Some(new DateTime(in.readLong)),
-    readError(in))
+    readError(in),readLogstatus(in))
 
   override def getJobInfo(jobId: String): Option[JobInfo] = jobs.get(jobId)
 

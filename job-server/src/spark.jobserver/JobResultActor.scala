@@ -8,7 +8,7 @@ import spark.jobserver.util.LRUCache
 
 /**
  * It is an actor to manage results that are returned from jobs.
- *
+ *这里就是记录job的结果信息了
  * TODO: support multiple subscribers for same JobID
  */
 class JobResultActor extends InstrumentedActor with YammerMetrics {

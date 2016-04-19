@@ -1,40 +1,39 @@
 package spark.jobserver
 
-import java.util.NoSuchElementException
 import java.util.concurrent.TimeUnit
-import javax.net.ssl.SSLContext
 
-import akka.actor.{ActorRef, ActorSystem}
+import akka.actor.{ ActorSystem, ActorRef }
 import akka.pattern.ask
 import akka.util.Timeout
-import com.typesafe.config.{Config, ConfigException, ConfigFactory, ConfigRenderOptions}
-import ooyala.common.akka.web.JsonUtils.AnyJsonFormat
-import ooyala.common.akka.web.{CommonRoutes, WebService}
-import org.apache.shiro.SecurityUtils
-import org.apache.shiro.config.IniSecurityManagerFactory
+import com.typesafe.config.{ Config, ConfigFactory, ConfigException, ConfigRenderOptions }
+import java.util.NoSuchElementException
+import javax.net.ssl.SSLContext
+import ooyala.common.akka.web.{ WebService, CommonRoutes }
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
-import spark.jobserver.auth._
-import spark.jobserver.io.JobInfo
+import spark.jobserver.ContextSupervisor.ListContextsInfo
+import spark.jobserver.util.SparkJobUtils
+import spark.jobserver.util.SSLContextFactory
 import spark.jobserver.routes.DataRoutes
-import spark.jobserver.util.{SSLContextFactory, SparkJobUtils}
-import spray.http._
-import spray.httpx.SprayJsonSupport.sprayJsonMarshaller
-import spray.io.ServerSSLEngineProvider
-import spray.json.DefaultJsonProtocol._
-import spray.routing.directives.AuthMagnet
-import spray.routing.{HttpService, RequestContext, Route}
-
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.Try
-
+import spark.jobserver.io.JobInfo
+import spark.jobserver.auth._
+import spray.http.HttpResponse
+import spray.http.MediaTypes
+import spray.http.StatusCodes
+import spray.httpx.SprayJsonSupport.sprayJsonMarshaller
+import spray.json.DefaultJsonProtocol._
+import spray.routing.{ HttpService, Route, RequestContext }
+import spray.routing.directives.AuthMagnet
+import spray.io.ServerSSLEngineProvider
+import org.apache.shiro.config.IniSecurityManagerFactory
+import org.apache.shiro.mgt.SecurityManager
+import org.apache.shiro.SecurityUtils
 
 object WebApi {
   val StatusKey = "status"
   val ResultKey = "result"
-  val ResultKeyStartBytes = "{\n".getBytes
-  val ResultKeyEndBytes = "}".getBytes
-  val ResultKeyBytes = ("\"" + ResultKey + "\":").getBytes
 
   def badRequest(ctx: RequestContext, msg: String) {
     ctx.complete(StatusCodes.BadRequest, errMap(msg))
@@ -45,6 +44,8 @@ object WebApi {
   }
 
   def errMap(errMsg: String) : Map[String, String] = Map(StatusKey -> "ERROR", ResultKey -> errMsg)
+
+  def succMap(succMsg: String) : Map[String, String] = Map(StatusKey -> "OK", ResultKey -> succMsg)
 
   def errMap(t: Throwable, status: String) : Map[String, Any] =
     Map(StatusKey -> status, ResultKey -> formatException(t))
@@ -59,16 +60,9 @@ object WebApi {
     case item         => Map(ResultKey -> item)
   }
 
+  //返回结果了
   def resultToTable(result: Any): Map[String, Any] = {
     Map(ResultKey -> result)
-  }
-
-  def resultToByteIterator(jobReport: Map[String, Any], result: Iterator[_]): Iterator[_] = {
-    ResultKeyStartBytes.toIterator ++
-      (jobReport.map(t => Seq(AnyJsonFormat.write(t._1).toString(),
-                AnyJsonFormat.write(t._2).toString()).mkString(":") ).mkString(",") ++
-        (if(jobReport.nonEmpty) "," else "")).getBytes().toIterator ++
-      ResultKeyBytes.toIterator ++ result ++ ResultKeyEndBytes.toIterator
   }
 
   def formatException(t: Throwable): Any =
@@ -88,12 +82,14 @@ object WebApi {
     Map("jobId" -> jobInfo.jobId,
       "startTime" -> jobInfo.startTime.toString(),
       "classPath" -> jobInfo.classPath,
+      "logstatus" -> jobInfo.logstatus.getOrElse(""),
+      "endTime" -> jobInfo.endTime.getOrElse(""),
       "context" -> (if (jobInfo.contextName.isEmpty) "<<ad-hoc>>" else jobInfo.contextName),
       "duration" -> getJobDurationString(jobInfo)) ++ (jobInfo match {
-        case JobInfo(_, _, _, _, _, None, _) => Map(StatusKey -> "RUNNING")
-        case JobInfo(_, _, _, _, _, _, Some(ex)) => Map(StatusKey -> "ERROR",
+        case JobInfo(_, _, _, _, _, None, _ ,_) => Map(StatusKey -> "RUNNING")
+        case JobInfo(_, _, _, _, _, _, Some(ex),_) => Map(StatusKey -> "ERROR",
           ResultKey -> formatException(ex))
-        case JobInfo(_, _, _, _, _, Some(e), None) => Map(StatusKey -> "FINISHED")
+        case JobInfo(_, _, _, _, _, Some(e), None,_) => Map(StatusKey -> "FINISHED")
       })
   }
 }
@@ -105,8 +101,7 @@ class WebApi(system: ActorSystem,
              dataManager: ActorRef,
              supervisor: ActorRef,
              jobInfo: ActorRef)
-    extends HttpService with CommonRoutes with DataRoutes with SJSAuthenticator with CORSSupport
-                        with ChunkEncodedStreamingSupport {
+    extends HttpService with CommonRoutes with DataRoutes with SJSAuthenticator with CORSSupport {
   import CommonMessages._
   import ContextSupervisor._
   import scala.concurrent.duration._
@@ -123,8 +118,6 @@ class WebApi(system: ActorSystem,
   val DefaultJobLimit = 50
   val StatusKey = "status"
   val ResultKey = "result"
-  val ResultChunkSize = Option("spark.jobserver.result-chunk-size").filter(config.hasPath)
-      .fold(100 * 1024)(config.getBytes(_).toInt)
 
   val contextTimeout = SparkJobUtils.getContextTimeout(config)
   val bindAddress = config.getString("spark.jobserver.bind-address")
@@ -132,7 +125,7 @@ class WebApi(system: ActorSystem,
   val logger = LoggerFactory.getLogger(getClass)
 
   val myRoutes = cors {
-    jarRoutes ~ contextRoutes ~ jobRoutes ~
+    jarRoutes ~ contextRoutes ~ jobRoutes~ contsumRoutes~continfoRoutes ~dropcontexprocessRoutes~
       dataRoutes ~ healthzRoutes ~ otherRoutes
   }
 
@@ -161,6 +154,7 @@ class WebApi(system: ActorSystem,
   def start() {
 
     /**
+      * 这里进行api 接口开始了
      * activates ssl or tsl encryption between client and SJS if so requested
      * in config
      */
@@ -184,6 +178,7 @@ class WebApi(system: ActorSystem,
    * Routes for listing and uploading jars
    *    GET /jars              - lists all current jars
    *    POST /jars/<appName>   - upload a new jar file
+    *    上传jar包
    */
   def jarRoutes: Route = pathPrefix("jars") {
     // user authentication
@@ -206,6 +201,7 @@ class WebApi(system: ActorSystem,
               val future = jarManager ? StoreJar(appName, jarBytes)
               respondWithMediaType(MediaTypes.`application/json`) { ctx =>
                 future.map {
+                  //存储的结果
                   case JarStored  => ctx.complete(StatusCodes.OK)
                   case InvalidJar => badRequest(ctx, "Jar is not of the right format")
                 }.recover {
@@ -241,7 +237,6 @@ class WebApi(system: ActorSystem,
    */
   def contextRoutes: Route = pathPrefix("contexts") {
     import ContextSupervisor._
-
     import collection.JavaConverters._
     // user authentication
     authenticate(authenticator) { authInfo =>
@@ -262,6 +257,7 @@ class WebApi(system: ActorSystem,
            */
           path(Segment) { (contextName) =>
             // Enforce user context name to start with letters
+            logger.info("start here create " + contextName)
             if (!contextName.head.isLetter) {
               complete(StatusCodes.BadRequest, errMap("context name must start with letters"))
             } else {
@@ -270,7 +266,7 @@ class WebApi(system: ActorSystem,
                 val future = (supervisor ? AddContext(contextName, config))(contextTimeout.seconds)
                 respondWithMediaType(MediaTypes.`application/json`) { ctx =>
                   future.map {
-                    case ContextInitialized   => ctx.complete(StatusCodes.OK)
+                    case ContextInitialized(contextProcessId)   => ctx.complete(succMap(contextProcessId))
                     case ContextAlreadyExists => badRequest(ctx, "context " + contextName + " exists")
                     case ContextInitError(e)  => ctx.complete(500, errMap(e, "CONTEXT INIT ERROR"))
                   }
@@ -284,6 +280,7 @@ class WebApi(system: ActorSystem,
           //  Stop the context with the given name.  Executors will be shut down and all cached RDDs
           //  and currently running jobs will be lost.  Use with care!
           path(Segment) { (contextName) =>
+            logger.info("start here delete " + contextName)
             val future = supervisor ? StopContext(contextName)
             respondWithMediaType(MediaTypes.`text/plain`) { ctx =>
               future.map {
@@ -326,6 +323,72 @@ class WebApi(system: ActorSystem,
     }
   }
 
+
+  /**
+    * Routes for listing contexts contain how many sql num
+    *     GET /contsum         - lists all current contexts contain sql
+    */
+  def contsumRoutes: Route = pathPrefix("contsum") {
+    import ContextSupervisor._
+    import collection.JavaConverters._
+    // user authentication
+    authenticate(authenticator) { authInfo =>
+      get { ctx =>
+        (supervisor ? ListContextsContainSqlNum).mapTo[Seq[(String,Int,Int)]]
+          .map { contexts =>
+            ctx.complete(contexts)
+          }
+      }
+    }
+  }
+
+
+  /**
+    * Routes for listing contexts contain how many sql num
+    *     GET /continfo         - lists all current contexts info
+    */
+  def continfoRoutes: Route = pathPrefix("continfo") {
+    import ContextSupervisor._
+    import collection.JavaConverters._
+    // user authentication
+    authenticate(authenticator) { authInfo =>
+      get { ctx =>
+        (supervisor ? ListContextsInfo).mapTo[Seq[(String,Int,Int,String)]]
+          .map { contexts =>
+            ctx.complete(contexts)
+          }
+      }
+    }
+  }
+
+
+  /**
+    *
+    *   DELETE /dropcontexprocess/<contextProcessId>      - delete the old context process
+    */
+  def dropcontexprocessRoutes: Route = pathPrefix("dropcontexprocess") {
+    import ContextSupervisor._
+    import collection.JavaConverters._
+    // user authentication
+    authenticate(authenticator) { authInfo =>
+
+        delete {
+          //  DELETE /dropcontexprocess/<contextProcessId>
+          path(Segment) { (contextProcessId) =>
+            logger.info("start here delete context process " + contextProcessId)
+            val future = supervisor ? DropOldContext(contextProcessId)
+            respondWithMediaType(MediaTypes.`text/plain`) { ctx =>
+              future.map {
+                case DropContextSuccs(contextProcessId) => ctx.complete(succMap(contextProcessId))
+                case DropContextError(e) => ctx.complete(500, errMap(e, "DROP CONTEXT  PROCESS ERROR"))
+              }
+            }
+          }
+        }
+    }
+  }
+
+
   /**
    * Routes for getting health status of job server
    *    GET /healthz              - return OK or error message
@@ -352,9 +415,9 @@ class WebApi(system: ActorSystem,
   }
 
   val errorEvents: Set[Class[_]] = Set(classOf[JobErroredOut], classOf[JobValidationFailed])
+
   val asyncEvents = Set(classOf[JobStarted]) ++ errorEvents
   val syncEvents = Set(classOf[JobResult]) ++ errorEvents
-
   /**
    * Main routes for starting a job, listing existing jobs, getting job results
    */
@@ -398,12 +461,7 @@ class WebApi(system: ActorSystem,
                 val resultFuture = jobInfo ? GetJobResult(jobId)
                 resultFuture.map {
                   case JobResult(_, result) =>
-                    result match {
-                      case s: Stream[_] =>
-                        sendStreamingResponse(ctx, ResultChunkSize,
-                          resultToByteIterator(jobReport, s.toIterator))
-                      case _ => ctx.complete(jobReport ++ resultToTable(result))
-                    }
+                    ctx.complete(jobReport ++ resultToTable(result))
                   case _ =>
                     ctx.complete(jobReport)
                 }
@@ -419,13 +477,13 @@ class WebApi(system: ActorSystem,
             future.map {
               case NoSuchJobId =>
                 notFound(ctx, "No such job ID " + jobId.toString)
-              case JobInfo(_, contextName, _, classPath, _, None, _) =>
+              case JobInfo(_, contextName, _, classPath, _, None, _, _) =>
                 val jobManager = getJobManagerForContext(Some(contextName), config, classPath)
                 jobManager.get ! KillJob(jobId)
                 ctx.complete(Map(StatusKey -> "KILLED"))
-              case JobInfo(_, _, _, _, _, _, Some(ex)) =>
+              case JobInfo(_, _, _, _, _, _, Some(ex), _) =>
                 ctx.complete(Map(StatusKey -> "ERROR", "ERROR" -> formatException(ex)))
-              case JobInfo(_, _, _, _, _, Some(e), None) =>
+              case JobInfo(_, _, _, _, _, Some(e), None, _) =>
                 notFound(ctx, "No running job with ID " + jobId.toString)
             }
           }
@@ -452,6 +510,7 @@ class WebApi(system: ActorSystem,
           }
         } ~
         /**
+          * 这里开始运行一个job
          * POST /jobs   -- Starts a new job.  The job JAR must have been previously uploaded, and
          *                 the classpath must refer to an object that implements SparkJob.  The `validate()`
          *                 API will be invoked before `runJob`.
@@ -478,19 +537,17 @@ class WebApi(system: ActorSystem,
                     val jobConfig = postedJobConfig.withFallback(config).resolve()
                     val contextConfig = Try(jobConfig.getConfig("spark.context-settings")).
                       getOrElse(ConfigFactory.empty)
+                    //这里开始运行了，就是拉起一个上下文，然后里面有一个spark脚本进行运行job spark/submit
                     val jobManager = getJobManagerForContext(contextOpt, contextConfig, classPath)
                     val events = if (async) asyncEvents else syncEvents
                     val timeout = timeoutOpt.map(t => Timeout(t.seconds)).getOrElse(DefaultSyncTimeout)
                     val future = jobManager.get.ask(
+                    //这里进行远程发送命令，发送到spark运行的jar进程中
                       JobManagerActor.StartJob(appName, classPath, jobConfig, events))(timeout)
                     respondWithMediaType(MediaTypes.`application/json`) { ctx =>
                       future.map {
-                        case JobResult(_, res) =>
-                          res match {
-                            case s: Stream[_] => sendStreamingResponse(ctx, ResultChunkSize,
-                              resultToByteIterator(Map.empty, s.toIterator))
-                            case _ => ctx.complete(resultToTable(res))
-                          }
+                        //结果返回了
+                        case JobResult(_, res)       => ctx.complete(resultToTable(res))
                         case JobErroredOut(_, _, ex) => ctx.complete(errMap(ex, "ERROR"))
                         case JobStarted(jobId, context, _) =>
                           jobInfo ! StoreJobConfig(jobId, postedJobConfig)
@@ -531,6 +588,13 @@ class WebApi(system: ActorSystem,
   override def timeoutRoute: Route =
     complete(500, errMap("Request timed out. Try using the /jobs/<jobID>, /jobs APIs to get status/results"))
 
+  /**
+    * //这里进行拉起进行运行
+    * @param context
+    * @param contextConfig
+    * @param classPath
+    * @return
+    */
   private def getJobManagerForContext(context: Option[String],
                                       contextConfig: Config,
                                       classPath: String): Option[ActorRef] = {
@@ -539,11 +603,14 @@ class WebApi(system: ActorSystem,
       if (context.isDefined) {
         GetContext(context.get)
       } else {
+        //这里起动上下文了,同时里面也是起动一个spark/submit脚本的
         StartAdHocContext(classPath, contextConfig)
       }
+    //supervisor 这个对象可以是本地的或者是远程的actor对象
     val future = (supervisor ? msg)(contextTimeout.seconds)
+    //在这里进行等待结果了
     Await.result(future, contextTimeout.seconds) match {
-      case (manager: ActorRef, resultActor: ActorRef) => Some(manager)
+      case (manager: ActorRef, resultActor: ActorRef ,contextProcessId : String) => Some(manager)
       case NoSuchContext                              => None
       case ContextInitError(err)                      => throw new RuntimeException(err)
     }
