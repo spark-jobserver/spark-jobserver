@@ -104,20 +104,33 @@ class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
 
     case ListContextsContainSqlNum  =>
       //返回context里面包含多少条运行的Sql
-        var contextsSql = mutable.HashMap.empty[String,( String ,Int ,Int)]
+      var contextsSql = mutable.HashMap.empty[String,( String ,Int ,Int)]
       val keynum = contexts.keys.size
-      for (   name <- contexts.keys  ) {
-        val originator = sender
-        val future = (contexts(name)._1 ? SparkContextSqlNum) (contextTimeout.seconds)
-        future.collect {
-          case JobManagerActor.ContextContainSqlNum(contextName ,sqlNum ,maxRunningJobs) =>
-            Locker.synchronized {
-              contextsSql(name) = (name ,sqlNum,maxRunningJobs)
-              if (keynum == contextsSql.toSeq.length) {
+      if(keynum == 0 ){
+        sender ! contextsSql.values.toSeq
+
+      } else {
+        var othermsg: Int = 0;
+        for (name <- contexts.keys) {
+          val originator = sender
+          val future = (contexts(name)._1 ? SparkContextSqlNum) (contextTimeout.seconds)
+          future.collect {
+            case JobManagerActor.ContextContainSqlNum(contextName, sqlNum, maxRunningJobs) =>
+              Locker.synchronized {
+                contextsSql(name) = (name, sqlNum, maxRunningJobs)
+                if (keynum == (contextsSql.toSeq.length + othermsg)) {
+                  logger.info("send all length in it  {}  ", contextsSql.toSeq.length)
+                  originator ! contextsSql.values.toSeq
+                }
+              }
+            case _ =>
+              logger.warn("when send  SparkContextInfo ,it get other messag")
+              othermsg = othermsg + 1
+              if (keynum == (contextsSql.toSeq.length + othermsg)) {
                 logger.info("send all length in it  {}  ", contextsSql.toSeq.length)
                 originator ! contextsSql.values.toSeq
               }
-            }
+          }
         }
       }
 
@@ -125,18 +138,31 @@ class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
       //返回context里面包含所有的context的信息
       var contextsInfo = mutable.HashMap.empty[String,( String ,Int ,Int,String)]
       val keynum = contexts.keys.size
-      for (   name <- contexts.keys  ) {
-        val originator = sender
-        val future = (contexts(name)._1 ? SparkContextInfo) (contextTimeout.seconds)
-        future.collect {
-          case JobManagerActor.ContextInfoMsg(contextName ,sqlNum ,maxRunningJobs,applicationId) =>
-            Locker.synchronized {
-              contextsInfo(name) = (name ,sqlNum,maxRunningJobs,applicationId)
-              if (keynum == contextsInfo.toSeq.length) {
+      if(keynum == 0 ){
+        sender ! contextsInfo.values.toSeq
+
+      } else {
+        var othermsg: Int = 0;
+        for (name <- contexts.keys) {
+          val originator = sender
+          val future = (contexts(name)._1 ? SparkContextInfo) (contextTimeout.seconds)
+          future.collect {
+            case JobManagerActor.ContextInfoMsg(contextName, sqlNum, maxRunningJobs, applicationId) =>
+              Locker.synchronized {
+                contextsInfo(name) = (name, sqlNum, maxRunningJobs, applicationId)
+                if (keynum == (contextsInfo.toSeq.length + othermsg)) {
+                  logger.info("send all length in it  {}  ", contextsInfo.toSeq.length)
+                  originator ! contextsInfo.values.toSeq
+                }
+              }
+            case _ =>
+              logger.warn("when send  SparkContextInfo ,it get other messag")
+              othermsg = othermsg + 1
+              if (keynum == (contextsInfo.toSeq.length + othermsg)) {
                 logger.info("send all length in it  {}  ", contextsInfo.toSeq.length)
                 originator ! contextsInfo.values.toSeq
               }
-            }
+          }
         }
       }
 
