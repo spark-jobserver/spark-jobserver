@@ -1,0 +1,22 @@
+CREATE TABLE JARS (
+  JAR_ID       BIGINT             AUTO_INCREMENT NOT NULL PRIMARY KEY,
+  APP_NAME     VARCHAR(255)       NOT NULL,
+  UPLOAD_TIME  TIMESTAMP          NOT NULL,
+  JAR          LONGBLOB                                  NOT NULL
+);
+
+CREATE TABLE JOBS (
+  JOB_ID          VARCHAR(255)    NOT NULL PRIMARY KEY,
+  CONTEXT_NAME    VARCHAR(255)    NOT NULL,
+  JAR_ID          INTEGER         NOT NULL,
+  CLASSPATH       VARCHAR(255)    NOT NULL,
+  START_TIME      TIMESTAMP,
+  END_TIME        TIMESTAMP,
+  ERROR           text,
+  logstatus   text
+);
+
+CREATE TABLE CONFIGS (
+  JOB_ID      VARCHAR(255)        NOT NULL PRIMARY KEY,
+  JOB_CONFIG     text             NOT NULL
+);

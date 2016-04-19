@@ -1,7 +1,7 @@
 package spark.jobserver.io
 
 import com.typesafe.config.{ConfigRenderOptions, Config, ConfigFactory}
-import java.io.{FileOutputStream, BufferedOutputStream, File}
+import java.io.{EOFException, FileOutputStream, BufferedOutputStream, File}
 import java.sql.Timestamp
 import javax.sql.DataSource
 import org.flywaydb.core.Flyway
@@ -42,7 +42,7 @@ class JobSqlDAO(config: Config) extends JobDAO {
   // Explicitly avoiding to label 'jarId' as a foreign key to avoid dealing with
   // referential integrity constraint violations.
   class Jobs(tag: Tag) extends Table[(String, String, Int, String, Timestamp,
-                                      Option[Timestamp], Option[String])] (tag, "JOBS") {
+    Option[Timestamp], Option[String], Option[String])] (tag, "JOBS") {
     def jobId = column[String]("JOB_ID", O.PrimaryKey)
     def contextName = column[String]("CONTEXT_NAME")
     def jarId = column[Int]("JAR_ID") // FK to JARS table
@@ -50,7 +50,8 @@ class JobSqlDAO(config: Config) extends JobDAO {
     def startTime = column[Timestamp]("START_TIME")
     def endTime = column[Option[Timestamp]]("END_TIME")
     def error = column[Option[String]]("ERROR")
-    def * = (jobId, contextName, jarId, classPath, startTime, endTime, error)
+    def logstatus = column[Option[String]]("logstatus")
+    def * = (jobId, contextName, jarId, classPath, startTime, endTime, error,logstatus)
   }
   val jobs = TableQuery[Jobs]
 
@@ -97,17 +98,27 @@ class JobSqlDAO(config: Config) extends JobDAO {
 
     // Flyway migration
     val flyway = new Flyway()
+    flyway.setBaselineOnMigrate(true);
+    flyway.setValidateOnMigrate(false);
     flyway.setDataSource(jdbcUrl, jdbcUser, jdbcPassword)
     // TODO: flyway.setLocations(migrateLocations) should be removed when tests have a running configuration
     flyway.setLocations(migrateLocations)
-    flyway.migrate()
+
+    try {
+      flyway.migrate()
+    }catch {
+      case e:  Exception =>
+        logger.error("migrate error ",e)
+        flyway.repair();
+        flyway.migrate();
+    }
   }
 
   override def saveJar(appName: String, uploadTime: DateTime, jarBytes: Array[Byte]) {
     // The order is important. Save the jar file first and then log it into database.
     cacheJar(appName, uploadTime, jarBytes)
 
-    // log it into database
+    // log it into database 这里进行插入数据库
     val jarId = insertJarInfo(JarInfo(appName, uploadTime), jarBytes)
   }
 
@@ -115,8 +126,8 @@ class JobSqlDAO(config: Config) extends JobDAO {
     db withSession {
       implicit session =>
 
-      // It's "select appName, max(uploadTime) from jars group by appName
-      // max(uploadTime) is the latest upload time of the jar.
+        // It's "select appName, max(uploadTime) from jars group by appName
+        // max(uploadTime) is the latest upload time of the jar.
         val query = jars.groupBy { _.appName }.map {
           case (appName, jar) => (appName -> jar.map(_.uploadTime).max.get)
         }
@@ -250,7 +261,7 @@ class JobSqlDAO(config: Config) extends JobDAO {
         val updateQuery = jobs.filter(_.jobId === jobId).map(job => (job.endTime, job.error))
 
         updateQuery.list.size match {
-          case 0 => jobs += (jobId, contextName, jarId, classPath, start, endOpt, errOpt)
+          case 0 => jobs += (jobId, contextName, jarId, classPath, start, endOpt, errOpt,logstatus)
           case _ => updateQuery.update(endOpt, errOpt)
         }
     }
@@ -265,19 +276,20 @@ class JobSqlDAO(config: Config) extends JobDAO {
           jar <- jars
           j <- jobs if j.jarId === jar.jarId
         } yield
-          (j.jobId, j.contextName, jar.appName, jar.uploadTime, j.classPath, j.startTime, j.endTime, j.error)
+          (j.jobId, j.contextName, jar.appName, jar.uploadTime, j.classPath,
+            j.startTime, j.endTime, j.error ,j.logstatus)
         val sortQuery = joinQuery.sortBy(_._6.desc)
         val limitQuery = sortQuery.take(limit)
         // Transform the each row of the table into a map of JobInfo values
         limitQuery.list.map {
-          case (id, context, app, upload, classpath, start, end, err) =>
+          case (id, context, app, upload, classpath, start, end, err,logstatus) =>
             JobInfo(id,
               context,
               JarInfo(app, convertDateSqlToJoda(upload)),
               classpath,
               convertDateSqlToJoda(start),
               end.map(convertDateSqlToJoda(_)),
-              err.map(new Throwable(_)) ,None)
+              err.map(new Throwable(_)) ,logstatus)
         }.toSeq
     }
   }
@@ -292,15 +304,15 @@ class JobSqlDAO(config: Config) extends JobDAO {
           j <- jobs if j.jarId === jar.jarId && j.jobId === jobId
         } yield
           (j.jobId, j.contextName, jar.appName, jar.uploadTime, j.classPath, j.startTime,
-            j.endTime, j.error)
-        joinQuery.list.map { case (id, context, app, upload, classpath, start, end, err) =>
+            j.endTime, j.error ,j.logstatus)
+        joinQuery.list.map { case (id, context, app, upload, classpath, start, end, err,logstatus) =>
           JobInfo(id,
             context,
             JarInfo(app, convertDateSqlToJoda(upload)),
             classpath,
             convertDateSqlToJoda(start),
             end.map(convertDateSqlToJoda(_)),
-            err.map(new Throwable(_)),None)
+            err.map(new Throwable(_)),logstatus)
         }.headOption
     }
   }
