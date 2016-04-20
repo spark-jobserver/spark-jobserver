@@ -2,16 +2,14 @@ package ooyala.common.akka.web
 
 import java.util.concurrent.TimeUnit
 
-import org.scalatest.{Matchers, FunSpec}
-import spray.testkit.ScalatestRouteTest
-
-import spray.http.StatusCodes._
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Gauge
+import org.scalatest.{FunSpec, Matchers}
+import spray.http.StatusCodes._
+import spray.testkit.ScalatestRouteTest
 
 class CommonRoutesSpec extends FunSpec with Matchers with ScalatestRouteTest with CommonRoutes {
   def actorRefFactory = system
-
 
   val metricCounter = Metrics.newCounter(getClass, "test-counter")
   val metricMeter = Metrics.newMeter(getClass, "test-meter", "requests", TimeUnit.SECONDS)
@@ -39,11 +37,11 @@ class CommonRoutesSpec extends FunSpec with Matchers with ScalatestRouteTest wit
         val metricsMap = JsonUtils.mapFromJson(responseAs[String])
         val classMetrics = metricsMap(getClass.getName).asInstanceOf[Map[String, Any]]
 
-        classMetrics.keys.toSet should equal (Set("test-counter", "test-meter", "test-hist", "test-timer", "test-gauge"))
-        classMetrics("test-counter") should equal (counterMap)
-        classMetrics("test-meter") should equal (meterMap)
-        classMetrics("test-hist") should equal (histMap)
-        classMetrics("test-timer") should equal (timerMap)
+        classMetrics.keys.toSet should equal(Set("test-counter", "test-meter", "test-hist", "test-timer", "test-gauge"))
+        classMetrics("test-counter") should equal(counterMap)
+        classMetrics("test-meter") should equal(meterMap)
+        classMetrics("test-hist") should equal(histMap)
+        classMetrics("test-timer") should equal(timerMap)
       }
     }
   }

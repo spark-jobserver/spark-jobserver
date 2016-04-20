@@ -1,11 +1,8 @@
 package ooyala.common.akka
 
-import org.scalatest.matchers.ShouldMatchers
-import org.scalatest.{Matchers, FunSpec}
+import akka.actor.ActorSystem
 import akka.testkit.TestActorRef
-
-import akka.actor.{Actor, ActorSystem}
-
+import org.scalatest.{FunSpec, Matchers}
 
 class ActorMetricsSpec extends FunSpec with Matchers {
   implicit val system = ActorSystem("test")
@@ -16,7 +13,7 @@ class ActorMetricsSpec extends FunSpec with Matchers {
       val actor = actorRef.underlyingActor
 
       actorRef ! "me"
-      actor.metricReceiveTimer.count should equal (1)
+      actor.metricReceiveTimer.count should equal(1)
     }
   }
 }

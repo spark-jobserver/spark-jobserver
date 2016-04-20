@@ -1,19 +1,15 @@
 package spark.jobserver
 
-import akka.actor.{Terminated, Props, ActorRef, PoisonPill}
+import scala.collection.mutable
+import scala.util.{Failure, Success, Try}
+
+import akka.actor.{ActorRef, PoisonPill, Props, Terminated}
 import akka.pattern.ask
 import akka.util.Timeout
-import com.typesafe.config.Config
-import com.typesafe.config.ConfigFactory
+import com.typesafe.config.{Config, ConfigFactory}
 import ooyala.common.akka.InstrumentedActor
-import spark.jobserver.JobManagerActor.{SparkContextDead, SparkContextAlive, SparkContextStatus}
-import spark.jobserver.io.JobDAO
+import spark.jobserver.JobManagerActor.{SparkContextAlive, SparkContextDead, SparkContextStatus}
 import spark.jobserver.util.SparkJobUtils
-import scala.collection.mutable
-import scala.concurrent.Await
-import scala.util.{Failure, Success, Try}
-import org.joda.time.DateTime
-import org.joda.time.format.DateTimeFormat
 
 /** Messages common to all ContextSupervisors */
 object ContextSupervisor {
@@ -23,7 +19,7 @@ object ContextSupervisor {
   case class AddContext(name: String, contextConfig: Config)
   case class StartAdHocContext(classPath: String, contextConfig: Config)
   case class GetContext(name: String) // returns JobManager, JobResultActor
-  case class GetResultActor(name: String)  // returns JobResultActor
+  case class GetResultActor(name: String) // returns JobResultActor
   case class StopContext(name: String)
 
   // Errors/Responses
@@ -68,14 +64,15 @@ object ContextSupervisor {
  * }}}
  */
 class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
-  import ContextSupervisor._
   import scala.collection.JavaConverters._
   import scala.concurrent.duration._
+
+  import ContextSupervisor._
 
   val config = context.system.settings.config
   val defaultContextConfig = config.getConfig("spark.context-settings")
   val contextTimeout = SparkJobUtils.getContextTimeout(config)
-  import context.dispatcher   // to get ExecutionContext for futures
+  import context.dispatcher // to get ExecutionContext for futures
 
   private val contexts = mutable.HashMap.empty[String, (ActorRef, ActorRef)]
 
@@ -127,7 +124,7 @@ class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
 
     case GetContext(name) =>
       if (contexts contains name) {
-        val future = (contexts(name)._1 ? SparkContextStatus) (contextTimeout.seconds)
+        val future = (contexts(name)._1 ? SparkContextStatus)(contextTimeout.seconds)
         val originator = sender
         future.collect {
           case SparkContextAlive => originator ! contexts(name)
@@ -155,21 +152,22 @@ class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
       contexts.remove(name)
   }
 
-  private def startContext(name: String, contextConfig: Config, isAdHoc: Boolean, timeoutSecs: Int = 1)
-                          (successFunc: ActorRef => Unit)
-                          (failureFunc: Throwable => Unit) {
+  private def startContext(name: String, contextConfig: Config, isAdHoc: Boolean, timeoutSecs: Int = 1)(successFunc: ActorRef => Unit)(failureFunc: Throwable => Unit) {
     require(!(contexts contains name), "There is already a context named " + name)
     logger.info("Creating a SparkContext named {}", name)
 
     val resultActorRef = if (isAdHoc) Some(globalResultActor) else None
     val mergedConfig = ConfigFactory.parseMap(
-                         Map("is-adhoc" -> isAdHoc.toString,
-                             "context.name" -> name,
-                             "context.actorname" -> name).asJava
-                       ).withFallback(contextConfig)
+      Map(
+      "is-adhoc" -> isAdHoc.toString,
+      "context.name" -> name,
+      "context.actorname" -> name
+    ).asJava
+    ).withFallback(contextConfig)
     val ref = context.actorOf(JobManagerActor.props(mergedConfig), name)
     (ref ? JobManagerActor.Initialize(
-      dao, resultActorRef))(Timeout(timeoutSecs.second)).onComplete {
+      dao, resultActorRef
+    ))(Timeout(timeoutSecs.second)).onComplete {
       case Failure(e: Exception) =>
         logger.error("Exception after sending Initialize to JobManagerActor", e)
         // Make sure we try to shut down the context in case it gets created anyways

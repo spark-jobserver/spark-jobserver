@@ -1,7 +1,7 @@
 package spark.jobserver.io
 
 import com.typesafe.config._
-import org.joda.time.{ Duration, DateTime }
+import org.joda.time.{DateTime, Duration}
 
 // Uniquely identifies the jar used to run a job
 case class JarInfo(appName: String, uploadTime: DateTime)

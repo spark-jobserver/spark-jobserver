@@ -1,16 +1,17 @@
 package spark.jobserver.routes
 
+import scala.concurrent.ExecutionContext
+
+import java.net.URLDecoder
+
 import akka.actor.ActorRef
 import akka.pattern.ask
 import akka.util.Timeout
 import spark.jobserver.DataManagerActor._
-import spray.routing.{ HttpService, Route }
-import spray.http.MediaTypes
-import spray.http.StatusCodes
-import java.net.URLDecoder
+import spray.http.{MediaTypes, StatusCodes}
 import spray.httpx.SprayJsonSupport.sprayJsonMarshaller
 import spray.json.DefaultJsonProtocol._
-import scala.concurrent.ExecutionContext
+import spray.routing.{HttpService, Route}
 
 /**
  * Routes for listing, deletion of and storing data files
@@ -21,7 +22,6 @@ import scala.concurrent.ExecutionContext
  * @author TimMaltGermany
  */
 trait DataRoutes extends HttpService {
-  import scala.concurrent.duration._
   import spark.jobserver.WebApi._
 
   def dataRoutes(dataManager: ActorRef)(implicit ec: ExecutionContext, ShortTimeout: Timeout): Route = {
@@ -61,7 +61,8 @@ trait DataRoutes extends HttpService {
               future.map {
                 case Stored(filename) => {
                   ctx.complete(StatusCodes.OK, Map[String, Any](
-                    ResultKey -> Map("filename" -> filename)))
+                    ResultKey -> Map("filename" -> filename)
+                  ))
                 }
                 case Error =>
                   badRequest(ctx, "Failed to store data file '" + filename + "'.")

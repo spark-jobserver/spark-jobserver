@@ -1,11 +1,8 @@
 package ooyala.common.akka
 
-import org.scalatest.matchers.ShouldMatchers
-import org.scalatest.{Matchers, FunSpec}
+import akka.actor.ActorSystem
 import akka.testkit.TestActorRef
-
-import akka.actor.{Actor, ActorSystem}
-
+import org.scalatest.{FunSpec, Matchers}
 
 class DummyActor extends ActorStack {
   var str = ""
@@ -32,7 +29,7 @@ class ActorStackSpec extends FunSpec with Matchers {
       val actor = actorRef.underlyingActor
 
       actorRef ! "me"
-      actor.str should equal ("pre me")
+      actor.str should equal("pre me")
     }
 
     it("should pass messages not handled in wrappedReceive to unhandled function") {
@@ -40,7 +37,7 @@ class ActorStackSpec extends FunSpec with Matchers {
       val actor = actorRef.underlyingActor
 
       actorRef ! List(1, 2)
-      actor.str should equal ("unhandled")
+      actor.str should equal("unhandled")
     }
   }
 }

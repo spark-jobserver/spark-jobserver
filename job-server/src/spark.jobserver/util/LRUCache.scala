@@ -1,7 +1,6 @@
 package spark.jobserver.util
 
 import java.util.Map.Entry
-import java.lang.ref.SoftReference
 
 /**
  * A convenience class to define a Least-Recently-Used Cache with a maximum size.
@@ -10,7 +9,7 @@ import java.lang.ref.SoftReference
  * For definitions of cacheSize and loadingFactor, see the docs for java.util.LinkedHashMap
  * @see LinkedHashMap
  */
-class LRUCache[K, V](cacheSize: Int, loadingFactor: Float  = 0.75F) {
+class LRUCache[K, V](cacheSize: Int, loadingFactor: Float = 0.75F) {
 
   private val cache = {
     val initialCapacity = math.ceil(cacheSize / loadingFactor).toInt + 1

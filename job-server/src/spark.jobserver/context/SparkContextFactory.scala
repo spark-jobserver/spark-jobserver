@@ -1,9 +1,10 @@
 package spark.jobserver.context
 
-import com.typesafe.config.Config
 import org.apache.spark.{SparkConf, SparkContext}
-import spark.jobserver.{ContextLike, SparkJob, SparkJobBase}
+
+import com.typesafe.config.Config
 import spark.jobserver.util.SparkJobUtils
+import spark.jobserver.{ContextLike, SparkJob, SparkJobBase}
 
 /**
  * Factory trait for creating a SparkContext or any derived Contexts,
@@ -23,7 +24,7 @@ trait SparkContextFactory {
    * @param contextName the name of the context to start
    * @return the newly created context.
    */
-  def makeContext(sparkConf: SparkConf, config: Config,  contextName: String): C
+  def makeContext(sparkConf: SparkConf, config: Config, contextName: String): C
 
   /**
    * Creates a SparkContext or derived context.
@@ -49,7 +50,7 @@ class DefaultSparkContextFactory extends SparkContextFactory {
 
   type C = SparkContext with ContextLike
 
-  def makeContext(sparkConf: SparkConf, config: Config,  contextName: String): C = {
+  def makeContext(sparkConf: SparkConf, config: Config, contextName: String): C = {
     val sc = new SparkContext(sparkConf) with ContextLike {
       def sparkContext: SparkContext = this
       def isValidJob(job: SparkJobBase): Boolean = job.isInstanceOf[SparkJob]

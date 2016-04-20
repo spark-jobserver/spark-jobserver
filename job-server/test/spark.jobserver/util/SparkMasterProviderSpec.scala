@@ -1,13 +1,13 @@
 package spark.jobserver.util
 
-import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.spark.SparkConf
-import org.scalatest.{Matchers, FunSpec}
+
+import com.typesafe.config.{Config, ConfigFactory}
+import org.scalatest.{FunSpec, Matchers}
 
 class SparkMasterProviderSpec extends FunSpec with Matchers {
 
   import collection.JavaConverters._
-
 
   val contextName = "demo"
 

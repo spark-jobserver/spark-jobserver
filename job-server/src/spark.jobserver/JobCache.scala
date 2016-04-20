@@ -1,19 +1,21 @@
 package spark.jobserver
 
+import org.apache.spark.SparkContext
+
 import java.net.URL
+
 import akka.actor.ActorRef
 import akka.util.Timeout
-import org.apache.spark.{SparkContext, SparkEnv}
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import spark.jobserver.io.JobDAOActor
 import spark.jobserver.util.{ContextURLClassLoader, JarUtils, LRUCache}
 
-import scala.util.{Success, Failure}
-
-case class JobJarInfo(constructor: () => SparkJobBase,
-                      className: String,
-                      jarFilePath: String)
+case class JobJarInfo(
+  constructor: () => SparkJobBase,
+  className:   String,
+  jarFilePath: String
+)
 
 /**
  * A cache for SparkJob classes.  A lot of times jobs are run repeatedly, and especially for low-latency
@@ -35,8 +37,9 @@ class JobCache(maxEntries: Int, dao: ActorRef, sparkContext: SparkContext, loade
    */
   def getSparkJob(appName: String, uploadTime: DateTime, classPath: String): JobJarInfo = {
     cache.get((appName, uploadTime, classPath), {
-      import akka.pattern.ask
       import scala.concurrent.Await
+
+      import akka.pattern.ask
 
       val jarPathReq = (dao ? JobDAOActor.GetJarPath(appName, uploadTime)).mapTo[JobDAOActor.JarPath]
       val jarPath = Await.result(jarPathReq, daoAskTimeout.duration).jarPath

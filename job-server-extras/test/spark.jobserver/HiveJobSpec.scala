@@ -1,12 +1,12 @@
 package spark.jobserver
 
-import com.typesafe.config.ConfigFactory
 import org.apache.spark.sql.Row
-import org.apache.spark.{SparkContext, SparkConf}
-
 import org.apache.spark.sql.hive.test.TestHiveContext
-import spark.jobserver.context.{HiveContextLike, HiveContextFactory}
-import spark.jobserver.io.{JobDAO, JobDAOActor}
+import org.apache.spark.{SparkConf, SparkContext}
+
+import com.typesafe.config.ConfigFactory
+import spark.jobserver.context.{HiveContextFactory, HiveContextLike}
+import spark.jobserver.io.JobDAOActor
 
 class TestHiveContextFactory extends HiveContextFactory {
   override protected def contextFactory(conf: SparkConf): C =
@@ -19,8 +19,8 @@ object HiveJobSpec extends JobSpecConfig {
 
 class HiveJobSpec extends ExtrasJobSpecBase(HiveJobSpec.getNewSystem) {
   import scala.concurrent.duration._
+
   import CommonMessages._
-  import JobManagerSpec.MaxJobsPerContext
 
   val classPrefix = "spark.jobserver."
   private val hiveLoaderClass = classPrefix + "HiveLoaderJob"
@@ -28,13 +28,15 @@ class HiveJobSpec extends ExtrasJobSpecBase(HiveJobSpec.getNewSystem) {
 
   val emptyConfig = ConfigFactory.parseString("spark.master = bar")
   val queryConfig = ConfigFactory.parseString(
-                      """sql = "SELECT firstName, lastName FROM `default`.`test_addresses` WHERE city = 'San Jose'" """)
+    """sql = "SELECT firstName, lastName FROM `default`.`test_addresses` WHERE city = 'San Jose'" """
+  )
 
   before {
     dao = new InMemoryDAO
     daoActor = system.actorOf(JobDAOActor.props(dao))
     manager = system.actorOf(JobManagerActor.props(
-                             HiveJobSpec.getContextConfig(false, HiveJobSpec.contextConfig)))
+      HiveJobSpec.getContextConfig(false, HiveJobSpec.contextConfig)
+    ))
   }
 
   describe("Spark Hive Jobs") {
@@ -45,7 +47,7 @@ class HiveJobSpec extends ExtrasJobSpecBase(HiveJobSpec.getNewSystem) {
       uploadTestJar()
       manager ! JobManagerActor.StartJob("demo", hiveLoaderClass, emptyConfig, syncEvents ++ errorEvents)
       expectMsgPF(120 seconds, "Did not get JobResult") {
-        case JobResult(_, result: Long) => result should equal (3L)
+        case JobResult(_, result: Long) => result should equal(3L)
       }
       expectNoMsg()
 
@@ -53,7 +55,7 @@ class HiveJobSpec extends ExtrasJobSpecBase(HiveJobSpec.getNewSystem) {
       expectMsgPF(6 seconds, "Did not get JobResult") {
         case JobResult(_, result: Array[Row]) =>
           result should have length (2)
-          result(0)(0) should equal ("Bob")
+          result(0)(0) should equal("Bob")
       }
       expectNoMsg()
     }

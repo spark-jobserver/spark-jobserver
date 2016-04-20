@@ -4,13 +4,12 @@ import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.testkit.{ImplicitSender, TestKit}
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 
-
 object JobResultActorSpec {
   val system = ActorSystem("test")
 }
 
 class JobResultActorSpec extends TestKit(JobResultActorSpec.system) with ImplicitSender
-with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
+    with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
   import spark.jobserver.CommonMessages._
 
@@ -48,7 +47,7 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
       expectMsg(JobResult("jobId", 10))
 
       actor ! JobResult("jobId", 20)
-      expectNoMsg()   // shouldn't get it again
+      expectNoMsg() // shouldn't get it again
     }
 
     it("should not be informed unsubscribed result") {
@@ -69,6 +68,5 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
       expectMsg(NoSuchJobId)
     }
   }
-
 
 }

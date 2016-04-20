@@ -4,8 +4,6 @@ import akka.actor.Props
 import com.typesafe.config.Config
 import ooyala.common.akka.InstrumentedActor
 import org.joda.time.DateTime
-import spark.jobserver.io.JobDAOActor.SaveJar
-import spark.jobserver.util.JarUtils
 
 object JobDAOActor {
 
@@ -18,7 +16,7 @@ object JobDAOActor {
   case class SaveJobInfo(jobInfo: JobInfo) extends JobDAORequest
   case class GetJobInfos(limit: Int) extends JobDAORequest
 
-  case class SaveJobConfig(jobId:String, jobConfig:Config) extends JobDAORequest
+  case class SaveJobConfig(jobId: String, jobConfig: Config) extends JobDAORequest
   case object GetJobConfigs extends JobDAORequest
 
   case class GetLastUploadTime(appName: String) extends JobDAORequest
@@ -37,7 +35,7 @@ object JobDAOActor {
   def props(dao: JobDAO): Props = Props(classOf[JobDAOActor], dao)
 }
 
-class JobDAOActor(dao:JobDAO) extends InstrumentedActor {
+class JobDAOActor(dao: JobDAO) extends InstrumentedActor {
   import JobDAOActor._
 
   def wrappedReceive: Receive = {
@@ -48,7 +46,7 @@ class JobDAOActor(dao:JobDAO) extends InstrumentedActor {
       sender() ! Apps(dao.getApps)
 
     case GetJarPath(appName, uploadTime) =>
-      sender() ! JarPath(dao.retrieveJarFile(appName,uploadTime))
+      sender() ! JarPath(dao.retrieveJarFile(appName, uploadTime))
 
     case SaveJobInfo(jobInfo) =>
       dao.saveJobInfo(jobInfo)
@@ -57,7 +55,7 @@ class JobDAOActor(dao:JobDAO) extends InstrumentedActor {
       sender() ! JobInfos(dao.getJobInfos(limit))
 
     case SaveJobConfig(jobId, jobConfig) =>
-      dao.saveJobConfig(jobId,jobConfig)
+      dao.saveJobConfig(jobId, jobConfig)
 
     case GetJobConfigs =>
       sender() ! JobConfigs(dao.getJobConfigs)

@@ -12,12 +12,12 @@ trait TestJarFinder {
   lazy val extrasJarDir = extrasJarBaseDir + "/target/scala-" + version + "/"
 
   /**
-    * Returns the base directory of a given package
-    *
-    * @param pkg
-    * @return
-    */
-  def getBaseDir(pkg: String): String ={
+   * Returns the base directory of a given package
+   *
+   * @param pkg
+   * @return
+   */
+  def getBaseDir(pkg: String): String = {
     // Current directory.  Find out if we are in project root, and need to go up a level.
     val cwd = Paths.get(".").toAbsolutePath.normalize().toString
     val dotdot = if (Paths.get(cwd + s"/$pkg").toFile.isDirectory) "" else "../"
@@ -25,11 +25,11 @@ trait TestJarFinder {
   }
 
   /**
-    * Returns a list of possible jars that match certain rules from a given directory
-    * @param baseDir
-    * @param jarDir
-    * @return
-    */
+   * Returns a list of possible jars that match certain rules from a given directory
+   * @param baseDir
+   * @param jarDir
+   * @return
+   */
   def getJarsList(baseDir: String, jarDir: String): Seq[File] = {
     val candidates = new java.io.File(baseDir + jarDir).listFiles.toSeq
     candidates.filter { file =>

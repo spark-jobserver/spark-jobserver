@@ -1,8 +1,7 @@
 package spark.jobserver
 
-import spray.http._
 import spray.http.HttpHeaders._
-import spray.http.HttpMethods._
+import spray.http._
 import spray.routing._
 
 // origin of code:
@@ -28,7 +27,7 @@ trait CORSSupport {
           x.collect { case rejection: MethodRejection => rejection.supported }
         ctx.complete {
           HttpResponse().withHeaders(
-            `Access-Control-Allow-Methods`(HttpMethods.OPTIONS, allowedMethods :_*) ::
+            `Access-Control-Allow-Methods`(HttpMethods.OPTIONS, allowedMethods: _*) ::
               allowOriginHeader :: optionsCorsHeaders
           )
         }

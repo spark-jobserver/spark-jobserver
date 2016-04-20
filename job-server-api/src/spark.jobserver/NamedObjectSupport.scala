@@ -1,8 +1,8 @@
 package spark.jobserver
 
-import akka.util.Timeout
 import java.util.concurrent.atomic.AtomicReference
-import scala.concurrent.duration.Duration
+
+import akka.util.Timeout
 
 trait NamedObject
 
@@ -45,7 +45,7 @@ abstract class NamedObjectPersister[O <: NamedObject] {
  */
 trait NamedObjects {
 
-  def defaultTimeout : Timeout
+  def defaultTimeout: Timeout
 
   /**
    * Gets a named object (NObj) with the given name, or creates it if one doesn't already exist.
@@ -67,9 +67,9 @@ trait NamedObjects {
    * @throws java.util.concurrent.TimeoutException if the request times out.
    * @throws java.lang.RuntimeException wrapping any error that occurs within the generator function.
    */
-  def getOrElseCreate[O <: NamedObject](name: String, objGen: => O)
-                                        (implicit timeout: Timeout = defaultTimeout,
-                                        persister: NamedObjectPersister[O]): O
+  def getOrElseCreate[O <: NamedObject](name: String, objGen: => O)(implicit
+    timeout: Timeout = defaultTimeout,
+                                                                    persister: NamedObjectPersister[O]): O
 
   /**
    * Gets an named object (NObj) with the given name if it already exists and is cached.
@@ -103,9 +103,9 @@ trait NamedObjects {
    * @tparam O <: NamedObject the generic type of the object.
    * @return the object with the given name.
    */
-  def update[O <: NamedObject](name: String, objGen: => O)
-                               (implicit timeout: Timeout = defaultTimeout,
-                               persister: NamedObjectPersister[O]): O
+  def update[O <: NamedObject](name: String, objGen: => O)(implicit
+    timeout: Timeout = defaultTimeout,
+                                                           persister: NamedObjectPersister[O]): O
 
   /**
    * removes the named object with the given name, if one existed, from the cache
@@ -124,8 +124,7 @@ trait NamedObjects {
    *
    * @param name the unique name of the object. The uniqueness is scoped to the current SparkContext.
    */
-  def destroy[O <: NamedObject](objOfType: O, name: String)
-                                (implicit persister: NamedObjectPersister[O]) : Unit
+  def destroy[O <: NamedObject](objOfType: O, name: String)(implicit persister: NamedObjectPersister[O]): Unit
 
   /**
    * Returns the names of all named object that are managed by the named objects implementation.
@@ -145,7 +144,7 @@ trait NamedObjectSupport { self: SparkJob =>
     new AtomicReference[NamedObjects](null)
 
   def namedObjects: NamedObjects = namedObjectsPrivate.get() match {
-    case null            => throw new NullPointerException("namedObjects value is null!")
+    case null                       => throw new NullPointerException("namedObjects value is null!")
     case namedObjects: NamedObjects => namedObjects
   }
 

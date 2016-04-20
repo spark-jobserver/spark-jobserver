@@ -2,13 +2,12 @@ package spark.jobserver
 
 import java.io.File
 
-import akka.actor.{AddressFromURIString, Address, Props, ActorSystem}
+import akka.actor.{ActorSystem, AddressFromURIString, Props}
 import akka.cluster.Cluster
-import com.typesafe.config.{ConfigValueFactory, ConfigFactory, Config}
+import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import ooyala.common.akka.actor.ProductionReaper
 import ooyala.common.akka.actor.Reaper.WatchMe
 import org.slf4j.LoggerFactory
-import spark.jobserver.io.{JobDAOActor, JobDAO}
 
 /**
  * The JobManager is the main entry point for the forked JVM process running an individual
@@ -44,8 +43,10 @@ object JobManager {
     } else {
       defaultConfig
     }
-    logger.info("Starting JobManager named " + managerName + " with config {}",
-      config.getConfig("spark").root.render())
+    logger.info(
+      "Starting JobManager named " + managerName + " with config {}",
+      config.getConfig("spark").root.render()
+    )
     logger.info("..and context config:\n" + contextConfig.root.render)
 
     val system = makeSystem(config.resolve())
@@ -64,8 +65,10 @@ object JobManager {
   def main(args: Array[String]) {
     import scala.collection.JavaConverters._
     def makeManagerSystem(name: String)(config: Config): ActorSystem = {
-      val configWithRole = config.withValue("akka.cluster.roles",
-        ConfigValueFactory.fromIterable(List("manager").asJava))
+      val configWithRole = config.withValue(
+        "akka.cluster.roles",
+        ConfigValueFactory.fromIterable(List("manager").asJava)
+      )
       ActorSystem(name, configWithRole)
     }
     start(args, makeManagerSystem("JobServer")(_))

@@ -1,18 +1,17 @@
 package spark.jobserver
 
-import akka.actor.{Props, ActorRef, ActorSystem}
-import akka.testkit.{TestKit, ImplicitSender}
-import spark.jobserver.io.{JobDAOActor, JarInfo, JobInfo, JobDAO}
+import akka.actor.{ActorRef, ActorSystem, Props}
+import akka.testkit.{ImplicitSender, TestKit}
 import org.joda.time.DateTime
-import org.scalatest.Matchers
-import org.scalatest.{FunSpecLike, BeforeAndAfter, BeforeAndAfterAll}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
+import spark.jobserver.io.{JarInfo, JobDAO, JobDAOActor, JobInfo}
 
 object JobStatusActorSpec {
   val system = ActorSystem("test")
 }
 
 class JobStatusActorSpec extends TestKit(JobStatusActorSpec.system) with ImplicitSender
-with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
+    with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
   import CommonMessages._
   import JobStatusActor._
@@ -73,7 +72,7 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
       actor ! Unsubscribe(jobId, self)
       actor ! JobStarted(jobId, contextName, DateTime.now)
-      expectNoMsg()   // shouldn't get it again
+      expectNoMsg() // shouldn't get it again
 
       actor ! Unsubscribe(jobId, self)
       expectMsg(NoSuchJobId)

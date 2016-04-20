@@ -8,12 +8,11 @@ import spark.jobserver.io.{JarInfo, JobDAOActor, JobInfo}
 import spray.routing.HttpService
 import spray.testkit.ScalatestRouteTest
 
-
 // Tests web response codes and formatting
 // Does NOT test underlying Supervisor / JarManager functionality
 // HttpService trait is needed for the sealRoute() which wraps exception handling
 class WebApiSpec extends FunSpec with Matchers with BeforeAndAfterAll
-with ScalatestRouteTest with HttpService {
+    with ScalatestRouteTest with HttpService {
   import scala.collection.JavaConverters._
 
   def actorRefFactory: ActorSystem = system
@@ -81,17 +80,17 @@ with ScalatestRouteTest with HttpService {
         sender ! JobResult("_num", 5000)
       case GetJobStatus("_unk") =>
         sender ! finishedJobInfo
-      case GetJobResult("_unk") => sender ! JobResult("_case", Seq(1, math.BigInt(101)))
+      case GetJobResult("_unk")        => sender ! JobResult("_case", Seq(1, math.BigInt(101)))
       case GetJobStatus("job_to_kill") => sender ! baseJobInfo
-      case GetJobStatus(id) => sender ! baseJobInfo
-      case GetJobResult(id) => sender ! JobResult(id, id + "!!!")
+      case GetJobStatus(id)            => sender ! baseJobInfo
+      case GetJobResult(id)            => sender ! JobResult(id, id + "!!!")
       case GetJobStatuses(limitOpt) =>
         sender ! Seq(baseJobInfo, finishedJobInfo)
 
       case ListJars => sender ! Map("demo1" -> dt, "demo2" -> dt.plusHours(1))
       // Ok these really belong to a JarManager but what the heck, type unsafety!!
       case StoreJar("badjar", _) => sender ! InvalidJar
-      case StoreJar(_, _)        => sender ! JarStored
+      case StoreJar(_, _) => sender ! JarStored
 
       case DataManagerActor.StoreData("/tmp/fileToRemove", _) => sender ! DataManagerActor.Stored("/tmp/fileToRemove-time-stamp")
       case DataManagerActor.StoreData("errorfileToRemove", _) => sender ! DataManagerActor.Error
@@ -99,25 +98,27 @@ with ScalatestRouteTest with HttpService {
       case DataManagerActor.DeleteData("/tmp/fileToRemove") => sender ! DataManagerActor.Deleted
       case DataManagerActor.DeleteData("errorfileToRemove") => sender ! DataManagerActor.Error
 
-      case ListContexts =>  sender ! Seq("context1", "context2")
+      case ListContexts => sender ! Seq("context1", "context2")
       case StopContext("none") => sender ! NoSuchContext
-      case StopContext(_)      => sender ! ContextStopped
+      case StopContext(_) => sender ! ContextStopped
       case AddContext("one", _) => sender ! ContextAlreadyExists
-      case AddContext(_, _)     => sender ! ContextInitialized
+      case AddContext(_, _) => sender ! ContextInitialized
 
       case GetContext("no-context") => sender ! NoSuchContext
-      case GetContext(_)            => sender ! (self, self)
+      case GetContext(_) => sender ! (self, self)
 
       case StartAdHocContext(_, _) => sender ! (self, self)
 
       // These routes are part of JobManagerActor
-      case StartJob("no-app", _, _, _)   =>  sender ! NoSuchApplication
-      case StartJob(_, "no-class", _, _) =>  sender ! NoSuchClass
+      case StartJob("no-app", _, _, _) => sender ! NoSuchApplication
+      case StartJob(_, "no-class", _, _) => sender ! NoSuchClass
       case StartJob("wrong-type", _, _, _) => sender ! WrongJobType
-      case StartJob("err", _, config, _) =>  sender ! JobErroredOut("foo", dt,
-                                                        new RuntimeException("oops",
-                                                          new IllegalArgumentException("foo")))
-      case StartJob("foo", _, config, events)     =>
+      case StartJob("err", _, config, _) => sender ! JobErroredOut("foo", dt,
+        new RuntimeException(
+          "oops",
+          new IllegalArgumentException("foo")
+        ))
+      case StartJob("foo", _, config, events) =>
         statusActor ! Subscribe("foo", sender, events)
         statusActor ! JobStatusActor.JobInit(JobInfo("foo", "context", null, "", dt, None, None))
         statusActor ! JobStarted("foo", "context1", dt)
@@ -125,7 +126,7 @@ with ScalatestRouteTest with HttpService {
         if (events.contains(classOf[JobResult])) sender ! JobResult("foo", map)
         statusActor ! Unsubscribe("foo", sender)
 
-      case StartJob("foo.stream", _, config, events)     =>
+      case StartJob("foo.stream", _, config, events) =>
         statusActor ! Subscribe("foo.stream", sender, events)
         statusActor ! JobStatusActor.JobInit(JobInfo("foo.stream", "context", null, "", dt, None, None))
         statusActor ! JobStarted("foo.stream", "context1", dt)
