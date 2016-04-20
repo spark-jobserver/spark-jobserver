@@ -1,7 +1,5 @@
 package spark.jobserver
 
-import akka.actor.Props
-import akka.testkit.TestProbe
 import spark.jobserver.CommonMessages.{JobErroredOut, JobResult}
 import spark.jobserver.io.JobDAOActor
 

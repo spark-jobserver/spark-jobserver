@@ -184,6 +184,9 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
         contexts(ctxName) = (ref, resActor)
         context.watch(ref)
         successFunc(ref)
+      case _ => logger.info("Failed for unknown reason.")
+        ref ! PoisonPill
+        failureFunc(new RuntimeException("Failed for unknown reason."))
     }
   }
 
@@ -201,7 +204,15 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
           failureFunc(e)
           return
       }
-    val pb = Process(s"$managerStartCommand $contextDir ${selfAddress.toString}")
+
+    //extract spark.proxy.user from contextConfig, if available and pass it to $managerStartCommand
+    var cmdString = s"$managerStartCommand $contextDir ${selfAddress.toString}"
+
+    if (contextConfig.hasPath("spark.proxy.user")) {
+      cmdString = cmdString + s" ${contextConfig.getString("spark.proxy.user")}"
+    }
+
+    val pb = Process(cmdString)
     val pio = new ProcessIO(_ => (),
                         stdout => scala.io.Source.fromInputStream(stdout)
                           .getLines.foreach(println),

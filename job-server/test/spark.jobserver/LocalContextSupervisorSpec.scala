@@ -3,8 +3,6 @@ package spark.jobserver
 import akka.actor._
 import akka.testkit.{ImplicitSender, TestKit}
 import com.typesafe.config.ConfigFactory
-import org.apache.hadoop.conf.Configuration
-import org.apache.spark.SparkConf
 import spark.jobserver.io.{JobDAO, JobDAOActor}
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 
@@ -102,7 +100,7 @@ class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.syst
       expectMsg(Seq("c1", "c2"))
       supervisor ! GetResultActor("c1")
       val rActor = expectMsgClass(classOf[ActorRef])
-      rActor.path.toString should not include ("global")
+      rActor.path.toString should not include "global"
     }
 
     it("should be able to get context configs") {
@@ -110,13 +108,12 @@ class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.syst
       expectMsg(ContextInitialized)
       supervisor ! GetContext("c1")
       expectMsgPF(5 seconds, "I can't find that context :'-(") {
-        case (contextActor: ActorRef, resultActor: ActorRef) => {
+        case (contextActor: ActorRef, resultActor: ActorRef) =>
           contextActor ! GetContextConfig
           val cc = expectMsgClass(classOf[ContextConfig])
           cc.contextName shouldBe "c1"
           cc.contextConfig.get("spark.ui.enabled") shouldBe "false"
           cc.hadoopConfig.get("mapreduce.framework.name") shouldBe "ayylmao"
-        }
       }
     }
 
