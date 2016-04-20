@@ -18,5 +18,6 @@
 * Database migration scripts and better table definitions (@v-gerasimov)
 * Chinese doc updates (@zp-j, @liujuncheng)
 * Minor improvements in style (@apivovarov)
+* SBT and other dependency upgades (@hntd187, @jaceklaskowski)
 * README change to document overriding default meta data DB backend (@noorul)
 * README typo fix (@qayshp)
