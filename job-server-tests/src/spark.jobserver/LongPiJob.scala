@@ -1,9 +1,12 @@
 package spark.jobserver
 
-import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.spark._
+
 import scala.util.Try
-import java.util.{Random, Date}
+
+import java.util.{Date, Random}
+
+import com.typesafe.config.{Config, ConfigFactory}
 
 /**
  * A long job for stress tests purpose.
@@ -37,7 +40,7 @@ object LongPiJob extends SparkJob {
     var hit = 0L
     var total = 0L
     val start = now
-    while(stillHaveTime(start, duration)) {
+    while (stillHaveTime(start, duration)) {
       val counts = estimatePi(sc)
       hit += counts._1
       total += counts._2

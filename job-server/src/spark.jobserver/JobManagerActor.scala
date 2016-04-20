@@ -1,21 +1,20 @@
 package spark.jobserver
 
-import java.util.concurrent.Executors._
-
-import akka.actor.{ActorRef, PoisonPill, Props}
-import com.typesafe.config.Config
-import java.net.{URI, URL}
-import java.util.concurrent.atomic.AtomicInteger
-
-import ooyala.common.akka.InstrumentedActor
-import org.apache.hadoop.conf.Configuration
-import org.apache.spark.{SparkConf, SparkContext, SparkEnv}
-import org.joda.time.DateTime
+import org.apache.spark.{SparkConf, SparkEnv}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
-import spark.jobserver.ContextSupervisor.StopContext
-import spark.jobserver.io.{JarInfo, JobDAO, JobDAOActor, JobInfo}
+
+import java.net.{URI, URL}
+import java.util.concurrent.Executors._
+import java.util.concurrent.atomic.AtomicInteger
+
+import akka.actor.{ActorRef, PoisonPill, Props}
+import com.typesafe.config.Config
+import ooyala.common.akka.InstrumentedActor
+import org.apache.hadoop.conf.Configuration
+import org.joda.time.DateTime
+import spark.jobserver.io.{JarInfo, JobDAOActor, JobInfo}
 import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
 
 object JobManagerActor {
@@ -69,10 +68,11 @@ object JobManagerActor {
  */
 class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
 
+  import collection.JavaConverters._
+  import scala.util.control.Breaks._
+
   import CommonMessages._
   import JobManagerActor._
-  import scala.util.control.Breaks._
-  import collection.JavaConverters._
 
   val config = context.system.settings.config
   private val maxRunningJobs = SparkJobUtils.getMaxRunningJobs(config)
@@ -135,7 +135,7 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
       val loadedJars = jarLoader.getURLs
       getSideJars(jobConfig).foreach { jarUri =>
         val jarToLoad = new URL(convertJarUriSparkToJava(jarUri))
-        if(! loadedJars.contains(jarToLoad)){
+        if (!loadedJars.contains(jarToLoad)) {
           logger.info("Adding {} to Current Job Class path", jarUri)
           jarLoader.addURL(new URL(convertJarUriSparkToJava(jarUri)))
           jobContext.sparkContext.addJar(jarUri)
@@ -182,24 +182,28 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
     }
   }
 
-  def startJobInternal(appName: String,
-                       classPath: String,
-                       jobConfig: Config,
-                       events: Set[Class[_]],
-                       jobContext: ContextLike,
-                       sparkEnv: SparkEnv): Option[Future[Any]] = {
+  def startJobInternal(
+    appName:    String,
+    classPath:  String,
+    jobConfig:  Config,
+    events:     Set[Class[_]],
+    jobContext: ContextLike,
+    sparkEnv:   SparkEnv
+  ): Option[Future[Any]] = {
     var future: Option[Future[Any]] = None
     breakable {
+      import scala.concurrent.Await
+      import scala.concurrent.duration._
+
       import akka.pattern.ask
       import akka.util.Timeout
-      import scala.concurrent.duration._
-      import scala.concurrent.Await
 
       val daoAskTimeout = Timeout(3 seconds)
       // TODO: refactor so we don't need Await, instead flatmap into more futures
       val resp = Await.result(
         (daoActor ? JobDAOActor.GetLastUploadTime(appName))(daoAskTimeout).mapTo[JobDAOActor.LastUploadTime],
-        daoAskTimeout.duration)
+        daoAskTimeout.duration
+      )
 
       val lastUploadTime = resp.lastUploadTime
       if (!lastUploadTime.isDefined) {
@@ -246,12 +250,14 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
     future
   }
 
-  private def getJobFuture(jobJarInfo: JobJarInfo,
-                           jobInfo: JobInfo,
-                           jobConfig: Config,
-                           subscriber: ActorRef,
-                           jobContext: ContextLike,
-                           sparkEnv: SparkEnv): Future[Any] = {
+  private def getJobFuture(
+    jobJarInfo: JobJarInfo,
+    jobInfo:    JobInfo,
+    jobConfig:  Config,
+    subscriber: ActorRef,
+    jobContext: ContextLike,
+    sparkEnv:   SparkEnv
+  ): Future[Any] = {
 
     val jobId = jobInfo.jobId
     val constructor = jobJarInfo.constructor
@@ -349,18 +355,18 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
   // a custom exception is thrown. Currently, throwing a custom exception doesn't
   // work and this is a workaround to wrap it into a standard exception.
   protected def wrapInRuntimeException(t: Throwable): RuntimeException = {
-    val cause : Throwable = getRootCause(t)
-    val e : RuntimeException = new RuntimeException("%s: %s"
-      .format(cause.getClass().getName() ,cause.getMessage))
+    val cause: Throwable = getRootCause(t)
+    val e: RuntimeException = new RuntimeException("%s: %s"
+      .format(cause.getClass().getName(), cause.getMessage))
     e.setStackTrace(cause.getStackTrace())
     return e
   }
 
   // Gets the very first exception that caused the current exception to be thrown.
   protected def getRootCause(t: Throwable): Throwable = {
-    var result : Throwable = t
-    var cause : Throwable = result.getCause()
-    while(cause != null  && (result != cause) ) {
+    var result: Throwable = t
+    var cause: Throwable = result.getCause()
+    while (cause != null && (result != cause)) {
       result = cause
       cause = result.getCause()
     }
@@ -393,7 +399,7 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
     val uri = new URI(jarUri)
     uri.getScheme match {
       case "local" => "file://" + uri.getPath
-      case _ => jarUri
+      case _       => jarUri
     }
   }
 
@@ -403,5 +409,5 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
   // present on every node, whereas file:// will be assumed only present on driver node
   private def getSideJars(config: Config): Seq[String] =
     Try(config.getStringList("dependent-jar-uris").asScala.toSeq).
-     orElse(Try(config.getString("dependent-jar-uris").split(",").toSeq)).getOrElse(Nil)
+      orElse(Try(config.getString("dependent-jar-uris").split(",").toSeq)).getOrElse(Nil)
 }

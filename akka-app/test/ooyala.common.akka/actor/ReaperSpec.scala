@@ -1,9 +1,8 @@
 package ooyala.common.akka.actor
 
-
-import akka.actor.{ActorSystem, Props, ActorRef}
-import akka.testkit.{TestKit, ImplicitSender, TestProbe}
-import org.scalatest.{MustMatchers, FunSpecLike, BeforeAndAfterAll}
+import akka.actor.{ActorRef, ActorSystem, Props}
+import akka.testkit.{ImplicitSender, TestKit, TestProbe}
+import org.scalatest.{BeforeAndAfterAll, FunSpecLike, MustMatchers}
 
 // Our test reaper.  Sends the snooper a message when all
 // the souls have been reaped
@@ -16,8 +15,9 @@ class ReaperSpec extends TestKit(ActorSystem("ReaperSpec")) with ImplicitSender
     with BeforeAndAfterAll
     with MustMatchers {
 
-  import Reaper._
   import scala.concurrent.duration._
+
+  import Reaper._
 
   override def afterAll() {
     system.shutdown()

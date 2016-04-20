@@ -1,8 +1,7 @@
 package spark.jobserver
 
 import com.typesafe.config.ConfigFactory
-import scala.collection.mutable
-import spark.jobserver.io.{JobDAO, JobDAOActor}
+import spark.jobserver.io.JobDAOActor
 
 /**
  * This is just to test that you cannot load a SqlJob into a normal job context.
@@ -11,8 +10,6 @@ object ContextJobSpec extends JobSpecConfig
 
 class ContextJobSpec extends JobSpecBase(ContextJobSpec.getNewSystem) {
   import scala.concurrent.duration._
-  import CommonMessages._
-  import JobManagerSpec.MaxJobsPerContext
 
   val classPrefix = "spark.jobserver."
   private val sqlTestClass = classPrefix + "SqlLoaderJob"

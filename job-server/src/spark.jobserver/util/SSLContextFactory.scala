@@ -1,9 +1,9 @@
 package spark.jobserver.util
 
-import javax.net.ssl.SSLContext
-import javax.net.ssl.KeyManagerFactory
-import java.security.KeyStore
 import java.io.FileInputStream
+import java.security.KeyStore
+import javax.net.ssl.{KeyManagerFactory, SSLContext}
+
 import com.typesafe.config.Config
 import org.slf4j.LoggerFactory
 

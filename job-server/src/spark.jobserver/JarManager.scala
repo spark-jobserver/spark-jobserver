@@ -1,13 +1,13 @@
 package spark.jobserver
 
+import java.nio.file.{Files, Paths}
+
 import akka.actor.ActorRef
 import akka.util.Timeout
 import ooyala.common.akka.InstrumentedActor
-import spark.jobserver.io.{JobDAOActor, JobDAO}
-import spark.jobserver.util.JarUtils
 import org.joda.time.DateTime
-
-import java.nio.file.{Files, Paths}
+import spark.jobserver.io.JobDAOActor
+import spark.jobserver.util.JarUtils
 
 // Messages to JarManager actor
 
@@ -17,9 +17,10 @@ case class StoreJar(appName: String, jarBytes: Array[Byte])
 /** Message requesting a listing of the available JARs */
 case object ListJars
 
-/** Message for storing one or more local JARs based on the given map.
-  * @param  localJars    Map where the key is the appName and the value is the local path to the JAR.
-  */
+/**
+ * Message for storing one or more local JARs based on the given map.
+ * @param  localJars    Map where the key is the appName and the value is the local path to the JAR.
+ */
 case class StoreLocalJars(localJars: Map[String, String])
 
 // Responses
@@ -48,7 +49,6 @@ class JarManager(jobDao: ActorRef) extends InstrumentedActor {
       val resp = (jobDao ? JobDAOActor.GetApps)(daoAskTimeout).mapTo[JobDAOActor.Apps]
       resp.map { msg => msg.apps } pipeTo requestor
 
-
     case StoreLocalJars(localJars) =>
       val success =
         localJars.foldLeft(true) { (success, pair) =>
@@ -63,8 +63,8 @@ class JarManager(jobDao: ActorRef) extends InstrumentedActor {
               }
             } catch {
               case e: Exception =>
-                  logger.error(e.getMessage)
-                  false
+                logger.error(e.getMessage)
+                false
             }
           }
         }

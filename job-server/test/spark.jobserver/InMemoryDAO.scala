@@ -1,9 +1,11 @@
 package spark.jobserver
 
-import com.typesafe.config.Config
-import java.io.{BufferedOutputStream, FileOutputStream}
-import org.joda.time.DateTime
 import scala.collection.mutable
+
+import java.io.{BufferedOutputStream, FileOutputStream}
+
+import com.typesafe.config.Config
+import org.joda.time.DateTime
 import spark.jobserver.io.{JobDAO, JobInfo}
 
 /**
@@ -19,8 +21,9 @@ class InMemoryDAO extends JobDAO {
   def getApps: Map[String, DateTime] = {
     jars.keys
       .groupBy(_._1)
-      .map { case (appName, appUploadTimeTuples) =>
-        appName -> appUploadTimeTuples.map(_._2).toSeq.head
+      .map {
+        case (appName, appUploadTimeTuples) =>
+          appName -> appUploadTimeTuples.map(_._2).toSeq.head
       }
   }
 

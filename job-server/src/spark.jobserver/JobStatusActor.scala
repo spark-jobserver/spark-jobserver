@@ -1,13 +1,14 @@
 package spark.jobserver
 
+import scala.collection.mutable
+import scala.util.Try
+
 import akka.actor.{ActorRef, Props}
 import com.yammer.metrics.core.Meter
 import ooyala.common.akka.InstrumentedActor
 import ooyala.common.akka.metrics.YammerMetrics
 import org.joda.time.DateTime
-import scala.collection.mutable
-import scala.util.Try
-import spark.jobserver.io.{JobDAOActor, JobInfo, JobDAO}
+import spark.jobserver.io.{JobDAOActor, JobInfo}
 
 object JobStatusActor {
   case class JobInit(jobInfo: JobInfo)
@@ -38,9 +39,12 @@ class JobStatusActor(jobDao: ActorRef) extends InstrumentedActor with YammerMetr
   override def postStop(): Unit = {
     val stopTime = DateTime.now()
     val stoppedInfos = infos.values.map { info =>
-      info.copy(endTime = Some(stopTime),
-                error = Some(new Exception(s"Context (${info.contextName}) for this job was terminated"))) }
-    stoppedInfos.foreach({info => jobDao ! JobDAOActor.SaveJobInfo(info)})
+      info.copy(
+        endTime = Some(stopTime),
+        error = Some(new Exception(s"Context (${info.contextName}) for this job was terminated"))
+      )
+    }
+    stoppedInfos.foreach({ info => jobDao ! JobDAOActor.SaveJobInfo(info) })
   }
 
   override def wrappedReceive: Receive = {
@@ -104,8 +108,7 @@ class JobStatusActor(jobDao: ActorRef) extends InstrumentedActor with YammerMetr
       }
   }
 
-  private def processStatus[M <: StatusMessage](msg: M, logMessage: String, remove: Boolean = false)
-                                               (infoModifier: (JobInfo, M) => JobInfo) {
+  private def processStatus[M <: StatusMessage](msg: M, logMessage: String, remove: Boolean = false)(infoModifier: (JobInfo, M) => JobInfo) {
     if (infos.contains(msg.jobId)) {
       infos(msg.jobId) = infoModifier(infos(msg.jobId), msg)
       logger.info("Job {} {}", msg.jobId: Any, logMessage)

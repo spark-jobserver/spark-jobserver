@@ -1,7 +1,8 @@
 package spark.jobserver
 
-import com.typesafe.config.Config
 import org.apache.spark.sql.SQLContext
+
+import com.typesafe.config.Config
 
 /**
  * A test job that accepts a SQLContext, as opposed to the regular SparkContext.

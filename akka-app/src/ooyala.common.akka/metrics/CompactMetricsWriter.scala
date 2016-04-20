@@ -1,11 +1,11 @@
 package ooyala.common.akka.metrics
 
-import com.yammer.metrics.core._
-import com.yammer.metrics.Metrics
-import org.slf4j.Logger
 import java.util.concurrent.TimeUnit
-import com.yammer.metrics.stats.Snapshot
 
+import com.yammer.metrics.Metrics
+import com.yammer.metrics.core._
+import com.yammer.metrics.stats.Snapshot
+import org.slf4j.Logger
 
 /**
  * Writes out metrics in a form suitable for writing to log files. For example a counter will be written
@@ -35,7 +35,7 @@ class CompactMetricsWriter(private val log: Logger) extends MetricProcessor[Logg
   }
 
   def processHistogram(name: MetricName, histogram: Histogram, logger: Logger) {
-    logger.info(processMetric(name) { sb => renderHistogram(histogram.getSnapshot, sb)})
+    logger.info(processMetric(name) { sb => renderHistogram(histogram.getSnapshot, sb) })
   }
 
   def processTimer(name: MetricName, timer: Timer, logger: Logger) {
@@ -81,13 +81,13 @@ class CompactMetricsWriter(private val log: Logger) extends MetricProcessor[Logg
 
   private def abbrev(timeUnit: TimeUnit) = {
     timeUnit match {
-      case TimeUnit.NANOSECONDS => "ns"
+      case TimeUnit.NANOSECONDS  => "ns"
       case TimeUnit.MICROSECONDS => "us"
       case TimeUnit.MILLISECONDS => "ms"
-      case TimeUnit.SECONDS => "s"
-      case TimeUnit.MINUTES => "m"
-      case TimeUnit.HOURS => "h"
-      case TimeUnit.DAYS => "d"
+      case TimeUnit.SECONDS      => "s"
+      case TimeUnit.MINUTES      => "m"
+      case TimeUnit.HOURS        => "h"
+      case TimeUnit.DAYS         => "d"
       case _ =>
         throw new IllegalArgumentException("Unrecognized TimeUnit: " + timeUnit)
     }

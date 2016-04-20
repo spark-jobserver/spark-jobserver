@@ -1,7 +1,8 @@
 package spark.jobserver
 
-import com.typesafe.config.Config
 import org.apache.spark.SparkContext
+
+import com.typesafe.config.Config
 
 sealed trait SparkJobValidation {
   // NOTE(harish): We tried using lazy eval here by passing in a function
@@ -9,7 +10,7 @@ sealed trait SparkJobValidation {
   // it would just hang and timeout. This is something worth investigating
   def &&(sparkValidation: SparkJobValidation): SparkJobValidation = this match {
     case SparkJobValid => sparkValidation
-    case x => x
+    case x             => x
   }
 }
 case object SparkJobValid extends SparkJobValidation

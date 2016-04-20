@@ -1,16 +1,16 @@
 package spark.jobserver
 
-import com.google.common.annotations.VisibleForTesting
-import com.typesafe.config.Config
 import org.apache.spark.rdd.RDD
 import org.apache.spark.streaming.StreamingContext
 
 import scala.collection.mutable
 
+import com.google.common.annotations.VisibleForTesting
+import com.typesafe.config.Config
+
 @VisibleForTesting
 object StreamingTestJob extends SparkStreamingJob {
   def validate(ssc: StreamingContext, config: Config): SparkJobValidation = SparkJobValid
-
 
   def runJob(ssc: StreamingContext, config: Config): Any = {
     val queue = mutable.Queue[RDD[String]]()

@@ -1,7 +1,8 @@
 package spark.jobserver
 
-import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.spark._
+
+import com.typesafe.config.{Config, ConfigFactory}
 
 /**
  * A very short job for stress tests purpose.
@@ -24,6 +25,6 @@ object VeryShortDoubleJob extends SparkJob {
 
   override def runJob(sc: SparkContext, config: Config): Any = {
     val dd = sc.parallelize(data)
-    dd.map( _ * 2 ).collect()
+    dd.map(_ * 2).collect()
   }
 }

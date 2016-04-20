@@ -1,13 +1,14 @@
 package spark.jobserver
 
-import akka.actor.{ ActorRef, ActorSystem, Props }
-import akka.testkit.{ ImplicitSender, TestKit }
-import org.apache.spark.{ SparkContext, SparkConf }
-import org.apache.spark.sql.{ SQLContext, Row, DataFrame}
-import org.apache.spark.sql.types._
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.types._
+import org.apache.spark.sql.{Row, SQLContext}
 import org.apache.spark.storage.StorageLevel
-import org.scalatest.{ Matchers, FunSpecLike, FunSpec, BeforeAndAfterAll, BeforeAndAfter }
+import org.apache.spark.{SparkConf, SparkContext}
+
+import akka.actor.ActorSystem
+import akka.testkit.{ImplicitSender, TestKit}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 
 /**
  * this Spec is a more complex version of the same one in the job-server project,
@@ -15,7 +16,7 @@ import org.scalatest.{ Matchers, FunSpecLike, FunSpec, BeforeAndAfterAll, Before
  */
 class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with FunSpecLike
     with ImplicitSender with Matchers with BeforeAndAfter with BeforeAndAfterAll {
-  
+
   val sc = new SparkContext("local[3]", getClass.getSimpleName, new SparkConf)
   val sqlContext = new SQLContext(sc)
   val namedObjects: NamedObjects = new JobServerNamedObjects(system)
@@ -25,7 +26,8 @@ class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with Fun
 
   val struct = StructType(
     StructField("i", IntegerType, true) ::
-      StructField("b", BooleanType, false) :: Nil)
+      StructField("b", BooleanType, false) :: Nil
+  )
 
   def rows: RDD[Row] = sc.parallelize(List(Row(1, true), Row(2, false), Row(55, true)))
 
@@ -51,7 +53,7 @@ class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with Fun
       val df = sqlContext.createDataFrame(rows, struct)
       namedObjects.update("df1", NamedDataFrame(df, true, StorageLevel.MEMORY_AND_DISK))
 
-      val NamedRDD(rdd1, _ ,_) = namedObjects.get[NamedRDD[Int]]("rdd1").get
+      val NamedRDD(rdd1, _, _) = namedObjects.get[NamedRDD[Int]]("rdd1").get
       rdd1 should equal(rdd)
 
       val df1: Option[NamedRDD[Int]] = namedObjects.get("df1")
@@ -127,7 +129,7 @@ class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with Fun
       namedObjects.update("o1", tmp)
 
       val NamedDataFrame(df2, _, _) = namedObjects.get[NamedDataFrame]("o1").get
-        
+
       df2 should equal(df)
 
       namedObjects.destroy(tmp, "o1")

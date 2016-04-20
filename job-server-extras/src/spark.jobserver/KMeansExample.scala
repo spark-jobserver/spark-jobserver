@@ -1,11 +1,11 @@
 package spark.jobserver
 
-import com.typesafe.config.Config
 import org.apache.spark._
 import org.apache.spark.ml.clustering.KMeans
 import org.apache.spark.ml.feature.{StandardScaler, VectorAssembler}
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
-import org.apache.spark.storage.StorageLevel
+
+import com.typesafe.config.Config
 
 /**
  * A Spark job example that implements the SparkJob trait and can be submitted to the job server.
@@ -38,8 +38,7 @@ object KMeansExample extends SparkJob with NamedRddSupport {
       val cacheReturn = cacheReturnOption.get.cache()
       val cacheReturnDF = sqlContext.createDataFrame(cacheReturn, cacheReturn.take(1)(0).schema)
       sampleAndReturn(cacheReturnDF)
-    }
-    else {
+    } else {
       //limit forces
       val data = sqlContext.read.parquet("s3n://us-east-1.elasticmapreduce.samples/flightdata/input")
         .limit(5E6.toInt)
@@ -73,7 +72,6 @@ object KMeansExample extends SparkJob with NamedRddSupport {
       namedRdds.update("kmeans", dataWithPredictions.rdd)
       sampleAndReturn(dataWithPredictions)
     }
-
 
   }
 

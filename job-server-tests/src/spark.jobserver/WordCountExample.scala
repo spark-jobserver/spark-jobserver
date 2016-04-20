@@ -1,9 +1,10 @@
 package spark.jobserver
 
-import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.spark._
-import org.apache.spark.SparkContext._
+
 import scala.util.Try
+
+import com.typesafe.config.{Config, ConfigFactory}
 
 /**
  * A super-simple Spark job example that implements the SparkJob trait and can be submitted to the job server.

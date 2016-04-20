@@ -2,7 +2,7 @@ package spark.jobserver
 
 import com.typesafe.config.ConfigFactory
 import spark.jobserver.context.StreamingContextFactory
-import spark.jobserver.io.{JobInfo, JobDAOActor}
+import spark.jobserver.io.{JobDAOActor, JobInfo}
 
 /**
  * Test for Straming Jobs.
@@ -13,10 +13,10 @@ object StreamingJobSpec extends JobSpecConfig {
 
 class StreamingJobSpec extends JobSpecBase(StreamingJobSpec.getNewSystem) {
 
-  import CommonMessages._
-
   import collection.JavaConverters._
   import scala.concurrent.duration._
+
+  import CommonMessages._
 
   val classPrefix = "spark.jobserver."
   private val streamingJob = classPrefix + "StreamingTestJob"
@@ -30,7 +30,8 @@ class StreamingJobSpec extends JobSpecBase(StreamingJobSpec.getNewSystem) {
     dao = new InMemoryDAO
     daoActor = system.actorOf(JobDAOActor.props(dao))
     manager = system.actorOf(JobManagerActor.props(
-                             StreamingJobSpec.getContextConfig(false, StreamingJobSpec.contextConfig)))
+      StreamingJobSpec.getContextConfig(false, StreamingJobSpec.contextConfig)
+    ))
   }
 
   describe("Spark Streaming Jobs") {
@@ -47,9 +48,9 @@ class StreamingJobSpec extends JobSpecBase(StreamingJobSpec.getNewSystem) {
         }
       }
       Thread sleep 1000
-      dao.getJobInfo(jobId).get match  {
-        case JobInfo(_, _, _, _, _, None, _) => {  }
-        case e => fail("Unexpected JobInfo" + e)
+      dao.getJobInfo(jobId).get match {
+        case JobInfo(_, _, _, _, _, None, _) => {}
+        case e                               => fail("Unexpected JobInfo" + e)
       }
     }
   }

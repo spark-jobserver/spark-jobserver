@@ -1,10 +1,12 @@
 package spark.jobserver.util
 
+import org.apache.spark.SparkConf
+
+import scala.util.Try
+
 import java.util.concurrent.TimeUnit
 
 import com.typesafe.config.Config
-import org.apache.spark.SparkConf
-import scala.util.Try
 
 /**
  * Holds a few functions common to Job Server SparkJob's and SparkContext's
@@ -65,19 +67,19 @@ object SparkJobUtils {
     // This is useful for setting configurations for hadoop connectors such as
     // elasticsearch, cassandra, etc.
     for (e <- Try(contextConfig.getConfig("passthrough"))) {
-         e.entrySet().asScala.map { s=>
-            conf.set(s.getKey, s.getValue.unwrapped.toString)
-         }
+      e.entrySet().asScala.map { s =>
+        conf.set(s.getKey, s.getValue.unwrapped.toString)
+      }
     }
 
     conf
   }
 
   /**
-    *
-    * @param config the specific context configuration
-    * @return a map of the hadoop configuration values or an empty Map
-    */
+   *
+   * @param config the specific context configuration
+   * @return a map of the hadoop configuration values or an empty Map
+   */
   def getHadoopConfig(config: Config): Map[String, String] = {
     Try(config.getConfig("hadoop").entrySet().asScala.map { e =>
       e.getKey -> e.getValue.unwrapped().toString
@@ -98,11 +100,15 @@ object SparkJobUtils {
   def getContextTimeout(config: Config): Int = {
     config.getString("spark.master") match {
       case "yarn-client" =>
-        Try(config.getDuration("spark.jobserver.yarn-context-creation-timeout",
-              TimeUnit.MILLISECONDS).toInt / 1000).getOrElse(40)
-      case _               =>
-        Try(config.getDuration("spark.jobserver.context-creation-timeout",
-              TimeUnit.MILLISECONDS).toInt / 1000).getOrElse(15)
+        Try(config.getDuration(
+          "spark.jobserver.yarn-context-creation-timeout",
+          TimeUnit.MILLISECONDS
+        ).toInt / 1000).getOrElse(40)
+      case _ =>
+        Try(config.getDuration(
+          "spark.jobserver.context-creation-timeout",
+          TimeUnit.MILLISECONDS
+        ).toInt / 1000).getOrElse(15)
     }
   }
 }

@@ -1,10 +1,12 @@
 package spark.jobserver
 
-import org.apache.spark.{SparkConf, SparkContext}
-import org.apache.spark.storage.StorageLevel
-import java.util.concurrent.TimeoutException
-import scala.concurrent.duration._
 import org.apache.spark.rdd.RDD
+import org.apache.spark.storage.StorageLevel
+import org.apache.spark.{SparkConf, SparkContext}
+
+import scala.concurrent.duration._
+
+import java.util.concurrent.TimeoutException
 
 import com.typesafe.config.Config
 
@@ -53,7 +55,7 @@ class JobWithNamedRddsSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
 
     it("get() should respect timeout when rdd is known, but not yet available") {
 
-      var rdd : Option[RDD[Int]] = None
+      var rdd: Option[RDD[Int]] = None
       val thread = new Thread {
         override def run() {
           namedTestRdds.getOrElseCreate("rdd-sleep", {

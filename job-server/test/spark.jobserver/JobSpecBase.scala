@@ -1,8 +1,7 @@
 package spark.jobserver
 
-import akka.actor.{ActorSystem, ActorRef}
-import akka.testkit.ImplicitSender
-import akka.testkit.TestKit
+import akka.actor.{ActorRef, ActorSystem}
+import akka.testkit.{ImplicitSender, TestKit}
 import com.typesafe.config.{Config, ConfigFactory}
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
@@ -39,9 +38,11 @@ trait JobSpecConfig {
   }
 
   def getContextConfig(adhoc: Boolean, baseConfig: Config = config): Config =
-    ConfigFactory.parseMap(Map("context.name" -> "ctx",
-                               "context.actorname" -> "ctx",
-                               "is-adhoc" -> adhoc.toString).asJava).withFallback(baseConfig)
+    ConfigFactory.parseMap(Map(
+      "context.name" -> "ctx",
+      "context.actorname" -> "ctx",
+      "is-adhoc" -> adhoc.toString
+    ).asJava).withFallback(baseConfig)
 
   lazy val contextConfig = {
     val ConfigMap = Map(
@@ -57,7 +58,7 @@ trait JobSpecConfig {
 }
 
 abstract class JobSpecBaseBase(system: ActorSystem) extends TestKit(system) with ImplicitSender
-with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
+    with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
   var dao: JobDAO = _
   var daoActor: ActorRef = _
   var manager: ActorRef = _
