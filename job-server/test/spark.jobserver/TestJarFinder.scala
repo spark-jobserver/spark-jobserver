@@ -19,9 +19,9 @@ trait TestJarFinder {
     */
   def getBaseDir(pkg: String): String ={
     // Current directory.  Find out if we are in project root, and need to go up a level.
-    val cwd = Paths.get(".").toAbsolutePath().normalize().toString()
-    val dotdot = if (Paths.get(cwd + s"/${pkg}").toFile.isDirectory) "" else "../"
-    s"$cwd/${dotdot}"
+    val cwd = Paths.get(".").toAbsolutePath.normalize().toString
+    val dotdot = if (Paths.get(cwd + s"/$pkg").toFile.isDirectory) "" else "../"
+    s"$cwd/$dotdot"
   }
 
   /**

@@ -76,8 +76,8 @@ class JobSqlDAOSpec extends TestJarFinder with FunSpecLike with Matchers with Be
     genTestJobInfo _
   }
 
-  def genJarInfo = genJarInfoClosure
-  def genJobInfo = genJobInfoClosure
+  def genJarInfo: (Boolean, Boolean) => JarInfo = genJarInfoClosure
+  def genJobInfo: (JarInfo, Boolean, Boolean, Boolean) => JobInfo = genJobInfoClosure
   //**********************************
 
   before {
@@ -210,8 +210,8 @@ class JobSqlDAOSpec extends TestJarFinder with FunSpecLike with Matchers with Be
       val jobIds = jobs map { _.jobId }
 
       // test
-      jobIds should equal (Seq(jobId, jobId2))
-      jobs should equal (Seq(expectedJobInfo, expectedJobInfo2))
+      jobIds should equal (Seq(jobId2, jobId))
+      jobs should equal (Seq(expectedJobInfo2, expectedJobInfo))
     }
 
     it("saving a JobInfo with the same jobId should update the JOBS table") {
@@ -228,7 +228,7 @@ class JobSqlDAOSpec extends TestJarFinder with FunSpecLike with Matchers with Be
 
       // First Test
       jobs.size should equal (2)
-      jobs.head should equal (expectedJobInfo)
+      jobs.last should equal (expectedJobInfo)
 
       // Second Test
       // Cannot compare JobInfos directly if error is a Some(Throwable) because
@@ -236,17 +236,17 @@ class JobSqlDAOSpec extends TestJarFinder with FunSpecLike with Matchers with Be
       dao.saveJobInfo(jobInfoNoEndSomeErr)
       val jobs2 = dao.getJobInfos(2)
       jobs2.size should equal (2)
-      jobs2.head.endTime should equal (None)
-      jobs2.head.error.isDefined should equal (true)
-      intercept[Throwable] { jobs2.head.error.map(throw _) }
-      jobs2.head.error.get.getMessage should equal (throwable.getMessage)
+      jobs2.last.endTime should equal (None)
+      jobs2.last.error.isDefined should equal (true)
+      intercept[Throwable] { jobs2.last.error.map(throw _) }
+      jobs2.last.error.get.getMessage should equal (throwable.getMessage)
 
       // Third Test
       dao.saveJobInfo(jobInfoSomeEndNoErr)
       val jobs3 = dao.getJobInfos(2)
       jobs3.size should equal (2)
-      jobs3.head.error.isDefined should equal (false)
-      jobs3.head should equal (expectedSomeEndNoErr)
+      jobs3.last.error.isDefined should equal (false)
+      jobs3.last should equal (expectedSomeEndNoErr)
 
       // Fourth Test
       // Cannot compare JobInfos directly if error is a Some(Throwable) because
@@ -254,10 +254,10 @@ class JobSqlDAOSpec extends TestJarFinder with FunSpecLike with Matchers with Be
       dao.saveJobInfo(jobInfoSomeEndSomeErr)
       val jobs4 = dao.getJobInfos(2)
       jobs4.size should equal (2)
-      jobs4.head.endTime should equal (expectedSomeEndSomeErr.endTime)
-      jobs4.head.error.isDefined should equal (true)
-      intercept[Throwable] { jobs4.head.error.map(throw _) }
-      jobs4.head.error.get.getMessage should equal (throwable.getMessage)
+      jobs4.last.endTime should equal (expectedSomeEndSomeErr.endTime)
+      jobs4.last.error.isDefined should equal (true)
+      intercept[Throwable] { jobs4.last.error.map(throw _) }
+      jobs4.last.error.get.getMessage should equal (throwable.getMessage)
     }
   }
 }
