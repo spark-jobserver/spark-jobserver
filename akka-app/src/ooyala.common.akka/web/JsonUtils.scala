@@ -1,8 +1,7 @@
 package ooyala.common.akka.web
 
-import spray.json._
 import spray.json.DefaultJsonProtocol._
-
+import spray.json._
 
 /**
  * JSON Serialization utilities for spray-json
@@ -14,12 +13,12 @@ object JsonUtils {
   // we have to be careful to make implicits that convert Any no wider in scope than needed
   implicit object AnyJsonFormat extends JsonFormat[Any] {
     def write(x: Any): JsValue = x match {
-      case n: Int => JsNumber(n)
-      case l: Long => JsNumber(l)
-      case d: Double => JsNumber(d)
-      case f: Float => JsNumber(f.toDouble)
-      case s: String => JsString(s)
-      case x: Seq[_] => seqFormat[Any].write(x)
+      case n: Int                    => JsNumber(n)
+      case l: Long                   => JsNumber(l)
+      case d: Double                 => JsNumber(d)
+      case f: Float                  => JsNumber(f.toDouble)
+      case s: String                 => JsString(s)
+      case x: Seq[_]                 => seqFormat[Any].write(x)
       case m: Map[_, _] if m.isEmpty => JsObject(Map[String, JsValue]())
       // Get the type of map keys from the first key, translate the rest the same way
       case m: Map[_, _] => m.keys.head match {
@@ -43,11 +42,11 @@ object JsonUtils {
     def read(value: JsValue): Any = value match {
       case JsNumber(n) => n.intValue()
       case JsString(s) => s
-      case a: JsArray => listFormat[Any].read(value)
+      case a: JsArray  => listFormat[Any].read(value)
       case o: JsObject => mapFormat[String, Any].read(value)
-      case JsTrue => true
-      case JsFalse => false
-      case x => deserializationError("Do not understand how to deserialize " + x)
+      case JsTrue      => true
+      case JsFalse     => false
+      case x           => deserializationError("Do not understand how to deserialize " + x)
     }
   }
 

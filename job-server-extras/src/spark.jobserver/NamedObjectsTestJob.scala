@@ -1,11 +1,12 @@
 package spark.jobserver
 
-import com.typesafe.config.Config
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import org.apache.spark.storage.StorageLevel
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{ SQLContext, Row, DataFrame }
+import org.apache.spark.sql.{Row, SQLContext}
+import org.apache.spark.storage.StorageLevel
+
+import com.typesafe.config.Config
 
 /**
  * A test job that accepts a SQLContext, as opposed to the regular SparkContext.
@@ -28,7 +29,8 @@ class NamedObjectsTestJob extends SparkJob with NamedObjectSupport {
       val sqlContext = new SQLContext(sc)
       val struct = StructType(
         StructField("i", IntegerType, true) ::
-          StructField("b", BooleanType, false) :: Nil)
+          StructField("b", BooleanType, false) :: Nil
+      )
       val df = sqlContext.createDataFrame(rows(sc), struct)
       namedObjects.update("df1", NamedDataFrame(df, true, StorageLevel.MEMORY_AND_DISK))
     }
@@ -36,8 +38,8 @@ class NamedObjectsTestJob extends SparkJob with NamedObjectSupport {
       namedObjects.update("rdd1", NamedRDD(rows(sc), true, StorageLevel.MEMORY_ONLY))
     }
 
-    if (config.hasPath(CREATE_BROADCAST)){
-      val broadcast = sc.broadcast(Set(1,2,3,4,5))
+    if (config.hasPath(CREATE_BROADCAST)) {
+      val broadcast = sc.broadcast(Set(1, 2, 3, 4, 5))
       namedObjects.update("broadcast1", NamedBroadcast(broadcast))
     }
 

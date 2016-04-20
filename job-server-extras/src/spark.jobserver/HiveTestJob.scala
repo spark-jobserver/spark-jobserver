@@ -1,8 +1,8 @@
 package spark.jobserver
 
-import com.typesafe.config.{Config, ConfigFactory}
-import org.apache.spark._
 import org.apache.spark.sql.hive.HiveContext
+
+import com.typesafe.config.Config
 
 /**
  * A test job that accepts a HiveContext, as opposed to the regular SparkContext.

@@ -1,32 +1,26 @@
 package spark.jobserver.auth
 
-import akka.actor.{ Actor, Props }
-import com.typesafe.config.{ ConfigFactory, ConfigValueFactory }
-import spark.jobserver._
-import spark.jobserver.io.{ JobInfo, JarInfo }
-import org.joda.time.DateTime
-import org.scalatest.{ Matchers, FunSpec, BeforeAndAfterAll }
-import spray.http.StatusCodes._
-import spray.http.HttpHeaders.Authorization
-import spray.http.BasicHttpCredentials
-import spray.routing.{ HttpService, Route }
-import spray.testkit.ScalatestRouteTest
-import org.apache.shiro.config.IniSecurityManagerFactory
-import org.apache.shiro.mgt.DefaultSecurityManager
-import org.apache.shiro.mgt.SecurityManager
-import org.apache.shiro.realm.Realm
+import akka.actor.{Actor, Props}
+import com.typesafe.config.{ConfigFactory, ConfigValueFactory}
 import org.apache.shiro.SecurityUtils
-import org.apache.shiro.config.Ini
+import org.apache.shiro.config.{Ini, IniSecurityManagerFactory}
+import org.joda.time.DateTime
+import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
+import spark.jobserver._
+import spark.jobserver.io.{JarInfo, JobInfo}
+import spray.http.BasicHttpCredentials
+import spray.http.HttpHeaders.Authorization
+import spray.http.StatusCodes._
+import spray.routing.{HttpService, Route}
+import spray.testkit.ScalatestRouteTest
 
 // Tests authorization only, actual responses are tested elsewhere
 // Does NOT test underlying Supervisor / JarManager functionality
 // HttpService trait is needed for the sealRoute() which wraps exception handling
 class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndAfterAll
     with ScalatestRouteTest with HttpService {
-  import scala.collection.JavaConverters._
   import spray.httpx.SprayJsonSupport._
   import spray.json.DefaultJsonProtocol._
-  import ooyala.common.akka.web.JsonUtils._
 
   def actorRefFactory = system
 
@@ -52,8 +46,10 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
   private val dummyActor = system.actorOf(Props(classOf[DummyActor], this))
 
   private def routesWithTimeout(authTimeout: String): Route = {
-    val testConfig = config.withValue("shiro.authentication-timeout",
-                                      ConfigValueFactory.fromAnyRef(authTimeout))
+    val testConfig = config.withValue(
+      "shiro.authentication-timeout",
+      ConfigValueFactory.fromAnyRef(authTimeout)
+    )
     val api = new WebApi(system, testConfig, dummyPort, dummyActor, dummyActor, dummyActor, dummyActor) {
       override def initSecurityManager() {
 

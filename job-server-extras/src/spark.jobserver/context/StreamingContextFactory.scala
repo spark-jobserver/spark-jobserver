@@ -1,15 +1,16 @@
 package spark.jobserver.context
 
-import com.typesafe.config.Config
 import org.apache.spark.SparkConf
 import org.apache.spark.streaming.{Milliseconds, StreamingContext}
+
+import com.typesafe.config.Config
 import spark.jobserver.{ContextLike, SparkJobBase, SparkStreamingJob}
 
 class StreamingContextFactory extends SparkContextFactory {
 
   type C = StreamingContext with ContextLike
 
-  def makeContext(sparkConf: SparkConf, config: Config,  contextName: String): C = {
+  def makeContext(sparkConf: SparkConf, config: Config, contextName: String): C = {
     val interval = config.getInt("streaming.batch_interval")
     val stopGracefully = config.getBoolean("streaming.stopGracefully")
     val stopSparkContext = config.getBoolean("streaming.stopSparkContext")

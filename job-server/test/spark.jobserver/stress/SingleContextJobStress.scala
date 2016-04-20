@@ -1,11 +1,12 @@
 package spark.jobserver.stress
 
+import scala.concurrent.Await
+
 import akka.actor.{ActorSystem, Props}
 import akka.pattern.ask
 import akka.util.Timeout
 import com.typesafe.config.ConfigFactory
 import org.joda.time.DateTime
-import scala.concurrent.Await
 import spark.jobserver._
 import spark.jobserver.io.JobFileDAO
 
@@ -18,10 +19,11 @@ import spark.jobserver.io.JobFileDAO
  */
 object SingleContextJobStress extends App with TestJarFinder {
 
-  import CommonMessages.JobResult
-  import JobManagerActor._
   import scala.collection.JavaConverters._
   import scala.concurrent.duration._
+
+  import CommonMessages.JobResult
+  import JobManagerActor._
   val jobDaoPrefix = "target/scala-" + version + "/jobserver/"
   val config = ConfigFactory.parseString("""
     num-cpu-cores = 4           # Number of cores to allocate.  Required.

@@ -1,9 +1,9 @@
 package spark.jobserver
 
-import com.typesafe.config.Config
 import org.apache.spark._
 import org.apache.spark.rdd.RDD
 
+import com.typesafe.config.Config
 
 trait SparkTestJob extends SparkJob {
   def validate(sc: SparkContext, config: Config): SparkJobValidation = SparkJobValid
@@ -35,7 +35,7 @@ class SleepJob extends SparkTestJob {
 class CacheSomethingJob extends SparkTestJob {
   def runJob(sc: SparkContext, config: Config): Any = {
     val dd = sc.parallelize(Seq(2, 4, 9, 16, 25, 36, 55, 66))
-               .map(_ * 2)
+      .map(_ * 2)
     dd.setName("numbers")
     dd.cache()
     dd.sum.toInt
@@ -89,7 +89,7 @@ class jobJarDependenciesJob extends SparkTestJob {
       getClass.getClassLoader.loadClass("spark.jobserver.context.SQLContextFactory").getName(),
       getClass.getClassLoader.loadClass("spark.jobserver.context.HiveContextFactory").getName(),
       getClass.getClassLoader.loadClass("spark.jobserver.context.StreamingContextFactory").getName()
-      )
+    )
     val input = sc.parallelize(loadedClasses)
     input.countByValue()
   }

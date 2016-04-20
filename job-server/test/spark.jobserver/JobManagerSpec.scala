@@ -116,7 +116,7 @@ abstract class JobManagerSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
       uploadTestJar()
       manager ! JobManagerActor.StartJob("demo", classPrefix + "MyErrorJob", emptyConfig, errorEvents)
       val errorMsg = expectMsgClass(startJobWait, classOf[JobErroredOut])
-      errorMsg.err.getClass should equal (classOf[RuntimeException])
+      errorMsg.err.getClass should equal(classOf[RuntimeException])
     }
 
     it("job should get jobConfig passed in to StartJob message") {
@@ -129,7 +129,7 @@ abstract class JobManagerSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
         syncEvents ++ errorEvents)
       expectMsgPF(startJobWait, "Did not get JobResult") {
         case JobResult(_, keys: Seq[_]) =>
-          keys should contain ("foo")
+          keys should contain("foo")
       }
     }
 
@@ -142,13 +142,13 @@ abstract class JobManagerSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
         syncEvents ++ errorEvents)
       expectMsgPF(5.seconds.dilated, "Did not get JobResult") {
         case JobResult(_, result: Array[Product]) =>
-          result.length should equal (1)
-          result(0).getClass.getName should include ("Animal")
+          result.length should equal(1)
+          result(0).getClass.getName should include("Animal")
       }
       expectNoMsg()
     }
 
-    it ("should refuse to start a job when too many jobs in the context are running") {
+    it("should refuse to start a job when too many jobs in the context are running") {
       val jobSleepTimeMillis = 2000L
       val jobConfig = ConfigFactory.parseString("sleep.time.millis = " + jobSleepTimeMillis)
 
@@ -168,19 +168,21 @@ abstract class JobManagerSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
           case started: JobStarted =>
             messageCounts(started.getClass) += 1
           case noSlots: NoJobSlotsAvailable =>
-            noSlots.maxJobSlots should equal (MaxJobsPerContext)
+            noSlots.maxJobSlots should equal(MaxJobsPerContext)
             messageCounts(noSlots.getClass) += 1
           case finished: JobFinished =>
             messageCounts(finished.getClass) += 1
           case result: JobResult =>
-            result.result should equal (jobSleepTimeMillis)
+            result.result should equal(jobSleepTimeMillis)
             messageCounts(result.getClass) += 1
         }
       }
-      messageCounts.toMap should equal (Map(classOf[JobStarted] -> MaxJobsPerContext,
+      messageCounts.toMap should equal(Map(
+        classOf[JobStarted] -> MaxJobsPerContext,
         classOf[JobFinished] -> MaxJobsPerContext,
         classOf[JobResult] -> MaxJobsPerContext,
-        classOf[NoJobSlotsAvailable] -> 1))
+        classOf[NoJobSlotsAvailable] -> 1
+      ))
     }
 
     it("should start a job that's an object rather than class") {
@@ -191,7 +193,7 @@ abstract class JobManagerSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
       manager ! JobManagerActor.StartJob("demo", classPrefix + "SimpleObjectJob", emptyConfig,
         syncEvents ++ errorEvents)
       expectMsgPF(5.seconds.dilated, "Did not get JobResult") {
-        case JobResult(_, result: Int) => result should equal (1 + 2 + 3)
+        case JobResult(_, result: Int) => result should equal(1 + 2 + 3)
       }
     }
 
@@ -209,10 +211,9 @@ abstract class JobManagerSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
       }
     }
 
-    it("should be able to start a job with job jar dependencies and return results"){
+    it("should be able to start a job with job jar dependencies and return results") {
       manager ! JobManagerActor.Initialize(daoActor, None)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
-
 
       uploadTestJar()
       val jobJarDepsConfigs = ConfigFactory.parseString(
@@ -229,16 +230,16 @@ abstract class JobManagerSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
       expectNoMsg()
     }
 
-    it("should fail a job that requires job jar dependencies but doesn't provide the jar"){
+    it("should fail a job that requires job jar dependencies but doesn't provide the jar") {
       manager ! JobManagerActor.Initialize(daoActor, None)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
-
 
       uploadTestJar()
       val jobJarDepsConfigs = ConfigFactory.parseString(
         s"""
            |dependent-jar-uris = []
-        """.stripMargin)
+        """.stripMargin
+      )
 
       manager ! JobManagerActor.StartJob("demo", classPrefix + "jobJarDependenciesJob", jobJarDepsConfigs,
         syncEvents ++ errorEvents)

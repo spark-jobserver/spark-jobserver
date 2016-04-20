@@ -1,8 +1,9 @@
 package spark.jobserver
 
-import com.typesafe.config.Config
-import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.SparkContext
+import org.apache.spark.api.java.JavaSparkContext
+
+import com.typesafe.config.Config
 
 /**
  * A class to make Java jobs easier to write.  In Java:

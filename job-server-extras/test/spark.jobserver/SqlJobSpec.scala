@@ -1,11 +1,11 @@
 package spark.jobserver
 
-import akka.actor.Props
-import akka.testkit.{TestProbe, TestActorRef}
-import com.typesafe.config.{ConfigValueFactory, ConfigFactory}
 import org.apache.spark.sql.Row
+
+import akka.testkit.TestProbe
+import com.typesafe.config.ConfigFactory
 import spark.jobserver.context.SQLContextFactory
-import spark.jobserver.io.{JobDAOActor, JobDAO}
+import spark.jobserver.io.JobDAOActor
 
 object SqlJobSpec extends JobSpecConfig {
   override val contextFactory = classOf[SQLContextFactory].getName
@@ -13,8 +13,8 @@ object SqlJobSpec extends JobSpecConfig {
 
 class SqlJobSpec extends ExtrasJobSpecBase(SqlJobSpec.getNewSystem) {
   import scala.concurrent.duration._
+
   import CommonMessages._
-  import JobManagerSpec.MaxJobsPerContext
 
   val classPrefix = "spark.jobserver."
   private val sqlLoaderClass = classPrefix + "SqlLoaderJob"
@@ -22,13 +22,15 @@ class SqlJobSpec extends ExtrasJobSpecBase(SqlJobSpec.getNewSystem) {
 
   val emptyConfig = ConfigFactory.parseString("spark.master = bar")
   val queryConfig = ConfigFactory.parseString(
-                      """sql = "SELECT firstName, lastName FROM addresses WHERE city = 'San Jose'" """)
+    """sql = "SELECT firstName, lastName FROM addresses WHERE city = 'San Jose'" """
+  )
 
   before {
     dao = new InMemoryDAO
     daoActor = system.actorOf(JobDAOActor.props(dao))
     manager = system.actorOf(JobManagerActor.props(
-                             SqlJobSpec.getContextConfig(false, SqlJobSpec.contextConfig)))
+      SqlJobSpec.getContextConfig(false, SqlJobSpec.contextConfig)
+    ))
     supervisor = TestProbe().ref
   }
 
@@ -40,7 +42,7 @@ class SqlJobSpec extends ExtrasJobSpecBase(SqlJobSpec.getNewSystem) {
       uploadTestJar()
       manager ! JobManagerActor.StartJob("demo", sqlLoaderClass, emptyConfig, syncEvents ++ errorEvents)
       expectMsgPF(6 seconds, "Did not get JobResult") {
-        case JobResult(_, result: Long) => result should equal (3L)
+        case JobResult(_, result: Long) => result should equal(3L)
       }
       expectNoMsg()
 
@@ -48,7 +50,7 @@ class SqlJobSpec extends ExtrasJobSpecBase(SqlJobSpec.getNewSystem) {
       expectMsgPF(6 seconds, "Did not get JobResult") {
         case JobResult(_, result: Array[Row]) =>
           result should have length (2)
-          result(0)(0) should equal ("Bob")
+          result(0)(0) should equal("Bob")
       }
       expectNoMsg()
     }

@@ -1,21 +1,20 @@
 package spark.jobserver
 
-import akka.actor.{Props, ActorRef, ActorSystem}
-import akka.testkit.{TestKit, ImplicitSender}
-import org.scalatest.{FunSpecLike, BeforeAndAfter, BeforeAndAfterAll, Matchers}
-
-import spark.jobserver.io.{JobDAOActor, JobDAO}
+import akka.actor.{ActorRef, ActorSystem, Props}
+import akka.testkit.{ImplicitSender, TestKit}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
+import spark.jobserver.io.{JobDAO, JobDAOActor}
 
 object JobInfoActorSpec {
   val system = ActorSystem("test")
 }
 
 class JobInfoActorSpec extends TestKit(JobInfoActorSpec.system) with ImplicitSender
-with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
+    with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
-  import com.typesafe.config._
   import CommonMessages.NoSuchJobId
   import JobInfoActor._
+  import com.typesafe.config._
 
   private val jobId = "jobId"
   private val jobConfig = ConfigFactory.empty()
@@ -43,7 +42,7 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
     it("should store a job configuration") {
       actor ! StoreJobConfig(jobId, jobConfig)
       expectMsg(JobConfigStored)
-      dao.getJobConfigs.get(jobId) should be (Some(jobConfig))
+      dao.getJobConfigs.get(jobId) should be(Some(jobConfig))
     }
 
     it("should return a job configuration when the jobId exists") {

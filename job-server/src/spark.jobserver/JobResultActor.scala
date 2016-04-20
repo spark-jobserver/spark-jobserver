@@ -1,9 +1,10 @@
 package spark.jobserver
 
+import scala.collection.mutable
+
 import akka.actor.ActorRef
 import ooyala.common.akka.InstrumentedActor
 import ooyala.common.akka.metrics.YammerMetrics
-import scala.collection.mutable
 import spark.jobserver.util.LRUCache
 
 /**

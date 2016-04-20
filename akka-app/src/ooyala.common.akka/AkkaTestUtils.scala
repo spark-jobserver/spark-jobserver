@@ -1,8 +1,9 @@
 package ooyala.common.akka
 
-import akka.actor.{ActorSystem, ActorRef}
-import akka.pattern.gracefulStop
 import scala.concurrent.Await
+
+import akka.actor.{ActorRef, ActorSystem}
+import akka.pattern.gracefulStop
 
 object AkkaTestUtils {
   import scala.concurrent.duration._

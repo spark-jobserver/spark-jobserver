@@ -5,6 +5,7 @@ import spark.jobserver.io.JobDAOActor
 
 class JobManagerActorSpec extends JobManagerSpec {
   import scala.concurrent.duration._
+
   import akka.testkit._
 
   before {
@@ -28,10 +29,10 @@ class JobManagerActorSpec extends JobManagerSpec {
         errorEvents ++ syncEvents)
       val JobResult(_, sum2: Int) = expectMsgClass(classOf[JobResult])
 
-      sum2 should equal (sum)
+      sum2 should equal(sum)
     }
 
-    it ("jobs should be able to cache and retrieve RDDs by name") {
+    it("jobs should be able to cache and retrieve RDDs by name") {
       manager ! JobManagerActor.Initialize(daoActor, None)
       expectMsgClass(classOf[JobManagerActor.Initialized])
 
@@ -39,7 +40,7 @@ class JobManagerActorSpec extends JobManagerSpec {
       manager ! JobManagerActor.StartJob("demo", classPrefix + "CacheRddByNameJob", emptyConfig,
         errorEvents ++ syncEvents)
       expectMsgPF(1.second.dilated, "Expected a JobResult or JobErroredOut message!") {
-        case JobResult(_, sum: Int) => sum should equal (1 + 4 + 9 + 16 + 25)
+        case JobResult(_, sum: Int)                => sum should equal(1 + 4 + 9 + 16 + 25)
         case JobErroredOut(_, _, error: Throwable) => throw error
       }
     }

@@ -1,11 +1,11 @@
 package spark.jobserver
 
-import akka.actor.ActorSystem
-import akka.testkit.{ ImplicitSender, TestKit }
-import org.apache.spark.{ SparkContext, SparkConf }
-
 import org.apache.spark.storage.StorageLevel
-import org.scalatest.{ Matchers, FunSpecLike, BeforeAndAfterAll, BeforeAndAfter }
+import org.apache.spark.{SparkConf, SparkContext}
+
+import akka.actor.ActorSystem
+import akka.testkit.{ImplicitSender, TestKit}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 
 /**
  * please note that this test only uses RDDs as named objects, there exists another test class
@@ -13,7 +13,7 @@ import org.scalatest.{ Matchers, FunSpecLike, BeforeAndAfterAll, BeforeAndAfter 
  */
 class NamedObjectsRDDsOnlySpec extends TestKit(ActorSystem("NamedObjectsSpec")) with FunSpecLike
     with ImplicitSender with Matchers with BeforeAndAfter with BeforeAndAfterAll {
-  
+
   val sc = new SparkContext("local[2]", getClass.getSimpleName, new SparkConf)
   val namedObjects: NamedObjects = new JobServerNamedObjects(system)
 
@@ -37,7 +37,7 @@ class NamedObjectsRDDsOnlySpec extends TestKit(ActorSystem("NamedObjectsSpec")) 
     it("get() should return Some(RDD) when it exists") {
       val rdd = sc.parallelize(Seq(1, 2, 3))
       namedObjects.update("rdd1", NamedRDD(rdd, true, StorageLevel.MEMORY_ONLY))
-      val rdd1 : Option[NamedRDD[Int]] = namedObjects.get("rdd1")
+      val rdd1: Option[NamedRDD[Int]] = namedObjects.get("rdd1")
       rdd1 should equal(Some(NamedRDD(rdd, true, StorageLevel.MEMORY_ONLY)))
     }
 
@@ -51,7 +51,7 @@ class NamedObjectsRDDsOnlySpec extends TestKit(ActorSystem("NamedObjectsSpec")) 
     it("destroy() should destroy an RDD that exists") {
       val rdd1 = NamedRDD(sc.parallelize(Seq(1, 2, 3)), false, StorageLevel.MEMORY_ONLY)
       namedObjects.update("rdd1", rdd1)
-      
+
       namedObjects.get("rdd1") should not equal None
       namedObjects.destroy(rdd1, "rdd1")
       namedObjects.get("rdd1") should equal(None)
@@ -80,7 +80,7 @@ class NamedObjectsRDDsOnlySpec extends TestKit(ActorSystem("NamedObjectsSpec")) 
       var generatorCalled = false
       val rdd = NamedRDD(sc.parallelize(Seq(1, 2, 3)), true, StorageLevel.MEMORY_ONLY)
       namedObjects.update("rdd2", rdd)
-      val rdd2 : NamedRDD[Int] = namedObjects.getOrElseCreate("rdd2", {
+      val rdd2: NamedRDD[Int] = namedObjects.getOrElseCreate("rdd2", {
         generatorCalled = true
         NamedRDD(sc.parallelize(Seq(4, 5, 6)), true, StorageLevel.MEMORY_ONLY)
       })

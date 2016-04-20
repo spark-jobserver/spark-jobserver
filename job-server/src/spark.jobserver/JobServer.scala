@@ -1,17 +1,16 @@
 package spark.jobserver
 
-import akka.actor.{ActorSystem, ActorRef}
-import akka.actor.Props
-import akka.pattern.ask
-import com.typesafe.config.{ConfigValueFactory, Config, ConfigFactory}
+import scala.collection.JavaConverters._
+import scala.concurrent.Await
+import scala.concurrent.duration._
 
 import java.io.File
-import spark.jobserver.io.{JobDAOActor, JobDAO, DataFileDAO}
-import org.slf4j.LoggerFactory
 
-import scala.collection.JavaConverters._
-import scala.concurrent.{Await, ExecutionContext}
-import scala.concurrent.duration._
+import akka.actor.{ActorRef, ActorSystem, Props}
+import akka.pattern.ask
+import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
+import org.slf4j.LoggerFactory
+import spark.jobserver.io.{DataFileDAO, JobDAO, JobDAOActor}
 
 /**
  * The Spark Job Server is a web service that allows users to submit and run Spark jobs, check status,
@@ -57,14 +56,18 @@ object JobServer {
     try {
       val jobDAO = ctor.newInstance(config).asInstanceOf[JobDAO]
       val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO), "dao-manager")
-      val dataManager = system.actorOf(Props(classOf[DataManagerActor],
-          new DataFileDAO(config)), "data-manager")
+      val dataManager = system.actorOf(Props(
+        classOf[DataManagerActor],
+        new DataFileDAO(config)
+      ), "data-manager")
       val jarManager = system.actorOf(Props(classOf[JarManager], daoActor), "jar-manager")
       val contextPerJvm = config.getBoolean("spark.jobserver.context-per-jvm")
       val supervisor =
-        system.actorOf(Props(if (contextPerJvm) { classOf[AkkaClusterSupervisorActor] }
-                             else               { classOf[LocalContextSupervisorActor] }, daoActor),
-                       "context-supervisor")
+        system.actorOf(
+          Props(if (contextPerJvm) { classOf[AkkaClusterSupervisorActor] }
+          else { classOf[LocalContextSupervisorActor] }, daoActor),
+          "context-supervisor"
+        )
       val jobInfo = system.actorOf(Props(classOf[JobInfoActor], jobDAO, supervisor), "job-info")
 
       // Add initial job JARs, if specified in configuration.
@@ -95,7 +98,7 @@ object JobServer {
           .toMap
 
       // Ensure that the jars exist
-      for(jarPath <- initialJars.values) {
+      for (jarPath <- initialJars.values) {
         val f = new java.io.File(jarPath)
         if (!f.exists) {
           val msg =
@@ -115,7 +118,7 @@ object JobServer {
 
       Await.result(future, contextTimeout.seconds) match {
         case InvalidJar => sys.error("Could not store initial job jars.")
-        case _ =>
+        case _          =>
       }
     }
   }
@@ -123,12 +126,13 @@ object JobServer {
   def main(args: Array[String]) {
     import scala.collection.JavaConverters._
     def makeSupervisorSystem(name: String)(config: Config): ActorSystem = {
-      val configWithRole = config.withValue("akka.cluster.roles",
-        ConfigValueFactory.fromIterable(List("supervisor").asJava))
+      val configWithRole = config.withValue(
+        "akka.cluster.roles",
+        ConfigValueFactory.fromIterable(List("supervisor").asJava)
+      )
       ActorSystem(name, configWithRole)
     }
     start(args, makeSupervisorSystem("JobServer")(_))
   }
-
 
 }

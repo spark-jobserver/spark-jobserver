@@ -1,9 +1,8 @@
 package spark.jobserver
 
 import ooyala.common.akka.InstrumentedActor
-import spark.jobserver.io.DataFileDAO
-import spark.jobserver.util.JarUtils
 import org.joda.time.DateTime
+import spark.jobserver.io.DataFileDAO
 
 object DataManagerActor {
   // Messages to DataManager actor

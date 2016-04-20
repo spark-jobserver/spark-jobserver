@@ -1,13 +1,11 @@
 package spark.jobserver.auth
 
-import org.apache.shiro.realm.ldap.JndiLdapRealm
-import org.apache.shiro.realm.ldap.LdapContextFactory
-import org.apache.shiro.realm.ldap.JndiLdapContextFactory
-import org.apache.shiro.realm.ldap.LdapUtils
-import org.apache.shiro.subject.PrincipalCollection
-import org.apache.shiro.authz._
-import javax.naming.ldap.LdapContext
 import javax.naming.directory._
+import javax.naming.ldap.LdapContext
+
+import org.apache.shiro.authz._
+import org.apache.shiro.realm.ldap.{JndiLdapContextFactory, JndiLdapRealm, LdapContextFactory, LdapUtils}
+import org.apache.shiro.subject.PrincipalCollection
 import org.slf4j.LoggerFactory
 
 /**
@@ -63,8 +61,10 @@ class LdapGroupRealm extends JndiLdapRealm {
     }
   }
 
-  override def queryForAuthorizationInfo(principals: PrincipalCollection,
-                                         ldapContextFactory: LdapContextFactory): AuthorizationInfo = {
+  override def queryForAuthorizationInfo(
+    principals:         PrincipalCollection,
+    ldapContextFactory: LdapContextFactory
+  ): AuthorizationInfo = {
 
     val username = getAvailablePrincipal(principals).toString
     val ldapContext = ldapContextFactory.getSystemLdapContext()

@@ -1,6 +1,6 @@
 package spark.jobserver
 
-import org.apache.spark.sql.{ SQLContext, DataFrame }
+import org.apache.spark.sql.DataFrame
 import org.apache.spark.storage.StorageLevel
 
 /**
@@ -17,8 +17,10 @@ class DataFramePersister extends NamedObjectPersister[NamedDataFrame] {
   override def persist(namedObj: NamedDataFrame, name: String) {
     namedObj match {
       case NamedDataFrame(df, forceComputation, storageLevel) =>
-        require(!forceComputation || storageLevel != StorageLevel.NONE,
-          "forceComputation implies storageLevel != NONE")
+        require(
+          !forceComputation || storageLevel != StorageLevel.NONE,
+          "forceComputation implies storageLevel != NONE"
+        )
         //these are not supported by DataFrame:
         //df.setName(name)
         //df.getStorageLevel match

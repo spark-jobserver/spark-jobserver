@@ -2,7 +2,6 @@ package ooyala.common.akka
 
 import java.util.concurrent.TimeUnit
 
-import akka.actor.Actor
 import com.yammer.metrics.Metrics
 
 /**
@@ -15,7 +14,7 @@ import com.yammer.metrics.Metrics
 trait ActorMetrics extends ActorStack {
   // Timer includes a histogram of wrappedReceive() duration as well as moving avg of rate of invocation
   val metricReceiveTimer = Metrics.newTimer(getClass, "message-handler",
-                                            TimeUnit.MILLISECONDS, TimeUnit.SECONDS)
+    TimeUnit.MILLISECONDS, TimeUnit.SECONDS)
 
   override def receive: Receive = {
     case x =>

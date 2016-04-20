@@ -1,13 +1,12 @@
 package spark.jobserver
 
+import scala.concurrent.duration._
+
 import akka.actor._
 import akka.testkit.{ImplicitSender, TestKit}
 import com.typesafe.config.ConfigFactory
-import spark.jobserver.io.{JobDAO, JobDAOActor}
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
-
-import scala.concurrent.duration._
-
+import spark.jobserver.io.{JobDAO, JobDAOActor}
 
 object LocalContextSupervisorSpec {
   val config = ConfigFactory.parseString("""

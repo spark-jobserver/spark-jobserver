@@ -3,7 +3,6 @@ package spark.jobserver.util
 import org.joda.time.format.ISODateTimeFormat
 import org.joda.time.{DateTime, DateTimeComparator, DateTimeZone}
 
-
 object DateUtils {
   val ZeroTime = dtFromUtcSeconds(0)
 
