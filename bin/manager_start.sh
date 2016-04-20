@@ -1,6 +1,6 @@
 #!/bin/bash
 # Script to start the job manager
-# args: <work dir for context> <cluster address>
+# args: <work dir for context> <cluster address> [proxy_user]
 set -e
 
 get_abs_script_path() {
@@ -27,10 +27,18 @@ JAVA_OPTS="-XX:MaxDirectMemorySize=$MAX_DIRECT_MEMORY
 
 MAIN="spark.jobserver.JobManager"
 
-cmd='$SPARK_HOME/bin/spark-submit --class $MAIN --driver-memory $JOBSERVER_MEMORY
+if [ ! -z $3 ]; then
+  cmd='$SPARK_HOME/bin/spark-submit --class $MAIN --driver-memory $JOBSERVER_MEMORY
+  --conf "spark.executor.extraJavaOptions=$LOGGING_OPTS"
+  --proxy-user $3
+  --driver-java-options "$GC_OPTS $JAVA_OPTS $LOGGING_OPTS $CONFIG_OVERRIDES"
+  $appdir/spark-job-server.jar $1 $2 $conffile'
+else
+  cmd='$SPARK_HOME/bin/spark-submit --class $MAIN --driver-memory $JOBSERVER_MEMORY
   --conf "spark.executor.extraJavaOptions=$LOGGING_OPTS"
   --driver-java-options "$GC_OPTS $JAVA_OPTS $LOGGING_OPTS $CONFIG_OVERRIDES"
   $appdir/spark-job-server.jar $1 $2 $conffile'
+fi
 
 eval $cmd > /dev/null 2>&1 &
 # exec java -cp $CLASSPATH $GC_OPTS $JAVA_OPTS $LOGGING_OPTS $CONFIG_OVERRIDES $MAIN $1 $2 $conffile 2>&1 &
