@@ -37,7 +37,7 @@ object Dependencies {
 
   val javaVersion = sys.env.getOrElse("JAVA_VERSION", "7-jre")
 
-  val mesosVersion = sys.env.getOrElse("MESOS_VERSION", "0.25.0-0.2.70.ubuntu1404")
+  val mesosVersion = sys.env.getOrElse("MESOS_VERSION", "0.28.1-2.0.20.ubuntu1404")
 
   val sparkVersion = sys.env.getOrElse("SPARK_VERSION", "1.6.1")
   lazy val sparkDeps = Seq(
