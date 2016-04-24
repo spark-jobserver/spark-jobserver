@@ -121,7 +121,7 @@ Alternatives:
 * EC2 Deploy scripts - follow the instructions in [EC2](doc/EC2.md) to spin up a Spark cluster with job server and an example application.
 * EMR Deploy instruction - follow the instruction in [EMR](doc/EMR.md)
 
-NOTE: Spark Job Server can optionally run `SparkContext`s in their own, forked JVM process when the config option `spark.jobserver.context-per-jvm` is set to `true`.  In local development mode, this is set to false by default, while the deployment templates have this set to true for production deployment. See [Deployment](#deployment) section for more info.
+NOTE: Spark Job Server can optionally run `SparkContext`s in their own, forked JVM process when the config option `spark.jobserver.context-per-jvm` is set to `true`.  This option does not currently work for SBT/local dev mode. See [Deployment](#deployment) section for more info.
 
 ## Development mode
 
@@ -452,8 +452,9 @@ NOTE: by default the assembly jar from `job-server-extras`, which includes suppo
 
 ### Context per JVM
 
-NOTE: Each context can be a separate process launched using spark-submit, via the included `manager_start.sh` script, if `context-per-jvm` is set to true.
-You may want to set `deploy.manager-start-cmd` to the correct path to your start script and customize the script.
+Each context can be a separate process launched using spark-submit, via the included `manager_start.sh` script, if `context-per-jvm` is set to true.
+You may want to set `deploy.manager-start-cmd` to the correct path to your start script and customize the script.  This can be especially desirable when you want to run many contexts at once, or for certain types of contexts such as StreamingContexts which really need their own processes.
+
 Also, the extra processes talk to the master HTTP process via random ports using the Akka Cluster gossip protocol.  If for some reason the separate processes causes issues, set `spark.jobserver.context-per-jvm` to `false`, which will cause the job server to use a single JVM for all contexts.
 
 Among the known issues:
