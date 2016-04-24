@@ -32,6 +32,7 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
   - [Authentication](#authentication)
 - [Deployment](#deployment)
   - [Manual steps](#manual-steps)
+  - [Context per JVM](#context-per-jvm)
     - [Configuring Spark Jobserver meta data Database backend](#configuring-spark-jobserver-meta-data-database-backend)
   - [Chef](#chef)
 - [Architecture](#architecture)
@@ -79,7 +80,7 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 - *"Spark as a Service"*: Simple REST interface (including HTTPS) for all aspects of job, context management
 - Support for Spark SQL, Hive, Streaming Contexts/jobs and custom job contexts!  See [Contexts](doc/contexts.md).
 - LDAP Auth support via Apache Shiro integration
-- Separate JVM per SparkContext for isolation
+- Separate JVM per SparkContext for isolation (EXPERIMENTAL)
 - Supports sub-second low-latency jobs via long-running job contexts
 - Start and stop job contexts for RDD sharing and low-latency jobs; change resources on restart
 - Kill running jobs via stop context and delete job
@@ -120,7 +121,7 @@ Alternatives:
 * EC2 Deploy scripts - follow the instructions in [EC2](doc/EC2.md) to spin up a Spark cluster with job server and an example application.
 * EMR Deploy instruction - follow the instruction in [EMR](doc/EMR.md)
 
-NOTE: Spark Job Server runs `SparkContext`s in their own, forked JVM process when the config option `spark.jobserver.context-per-jvm` is set to `true`.  In local development mode, this is set to false by default, while the deployment templates have this set to true for production deployment. See [Deployment](#deployment) section for more info.
+NOTE: Spark Job Server can optionally run `SparkContext`s in their own, forked JVM process when the config option `spark.jobserver.context-per-jvm` is set to `true`.  This option does not currently work for SBT/local dev mode. See [Deployment](#deployment) section for more info.
 
 ## Development mode
 
@@ -449,9 +450,16 @@ The `server_start.sh` script uses `spark-submit` under the hood and may be passe
 
 NOTE: by default the assembly jar from `job-server-extras`, which includes support for SQLContext and HiveContext, is used.  If you face issues with all the extra dependencies, consider modifying the install scripts to invoke `sbt job-server/assembly` instead, which doesn't include the extra dependencies.
 
-NOTE: Each context is a separate process launched using spark-submit, via the included `manager_start.sh` script.
-You may want to set `deploy.manager-start-cmd` to the correct path to your start script and customize the script.
+### Context per JVM
+
+Each context can be a separate process launched using spark-submit, via the included `manager_start.sh` script, if `context-per-jvm` is set to true.
+You may want to set `deploy.manager-start-cmd` to the correct path to your start script and customize the script.  This can be especially desirable when you want to run many contexts at once, or for certain types of contexts such as StreamingContexts which really need their own processes.
+
 Also, the extra processes talk to the master HTTP process via random ports using the Akka Cluster gossip protocol.  If for some reason the separate processes causes issues, set `spark.jobserver.context-per-jvm` to `false`, which will cause the job server to use a single JVM for all contexts.
+
+Among the known issues:
+- Launched contexts do not shut down by themselves.  You need to manually kill each separate process, or do `-X DELETE /contexts/<context-name>`
+- Custom error messages are not serialized back to HTTP
 
 Log files are separated out for each context (assuming `context-per-jvm` is `true`) in their own subdirs under the `LOG_DIR` configured in `settings.sh` in the deployed directory.
 
