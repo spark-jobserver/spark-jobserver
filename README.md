@@ -262,7 +262,7 @@ manage and re-use contexts.
 
 ### NEW SparkJob API
 
-Note: As of version 0.7.0, a new SparkJob API that is significantly better than the old SparkJob API will take over... see `spark.jobserver.api.SparkJobBase`.  Existing jobs should continue to compile against the old `spark.jobserver.SparkJob` API, but this will be deprecated in the future.  Note that jobs before 0.7.0 will need to be recompiled, older jobs may not work with the current SJS example.  The new API looks like this:
+Note: As of version 0.7.0, a new SparkJob API that is significantly better than the old SparkJob API will take over.  Existing jobs should continue to compile against the old `spark.jobserver.SparkJob` API, but this will be deprecated in the future.  Note that jobs before 0.7.0 will need to be recompiled, older jobs may not work with the current SJS example.  The new API looks like this:
 
 ```scala
 object WordCountExampleNewApi extends NewSparkJob {
@@ -281,7 +281,7 @@ object WordCountExampleNewApi extends NewSparkJob {
 }
 ```
 
-It is much more type safe, separates context configuration, job ID, named objects, and other environment variables into a separate JobEnvironment input, and allows the validation method to return specific data for the runJob method.
+It is much more type safe, separates context configuration, job ID, named objects, and other environment variables into a separate JobEnvironment input, and allows the validation method to return specific data for the runJob method.  See the [WordCountExample](job-server-tests/src/spark.jobserver/WordCountExample.scala) and [LongPiJob](job-server-tests/src/spark.jobserver/LongPiJob.scala) for examples.
 
 Let's try running our sample job with an invalid configuration:
 
