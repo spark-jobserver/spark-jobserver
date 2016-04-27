@@ -1,6 +1,7 @@
 #!/bin/bash
 # Script to start the job manager
-# args: <work dir for context> <cluster address>
+# args: <work dir for context> <cluster address> <driver memory> [proxy_user]
+# if <driver memory> is 0, the default value will be used
 set -e
 
 get_abs_script_path() {
