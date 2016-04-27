@@ -1,10 +1,14 @@
+import scalariform.formatter.preferences._
+
+import com.typesafe.sbt.SbtScalariform._
+import sbt.Keys._
 import sbt._
-import Keys._
 import sbtassembly.AssemblyPlugin.autoImport._
 import spray.revolver.RevolverPlugin._
 import com.typesafe.sbt.SbtScalariform._
 import scalariform.formatter.preferences._
 import bintray.Plugin.bintrayPublishSettings
+import scoverage.ScoverageKeys._
 
 // There are advantages to using real Scala build files with SBT:
 //  - Multi-JVM testing won't work without it, for now
@@ -105,7 +109,7 @@ object JobServerBuild extends Build {
       val artifact = (outputPath in assembly in jobServerExtras).value
       val artifactTargetPath = s"/app/${artifact.name}"
       new sbtdocker.mutable.Dockerfile {
-        from("java:7-jre")
+        from(s"java:${javaVersion}")
         // Dockerfile best practices: https://docs.docker.com/articles/dockerfile_best-practices/
         expose(8090)
         expose(9999)    // for JMX
@@ -119,6 +123,7 @@ object JobServerBuild extends Build {
         copy(artifact, artifactTargetPath)
         copy(baseDirectory(_ / "bin" / "server_start.sh").value, file("app/server_start.sh"))
         copy(baseDirectory(_ / "bin" / "server_stop.sh").value, file("app/server_stop.sh"))
+        copy(baseDirectory(_ / "bin" / "setenv.sh").value, file("app/setenv.sh"))
         copy(baseDirectory(_ / "config" / "log4j-stdout.properties").value, file("app/log4j-server.properties"))
         copy(baseDirectory(_ / "config" / "docker.conf").value, file("app/docker.conf"))
         copy(baseDirectory(_ / "config" / "docker.sh").value, file("app/settings.sh"))
@@ -156,14 +161,15 @@ object JobServerBuild extends Build {
       Tags.limitSum(1, Tags.Test, Tags.Untagged))
   )
 
-  lazy val revolverSettings = Revolver.settings ++ Seq(
-    javaOptions in Revolver.reStart += jobServerLogging,
+  import spray.revolver.RevolverPlugin.autoImport._
+  lazy val revolverSettings = Seq(
+    javaOptions in reStart += jobServerLogging,
     // Give job server a bit more PermGen since it does classloading
-    javaOptions in Revolver.reStart += "-XX:MaxPermSize=256m",
-    javaOptions in Revolver.reStart += "-Djava.security.krb5.realm= -Djava.security.krb5.kdc=",
+    javaOptions in reStart += "-XX:MaxPermSize=256m",
+    javaOptions in reStart += "-Djava.security.krb5.realm= -Djava.security.krb5.kdc=",
     // This lets us add Spark back to the classpath without assembly barfing
-    fullClasspath in Revolver.reStart := (fullClasspath in Compile).value,
-    mainClass in Revolver.reStart := Some("spark.jobserver.JobServer")
+    fullClasspath in reStart := (fullClasspath in Compile).value,
+    mainClass in reStart := Some("spark.jobserver.JobServer")
   )
 
   // To add an extra jar to the classpath when doing "re-start" for quick development, set the
@@ -175,11 +181,11 @@ object JobServerBuild extends Build {
   // Create a default Scala style task to run with compiles
   lazy val runScalaStyle = taskKey[Unit]("testScalaStyle")
 
-  lazy val commonSettings = Defaults.defaultSettings ++ dirSettings ++ implicitlySettings ++ Seq(
+  lazy val commonSettings = Defaults.coreDefaultSettings ++ dirSettings ++ implicitlySettings ++ Seq(
     organization := "spark.jobserver",
     crossPaths   := true,
-    crossScalaVersions := Seq("2.10.5","2.11.6"),
-    scalaVersion := "2.10.5",
+    crossScalaVersions := Seq("2.10.6","2.11.8"),
+    scalaVersion := "2.10.6",
     publishTo    := Some(Resolver.file("Unused repo", file("target/unusedrepo"))),
 
     // scalastyleFailOnError := true,
@@ -196,6 +202,7 @@ object JobServerBuild extends Build {
     resolvers    ++= Dependencies.repos,
     libraryDependencies ++= apiDeps,
     parallelExecution in Test := false,
+
     // We need to exclude jms/jmxtools/etc because it causes undecipherable SBT errors  :(
     ivyXML :=
       <dependencies>
@@ -206,9 +213,8 @@ object JobServerBuild extends Build {
   ) ++ scalariformPrefs ++ scoverageSettings
 
   lazy val scoverageSettings = {
-    import scoverage.ScoverageSbtPlugin
     // Semicolon-separated list of regexs matching classes to exclude
-    ScoverageSbtPlugin.ScoverageKeys.coverageExcludedPackages := ".+Benchmark.*"
+    coverageExcludedPackages := ".+Benchmark.*"
   }
 
   lazy val publishSettings = bintrayPublishSettings ++ Seq(
@@ -223,7 +229,8 @@ object JobServerBuild extends Build {
       .setPreference(AlignParameters, true)
       .setPreference(AlignSingleLineCaseStatements, true)
       .setPreference(DoubleIndentClassDeclaration, true)
-      .setPreference(PreserveDanglingCloseParenthesis, false)
+      // This was deprecated.
+      //.setPreference(PreserveDanglingCloseParenthesis, false)
   )
 
   // This is here so we can easily switch back to Logback when Spark fixes its log4j dependency.

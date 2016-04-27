@@ -32,6 +32,7 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
   - [Authentication](#authentication)
 - [Deployment](#deployment)
   - [Manual steps](#manual-steps)
+  - [Context per JVM](#context-per-jvm)
     - [Configuring Spark Jobserver meta data Database backend](#configuring-spark-jobserver-meta-data-database-backend)
   - [Chef](#chef)
 - [Architecture](#architecture)
@@ -72,13 +73,14 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 - [Newsweaver](https://www.newsweaver.com)
 - [Instaclustr](http://www.instaclustr.com)
 - [SnappyData](http://www.snappydata.io)
+- [Linkfluence](http://www.linkfluence.com)
 
 ## Features
 
 - *"Spark as a Service"*: Simple REST interface (including HTTPS) for all aspects of job, context management
 - Support for Spark SQL, Hive, Streaming Contexts/jobs and custom job contexts!  See [Contexts](doc/contexts.md).
 - LDAP Auth support via Apache Shiro integration
-- Separate JVM per SparkContext for isolation
+- Separate JVM per SparkContext for isolation (EXPERIMENTAL)
 - Supports sub-second low-latency jobs via long-running job contexts
 - Start and stop job contexts for RDD sharing and low-latency jobs; change resources on restart
 - Kill running jobs via stop context and delete job
@@ -102,7 +104,8 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 | 0.5.2       | 1.3.1         |
 | 0.6.0       | 1.4.1         |
 | 0.6.1       | 1.5.2         |
-| master      | 1.6.0         |
+| 0.6.2       | 1.6.1         |
+| master      | 1.6.1         |
 
 For release notes, look in the `notes/` directory.  They should also be up on [notes.implicit.ly](http://notes.implicit.ly/search/spark-jobserver).
 
@@ -119,7 +122,7 @@ Alternatives:
 * EC2 Deploy scripts - follow the instructions in [EC2](doc/EC2.md) to spin up a Spark cluster with job server and an example application.
 * EMR Deploy instruction - follow the instruction in [EMR](doc/EMR.md)
 
-NOTE: Spark Job Server runs `SparkContext`s in their own, forked JVM process when the config option `spark.jobserver.context-per-jvm` is set to `true`.  In local development mode, this is set to false by default, while the deployment templates have this set to true for production deployment. See [Deployment](#deployment) section for more info.
+NOTE: Spark Job Server can optionally run `SparkContext`s in their own, forked JVM process when the config option `spark.jobserver.context-per-jvm` is set to `true`.  This option does not currently work for SBT/local dev mode. See [Deployment](#deployment) section for more info.
 
 ## Development mode
 
@@ -232,11 +235,11 @@ In your `build.sbt`, add this to use the job server jar:
 
         resolvers += "Job Server Bintray" at "https://dl.bintray.com/spark-jobserver/maven"
 
-        libraryDependencies += "spark.jobserver" %% "job-server-api" % "0.6.1" % "provided"
+        libraryDependencies += "spark.jobserver" %% "job-server-api" % "0.6.2" % "provided"
 
 If a SQL or Hive job/context is desired, you also want to pull in `job-server-extras`:
 
-    libraryDependencies += "spark.jobserver" %% "job-server-extras" % "0.6.1" % "provided"
+    libraryDependencies += "spark.jobserver" %% "job-server-extras" % "0.6.2" % "provided"
 
 For most use cases it's better to have the dependencies be "provided" because you don't want SBT assembly to include the whole job server jar.
 
@@ -448,9 +451,16 @@ The `server_start.sh` script uses `spark-submit` under the hood and may be passe
 
 NOTE: by default the assembly jar from `job-server-extras`, which includes support for SQLContext and HiveContext, is used.  If you face issues with all the extra dependencies, consider modifying the install scripts to invoke `sbt job-server/assembly` instead, which doesn't include the extra dependencies.
 
-NOTE: Each context is a separate process launched using spark-submit, via the included `manager_start.sh` script.
-You may want to set `deploy.manager-start-cmd` to the correct path to your start script and customize the script.
+### Context per JVM
+
+Each context can be a separate process launched using spark-submit, via the included `manager_start.sh` script, if `context-per-jvm` is set to true.
+You may want to set `deploy.manager-start-cmd` to the correct path to your start script and customize the script.  This can be especially desirable when you want to run many contexts at once, or for certain types of contexts such as StreamingContexts which really need their own processes.
+
 Also, the extra processes talk to the master HTTP process via random ports using the Akka Cluster gossip protocol.  If for some reason the separate processes causes issues, set `spark.jobserver.context-per-jvm` to `false`, which will cause the job server to use a single JVM for all contexts.
+
+Among the known issues:
+- Launched contexts do not shut down by themselves.  You need to manually kill each separate process, or do `-X DELETE /contexts/<context-name>`
+- Custom error messages are not serialized back to HTTP
 
 Log files are separated out for each context (assuming `context-per-jvm` is `true`) in their own subdirs under the `LOG_DIR` configured in `settings.sh` in the deployed directory.
 
@@ -591,12 +601,24 @@ or in the job config when using POST /jobs,
         spark.cores.max = 10
     }
 
+User impersonation for an already Kerberos authenticated user is supported via `spark.proxy.user` query param:
+  
+  POST /contexts/my-new-context?spark.proxy.user=<user-to-impersonate>
+
 To pass settings directly to the sparkConf that do not use the "spark." prefix "as-is", use the "passthrough" section.
 
     spark.context-settings {
         spark.cores.max = 10
         passthrough {
           some.custom.hadoop.config = "192.168.1.1"
+        }
+    }
+
+To add to the underlying Hadoop configuration in a Spark context, add the hadoop section to the context settings
+
+    spark.context-settings {
+        hadoop {
+            mapreduce.framework.name = "Foo"
         }
     }
 
@@ -620,6 +642,11 @@ serialized properly:
 - Array's
 - Anything that implements Product (Option, case classes) -- they will be serialized as lists
 - Maps and Seqs may contain nested values of any of the above
+- If a job result is of scala's Stream[Byte] type it will be serialised directly as a chunk encoded stream.
+  This is useful if your job result payload is large and may cause a timeout serialising as objects. Beware, this
+  will not currently work as desired with context-per-jvm=true configuration, since it would require serialising
+  Stream[_] blob between processes. For now use Stream[_] job results in context-per-jvm=false configuration, pending
+  potential future enhancements to support this in context-per-jvm=true mode.
 
 If we encounter a data type that is not supported, then the entire result will be serialized to a string.
 

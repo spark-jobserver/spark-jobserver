@@ -1,23 +1,16 @@
 package spark.jobserver
 
-import akka.actor.{Actor, Props}
 import com.typesafe.config.ConfigFactory
-import spark.jobserver.io.{JobInfo, JarInfo}
-import org.joda.time.DateTime
-import org.scalatest.{Matchers, FunSpec, BeforeAndAfterAll}
 import spray.http.StatusCodes._
-import spray.routing.HttpService
-import spray.testkit.ScalatestRouteTest
 
 
 // Tests web response codes and formatting
 // Does NOT test underlying Supervisor / JarManager functionality
 // HttpService trait is needed for the sealRoute() which wraps exception handling
 class WebApiMainRoutesSpec extends WebApiSpec {
-  import scala.collection.JavaConverters._
+  import ooyala.common.akka.web.JsonUtils._
   import spray.httpx.SprayJsonSupport._
   import spray.json.DefaultJsonProtocol._
-  import ooyala.common.akka.web.JsonUtils._
 
   val getJobStatusInfoMap = {
     Map(
@@ -131,6 +124,17 @@ class WebApiMainRoutesSpec extends WebApiSpec {
             "shiro.authentication" -> "off",
             "spark.jobserver.short-timeout" -> "3 s"
           )
+        ))
+      }
+    }
+
+    it("adhoc job with Stream result of sync route should return 200 and chunked result") {
+      val config2 = "foo.baz = booboo"
+      Post("/jobs?appName=foo.stream&classPath=com.abc.meme&sync=true", config2) ~>
+        sealRoute(routes) ~> check {
+        status should be (OK)
+        responseAs[Map[String, Any]] should be (Map(
+          ResultKey -> "1, 2, 3, 4, 5, 6"
         ))
       }
     }
@@ -265,6 +269,15 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         responseAs[Map[String, Any]] should be (
           getJobStatusInfoMap ++ Map(ResultKey -> Seq(1, 2, Map("3" -> "three"))
           )
+        )
+      }
+    }
+
+    it("should be able to chunk serialize Stream with different types to JSON") {
+      Get("/jobs/_stream") ~> sealRoute(routes) ~> check {
+        status should be (OK)
+        responseAs[Map[String, Any]] should be (
+          getJobStatusInfoMap ++ Map(ResultKey -> "1, 2, 3, 4, 5, 6, 7")
         )
       }
     }

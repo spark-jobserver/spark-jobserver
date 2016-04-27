@@ -1,19 +1,14 @@
 package spark.jobserver
 
-import akka.actor.{ ActorRef, ActorSystem, Props }
-import akka.testkit.{ ImplicitSender, TestKit }
-import org.apache.spark.{ SparkContext, SparkConf }
+import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.storage.StorageLevel
-import org.scalatest.{ FunSpecLike, FunSpec, BeforeAndAfterAll, BeforeAndAfter }
-import com.typesafe.config.Config
-import com.typesafe.config.ConfigFactory
-import spark.jobserver.CommonMessages.{ JobErroredOut, JobResult }
 import java.util.concurrent.TimeoutException
 import scala.concurrent.duration._
 import org.apache.spark.rdd.RDD
-class JobWithNamedRddsSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
 
-  private val emptyConfig = ConfigFactory.parseString("spark.jobserver.named-object-creation-timeout = 60 s")
+import com.typesafe.config.Config
+
+class JobWithNamedRddsSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
 
   val sc = new SparkContext("local[4]", getClass.getSimpleName, new SparkConf)
 
@@ -42,7 +37,7 @@ class JobWithNamedRddsSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
 
   describe("NamedRdds") {
     it("get() should return None when RDD does not exist") {
-      namedTestRdds.getNames.foreach { rddName => namedTestRdds.destroy(rddName) }
+      namedTestRdds.getNames().foreach { rddName => namedTestRdds.destroy(rddName) }
       namedTestRdds.get[Int]("No such RDD") should equal(None)
     }
 
@@ -60,7 +55,7 @@ class JobWithNamedRddsSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
 
       var rdd : Option[RDD[Int]] = None
       val thread = new Thread {
-        override def run {
+        override def run() {
           namedTestRdds.getOrElseCreate("rdd-sleep", {
             val t1 = System.currentTimeMillis()
             var x = 0d
@@ -73,7 +68,7 @@ class JobWithNamedRddsSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
           })(1.milliseconds)
         }
       }
-      thread.start
+      thread.start()
       Thread.sleep(11)
       //don't wait
       val err = intercept[TimeoutException] { namedTestRdds.get[Int]("rdd-sleep")(1.milliseconds) }
@@ -147,7 +142,7 @@ class JobWithNamedRddsSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
     }
 
     it("should include underlying exception when error occurs") {
-      def errorFunc = {
+      def errorFunc: RDD[Int] = {
         throw new IllegalArgumentException("boo!")
         sc.parallelize(Seq(1, 2))
       }
