@@ -1,14 +1,12 @@
 import scalariform.formatter.preferences._
 
-import com.typesafe.sbt.SbtScalariform._
-import sbt.Keys._
 import sbt._
-import sbtassembly.AssemblyPlugin.autoImport._
-import spray.revolver.RevolverPlugin._
+import Keys._
+import bintray.BintrayKeys._
 import com.typesafe.sbt.SbtScalariform._
-import scalariform.formatter.preferences._
-import bintray.Plugin.bintrayPublishSettings
+import sbtassembly.AssemblyPlugin.autoImport._
 import scoverage.ScoverageKeys._
+import spray.revolver.RevolverPlugin.autoImport._
 
 // There are advantages to using real Scala build files with SBT:
 //  - Multi-JVM testing won't work without it, for now
@@ -60,7 +58,7 @@ object JobServerBuild extends Build {
 
   lazy val jobServerTestJar = Project(id = "job-server-tests", base = file("job-server-tests"),
                                       settings = commonSettings ++ jobServerTestJarSettings
-                                     ) dependsOn(jobServerApi)
+                                     ) dependsOn jobServerApi
 
   lazy val jobServerApi = Project(id = "job-server-api",
                                   base = file("job-server-api"),
@@ -106,10 +104,10 @@ object JobServerBuild extends Build {
     // Make the docker task depend on the assembly task, which generates a fat JAR file
     docker <<= (docker dependsOn (assembly in jobServerExtras)),
     dockerfile in docker := {
-      val artifact = (outputPath in assembly in jobServerExtras).value
+      val artifact = (assemblyOutputPath in assembly in jobServerExtras).value
       val artifactTargetPath = s"/app/${artifact.name}"
       new sbtdocker.mutable.Dockerfile {
-        from(s"java:${javaVersion}")
+        from(s"java:$javaVersion")
         // Dockerfile best practices: https://docs.docker.com/articles/dockerfile_best-practices/
         expose(8090)
         expose(9999)    // for JMX
@@ -130,7 +128,7 @@ object JobServerBuild extends Build {
         // Including envs in Dockerfile makes it easy to override from docker command
         env("JOBSERVER_MEMORY", "1G")
         env("SPARK_HOME", "/spark")
-        env("SPARK_BUILD", s"spark-${sparkVersion}-bin-hadoop2.4")
+        env("SPARK_BUILD", s"spark-$sparkVersion-bin-hadoop2.4")
         // Use a volume to persist database between container invocations
         run("mkdir", "-p", "/database")
         runRaw("""wget http://d3kbcqa49mib13.cloudfront.net/$SPARK_BUILD.tgz && \
@@ -145,7 +143,7 @@ object JobServerBuild extends Build {
     imageNames in docker := Seq(
       sbtdocker.ImageName(namespace = Some("velvia"),
                           repository = "spark-jobserver",
-                          tag = Some(s"${version.value}.mesos-${mesosVersion.split('-')(0)}.spark-${sparkVersion}"))
+                          tag = Some(s"${version.value}.mesos-${mesosVersion.split('-')(0)}.spark-$sparkVersion"))
     )
   )
 
@@ -154,14 +152,13 @@ object JobServerBuild extends Build {
     parallelExecution in Test := false,
     publishArtifact := false,
     concurrentRestrictions := Seq(
-      Tags.limit(Tags.CPU, java.lang.Runtime.getRuntime().availableProcessors()),
+      Tags.limit(Tags.CPU, java.lang.Runtime.getRuntime.availableProcessors()),
       // limit to 1 concurrent test task, even across sub-projects
       // Note: some components of tests seem to have the "Untagged" tag rather than "Test" tag.
       // So, we limit the sum of "Test", "Untagged" tags to 1 concurrent
       Tags.limitSum(1, Tags.Test, Tags.Untagged))
   )
 
-  import spray.revolver.RevolverPlugin.autoImport._
   lazy val revolverSettings = Seq(
     javaOptions in reStart += jobServerLogging,
     // Give job server a bit more PermGen since it does classloading
@@ -187,7 +184,6 @@ object JobServerBuild extends Build {
     crossScalaVersions := Seq("2.10.6","2.11.8"),
     scalaVersion := "2.10.6",
     publishTo    := Some(Resolver.file("Unused repo", file("target/unusedrepo"))),
-
     // scalastyleFailOnError := true,
     runScalaStyle := {
       org.scalastyle.sbt.ScalastylePlugin.scalastyle.in(Compile).toTask("").value
@@ -217,20 +213,18 @@ object JobServerBuild extends Build {
     coverageExcludedPackages := ".+Benchmark.*"
   }
 
-  lazy val publishSettings = bintrayPublishSettings ++ Seq(
+  lazy val publishSettings = Seq(
     licenses += ("Apache-2.0", url("http://choosealicense.com/licenses/apache/")),
-    bintray.Keys.bintrayOrganization in bintray.Keys.bintray := Some("spark-jobserver")
+    bintrayOrganization := Some("spark-jobserver")
   )
 
   // change to scalariformSettings for auto format on compile; defaultScalariformSettings to disable
   // See https://github.com/mdr/scalariform for formatting options
-  lazy val scalariformPrefs = defaultScalariformSettings ++ Seq(
-    ScalariformKeys.preferences := FormattingPreferences()
+  lazy val scalariformPrefs = scalariformSettings ++ Seq(
+    ScalariformKeys.preferences := ScalariformKeys.preferences.value
       .setPreference(AlignParameters, true)
       .setPreference(AlignSingleLineCaseStatements, true)
       .setPreference(DoubleIndentClassDeclaration, true)
-      // This was deprecated.
-      //.setPreference(PreserveDanglingCloseParenthesis, false)
   )
 
   // This is here so we can easily switch back to Logback when Spark fixes its log4j dependency.
