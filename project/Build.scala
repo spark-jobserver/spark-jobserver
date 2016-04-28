@@ -220,8 +220,8 @@ object JobServerBuild extends Build {
 
   // change to scalariformSettings for auto format on compile; defaultScalariformSettings to disable
   // See https://github.com/mdr/scalariform for formatting options
-  lazy val scalariformPrefs = scalariformSettings ++ Seq(
-    ScalariformKeys.preferences := ScalariformKeys.preferences.value
+  lazy val scalariformPrefs = defaultScalariformSettings ++ Seq(
+    ScalariformKeys.preferences := FormattingPreferences()
       .setPreference(AlignParameters, true)
       .setPreference(AlignSingleLineCaseStatements, true)
       .setPreference(DoubleIndentClassDeclaration, true)
