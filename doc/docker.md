@@ -31,7 +31,7 @@ Similarly, to change the logging configuration, inherit from this container and 
 
 Any `spark-submit` arguments can be passed to the tail of the `docker run` command.  A very common use of this is to add custom jars to your Spark job environment.  For example, to add the Datastax Spark-Cassandra Connector to your job:
 
-    docker run -d -p 8090:8090 velvia/spark-jobserver:0.6.2.mesos-0.28.1.spark-1.6.1 --packages com.datastax.spark:spark-cassandra-connector_2.10:1.3.0-M1
+    docker run -d -p 8090:8090 velvia/spark-jobserver:0.6.2.mesos-0.28.1.spark-1.6.1 --packages com.datastax.spark:spark-cassandra-connector_2.10:1.6.1
 
 ## Database, Persistence, Logs
 
@@ -72,7 +72,7 @@ Example Marathon config, thanks to @peterklipfel:
     }
   },
   "args": [
-    "--packages", "com.datastax.spark:spark-cassandra-connector_2.10:1.4.1,com.github.sstone:amqp-client_2.10:1.5,com.rabbitmq:amqp-client:3.2.1, com.typesafe.akka:akka-actor_2.10:2.3.11,com.github.nscala-time:nscala-time_2.10:1.6.0,com.fasterxml.jackson.core:jackson-core:2.2.2, com.fasterxml.jackson.core:jackson-databind:2.2.2,com.fasterxml.jackson.module:jackson-module-scala_2.10:2.2.2,org.scalaj:scalaj-http_2.10:1.1.4,org.elasticsearch:elasticsearch-spark_2.10:2.1.0.Beta3,spark.jobserver:job-server-api:0.6.2,spark.jobserver:job-server-extras:0.6.2"
+    "--packages", "com.datastax.spark:spark-cassandra-connector_2.10:1.6.1,com.github.sstone:amqp-client_2.10:1.5,com.rabbitmq:amqp-client:3.2.1, com.typesafe.akka:akka-actor_2.10:2.3.11,com.github.nscala-time:nscala-time_2.10:1.6.0,com.fasterxml.jackson.core:jackson-core:2.2.2, com.fasterxml.jackson.core:jackson-databind:2.2.2,com.fasterxml.jackson.module:jackson-module-scala_2.10:2.2.2,org.scalaj:scalaj-http_2.10:1.1.4,org.elasticsearch:elasticsearch-spark_2.10:2.1.0.Beta3,spark.jobserver:job-server-api:0.6.2,spark.jobserver:job-server-extras:0.6.2"
   ],
   "env": {
     "SPARK_MASTER": "mesos.ourcluster.internal:5050"
