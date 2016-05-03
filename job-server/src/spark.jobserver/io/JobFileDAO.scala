@@ -2,9 +2,12 @@ package spark.jobserver.io
 
 import com.typesafe.config._
 import java.io._
+
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import scala.collection.mutable
+import scala.concurrent.Future
+import scala.concurrent.ExecutionContext.Implicits.global
 
 class JobFileDAO(config: Config) extends JobDAO {
   private val logger = LoggerFactory.getLogger(getClass)
@@ -97,7 +100,7 @@ class JobFileDAO(config: Config) extends JobDAO {
     val outFile = new File(rootDir, createJarName(appName, uploadTime) + ".jar")
     val bos = new BufferedOutputStream(new FileOutputStream(outFile))
     try {
-      logger.debug("Writing {} bytes to file {}", jarBytes.size, outFile.getPath)
+      logger.debug("Writing {} bytes to file {}", jarBytes.length, outFile.getPath)
       bos.write(jarBytes)
       bos.flush()
     } finally {
@@ -126,10 +129,12 @@ class JobFileDAO(config: Config) extends JobDAO {
     }
   }
 
-  def getApps: Map[String, DateTime] = apps.map {
-    case (appName, uploadTimes) =>
-      appName -> uploadTimes.head
+  def getApps: Future[Map[String, DateTime]] = Future {
+    apps.map {
+      case (appName, uploadTimes) =>
+        appName -> uploadTimes.head
     }.toMap
+  }
 
   override def retrieveJarFile(appName: String, uploadTime: DateTime): String =
     new File(rootDir, createJarName(appName, uploadTime) + ".jar").getAbsolutePath
@@ -168,17 +173,20 @@ class JobFileDAO(config: Config) extends JobDAO {
     Some(new DateTime(in.readLong)),
     readError(in))
 
-  override def getJobInfo(jobId: String): Option[JobInfo] = jobs.get(jobId)
+  override def getJobInfo(jobId: String): Future[Option[JobInfo]] = Future {
+    jobs.get(jobId)
+  }
 
-  override def getJobInfos(limit: Int): Seq[JobInfo] =
-    jobs.values.toSeq.sortBy(- _.startTime.getMillis).take(limit)
+  override def getJobInfos(limit: Int): Future[Seq[JobInfo]] = Future {
+    jobs.values.toSeq.sortBy(-_.startTime.getMillis).take(limit)
+  }
 
   override def saveJobConfig(jobId: String, jobConfig: Config) {
     writeJobConfig(jobConfigsOutputStream, jobId, jobConfig)
     configs(jobId) = jobConfig
   }
 
-  override def getJobConfigs: Map[String, Config] = configs.toMap
+  override def getJobConfigs: Future[Map[String, Config]] = Future { configs.toMap }
 
   private def writeJobConfig(out: DataOutputStream, jobId: String, jobConfig: Config) {
     out.writeUTF(jobId)
