@@ -6,8 +6,10 @@ import org.apache.spark.sql.hive.HiveContext
 import spark.jobserver.{api, ContextLike, SparkHiveJob}
 import spark.jobserver.util.SparkJobUtils
 
-class HiveContextFactory extends SparkContextFactory {
+class HiveContextFactory extends ScalaContextFactory {
   type C = HiveContext with ContextLike
+
+  def isValidJob(job: api.SparkJobBase): Boolean = job.isInstanceOf[SparkHiveJob]
 
   def makeContext(sparkConf: SparkConf, config: Config,  contextName: String): C = {
     contextFactory(sparkConf)
@@ -19,6 +21,5 @@ class HiveContextFactory extends SparkContextFactory {
 }
 
 private[jobserver] trait HiveContextLike extends ContextLike {
-  def isValidJob(job: api.SparkJobBase): Boolean = job.isInstanceOf[SparkHiveJob]
   def stop() { this.sparkContext.stop() }
 }

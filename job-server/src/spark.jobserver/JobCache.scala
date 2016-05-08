@@ -11,16 +11,15 @@ import spark.jobserver.util.{ContextURLClassLoader, JarUtils, LRUCache}
 
 import scala.util.{Success, Failure}
 
-case class JobJarInfo(constructor: () => spark.jobserver.api.SparkJobBase,
-                      className: String,
-                      jarFilePath: String)
-
 /**
  * A cache for SparkJob classes.  A lot of times jobs are run repeatedly, and especially for low-latency
  * jobs, why retrieve the jar and load it every single time?
  */
 
-class JobCache(maxEntries: Int, dao: ActorRef, sparkContext: SparkContext, loader: ContextURLClassLoader) {
+class JobCacheImpl(maxEntries: Int,
+                   dao: ActorRef,
+                   sparkContext: SparkContext,
+                   loader: ContextURLClassLoader) extends JobCache {
   import scala.concurrent.duration._
 
   private val cache = new LRUCache[(String, DateTime, String), JobJarInfo](maxEntries)

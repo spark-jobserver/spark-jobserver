@@ -27,7 +27,7 @@ object Dependencies {
     "io.spray" %% "spray-routing" % spray,
     "io.spray" %% "spray-client" % spray,
     yammerDeps
-  ) ++ jodaDeps
+  )
 
   val javaVersion = sys.env.getOrElse("JAVA_VERSION", "7-jre")
 
@@ -70,7 +70,7 @@ object Dependencies {
      "org.apache.shiro" % "shiro-core" % shiro
   )
 
-  lazy val serverDeps = apiDeps ++ jodaDeps
+  lazy val serverDeps = apiDeps
   lazy val apiDeps = sparkDeps ++ miscDeps :+ typeSafeConfigDeps :+ scalaTestDep
 
   val repos = Seq(
