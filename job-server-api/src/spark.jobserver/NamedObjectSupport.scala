@@ -138,7 +138,7 @@ trait NamedObjects {
   def getNames(): Iterable[String]
 }
 
-trait NamedObjectSupport { self: SparkJob =>
+trait NamedObjectSupport { self: SparkJobBase =>
 
   // Note: the JobManagerActor sets the correct NamedObjects instance here before before running our job.
   val namedObjectsPrivate: AtomicReference[NamedObjects] =
