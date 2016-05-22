@@ -167,8 +167,7 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
     it("should only show visible contexts to user") {
       val testRoutes = routesWithProxyUser
       val authorization2 = new Authorization(new BasicHttpCredentials("darkhelmet", "ludicrousspeed"))
-      Put("/contexts?reset=reboot").withHeaders(authorization) ~> sealRoute(testRoutes)
-
+      addedContexts.clear
       //the parameter SparkJobUtils.SPARK_PROXY_USER_PARAM + "=" + USER_NAME should have no effect
       Post("/contexts/one?" + SparkJobUtils.SPARK_PROXY_USER_PARAM + "=" + USER_NAME).withHeaders(authorization) ~>
         sealRoute(testRoutes) ~> check {
@@ -183,7 +182,7 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
         sealRoute(testRoutes) ~> check {
           status should be(OK)
         }
-      while (!addedContexts.contains(USER_NAME+"_three")) {
+      while (!addedContexts.contains(USER_NAME + "_one") && !addedContexts.contains(USER_NAME + "_two") && !addedContexts.contains(USER_NAME + "_three")) {
         Thread.sleep(3)
       }
 
@@ -199,11 +198,13 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
         responseAs[Seq[String]] should be(Seq())
       }
       //clear
-      Put("/contexts?reset=reboot").withHeaders(authorization) ~> sealRoute(testRoutes)
+      addedContexts.clear
     }
 
     it("should allow user name prefixes in contexts") {
       val testRoutes = routesWithProxyUser
+      //clear
+      addedContexts.clear
       //add a context that has the user name as a prefix
       Post("/contexts/" + USER_NAME + "_c").withHeaders(authorization) ~>
         sealRoute(testRoutes) ~> check {
@@ -220,12 +221,17 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
           status should be(OK)
         }
 
+      while (!addedContexts.contains(USER_NAME + "_c") &&
+        !addedContexts.contains(USER_NAME + "_" + USER_NAME + "_c") &&
+        !addedContexts.contains(USER_NAME + "_" + USER_NAME + "_c2")) {
+        Thread.sleep(3)
+      }
+
       Get("/contexts/").withHeaders(authorization) ~> sealRoute(testRoutes) ~> check {
         status should be(OK)
         responseAs[Set[String]] should be(Set("c", USER_NAME + "_c", USER_NAME + "_c2"))
       }
-      //clear
-      Put("/contexts?reset=reboot").withHeaders(authorization) ~> sealRoute(testRoutes)
+      addedContexts.clear
     }
 
     //test what happens when user uses the proxy user param context with the same name?
@@ -246,8 +252,7 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
         sealRoute(routesWithProxyUser) ~> check {
           status should be(BadRequest)
         }
-      //clear
-      Put("/contexts?reset=reboot").withHeaders(authorization) ~> sealRoute(routesWithProxyUser)
+      addedContexts.clear
     }
 
     it("should allow contexts of the same name by different users") {
@@ -277,8 +282,7 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
         status should be(OK)
         responseAs[Set[String]] should be(Set(cName))
       }
-      //clear
-      Put("/contexts?reset=reboot").withHeaders(authorization) ~> sealRoute(routesWithProxyUser)
+      addedContexts.clear
     }
 
     it("should not allow user with invalid password") {
@@ -323,8 +327,7 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
     }
 
     it("should allow valid user to delete context with proper impersonation") {
-      //clear
-      Put("/contexts?reset=reboot").withHeaders(authorization) ~> sealRoute(routesWithProxyUser)
+      addedContexts.clear
       Post("/contexts/xxx?" + SparkJobUtils.SPARK_PROXY_USER_PARAM + "=" + USER_NAME).withHeaders(authorization) ~>
         sealRoute(routesWithProxyUser) ~> check {
           status should be(OK)
