@@ -32,7 +32,8 @@ class NamedObjectsJobSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
     ConfigFactory.parseString("spark.jobserver.named-object-creation-timeout = 60 s, " +
         NamedObjectsTestJobConfig.CREATE_DF + " = " + createDF + ", " +
         NamedObjectsTestJobConfig.CREATE_RDD + " = " + createRDD + ", " +
-        NamedObjectsTestJobConfig.CREATE_BROADCAST + " = " + createBroadcast)
+        NamedObjectsTestJobConfig.CREATE_BROADCAST + " = " + createBroadcast + ", "+
+        "max-jobs-per-context = 8")
   }
   
   private def getDeleteConfig(names: List[String]) : Config = {
