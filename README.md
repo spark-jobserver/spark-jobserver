@@ -605,6 +605,8 @@ or in the job config when using POST /jobs,
 User impersonation for an already Kerberos authenticated user is supported via `spark.proxy.user` query param:
 
   POST /contexts/my-new-context?spark.proxy.user=<user-to-impersonate>
+  
+However, whenever the flag `shiro.use-as-proxy-user` is set to `on` (and authentication is `on`) then this parameter is ignored and the name of the authenticated is *always* used as the value of the `spark.proxy.user` parameter when creating contexts. 
 
 To pass settings directly to the sparkConf that do not use the "spark." prefix "as-is", use the "passthrough" section.
 

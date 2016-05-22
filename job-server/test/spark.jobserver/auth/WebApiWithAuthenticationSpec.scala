@@ -3,6 +3,7 @@ package spark.jobserver.auth
 import akka.actor.{ Actor, Props }
 import com.typesafe.config.{ ConfigFactory, ConfigValueFactory }
 import spark.jobserver._
+import spark.jobserver.util.SparkJobUtils
 import spark.jobserver.io.{ JobInfo, JarInfo }
 import org.joda.time.DateTime
 import org.scalatest.{ Matchers, FunSpec, BeforeAndAfterAll }
@@ -17,6 +18,7 @@ import org.apache.shiro.mgt.SecurityManager
 import org.apache.shiro.realm.Realm
 import org.apache.shiro.SecurityUtils
 import org.apache.shiro.config.Ini
+import scala.collection.mutable.SynchronizedSet
 
 // Tests authorization only, actual responses are tested elsewhere
 // Does NOT test underlying Supervisor / JarManager functionality
@@ -51,12 +53,11 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
   // for actors declared as inner classes we need to pass this as first arg
   private val dummyActor = system.actorOf(Props(classOf[DummyActor], this))
 
-  private def routesWithTimeout(authTimeout: String): Route = {
+  private def routesWithTimeout(useAsProxyUser: Boolean, authTimeout: String): Route = {
     val testConfig = config.withValue("shiro.authentication-timeout",
-                                      ConfigValueFactory.fromAnyRef(authTimeout))
+      ConfigValueFactory.fromAnyRef(authTimeout)).withValue("shiro.use-as-proxy-user", ConfigValueFactory.fromAnyRef(useAsProxyUser))
     val api = new WebApi(system, testConfig, dummyPort, dummyActor, dummyActor, dummyActor, dummyActor) {
       override def initSecurityManager() {
-
         val ini = {
           val tmp = new Ini()
           tmp.load(SJSAuthenticatorSpec.DummyIniConfig)
@@ -71,15 +72,19 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
     api.myRoutes
   }
 
-  private val routes = routesWithTimeout("1 s")
+  private val routesWithProxyUser = routesWithTimeout(true, "1 s")
+  private val routesWithoutProxyUser = routesWithTimeout(false, "1 s")
 
+  private val USER_NAME = "presidentskroob"
   // set to some valid user
-  private val authorization = new Authorization(new BasicHttpCredentials("presidentskroob", "12345"))
-  private val authorizationInvalidPassword = new Authorization(new BasicHttpCredentials("presidentskroob", "xxx"))
+  private val authorization = new Authorization(new BasicHttpCredentials(USER_NAME, "12345"))
+  private val authorizationInvalidPassword = new Authorization(new BasicHttpCredentials(USER_NAME, "xxx"))
   private val authorizationUnknownUser = new Authorization(new BasicHttpCredentials("whoami", "xxx"))
   private val dt = DateTime.parse("2013-05-29T00Z")
   private val jobInfo = JobInfo("foo-1", "context", JarInfo("demo", dt), "com.abc.meme", dt, None, None)
   private val ResultKey = "result"
+
+  private val addedContexts = new scala.collection.mutable.HashSet[String] with SynchronizedSet[String]
 
   class DummyActor extends Actor {
     import CommonMessages._
@@ -88,25 +93,41 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
       case ListJars                       => sender ! Map()
       case GetJobStatus(id)               => sender ! jobInfo
       case GetJobResult(id)               => sender ! JobResult(id, id + "!!!")
-      case ContextSupervisor.ListContexts => sender ! Seq("context1", "context2")
+      case ContextSupervisor.ListContexts => sender ! addedContexts.toSeq
+      case ContextSupervisor.AddContext(name, _) =>
+        if (addedContexts.contains(name)) {
+          sender ! ContextSupervisor.ContextAlreadyExists
+        } else {
+          addedContexts.add(name)
+          sender ! ContextSupervisor.ContextInitialized
+        }
+      case ContextSupervisor.StopContext(name) =>
+        addedContexts.remove(name)
+        sender ! ContextSupervisor.ContextStopped
+      case ContextSupervisor.AddContextsFromConfig =>
+        sender ! "OK"
+      case m =>
+        //dev support when adding new test cases:
+        println("Unhandled message: " + m)
+        sender ! m.toString
     }
   }
 
   describe("jars routes") {
     it("should allow user with valid authorization") {
-      Get("/jars").withHeaders(authorization) ~> sealRoute(routes) ~> check {
+      Get("/jars").withHeaders(authorization) ~> sealRoute(routesWithProxyUser) ~> check {
         status should be(OK)
       }
     }
 
     it("should not allow user with invalid password") {
-      Post("/jars/foobar", Array[Byte](0, 1, 2)).withHeaders(authorizationInvalidPassword) ~> sealRoute(routes) ~> check {
+      Post("/jars/foobar", Array[Byte](0, 1, 2)).withHeaders(authorizationInvalidPassword) ~> sealRoute(routesWithProxyUser) ~> check {
         status should be(Unauthorized)
       }
     }
 
     it("should not allow unknown user") {
-      Get("/jars").withHeaders(authorizationUnknownUser) ~> sealRoute(routes) ~> check {
+      Get("/jars").withHeaders(authorizationUnknownUser) ~> sealRoute(routesWithProxyUser) ~> check {
         status should be(Unauthorized)
       }
     }
@@ -115,7 +136,7 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
   describe("/jobs routes") {
     it("should allow user with valid authorization") {
       Get("/jobs/foobar").withHeaders(authorization) ~>
-        sealRoute(routes) ~> check {
+        sealRoute(routesWithProxyUser) ~> check {
           status should be(OK)
         }
     }
@@ -123,13 +144,13 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
     it("should not allow user with invalid password") {
       val config2 = "foo.baz = booboo"
       Post("/jobs?appName=foo&classPath=com.abc.meme&context=one&sync=true", config2).withHeaders(authorizationInvalidPassword) ~>
-        sealRoute(routes) ~> check {
+        sealRoute(routesWithProxyUser) ~> check {
           status should be(Unauthorized)
         }
     }
 
     it("should not allow unknown user") {
-      Delete("/jobs/job_to_kill").withHeaders(authorizationUnknownUser) ~> sealRoute(routes) ~> check {
+      Delete("/jobs/job_to_kill").withHeaders(authorizationUnknownUser) ~> sealRoute(routesWithProxyUser) ~> check {
         status should be(Unauthorized)
       }
     }
@@ -138,21 +159,187 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
   describe("context routes") {
     it("should allow user with valid authorization") {
       Get("/contexts").withHeaders(authorization) ~>
-        sealRoute(routes) ~> check {
+        sealRoute(routesWithProxyUser) ~> check {
           status should be(OK)
         }
     }
 
+    it("should only show visible contexts to user") {
+      val testRoutes = routesWithProxyUser
+      val authorization2 = new Authorization(new BasicHttpCredentials("darkhelmet", "ludicrousspeed"))
+      Put("/contexts?reset=reboot").withHeaders(authorization) ~> sealRoute(testRoutes)
+
+      //the parameter SparkJobUtils.SPARK_PROXY_USER_PARAM + "=" + USER_NAME should have no effect
+      Post("/contexts/one?" + SparkJobUtils.SPARK_PROXY_USER_PARAM + "=" + USER_NAME).withHeaders(authorization) ~>
+        sealRoute(testRoutes) ~> check {
+          status should be(OK)
+        }
+      Post("/contexts/two").withHeaders(authorization) ~>
+        sealRoute(testRoutes) ~> check {
+          status should be(OK)
+        }
+      //again, proxy user param should have no effect
+      Post("/contexts/three?" + SparkJobUtils.SPARK_PROXY_USER_PARAM + "=XXX").withHeaders(authorization) ~>
+        sealRoute(testRoutes) ~> check {
+          status should be(OK)
+        }
+      //this user should see both contexts
+      Get("/contexts/").withHeaders(authorization) ~> sealRoute(testRoutes) ~> check {
+        status should be(OK)
+        responseAs[Set[String]] should be(Set("one", "two", "three"))
+      }
+
+      //another user should not see any contexts
+      Get("/contexts/").withHeaders(authorization2) ~> sealRoute(testRoutes) ~> check {
+        status should be(OK)
+        responseAs[Seq[String]] should be(Seq())
+      }
+      //clear
+      Put("/contexts?reset=reboot").withHeaders(authorization) ~> sealRoute(testRoutes)
+    }
+
+    it("should allow user name prefixes in contexts") {
+      val testRoutes = routesWithProxyUser
+      //add a context that has the user name as a prefix
+      Post("/contexts/" + USER_NAME + "_c").withHeaders(authorization) ~>
+        sealRoute(testRoutes) ~> check {
+          status should be(OK)
+        }
+      //add same context without the user name prefix
+      Post("/contexts/" + "c").withHeaders(authorization) ~>
+        sealRoute(testRoutes) ~> check {
+          status should be(OK)
+        }
+      //add an impersonating contexts that already has the user name as a prefix
+      Post("/contexts/" + USER_NAME + "_c2?" + SparkJobUtils.SPARK_PROXY_USER_PARAM + "=" + USER_NAME).withHeaders(authorization) ~>
+        sealRoute(testRoutes) ~> check {
+          status should be(OK)
+        }
+
+      Get("/contexts/").withHeaders(authorization) ~> sealRoute(testRoutes) ~> check {
+        status should be(OK)
+        responseAs[Set[String]] should be(Set("c", USER_NAME + "_c", USER_NAME + "_c2"))
+      }
+      //clear
+      Put("/contexts?reset=reboot").withHeaders(authorization) ~> sealRoute(testRoutes)
+    }
+
+    //test what happens when user uses the proxy user param context with the same name?
+    it("should ignore proxy user param") {
+      val cName = "Z"
+      Post("/contexts/" + cName + "?" + SparkJobUtils.SPARK_PROXY_USER_PARAM + "=" + USER_NAME).withHeaders(authorization) ~>
+        sealRoute(routesWithProxyUser) ~> check {
+          status should be(OK)
+        }
+      Thread.sleep(5)
+      addedContexts.contains(USER_NAME + "_" + cName) should equal(true)
+      Post("/contexts/" + cName).withHeaders(authorization) ~>
+        sealRoute(routesWithProxyUser) ~> check {
+          status should be(BadRequest)
+        }
+      //another proxy user should also not work
+      Post("/contexts/" + cName + "?" + SparkJobUtils.SPARK_PROXY_USER_PARAM + "=XYZ").withHeaders(authorization) ~>
+        sealRoute(routesWithProxyUser) ~> check {
+          status should be(BadRequest)
+        }
+      //clear
+      Put("/contexts?reset=reboot").withHeaders(authorization) ~> sealRoute(routesWithProxyUser)
+    }
+
+    it("should allow contexts of the same name by different users") {
+      val cName = "X"
+      Post("/contexts/" + cName + "?" + SparkJobUtils.SPARK_PROXY_USER_PARAM + "=" + USER_NAME).withHeaders(authorization) ~>
+        sealRoute(routesWithProxyUser) ~> check {
+          status should be(OK)
+        }
+      Thread.sleep(5)
+      Get("/contexts/").withHeaders(authorization) ~> sealRoute(routesWithProxyUser) ~> check {
+        status should be(OK)
+        responseAs[Set[String]] should be(Set(cName))
+      }
+
+      val authorization2 = new Authorization(new BasicHttpCredentials("darkhelmet", "ludicrousspeed"))
+      Post("/contexts/" + cName).withHeaders(authorization2) ~>
+        sealRoute(routesWithProxyUser) ~> check {
+          status should be(OK)
+        }
+
+      Thread.sleep(1)
+      Get("/contexts/").withHeaders(authorization) ~> sealRoute(routesWithProxyUser) ~> check {
+        status should be(OK)
+        responseAs[Set[String]] should be(Set(cName))
+      }
+      Get("/contexts/").withHeaders(authorization2) ~> sealRoute(routesWithProxyUser) ~> check {
+        status should be(OK)
+        responseAs[Set[String]] should be(Set(cName))
+      }
+      //clear
+      Put("/contexts?reset=reboot").withHeaders(authorization) ~> sealRoute(routesWithProxyUser)
+    }
+
     it("should not allow user with invalid password") {
       Post("/contexts/one").withHeaders(authorizationInvalidPassword) ~>
-        sealRoute(routes) ~> check {
+        sealRoute(routesWithProxyUser) ~> check {
           status should be(Unauthorized)
         }
     }
 
+    it("should allow user with valid authorization to impersonate herself") {
+      Post("/contexts/validImpersonation?" + SparkJobUtils.SPARK_PROXY_USER_PARAM + "=" + USER_NAME).withHeaders(authorization) ~>
+        sealRoute(routesWithoutProxyUser) ~> check {
+          status should be(OK)
+        }
+      Delete("/contexts/validImpersonation").withHeaders(authorization) ~> sealRoute(routesWithoutProxyUser) ~> check {
+        status should be(OK)
+      }
+    }
+
+    it("should allow user with valid authorization to impersonate another user when flag is off") {
+      val cName = "who"
+      Post("/contexts/" + cName + "?" + SparkJobUtils.SPARK_PROXY_USER_PARAM + "=XYZ").withHeaders(authorization) ~>
+        sealRoute(routesWithoutProxyUser) ~> check {
+          status should be(OK)
+        }
+      //any user should be able to see this context
+      val authorization2 = new Authorization(new BasicHttpCredentials("darkhelmet", "ludicrousspeed"))
+      Get("/contexts/").withHeaders(authorization2) ~> sealRoute(routesWithoutProxyUser) ~> check {
+        status should be(OK)
+        responseAs[Set[String]].contains(cName) should be(true)
+      }
+      Get("/contexts/").withHeaders(authorization) ~> sealRoute(routesWithoutProxyUser) ~> check {
+        status should be(OK)
+        responseAs[Set[String]].contains(cName) should be(true)
+      }
+    }
+
     it("should not allow unknown user") {
-      Delete("/contexts/xxx").withHeaders(authorizationUnknownUser) ~> sealRoute(routes) ~> check {
+      Delete("/contexts/xxx").withHeaders(authorizationUnknownUser) ~> sealRoute(routesWithProxyUser) ~> check {
         status should be(Unauthorized)
+      }
+    }
+
+    it("should allow valid user to delete context with proper impersonation") {
+      //clear
+      Put("/contexts?reset=reboot").withHeaders(authorization) ~> sealRoute(routesWithProxyUser)
+      Post("/contexts/xxx?" + SparkJobUtils.SPARK_PROXY_USER_PARAM + "=" + USER_NAME).withHeaders(authorization) ~>
+        sealRoute(routesWithProxyUser) ~> check {
+          status should be(OK)
+        }
+      
+      while (!addedContexts.contains(USER_NAME + "_xxx")) {
+        Thread.sleep(3)
+      }
+      Get("/contexts/").withHeaders(authorization) ~> sealRoute(routesWithProxyUser) ~> check {
+        status should be(OK)
+        responseAs[Set[String]] should be(Set("xxx"))
+      }
+      Delete("/contexts/xxx").withHeaders(authorization) ~>
+        sealRoute(routesWithProxyUser) ~> check {
+          status should be(OK)
+        }
+      Get("/contexts/").withHeaders(authorization) ~> sealRoute(routesWithProxyUser) ~> check {
+        status should be(OK)
+        responseAs[Set[String]] should be(Set())
       }
     }
   }
@@ -160,21 +347,21 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
   describe("routes with timeout") {
     ignore("jobs should not allow user with valid authorization when timeout") {
       Get("/jobs/foobar").withHeaders(authorization) ~>
-        sealRoute(routesWithTimeout("0 s")) ~> check {
+        sealRoute(routesWithTimeout(true, "0 s")) ~> check {
           status should be(InternalServerError)
         }
     }
 
     it("jars should not allow user with valid authorization when timeout") {
       Get("/jars").withHeaders(authorization) ~>
-        sealRoute(routesWithTimeout("0 s")) ~> check {
+        sealRoute(routesWithTimeout(false, "0 s")) ~> check {
           status should be(InternalServerError)
         }
     }
 
     it("contexts should not allow user with valid authorization when timeout") {
       Get("/contexts").withHeaders(authorization) ~>
-        sealRoute(routesWithTimeout("0 s")) ~> check {
+        sealRoute(routesWithTimeout(true, "0 s")) ~> check {
           status should be(InternalServerError)
         }
     }
