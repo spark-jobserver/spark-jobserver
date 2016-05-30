@@ -82,7 +82,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
       }
 
     case ActorIdentity(memberActors, actorRefOpt) =>
-      actorRefOpt.map { actorRef =>
+      actorRefOpt.foreach{ actorRef =>
         val actorName = actorRef.path.name
         if (actorName.startsWith("jobManager")) {
           logger.info("Received identify response, attempting to initialize context at {}", memberActors)
@@ -92,7 +92,6 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
            }).getOrElse({
             logger.warn("No initialization or callback found for jobManager actor {}", actorRef.path)
             actorRef ! PoisonPill
-
           })
         }
       }
