@@ -36,6 +36,8 @@ object WebApi {
   val ResultKeyEndBytes = "}".getBytes
   val ResultKeyBytes = ("\"" + ResultKey + "\":").getBytes
 
+  val NameContextDelimiter = "_"
+
   def badRequest(ctx: RequestContext, msg: String) {
     ctx.complete(StatusCodes.BadRequest, errMap(msg))
   }
@@ -534,6 +536,12 @@ class WebApi(system: ActorSystem,
   override def timeoutRoute: Route =
     complete(500, errMap("Request timed out. Try using the /jobs/<jobID>, /jobs APIs to get status/results"))
 
+  def userNamePrefix(authInfo: AuthInfo) : String = {
+    authInfo.toString.replaceAll(NameContextDelimiter,
+                                 NameContextDelimiter + NameContextDelimiter) +
+        NameContextDelimiter
+  }
+
   def determineProxyUser(aConfig: Config,
                          authInfo: AuthInfo,
                          contextName: String): (String, Config) = {
@@ -541,7 +549,7 @@ class WebApi(system: ActorSystem,
       //proxy-user-param is ignored and the authenticated user name is used
       val config = aConfig.withValue(SparkJobUtils.SPARK_PROXY_USER_PARAM,
         ConfigValueFactory.fromAnyRef(authInfo.toString))
-      (authInfo.toString + "_" + contextName, config)
+      (userNamePrefix(authInfo) + contextName, config)
     } else {
       (contextName, aConfig)
     }
@@ -549,16 +557,10 @@ class WebApi(system: ActorSystem,
 
   def removeProxyUserPrefix(authInfo: AuthInfo, contextNames: Seq[String]): Seq[String] = {
     if (config.getBoolean("shiro.authentication") && config.getBoolean("shiro.use-as-proxy-user")) {
-      val userNamePrefix = authInfo.toString + "_"
-      contextNames map { cName =>
-        {
-          if (cName.startsWith(userNamePrefix)) {
-            Some(cName.substring(userNamePrefix.length))
-          } else {
-            None
-          }
-        }
-      } filter (_.isDefined) map (_.get)
+      val RegExPrefix = ("^" + userNamePrefix(authInfo) + "([^_]+.*)").r
+      contextNames collect {
+        case RegExPrefix(cName) => cName
+      }
     } else {
       contextNames
     }

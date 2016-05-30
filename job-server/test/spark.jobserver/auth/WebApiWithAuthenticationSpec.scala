@@ -76,6 +76,8 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
   private val routesWithoutProxyUser = routesWithTimeout(false, "1 s")
 
   private val USER_NAME = "presidentskroob"
+  private val USER_NAME_2 = USER_NAME + WebApi.NameContextDelimiter + "2"
+
   // set to some valid user
   private val authorization = new Authorization(new BasicHttpCredentials(USER_NAME, "12345"))
   private val authorizationInvalidPassword = new Authorization(new BasicHttpCredentials(USER_NAME, "xxx"))
@@ -108,7 +110,7 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
         sender ! "OK"
       case m =>
         //dev support when adding new test cases:
-        println("Unhandled message: " + m)
+        sys.error("Unhandled message: " + m)
         sender ! m.toString
     }
   }
@@ -166,7 +168,7 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
 
     it("should only show visible contexts to user") {
       val testRoutes = routesWithProxyUser
-      val authorization2 = new Authorization(new BasicHttpCredentials("darkhelmet", "ludicrousspeed"))
+      val authorization2 = new Authorization(new BasicHttpCredentials(USER_NAME_2, "ludicrousspeed"))
       addedContexts.clear
       //the parameter SparkJobUtils.SPARK_PROXY_USER_PARAM + "=" + USER_NAME should have no effect
       Post("/contexts/one?" + SparkJobUtils.SPARK_PROXY_USER_PARAM + "=" + USER_NAME).withHeaders(authorization) ~>
@@ -221,15 +223,47 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
           status should be(OK)
         }
 
-      while (!addedContexts.contains(USER_NAME + "_c") &&
-        !addedContexts.contains(USER_NAME + "_" + USER_NAME + "_c") &&
-        !addedContexts.contains(USER_NAME + "_" + USER_NAME + "_c2")) {
+      while (!addedContexts.contains(USER_NAME + WebApi.NameContextDelimiter  + "c") &&
+        !addedContexts.contains(USER_NAME + WebApi.NameContextDelimiter + USER_NAME + "_c") &&
+        !addedContexts.contains(USER_NAME + WebApi.NameContextDelimiter + USER_NAME + "_c2")) {
         Thread.sleep(3)
       }
 
       Get("/contexts/").withHeaders(authorization) ~> sealRoute(testRoutes) ~> check {
         status should be(OK)
         responseAs[Set[String]] should be(Set("c", USER_NAME + "_c", USER_NAME + "_c2"))
+      }
+      addedContexts.clear
+    }
+
+    it("should allow user names that contain prefixes") {
+      val testRoutes = routesWithProxyUser
+      //clear
+      addedContexts.clear
+      //add some context as USER_NAME
+      Post("/contexts/c1").withHeaders(authorization) ~>
+        sealRoute(testRoutes) ~> check {
+          status should be(OK)
+        }
+      //add another context as USER_NAME_2
+      val authorization2 = new Authorization(new BasicHttpCredentials(USER_NAME_2, "ludicrousspeed"))
+      Post("/contexts/c2").withHeaders(authorization2) ~>
+        sealRoute(testRoutes) ~> check {
+          status should be(OK)
+        }
+
+      while (!addedContexts.contains(USER_NAME + WebApi.NameContextDelimiter + "c1") &&
+        !addedContexts.contains(USER_NAME + WebApi.NameContextDelimiter + WebApi.NameContextDelimiter + "2" + WebApi.NameContextDelimiter + "c2")) {
+        Thread.sleep(3)
+      }
+
+      Get("/contexts/").withHeaders(authorization) ~> sealRoute(testRoutes) ~> check {
+        status should be(OK)
+        responseAs[Set[String]] should be(Set("c1"))
+      }
+      Get("/contexts/").withHeaders(authorization2) ~> sealRoute(testRoutes) ~> check {
+        status should be(OK)
+        responseAs[Set[String]] should be(Set("c2"))
       }
       addedContexts.clear
     }
@@ -242,7 +276,7 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
           status should be(OK)
         }
       Thread.sleep(5)
-      addedContexts.contains(USER_NAME + "_" + cName) should equal(true)
+      addedContexts.contains(USER_NAME + WebApi.NameContextDelimiter + cName) should equal(true)
       Post("/contexts/" + cName).withHeaders(authorization) ~>
         sealRoute(routesWithProxyUser) ~> check {
           status should be(BadRequest)
@@ -267,7 +301,7 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
         responseAs[Set[String]] should be(Set(cName))
       }
 
-      val authorization2 = new Authorization(new BasicHttpCredentials("darkhelmet", "ludicrousspeed"))
+      val authorization2 = new Authorization(new BasicHttpCredentials(USER_NAME_2, "ludicrousspeed"))
       Post("/contexts/" + cName).withHeaders(authorization2) ~>
         sealRoute(routesWithProxyUser) ~> check {
           status should be(OK)
@@ -309,7 +343,7 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
           status should be(OK)
         }
       //any user should be able to see this context
-      val authorization2 = new Authorization(new BasicHttpCredentials("darkhelmet", "ludicrousspeed"))
+      val authorization2 = new Authorization(new BasicHttpCredentials(USER_NAME_2, "ludicrousspeed"))
       Get("/contexts/").withHeaders(authorization2) ~> sealRoute(routesWithoutProxyUser) ~> check {
         status should be(OK)
         responseAs[Set[String]].contains(cName) should be(true)
