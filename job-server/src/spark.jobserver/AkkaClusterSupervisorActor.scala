@@ -208,8 +208,8 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
     //extract spark.proxy.user from contextConfig, if available and pass it to $managerStartCommand
     var cmdString = s"$managerStartCommand $contextDir ${selfAddress.toString}"
 
-    if (contextConfig.hasPath("spark.proxy.user")) {
-      cmdString = cmdString + s" ${contextConfig.getString("spark.proxy.user")}"
+    if (contextConfig.hasPath(SparkJobUtils.SPARK_PROXY_USER_PARAM)) {
+      cmdString = cmdString + s" ${contextConfig.getString(SparkJobUtils.SPARK_PROXY_USER_PARAM)}"
     }
 
     val pb = Process(cmdString)

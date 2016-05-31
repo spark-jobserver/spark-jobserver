@@ -13,6 +13,12 @@ object SparkJobUtils {
   import collection.JavaConverters._
 
   /**
+   * User impersonation for an already Kerberos authenticated user is supported via the
+   * `spark.proxy.user` query param
+   */
+  val SPARK_PROXY_USER_PARAM = "spark.proxy.user"
+
+  /**
    * Creates a SparkConf for initializing a SparkContext based on various configs.
    * Note that anything in contextConfig with keys beginning with spark. get
    * put directly in the SparkConf.

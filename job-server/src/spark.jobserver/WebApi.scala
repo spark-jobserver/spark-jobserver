@@ -7,7 +7,7 @@ import javax.net.ssl.SSLContext
 import akka.actor.{ActorRef, ActorSystem}
 import akka.pattern.ask
 import akka.util.Timeout
-import com.typesafe.config.{Config, ConfigException, ConfigFactory, ConfigRenderOptions}
+import com.typesafe.config.{Config, ConfigException, ConfigFactory, ConfigValueFactory, ConfigRenderOptions}
 import ooyala.common.akka.web.JsonUtils.AnyJsonFormat
 import ooyala.common.akka.web.{CommonRoutes, WebService}
 import org.apache.shiro.SecurityUtils
@@ -35,6 +35,8 @@ object WebApi {
   val ResultKeyStartBytes = "{\n".getBytes
   val ResultKeyEndBytes = "}".getBytes
   val ResultKeyBytes = ("\"" + ResultKey + "\":").getBytes
+
+  val NameContextDelimiter = "~"
 
   def badRequest(ctx: RequestContext, msg: String) {
     ctx.complete(StatusCodes.BadRequest, errMap(msg))
@@ -247,7 +249,8 @@ class WebApi(system: ActorSystem,
     authenticate(authenticator) { authInfo =>
       get { ctx =>
         (supervisor ? ListContexts).mapTo[Seq[String]]
-          .map { contexts => ctx.complete(contexts) }
+          .map { contexts =>
+            ctx.complete(removeProxyUserPrefix(authInfo, contexts)) }
       } ~
         post {
           /**
@@ -266,8 +269,9 @@ class WebApi(system: ActorSystem,
               complete(StatusCodes.BadRequest, errMap("context name must start with letters"))
             } else {
               parameterMap { (params) =>
-                val config = ConfigFactory.parseMap(params.asJava).resolve()
-                val future = (supervisor ? AddContext(contextName, config))(contextTimeout.seconds)
+                val (cName, config) = determineProxyUser(ConfigFactory.parseMap(params.asJava).resolve(),
+                                                            authInfo, contextName)
+                val future = (supervisor ? AddContext(cName, config))(contextTimeout.seconds)
                 respondWithMediaType(MediaTypes.`application/json`) { ctx =>
                   future.map {
                     case ContextInitialized   => ctx.complete(StatusCodes.OK)
@@ -284,7 +288,8 @@ class WebApi(system: ActorSystem,
           //  Stop the context with the given name.  Executors will be shut down and all cached RDDs
           //  and currently running jobs will be lost.  Use with care!
           path(Segment) { (contextName) =>
-            val future = supervisor ? StopContext(contextName)
+            val (cName, _) = determineProxyUser(config, authInfo, contextName)
+            val future = supervisor ? StopContext(cName)
             respondWithMediaType(MediaTypes.`text/plain`) { ctx =>
               future.map {
                 case ContextStopped => ctx.complete(StatusCodes.OK)
@@ -530,6 +535,51 @@ class WebApi(system: ActorSystem,
 
   override def timeoutRoute: Route =
     complete(500, errMap("Request timed out. Try using the /jobs/<jobID>, /jobs APIs to get status/results"))
+
+  /**
+   * appends the NameContextDelimiter to the user name and,
+   * if the user name contains the delimiter as well, then it doubles it so that we can be sure
+   * that our prefix is unique
+   */
+  private def userNamePrefix(authInfo: AuthInfo) : String = {
+    authInfo.toString.replaceAll(NameContextDelimiter,
+                                 NameContextDelimiter + NameContextDelimiter) +
+        NameContextDelimiter
+  }
+
+  /**
+   * if the shiro user is to be used as the proxy user, then this
+   * computes the context name from the user name (and a prefix) and appends the user name
+   * as the spark proxy user parameter to the config
+   */
+  def determineProxyUser(aConfig: Config,
+                         authInfo: AuthInfo,
+                         contextName: String): (String, Config) = {
+    if (config.getBoolean("shiro.authentication") && config.getBoolean("shiro.use-as-proxy-user")) {
+      //proxy-user-param is ignored and the authenticated user name is used
+      val config = aConfig.withValue(SparkJobUtils.SPARK_PROXY_USER_PARAM,
+        ConfigValueFactory.fromAnyRef(authInfo.toString))
+      (userNamePrefix(authInfo) + contextName, config)
+    } else {
+      (contextName, aConfig)
+    }
+  }
+
+  private val regRexPart2 = "([^" + NameContextDelimiter + "]+.*)"
+
+  /**
+   * filter the given context names so that the user may only see his/her own contexts
+   */
+  def removeProxyUserPrefix(authInfo: AuthInfo, contextNames: Seq[String]): Seq[String] = {
+    if (config.getBoolean("shiro.authentication") && config.getBoolean("shiro.use-as-proxy-user")) {
+      val RegExPrefix = ("^" + userNamePrefix(authInfo) + regRexPart2).r
+      contextNames collect {
+        case RegExPrefix(cName) => cName
+      }
+    } else {
+      contextNames
+    }
+  }
 
   private def getJobManagerForContext(context: Option[String],
                                       contextConfig: Config,
