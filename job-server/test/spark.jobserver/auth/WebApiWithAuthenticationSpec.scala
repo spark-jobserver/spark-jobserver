@@ -184,7 +184,8 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
         sealRoute(testRoutes) ~> check {
           status should be(OK)
         }
-      while (!addedContexts.contains(USER_NAME + "_one") && !addedContexts.contains(USER_NAME + "_two") && !addedContexts.contains(USER_NAME + "_three")) {
+      while (!addedContexts.contains(USER_NAME + WebApi.NameContextDelimiter + "one") && !addedContexts.contains(USER_NAME + WebApi.NameContextDelimiter + "two") &&
+          !addedContexts.contains(USER_NAME + WebApi.NameContextDelimiter + "three")) {
         Thread.sleep(3)
       }
 
@@ -367,7 +368,7 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
           status should be(OK)
         }
 
-      while (!addedContexts.contains(USER_NAME + "_xxx")) {
+      while (!addedContexts.contains(USER_NAME + WebApi.NameContextDelimiter + "xxx")) {
         Thread.sleep(3)
       }
       Get("/contexts/").withHeaders(authorization) ~> sealRoute(routesWithProxyUser) ~> check {

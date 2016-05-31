@@ -54,7 +54,7 @@ securityManager.cacheManager = $cacheManager
 root = secret, admin
 guest = guest, guest
 presidentskroob = 12345, president
-presidentskroob_2 = ludicrousspeed, darklord, schwartz
+presidentskroob~2 = ludicrousspeed, darklord, schwartz
 lonestarr = vespa, goodguy, schwartz
 
 # -----------------------------------------------------------------------------
