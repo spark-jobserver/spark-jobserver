@@ -498,6 +498,8 @@ database created with necessary rights granted to user.
       }
     }
 
+    flyway.locations="db/postgresql/migration"
+
 It is also important that any dependent jars are to be added to Job Server class path.
 
 ### Chef
