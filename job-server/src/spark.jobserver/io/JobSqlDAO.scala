@@ -66,21 +66,28 @@ class JobSqlDAO(config: Config) extends JobDAO {
   val jdbcUrl = config.getString("spark.jobserver.sqldao.jdbc.url")
   val jdbcUser = config.getString("spark.jobserver.sqldao.jdbc.user")
   val jdbcPassword = config.getString("spark.jobserver.sqldao.jdbc.password")
-  val dbcpMaxActive = config.getInt("spark.jobserver.sqldao.dbcp.maxactive")
-  val dbcpMaxIdle = config.getInt("spark.jobserver.sqldao.dbcp.maxidle")
-  val dbcpInitialSize = config.getInt("spark.jobserver.sqldao.dbcp.initialsize")
-  val dataSource: DataSource = {
-    val ds = new BasicDataSource
-    ds.setDriverClassName(jdbcDriverClass)
-    ds.setUsername(jdbcUser)
-    ds.setPassword(jdbcPassword)
-    ds.setMaxActive(dbcpMaxActive)
-    ds.setMaxIdle(dbcpMaxIdle)
-    ds.setInitialSize(dbcpInitialSize)
-    ds.setUrl(jdbcUrl)
-    ds
+  val enableDbcp = config.getBoolean("spark.jobserver.sqldao.dbcp.enabled")
+  val db = if (enableDbcp) {
+    logger.info("DBCP enabled")
+    val dbcpMaxActive = config.getInt("spark.jobserver.sqldao.dbcp.maxactive")
+    val dbcpMaxIdle = config.getInt("spark.jobserver.sqldao.dbcp.maxidle")
+    val dbcpInitialSize = config.getInt("spark.jobserver.sqldao.dbcp.initialsize")
+    val dataSource: DataSource = {
+      val ds = new BasicDataSource
+      ds.setDriverClassName(jdbcDriverClass)
+      ds.setUsername(jdbcUser)
+      ds.setPassword(jdbcPassword)
+      ds.setMaxActive(dbcpMaxActive)
+      ds.setMaxIdle(dbcpMaxIdle)
+      ds.setInitialSize(dbcpInitialSize)
+      ds.setUrl(jdbcUrl)
+      ds
+    }
+    Database.forDataSource(dataSource)
+  } else {
+    logger.info("DBCP disabled")
+    Database.forURL(jdbcUrl, driver = jdbcDriverClass, user = jdbcUser, password = jdbcPassword)
   }
-  val db = Database.forDataSource(dataSource)
   // TODO: migrateLocations should be removed when tests have a running configuration
   val migrateLocations = config.getString("flyway.locations")
 

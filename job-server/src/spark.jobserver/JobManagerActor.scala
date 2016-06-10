@@ -338,9 +338,9 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
       case _ =>
         // Make sure to decrement the count of running jobs when a job finishes, in both success and failure
         // cases.
+        currentRunningJobs.getAndDecrement()
         resultActor ! Unsubscribe(jobId, subscriber)
         statusActor ! Unsubscribe(jobId, subscriber)
-        currentRunningJobs.getAndDecrement()
         postEachJob()
     }(executionContext)
   }

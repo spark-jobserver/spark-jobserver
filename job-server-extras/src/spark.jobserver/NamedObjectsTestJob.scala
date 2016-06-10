@@ -8,8 +8,7 @@ import org.apache.spark.sql.types._
 import org.apache.spark.sql.{ SQLContext, Row, DataFrame }
 
 /**
- * A test job that accepts a SQLContext, as opposed to the regular SparkContext.
- * Just initializes some dummy data into a table.
+ * A test job for named objects
  */
 class NamedObjectsTestJob extends SparkJob with NamedObjectSupport {
   import NamedObjectsTestJobConfig._
@@ -48,6 +47,8 @@ class NamedObjectsTestJob extends SparkJob with NamedObjectSupport {
       }
     }
 
+    //sleep just a bit to allow other threads in
+    Thread.sleep(1)
     namedObjects.getNames().toArray
   }
 }

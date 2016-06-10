@@ -1,11 +1,5 @@
 package spark.jobserver.auth
 
-import scala.concurrent.Future
-import scala.concurrent.ExecutionContext
-import spray.routing.directives.AuthMagnet
-import spray.routing.authentication.UserPass
-import spray.routing.authentication.BasicAuth
-
 import spray.routing.authentication._
 import spray.routing.directives.AuthMagnet
 
