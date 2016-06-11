@@ -267,5 +267,5 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
 }
 
 class JobSqlDAODBCPSpec extends JobSqlDAOSpec {
-  override def config: Config = ConfigFactory.load("local.test.jobsqldao.conf")
+  override def config: Config = ConfigFactory.load("local.test.jobsqldao_dbcp.conf")
 }
