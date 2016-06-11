@@ -7,8 +7,12 @@ import spark.jobserver.TestJarFinder
 import com.google.common.io.Files
 import java.io.File
 
-class JobSqlDAOSpec extends TestJarFinder with FunSpecLike with Matchers with BeforeAndAfter {
-  var config = ConfigFactory.load("local.test.jobsqldao.conf")
+abstract class JobSqlDAOSpecBase {
+  def config : Config
+}
+
+class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLike with Matchers with BeforeAndAfter {
+  override def config: Config = ConfigFactory.load("local.test.jobsqldao.conf")
 
   var dao: JobSqlDAO = _
 
@@ -263,5 +267,5 @@ class JobSqlDAOSpec extends TestJarFinder with FunSpecLike with Matchers with Be
 }
 
 class JobSqlDAODBCPSpec extends JobSqlDAOSpec {
-  config = ConfigFactory.load("local.test.jobsqldao_dbcp.conf")
+  override def config: Config = ConfigFactory.load("local.test.jobsqldao.conf")
 }
