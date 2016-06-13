@@ -204,8 +204,13 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
           return
       }
 
+    var driverMemory = "0"
+    if (contextConfig.hasPath("spark.driver") && contextConfig.hasPath("spark.driver.memory")) {
+      driverMemory = contextConfig.getString("spark.driver.memory")
+    }
+
     //extract spark.proxy.user from contextConfig, if available and pass it to $managerStartCommand
-    var cmdString = s"$managerStartCommand $contextDir ${selfAddress.toString}"
+    var cmdString = s"$managerStartCommand $contextDir ${selfAddress.toString} $name $driverMemory"
 
     if (contextConfig.hasPath(SparkJobUtils.SPARK_PROXY_USER_PARAM)) {
       cmdString = cmdString + s" ${contextConfig.getString(SparkJobUtils.SPARK_PROXY_USER_PARAM)}"
