@@ -1,3 +1,4 @@
 #Scala #akka @ApacheSpark
 
 * Improve Chinese document (@stanzhai)
+* Make dbcp optional, default: disabled (@noorul)
