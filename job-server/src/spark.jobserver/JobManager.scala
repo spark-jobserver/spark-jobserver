@@ -1,14 +1,11 @@
 package spark.jobserver
 
-import java.io.File
-
-import akka.actor.{AddressFromURIString, Address, Props, ActorSystem}
+import akka.actor.{ActorSystem, AddressFromURIString, Props}
 import akka.cluster.Cluster
-import com.typesafe.config.{ConfigValueFactory, ConfigFactory, Config}
+import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import ooyala.common.akka.actor.ProductionReaper
 import ooyala.common.akka.actor.Reaper.WatchMe
 import org.slf4j.LoggerFactory
-import spark.jobserver.io.{JobDAOActor, JobDAO}
 
 /**
  * The JobManager is the main entry point for the forked JVM process running an individual
@@ -35,15 +32,16 @@ object JobManager {
 
     val defaultConfig = ConfigFactory.load()
     val config = if (args.length > 2) {
-      val configFile = new File(args(2))
-      if (!configFile.exists()) {
-        System.err.println("Could not find configuration file " + configFile)
-        sys.exit(1)
-      }
-      ConfigFactory.parseFile(configFile).withFallback(defaultConfig)
+      val properties = new java.util.HashMap[String, String]()
+      args(2).split('|').foreach(_.split("=", 2) match {
+        case Array(key, value) => properties.put(key, value)
+      })
+
+      ConfigFactory.parseMap(properties).withFallback(defaultConfig)
     } else {
       defaultConfig
     }
+
     logger.info("Starting JobManager named " + managerName + " with config {}",
       config.getConfig("spark").root.render())
     logger.info("..and context config:\n" + contextConfig.root.render)
