@@ -65,12 +65,9 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
   var supervisor: ActorRef = _
   def extrasJar: java.io.File
 
-  after {
-    ooyala.common.akka.AkkaTestUtils.shutdownAndWait(manager)
-  }
-
   override def afterAll() {
-    ooyala.common.akka.AkkaTestUtils.shutdownAndWait(system)
+    ooyala.common.akka.AkkaTestUtils.shutdownAndWait(manager)
+    TestKit.shutdownActorSystem(system)
   }
 
   protected def uploadJar(dao: JobDAO, jarFilePath: String, appName: String) {
