@@ -195,6 +195,8 @@ object JobServerBuild extends Build {
     // See SIP-18 (https://docs.google.com/document/d/1nlkvpoIRkx7at1qJEZafJwthZ3GeIklTFhqmXMvTX9Q/edit)
     scalacOptions := Seq("-deprecation", "-feature",
                          "-language:implicitConversions", "-language:postfixOps"),
+    // For Building on Encrypted File Systems...
+    scalacOptions ++= Seq("-Xmax-classfile-name","128"),
     resolvers    ++= Dependencies.repos,
     libraryDependencies ++= apiDeps,
     parallelExecution in Test := false,
