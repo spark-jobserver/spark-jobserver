@@ -235,5 +235,5 @@ object JobServerBuild extends Build {
 
   // This is here so we can easily switch back to Logback when Spark fixes its log4j dependency.
   lazy val jobServerLogbackLogging = "-Dlogback.configurationFile=config/logback-local.xml"
-  lazy val jobServerLogging = "-Dlog4j.configuration=config/log4j-local.properties"
+  lazy val jobServerLogging = "-Dlog4j.configuration=file:config/log4j-local.properties"
 }
