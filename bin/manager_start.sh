@@ -1,7 +1,7 @@
 #!/bin/bash
 # Script to start the job manager
-# args: <work dir for context> <cluster address> [proxy_user] [additional parameters]
-# if <driver memory> is 0, the default value will be used
+# args: <work dir for context> <cluster address> <spark context name> [additional parameters]
+# additional parameters should look this way: "spark.driver.memory=4g|spark.executor.cores=4|..."
 set -e
 
 get_abs_script_path() {
