@@ -3,7 +3,7 @@ package spark.jobserver
 import akka.actor.{ ActorRef, ActorSystem, Props }
 import akka.testkit.{ ImplicitSender, TestKit }
 import org.apache.spark.{ SparkContext, SparkConf }
-import org.apache.spark.sql.{ SQLContext, Row, DataFrame}
+import org.apache.spark.sql.{ SQLContext, Row, DataFrame }
 import org.apache.spark.sql.types._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
@@ -15,28 +15,30 @@ import org.scalatest.{ Matchers, FunSpecLike, FunSpec, BeforeAndAfterAll, Before
  */
 class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with FunSpecLike
     with ImplicitSender with Matchers with BeforeAndAfter with BeforeAndAfterAll {
-  
-  val sc = new SparkContext("local[3]", getClass.getSimpleName, new SparkConf)
-  val sqlContext = new SQLContext(sc)
-  val namedObjects: NamedObjects = new JobServerNamedObjects(system)
 
   implicit def rddPersister: NamedObjectPersister[NamedRDD[Int]] = new RDDPersister[Int]
   implicit def dataFramePersister = new DataFramePersister
 
+  private var sc : SparkContext = _
+  private var sqlContext : SQLContext = _
+  private var namedObjects: NamedObjects = _
+  
+  override def beforeAll {
+    sc = new SparkContext("local[3]", getClass.getSimpleName, new SparkConf)
+    sqlContext = new SQLContext(sc)
+    namedObjects = new JobServerNamedObjects(system)
+    namedObjects.getNames.foreach { namedObjects.forget(_) }
+  }
+  
   val struct = StructType(
     StructField("i", IntegerType, true) ::
       StructField("b", BooleanType, false) :: Nil)
 
   def rows: RDD[Row] = sc.parallelize(List(Row(1, true), Row(2, false), Row(55, true)))
 
-  before {
-    namedObjects.getNames.foreach { namedObjects.forget(_) }
-  }
-
   override def afterAll() {
-    //ooyala.common.akka.AkkaTestUtils.shutdownAndWait(namedObjManager)
-    sc.stop()
-    ooyala.common.akka.AkkaTestUtils.shutdownAndWait(system)
+    sc.stop
+    TestKit.shutdownActorSystem(system)
   }
 
   describe("NamedObjects") {
@@ -51,12 +53,11 @@ class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with Fun
       val df = sqlContext.createDataFrame(rows, struct)
       namedObjects.update("df1", NamedDataFrame(df, true, StorageLevel.MEMORY_AND_DISK))
 
-      val NamedRDD(rdd1, _ ,_) = namedObjects.get[NamedRDD[Int]]("rdd1").get
+      val NamedRDD(rdd1, _, _) = namedObjects.get[NamedRDD[Int]]("rdd1").get
       rdd1 should equal(rdd)
 
       val df1: Option[NamedRDD[Int]] = namedObjects.get("df1")
       df1 should equal(Some(NamedDataFrame(df, true, StorageLevel.MEMORY_AND_DISK)))
-
     }
 
     it("destroy() should destroy an object that exists") {
@@ -127,7 +128,7 @@ class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with Fun
       namedObjects.update("o1", tmp)
 
       val NamedDataFrame(df2, _, _) = namedObjects.get[NamedDataFrame]("o1").get
-        
+
       df2 should equal(df)
 
       namedObjects.destroy(tmp, "o1")
@@ -186,6 +187,5 @@ class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with Fun
       otherThreads(4).start
       namedObjects.get("sleep") should equal(obj)
     }
-
   }
 }

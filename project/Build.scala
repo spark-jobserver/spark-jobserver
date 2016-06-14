@@ -4,6 +4,7 @@ import sbt._
 import Keys._
 import bintray.BintrayKeys._
 import com.typesafe.sbt.SbtScalariform._
+import com.typesafe.sbt.SbtScalariform
 import sbtassembly.AssemblyPlugin.autoImport._
 import scoverage.ScoverageKeys._
 import spray.revolver.RevolverPlugin.autoImport._
@@ -27,7 +28,7 @@ object JobServerBuild extends Build {
       description := "Common Akka application stack: metrics, tracing, logging, and more.",
       libraryDependencies ++= coreTestDeps ++ akkaDeps
     ) ++ publishSettings
-  )
+  ).disablePlugins(SbtScalariform)
 
   lazy val jobServer = Project(id = "job-server", base = file("job-server"),
     settings = commonSettings ++ revolverSettings ++ Assembly.settings ++ Seq(
@@ -54,21 +55,21 @@ object JobServerBuild extends Build {
       // Also: note that fork won't work when VPN is on or other funny networking
       fork in Test := true
       ) ++ publishSettings
-  ) dependsOn(akkaApp, jobServerApi)
+  ).dependsOn(akkaApp, jobServerApi).disablePlugins(SbtScalariform)
 
   lazy val jobServerTestJar = Project(id = "job-server-tests", base = file("job-server-tests"),
                                       settings = commonSettings ++ jobServerTestJarSettings
-                                     ) dependsOn jobServerApi
+                                     ).dependsOn(jobServerApi).disablePlugins(SbtScalariform)
 
   lazy val jobServerApi = Project(id = "job-server-api",
                                   base = file("job-server-api"),
-                                  settings = commonSettings ++ publishSettings)
+                                  settings = commonSettings ++ publishSettings).disablePlugins(SbtScalariform)
 
   lazy val jobServerExtras = Project(id = "job-server-extras",
                                      base = file("job-server-extras"),
                                      settings = commonSettings ++ jobServerExtrasSettings
-                                    ) dependsOn(jobServerApi,
-                                                jobServer % "compile->compile; test->test")
+                                    ).dependsOn(jobServerApi, jobServer % "compile->compile; test->test")
+                                    .disablePlugins(SbtScalariform)
 
   // This meta-project aggregates all of the sub-projects and can be used to compile/test/style check
   // all of them with a single command.
@@ -77,7 +78,7 @@ object JobServerBuild extends Build {
   lazy val root = Project(id = "root", base = file("."),
                     settings = commonSettings ++ ourReleaseSettings ++ rootSettings ++ dockerSettings
                   ).aggregate(jobServer, jobServerApi, jobServerTestJar, akkaApp, jobServerExtras).
-                   dependsOn(jobServer, jobServerExtras)
+                   dependsOn(jobServer, jobServerExtras).disablePlugins(SbtScalariform)
 
   lazy val jobServerExtrasSettings = revolverSettings ++ Assembly.settings ++ publishSettings ++ Seq(
     libraryDependencies ++= sparkExtraDeps,
@@ -195,6 +196,8 @@ object JobServerBuild extends Build {
     // See SIP-18 (https://docs.google.com/document/d/1nlkvpoIRkx7at1qJEZafJwthZ3GeIklTFhqmXMvTX9Q/edit)
     scalacOptions := Seq("-deprecation", "-feature",
                          "-language:implicitConversions", "-language:postfixOps"),
+    // For Building on Encrypted File Systems...
+    scalacOptions ++= Seq("-Xmax-classfile-name","128"),
     resolvers    ++= Dependencies.repos,
     libraryDependencies ++= apiDeps,
     parallelExecution in Test := false,
@@ -206,7 +209,9 @@ object JobServerBuild extends Build {
         <exclude module="jmxtools"/>
         <exclude module="jmxri"/>
       </dependencies>
-  ) ++ scalariformPrefs ++ scoverageSettings
+  ) ++ scoverageSettings
+  // scarman June 14th 2016, disabled scalariform so as to not reformat the entire codebase
+  //++ scalariformPrefs
 
   lazy val scoverageSettings = {
     // Semicolon-separated list of regexs matching classes to exclude
@@ -220,14 +225,16 @@ object JobServerBuild extends Build {
 
   // change to scalariformSettings for auto format on compile; defaultScalariformSettings to disable
   // See https://github.com/mdr/scalariform for formatting options
-  lazy val scalariformPrefs = defaultScalariformSettings ++ Seq(
+  lazy val scalariformPrefs = defaultScalariformSettings
+  /*
+  ++ Seq(
     ScalariformKeys.preferences := FormattingPreferences()
       .setPreference(AlignParameters, true)
       .setPreference(AlignSingleLineCaseStatements, true)
       .setPreference(DoubleIndentClassDeclaration, true)
   )
-
+  */
   // This is here so we can easily switch back to Logback when Spark fixes its log4j dependency.
   lazy val jobServerLogbackLogging = "-Dlogback.configurationFile=config/logback-local.xml"
-  lazy val jobServerLogging = "-Dlog4j.configuration=config/log4j-local.properties"
+  lazy val jobServerLogging = "-Dlog4j.configuration=file:config/log4j-local.properties"
 }

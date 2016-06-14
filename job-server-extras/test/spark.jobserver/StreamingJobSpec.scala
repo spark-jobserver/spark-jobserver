@@ -5,7 +5,7 @@ import spark.jobserver.context.StreamingContextFactory
 import spark.jobserver.io.{JobInfo, JobDAOActor}
 
 /**
- * Test for Straming Jobs.
+ * Test for Streaming Jobs.
  */
 object StreamingJobSpec extends JobSpecConfig {
   override val contextFactory = classOf[StreamingContextFactory].getName
