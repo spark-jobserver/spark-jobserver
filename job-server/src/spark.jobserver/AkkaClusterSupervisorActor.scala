@@ -1,20 +1,21 @@
 package spark.jobserver
 
 import java.io.IOException
-import java.nio.file.{Files, Paths}
 import java.nio.charset.Charset
+import java.nio.file.{Files, Paths}
 import java.util.concurrent.TimeUnit
 
 import akka.actor._
 import akka.cluster.Cluster
-import akka.cluster.ClusterEvent.{MemberUp, MemberEvent, InitialStateAsEvents}
+import akka.cluster.ClusterEvent.{InitialStateAsEvents, MemberEvent, MemberUp}
 import akka.util.Timeout
 import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
 import ooyala.common.akka.InstrumentedActor
-import spark.jobserver.util.SparkJobUtils
+
+import scala.collection.JavaConversions.asScalaSet
 import scala.collection.mutable
-import scala.util.{Try, Success, Failure}
 import scala.sys.process._
+import scala.util.{Failure, Success, Try}
 
 /**
  * The AkkaClusterSupervisorActor launches Spark Contexts as external processes
@@ -36,6 +37,7 @@ import scala.sys.process._
  */
 class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
   import ContextSupervisor._
+
   import scala.collection.JavaConverters._
   import scala.concurrent.duration._
 
@@ -204,18 +206,22 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
           return
       }
 
-    var driverMemory = "0"
-    if (contextConfig.hasPath("spark.driver") && contextConfig.hasPath("spark.driver.memory")) {
-      driverMemory = contextConfig.getString("spark.driver.memory")
+    var sparkConf = ""
+    for (e <- contextConfig.entrySet()) {
+      val key = e.getKey match {
+        case "memory-per-node" => "spark.executor.memory"
+        case "num-cpu-cores" => "spark.cores.max"
+        case x => x
+      }
+      val value = e.getValue.unwrapped().toString
+
+      sparkConf += key + "=" + value.replace("\"", "\\\"") + "|"
     }
 
-    //extract spark.proxy.user from contextConfig, if available and pass it to $managerStartCommand
-    var cmdString = s"$managerStartCommand $contextDir ${selfAddress.toString} $name $driverMemory"
+    val driverMemory = Try(contextConfig.getString("spark.driver.memory")).getOrElse("0")
 
-    if (contextConfig.hasPath(SparkJobUtils.SPARK_PROXY_USER_PARAM)) {
-      cmdString = cmdString + s" ${contextConfig.getString(SparkJobUtils.SPARK_PROXY_USER_PARAM)}"
-    }
-
+    val cmdString = s"$managerStartCommand $contextDir ${selfAddress.toString} $name $driverMemory " +
+      "\"" + sparkConf + "\""
     val pb = Process(cmdString)
     val pio = new ProcessIO(_ => (),
                         stdout => scala.io.Source.fromInputStream(stdout)
