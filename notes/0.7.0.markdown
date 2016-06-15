@@ -2,3 +2,4 @@
 
 * Improve Chinese document (@stanzhai)
 * Make dbcp optional, default: disabled (@noorul)
+* Fix logging issue in dev mode, #475 (@noorul)
