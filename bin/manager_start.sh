@@ -1,7 +1,7 @@
 #!/bin/bash
 # Script to start the job manager
-# args: <work dir for context> <cluster address> <spark context name> [additional parameters]
-# additional parameters should look this way: "spark.driver.memory=4g|spark.executor.cores=4|..."
+# args: <work dir for context> <cluster address> <spark context name> <spark.driver.memory> [additional parameters]
+# additional parameters should look this way: "spark.executor.cores=4|..."
 set -e
 
 get_abs_script_path() {
@@ -17,7 +17,8 @@ get_abs_script_path
 WORK_DIR=$1
 CLUSTER_ADDRESS=$2
 SPARK_CONTEXT_NAME=$3
-SPARK_CONFIGURATION=$4
+SPARK_DRIVER_MEMORY=$4
+SPARK_CONFIGURATION=$5
 
 # Override logging options to provide per-context logging
 LOGGING_OPTS="-Dlog4j.configuration=file:$appdir/log4j-server.properties
@@ -36,7 +37,11 @@ EXTRA_CLASSPATH_OPTS="/etc/hadoop/conf:/etc/hive/conf:/usr/lib/hadoop-lzo/lib/*:
 
 MAIN="spark.jobserver.JobManager"
 
-cmd="$SPARK_HOME/bin/spark-submit --class $MAIN --driver-memory $JOBSERVER_MEMORY
+if [ "$SPARK_DRIVER_MEMORY" -eq "0" ]; then
+    SPARK_DRIVER_MEMORY=JOBSERVER_MEMORY
+fi
+
+cmd="$SPARK_HOME/bin/spark-submit --class $MAIN --driver-memory $SPARK_DRIVER_MEMORY
   --conf \"spark.executor.extraJavaOptions=$LOGGING_OPTS\"
   --conf \"spark.driver.extraClassPath=$EXTRA_CLASSPATH_OPTS\"
   --conf \"spark.executor.extraClassPath=$EXTRA_CLASSPATH_OPTS\"

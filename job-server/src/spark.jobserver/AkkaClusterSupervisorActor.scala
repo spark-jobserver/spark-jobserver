@@ -218,7 +218,9 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
       sparkConf += key + "=" + value.replace("\"", "\\\"") + "|"
     }
 
-    val cmdString = s"$managerStartCommand $contextDir ${selfAddress.toString} $name " +
+    val driverMemory = Try(contextConfig.getString("spark.driver.memory")).getOrElse("0")
+
+    val cmdString = s"$managerStartCommand $contextDir ${selfAddress.toString} $name $driverMemory " +
       "\"" + sparkConf + "\""
     val pb = Process(cmdString)
     val pio = new ProcessIO(_ => (),
