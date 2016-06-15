@@ -68,8 +68,9 @@ object JobServerBuild extends Build {
   lazy val jobServerExtras = Project(id = "job-server-extras",
                                      base = file("job-server-extras"),
                                      settings = commonSettings ++ jobServerExtrasSettings
-                                    ).dependsOn(jobServerApi, jobServer % "compile->compile; test->test")
+                                    ).dependsOn(jobServerApi, jobServer % "test->test")
                                     .disablePlugins(SbtScalariform)
+
 
   // This meta-project aggregates all of the sub-projects and can be used to compile/test/style check
   // all of them with a single command.

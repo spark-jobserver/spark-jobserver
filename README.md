@@ -24,6 +24,7 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
     - [Ad-hoc Mode - Single, Unrelated Jobs (Transient Context)](#ad-hoc-mode---single-unrelated-jobs-transient-context)
     - [Persistent Context Mode - Faster & Required for Related Jobs](#persistent-context-mode---faster-&-required-for-related-jobs)
 - [Create a Job Server Project](#create-a-job-server-project)
+  - [NEW SparkJob API](#new-sparkjob-api)
   - [Dependency jars](#dependency-jars)
   - [Named Objects](#named-objects)
     - [Using Named RDDs](#using-named-rdds)
@@ -247,9 +248,9 @@ For most use cases it's better to have the dependencies be "provided" because yo
 To create a job that can be submitted through the job server, the job must implement the `SparkJob` trait.
 Your job will look like:
 ```scala
-object SampleJob  extends SparkJob {
-    override def runJob(sc:SparkContext, jobConfig: Config): Any = ???
-    override def validate(sc:SparkContext, config: Config): SparkJobValidation = ???
+object SampleJob extends SparkJob {
+    override def runJob(sc: SparkContext, jobConfig: Config): Any = ???
+    override def validate(sc: SparkContext, config: Config): SparkJobValidation = ???
 }
 ```
 
@@ -258,6 +259,29 @@ object SampleJob  extends SparkJob {
 manage and re-use contexts.
 - `validate` allows for an initial validation of the context and any provided configuration. If the context and configuration are OK to run the job, returning `spark.jobserver.SparkJobValid` will let the job execute, otherwise returning `spark.jobserver.SparkJobInvalid(reason)` prevents the job from running and provides means to convey the reason of failure. In this case, the call immediately returns an `HTTP/1.1 400 Bad Request` status code.  
 `validate` helps you preventing running jobs that will eventually fail due to missing or wrong configuration and save both time and resources.  
+
+### NEW SparkJob API
+
+Note: As of version 0.7.0, a new SparkJob API that is significantly better than the old SparkJob API will take over.  Existing jobs should continue to compile against the old `spark.jobserver.SparkJob` API, but this will be deprecated in the future.  Note that jobs before 0.7.0 will need to be recompiled, older jobs may not work with the current SJS example.  The new API looks like this:
+
+```scala
+object WordCountExampleNewApi extends NewSparkJob {
+  type JobData = Seq[String]
+  type JobOutput = collection.Map[String, Long]
+
+  def runJob(sc: SparkContext, runtime: JobEnvironment, data: JobData): JobOutput =
+    sc.parallelize(data).countByValue
+
+  def validate(sc: SparkContext, runtime: JobEnvironment, config: Config):
+    JobData Or Every[ValidationProblem] = {
+    Try(config.getString("input.string").split(" ").toSeq)
+      .map(words => Good(words))
+      .getOrElse(Bad(One(SingleProblem("No input.string param"))))
+  }
+}
+```
+
+It is much more type safe, separates context configuration, job ID, named objects, and other environment variables into a separate JobEnvironment input, and allows the validation method to return specific data for the runJob method.  See the [WordCountExample](job-server-tests/src/spark.jobserver/WordCountExample.scala) and [LongPiJob](job-server-tests/src/spark.jobserver/LongPiJob.scala) for examples.
 
 Let's try running our sample job with an invalid configuration:
 

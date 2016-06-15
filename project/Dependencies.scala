@@ -7,7 +7,8 @@ object Dependencies {
 
   lazy val yammerDeps = "com.yammer.metrics" % "metrics-core" % metrics
 
-  lazy val jodaDeps = Seq(
+  lazy val miscDeps = Seq(
+    "org.scalactic" %% "scalactic" % scalatic,
     "org.joda" % "joda-convert" % jodaConvert,
     "joda-time" % "joda-time" % jodaTime
   )
@@ -23,7 +24,7 @@ object Dependencies {
     "io.spray" %% "spray-routing" % spray,
     "io.spray" %% "spray-client" % spray,
     yammerDeps
-  ) ++ jodaDeps
+  )
 
   val javaVersion = sys.env.getOrElse("JAVA_VERSION", "7-jre")
 
@@ -54,8 +55,10 @@ object Dependencies {
     "ch.qos.logback" % "logback-classic" % logback
   )
 
+  lazy val scalaTestDep = "org.scalatest" %% "scalatest" % scalaTest % "test"
+
   lazy val coreTestDeps = Seq(
-    "org.scalatest" %% "scalatest" % scalaTest % "test",
+    scalaTestDep,
     "com.typesafe.akka" %% "akka-testkit" % akka % "test",
     "io.spray" %% "spray-testkit" % spray % "test"
   )
@@ -64,8 +67,8 @@ object Dependencies {
      "org.apache.shiro" % "shiro-core" % shiro
   )
 
-  lazy val serverDeps = apiDeps ++ jodaDeps
-  lazy val apiDeps = sparkDeps :+ typeSafeConfigDeps
+  lazy val serverDeps = apiDeps
+  lazy val apiDeps = sparkDeps ++ miscDeps :+ typeSafeConfigDeps :+ scalaTestDep
 
   val repos = Seq(
     "Typesafe Repo" at "http://repo.typesafe.com/typesafe/releases/",
