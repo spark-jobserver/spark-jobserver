@@ -7,13 +7,10 @@ object Dependencies {
 
   lazy val yammerDeps = "com.yammer.metrics" % "metrics-core" % metrics
 
-  lazy val jodaDeps = Seq(
+  lazy val miscDeps = Seq(
+    "org.scalactic" %% "scalactic" % scalatic,
     "org.joda" % "joda-convert" % jodaConvert,
     "joda-time" % "joda-time" % jodaTime
-  )
-
-  lazy val miscDeps = Seq(
-    "org.scalactic" %% "scalactic" % scalatic
   )
 
   lazy val akkaDeps = Seq(
