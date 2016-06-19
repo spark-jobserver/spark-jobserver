@@ -227,7 +227,7 @@ abstract class JobManagerSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
       uploadTestJar()
       manager ! JobManagerActor.StartJob("demo", classPrefix + "LongPiJob", stringConfig, allEvents)
       expectMsgPF(5.seconds.dilated, "Did not get JobResult") {
-        case JobStarted(id, _, _) =>
+        case JobStarted(id, _) =>
           manager ! KillJob(id)
           expectMsgClass(classOf[JobKilled])
 

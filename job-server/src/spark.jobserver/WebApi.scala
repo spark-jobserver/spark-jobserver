@@ -86,17 +86,18 @@ object WebApi {
         "stack" -> t.getStackTrace.map(_.toString).toSeq)
     }
 
-  def getJobReport(jobInfo: JobInfo): Map[String, Any] = {
-    Map("jobId" -> jobInfo.jobId,
-      "startTime" -> jobInfo.startTime.toString(),
-      "classPath" -> jobInfo.classPath,
-      "context" -> (if (jobInfo.contextName.isEmpty) "<<ad-hoc>>" else jobInfo.contextName),
-      "duration" -> getJobDurationString(jobInfo)) ++ (jobInfo match {
+  def getJobReport(jobInfo: JobInfo, jobStarted:Boolean = false): Map[String, Any] = {
+    val statusMap = if (jobStarted) Map(StatusKey -> "STARTED") else (jobInfo match {
         case JobInfo(_, _, _, _, _, None, _) => Map(StatusKey -> "RUNNING")
         case JobInfo(_, _, _, _, _, _, Some(ex)) => Map(StatusKey -> "ERROR",
           ResultKey -> formatException(ex))
         case JobInfo(_, _, _, _, _, Some(e), None) => Map(StatusKey -> "FINISHED")
-      })
+    })
+    Map("jobId" -> jobInfo.jobId,
+      "startTime" -> jobInfo.startTime.toString(),
+      "classPath" -> jobInfo.classPath,
+      "context" -> (if (jobInfo.contextName.isEmpty) "<<ad-hoc>>" else jobInfo.contextName),
+      "duration" -> getJobDurationString(jobInfo)) ++ statusMap
   }
 }
 
@@ -106,7 +107,7 @@ class WebApi(system: ActorSystem,
              jarManager: ActorRef,
              dataManager: ActorRef,
              supervisor: ActorRef,
-             jobInfo: ActorRef)
+             jobInfoActor: ActorRef)
     extends HttpService with CommonRoutes with DataRoutes with SJSAuthenticator with CORSSupport
                         with ChunkEncodedStreamingSupport {
   import CommonMessages._
@@ -378,7 +379,7 @@ class WebApi(system: ActorSystem,
       (get & path(Segment / "config")) { jobId =>
         val renderOptions = ConfigRenderOptions.defaults().setComments(false).setOriginComments(false)
 
-        val future = jobInfo ? GetJobConfig(jobId)
+        val future = jobInfoActor ? GetJobConfig(jobId)
         respondWithMediaType(MediaTypes.`application/json`) { ctx =>
           future.map {
             case NoSuchJobId =>
@@ -393,14 +394,14 @@ class WebApi(system: ActorSystem,
         // If the job isn't finished yet, then {"status": "RUNNING" | "ERROR"} is returned.
         // Returned JSON contains result attribute if status is "FINISHED"
         (get & path(Segment)) { jobId =>
-          val statusFuture = jobInfo ? GetJobStatus(jobId)
+          val statusFuture = jobInfoActor ? GetJobStatus(jobId)
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
             statusFuture.map {
               case NoSuchJobId =>
                 notFound(ctx, "No such job ID " + jobId.toString)
               case info: JobInfo =>
                 val jobReport = getJobReport(info)
-                val resultFuture = jobInfo ? GetJobResult(jobId)
+                val resultFuture = jobInfoActor ? GetJobResult(jobId)
                 resultFuture.map {
                   case JobResult(_, result) =>
                     result match {
@@ -419,7 +420,7 @@ class WebApi(system: ActorSystem,
         //  Stop the current job. All other jobs submited with this spark context
         //  will continue to run
         (delete & path(Segment)) { jobId =>
-          val future = jobInfo ? GetJobStatus(jobId)
+          val future = jobInfoActor ? GetJobStatus(jobId)
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
             future.map {
               case NoSuchJobId =>
@@ -445,7 +446,7 @@ class WebApi(system: ActorSystem,
         get {
           parameters('limit.as[Int] ?) { (limitOpt) =>
             val limit = limitOpt.getOrElse(DefaultJobLimit)
-            val future = (jobInfo ? GetJobStatuses(Some(limit))).mapTo[Seq[JobInfo]]
+            val future = (jobInfoActor ? GetJobStatuses(Some(limit))).mapTo[Seq[JobInfo]]
             respondWithMediaType(MediaTypes.`application/json`) { ctx =>
               future.map { infos =>
                 val jobReport = infos.map { info =>
@@ -497,11 +498,9 @@ class WebApi(system: ActorSystem,
                             case _ => ctx.complete(resultToTable(res))
                           }
                         case JobErroredOut(_, _, ex) => ctx.complete(errMap(ex, "ERROR"))
-                        case JobStarted(jobId, context, _) =>
-                          jobInfo ! StoreJobConfig(jobId, postedJobConfig)
-                          ctx.complete(202, Map[String, Any](
-                            StatusKey -> "STARTED",
-                            ResultKey -> Map("jobId" -> jobId, "context" -> context)))
+                        case JobStarted(_, jobInfo) =>
+                          jobInfoActor ! StoreJobConfig(jobInfo.jobId, postedJobConfig)
+                          ctx.complete(202, getJobReport(jobInfo, true))
                         case JobValidationFailed(_, _, ex) =>
                           ctx.complete(400, errMap(ex, "VALIDATION FAILED"))
                         case NoSuchApplication => notFound(ctx, "appName " + appName + " not found")
