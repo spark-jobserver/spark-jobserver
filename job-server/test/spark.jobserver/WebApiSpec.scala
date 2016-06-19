@@ -119,7 +119,7 @@ with ScalatestRouteTest with HttpService {
                                                           new IllegalArgumentException("foo")))
       case StartJob("foo", _, config, events)     =>
         statusActor ! Subscribe("foo", sender, events)
-        val jobInfo = JobInfo("foo", "context", null, "", dt, None, None)
+        val jobInfo = JobInfo("foo", "context", null, "com.abc.meme", dt, None, None)
         statusActor ! JobStatusActor.JobInit(jobInfo)
         statusActor ! JobStarted(jobInfo.jobId, jobInfo)
         val map = config.entrySet().asScala.map { entry => entry.getKey -> entry.getValue.unwrapped }.toMap

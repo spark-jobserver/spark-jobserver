@@ -128,7 +128,7 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
       expectMsg(Seq(jobInfo))
 
       val startTime = DateTime.now
-      actor ! JobStarted(jobId, jobInfo)
+      actor ! JobStarted(jobId, jobInfo.copy(startTime=startTime))
       actor ! GetRunningJobStatus
       expectMsg(Seq(JobInfo(jobId, contextName, jarInfo, classPath, startTime, None, None)))
 
