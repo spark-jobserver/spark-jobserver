@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/spark-jobserver/spark-jobserver.svg?branch=master)](https://travis-ci.org/spark-jobserver/spark-jobserver)
+[![Build Status](https://travis-ci.org/spark-jobserver/spark-jobserver.svg?branch=master)](https://travis-ci.org/spark-jobserver/spark-jobserver) [![Coverage](https://img.shields.io/codecov/c/github/spark-jobserver/spark-jobserver/master.svg)](https://codecov.io/gh/spark-jobserver/spark-jobserver/branch/master)
 
 [![Join the chat at https://gitter.im/spark-jobserver/spark-jobserver](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/spark-jobserver/spark-jobserver?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
