@@ -86,7 +86,7 @@ object WebApi {
         "stack" -> t.getStackTrace.map(_.toString).toSeq)
     }
 
-  def getJobReport(jobInfo: JobInfo, jobStarted:Boolean = false): Map[String, Any] = {
+  def getJobReport(jobInfo: JobInfo, jobStarted: Boolean = false): Map[String, Any] = {
     val statusMap = if (jobStarted) Map(StatusKey -> "STARTED") else (jobInfo match {
         case JobInfo(_, _, _, _, _, None, _) => Map(StatusKey -> "RUNNING")
         case JobInfo(_, _, _, _, _, _, Some(ex)) => Map(StatusKey -> "ERROR",
