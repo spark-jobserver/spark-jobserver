@@ -107,7 +107,7 @@ abstract class JobManagerSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
       uploadTestJar()
       manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, syncEvents ++ errorEvents)
       expectMsgPF(startJobWait, "Did not get JobResult") {
-        case JobResult(_, result: Map[String, Int]) => result should equal (counts)
+        case JobResult(_, result) => result should equal (counts)
       }
       expectNoMsg()
     }
@@ -119,7 +119,7 @@ abstract class JobManagerSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
       uploadTestJar()
       manager ! JobManagerActor.StartJob("demo", newWordCountClass, stringConfig, syncEvents ++ errorEvents)
       expectMsgPF(startJobWait, "Did not get JobResult") {
-        case JobResult(_, result: Map[String, Int]) => result should equal (counts)
+        case JobResult(_, result) => result should equal (counts)
       }
       expectNoMsg()
     }

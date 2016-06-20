@@ -1,10 +1,5 @@
 package spark.jobserver.io
 
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration._
-import scala.concurrent.{Await, Future}
-import scala.reflect.runtime.universe
-
 import java.io.{BufferedOutputStream, File, FileOutputStream}
 import java.sql.Timestamp
 import javax.sql.DataSource
@@ -15,6 +10,11 @@ import org.flywaydb.core.Flyway
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import slick.driver.JdbcProfile
+
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration._
+import scala.concurrent.{Await, Future}
+import scala.reflect.runtime.universe
 
 class JobSqlDAO(config: Config) extends JobDAO {
   val slickDriverClass = config.getString("spark.jobserver.sqldao.slick-driver")
@@ -124,7 +124,9 @@ class JobSqlDAO(config: Config) extends JobDAO {
     cacheJar(appName, uploadTime, jarBytes)
 
     // log it into database
-    insertJarInfo(JarInfo(appName, uploadTime), jarBytes)
+    if (Await.result(insertJarInfo(JarInfo(appName, uploadTime), jarBytes), 60 seconds) == 0) {
+      throw new SlickException(s"Failed to insert jar: $appName into database at $uploadTime")
+    }
   }
 
   override def getApps: Future[Map[String, DateTime]] = {

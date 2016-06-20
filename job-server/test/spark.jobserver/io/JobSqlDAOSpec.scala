@@ -15,7 +15,8 @@ abstract class JobSqlDAOSpecBase {
   def config : Config
 }
 
-class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLike with Matchers with BeforeAndAfter {
+class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLike with Matchers
+  with BeforeAndAfter {
   override def config: Config = ConfigFactory.load("local.test.jobsqldao.conf")
 
   var dao: JobSqlDAO = _
