@@ -170,11 +170,12 @@ server will create its own SparkContext, and return a job ID for subsequent quer
 
     curl -d "input.string = a b c a b see" 'localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample'
     {
+      "duration": "Job not done yet",
+      "classPath": "spark.jobserver.LongPiJob",
+      "startTime": "2016-06-19T16:27:12.196+05:30",
+      "context": "b7ea0eb5-spark.jobserver.WordCountExample",
       "status": "STARTED",
-      "result": {
-        "jobId": "5453779a-f004-45fc-a11d-a39dae0f9bf4",
-        "context": "b7ea0eb5-spark.jobserver.WordCountExample"
-      }
+      "jobId": "5453779a-f004-45fc-a11d-a39dae0f9bf4"
     }⏎
 
 NOTE: If you want to feed in a text file config and POST using curl, you want the `--data-binary` option, otherwise

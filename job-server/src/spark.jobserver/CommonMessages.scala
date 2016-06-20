@@ -2,6 +2,7 @@ package spark.jobserver
 
 import akka.actor.ActorRef
 import org.joda.time.DateTime
+import spark.jobserver.io.JobInfo
 
 trait StatusMessage {
   val jobId: String
@@ -10,7 +11,7 @@ trait StatusMessage {
 // Messages that are sent and received by multiple actors.
 object CommonMessages {
   // job status messages
-  case class JobStarted(jobId: String, context: String, startTime: DateTime) extends StatusMessage
+  case class JobStarted(jobId: String, jobInfo: JobInfo) extends StatusMessage
   case class JobFinished(jobId: String, endTime: DateTime) extends StatusMessage
   case class JobValidationFailed(jobId: String, endTime: DateTime, err: Throwable) extends StatusMessage
   case class JobErroredOut(jobId: String, endTime: DateTime, err: Throwable) extends StatusMessage

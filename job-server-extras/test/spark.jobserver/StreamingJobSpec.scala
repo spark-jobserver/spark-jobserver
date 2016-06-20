@@ -41,7 +41,7 @@ class StreamingJobSpec extends JobSpecBase(StreamingJobSpec.getNewSystem) {
       manager ! JobManagerActor.StartJob("demo", streamingJob, emptyConfig, asyncEvents ++ errorEvents)
 
       jobId = expectMsgPF(6 seconds, "Did not start StreamingTestJob, expecting JobStarted") {
-        case JobStarted(jobid, _, _) => {
+        case JobStarted(jobid, _) => {
           jobid should not be null
           jobid
         }

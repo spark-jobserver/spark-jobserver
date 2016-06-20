@@ -119,16 +119,18 @@ with ScalatestRouteTest with HttpService {
                                                           new IllegalArgumentException("foo")))
       case StartJob("foo", _, config, events)     =>
         statusActor ! Subscribe("foo", sender, events)
-        statusActor ! JobStatusActor.JobInit(JobInfo("foo", "context", null, "", dt, None, None))
-        statusActor ! JobStarted("foo", "context1", dt)
+        val jobInfo = JobInfo("foo", "context", null, "com.abc.meme", dt, None, None)
+        statusActor ! JobStatusActor.JobInit(jobInfo)
+        statusActor ! JobStarted(jobInfo.jobId, jobInfo)
         val map = config.entrySet().asScala.map { entry => entry.getKey -> entry.getValue.unwrapped }.toMap
         if (events.contains(classOf[JobResult])) sender ! JobResult("foo", map)
         statusActor ! Unsubscribe("foo", sender)
 
       case StartJob("foo.stream", _, config, events)     =>
         statusActor ! Subscribe("foo.stream", sender, events)
-        statusActor ! JobStatusActor.JobInit(JobInfo("foo.stream", "context", null, "", dt, None, None))
-        statusActor ! JobStarted("foo.stream", "context1", dt)
+        val jobInfo = JobInfo("foo.stream", "context", null, "", dt, None, None)
+        statusActor ! JobStatusActor.JobInit(jobInfo)
+        statusActor ! JobStarted(jobInfo.jobId, jobInfo)
         val result = "\"1, 2, 3, 4, 5, 6\"".getBytes().toStream
         if (events.contains(classOf[JobResult])) sender ! JobResult("foo.stream", result)
         statusActor ! Unsubscribe("foo.stream", sender)

@@ -281,7 +281,7 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
               statusActor ! JobValidationFailed(jobId, DateTime.now(), err)
               throw err
             case Good(jobData) =>
-              statusActor ! JobStarted(jobId: String, contextName, jobInfo.startTime)
+              statusActor ! JobStarted(jobId: String, jobInfo)
               val sc = jobContext.sparkContext
               sc.setJobGroup(jobId, s"Job group for $jobId and spark context ${sc.applicationId}", true)
               job.runJob(jobC, jobEnv, jobData)
