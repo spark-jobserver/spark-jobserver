@@ -209,7 +209,9 @@ class JobSqlDAO(config: Config) extends JobDAO {
 
   override def saveJobConfig(jobId: String, jobConfig: Config): Unit = {
     val configRender = jobConfig.root().render(ConfigRenderOptions.concise())
-    db.run(configs.map(c => c.*) += (jobId, configRender))
+    if(Await.result(db.run(configs.map(c => c.*) += (jobId, configRender)), 60 seconds) == 0){
+      throw new SlickException(s"Could not insert $jobId into database")
+    }
   }
 
   override def saveJobInfo(jobInfo: JobInfo): Unit = {
@@ -218,7 +220,9 @@ class JobSqlDAO(config: Config) extends JobDAO {
     val endTime = jobInfo.endTime.map(t => convertDateJodaToSql(t))
     val errors = jobInfo.error.map(e => e.getMessage)
     val row = (jobInfo.jobId, jobInfo.contextName, jarId, jobInfo.classPath, startTime, endTime, errors)
-    db.run(jobs.insertOrUpdate(row))
+    if(Await.result(db.run(jobs.insertOrUpdate(row)), 60 seconds) == 0){
+      throw new SlickException(s"Could not update ${jobInfo.jobId} in the database")
+    }
   }
 
   override def getJobInfos(limit: Int): Future[Seq[JobInfo]] = {
