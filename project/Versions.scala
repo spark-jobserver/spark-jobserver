@@ -10,7 +10,7 @@ object Versions {
   lazy val spark = "1.6.1"
   lazy val mesos = "0.25.0-0.2.70.ubuntu1404"
   lazy val netty =  "4.0.29.Final"
-  lazy val slick = "2.1.0"
+  lazy val slick = "3.1.1"
   lazy val h2 = "1.3.176"
   lazy val commons = "1.4"
   lazy val flyway = "3.2.1"

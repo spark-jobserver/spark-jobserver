@@ -1,12 +1,14 @@
 package spark.jobserver.io
 
+import scala.concurrent.Await
+
 import akka.actor.Props
 import com.typesafe.config.Config
 import ooyala.common.akka.InstrumentedActor
 import org.joda.time.DateTime
 import spark.jobserver.io.JobDAOActor.SaveJar
 import spark.jobserver.util.JarUtils
-
+import scala.concurrent.duration._
 object JobDAOActor {
 
   //Requests
@@ -45,7 +47,8 @@ class JobDAOActor(dao:JobDAO) extends InstrumentedActor {
       dao.saveJar(appName, uploadTime, jarBytes)
 
     case GetApps =>
-      sender() ! Apps(dao.getApps)
+      val apps = Await.result(dao.getApps, 60 seconds)
+      sender() ! Apps(apps)
 
     case GetJarPath(appName, uploadTime) =>
       sender() ! JarPath(dao.retrieveJarFile(appName,uploadTime))
@@ -54,13 +57,15 @@ class JobDAOActor(dao:JobDAO) extends InstrumentedActor {
       dao.saveJobInfo(jobInfo)
 
     case GetJobInfos(limit) =>
-      sender() ! JobInfos(dao.getJobInfos(limit))
+      val jobInfo = Await.result(dao.getJobInfos(limit), 60 seconds)
+      sender() ! JobInfos(jobInfo)
 
     case SaveJobConfig(jobId, jobConfig) =>
       dao.saveJobConfig(jobId,jobConfig)
 
     case GetJobConfigs =>
-      sender() ! JobConfigs(dao.getJobConfigs)
+      val jobConfigs = Await.result(dao.getJobConfigs, 60 seconds)
+      sender() ! JobConfigs(jobConfigs)
 
     case GetLastUploadTime(appName) =>
       sender() ! LastUploadTime(dao.getLastUploadTime(appName))
