@@ -439,7 +439,14 @@ class WebApi(system: ActorSystem,
         /**
          * GET /jobs   -- returns a JSON list of hashes containing job status, ex:
          * [
-         *   {jobId: "word-count-2013-04-22", status: "RUNNING"}
+         *   {
+         *     "duration": "Job not done yet",
+         *     "classPath": "spark.jobserver.WordCountExample",
+         *     "startTime": "2016-06-19T16:27:12.196+05:30",
+         *     "context": "b7ea0eb5-spark.jobserver.WordCountExample",
+         *     "status": "RUNNING",
+         *     "jobId": "5453779a-f004-45fc-a11d-a39dae0f9bf4"
+         *   }
          * ]
          * @optional @param limit Int - optional limit to number of jobs to display, defaults to 50
          */

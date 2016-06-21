@@ -171,7 +171,7 @@ server will create its own SparkContext, and return a job ID for subsequent quer
     curl -d "input.string = a b c a b see" 'localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample'
     {
       "duration": "Job not done yet",
-      "classPath": "spark.jobserver.LongPiJob",
+      "classPath": "spark.jobserver.WordCountExample",
       "startTime": "2016-06-19T16:27:12.196+05:30",
       "context": "b7ea0eb5-spark.jobserver.WordCountExample",
       "status": "STARTED",
