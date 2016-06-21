@@ -13,7 +13,6 @@ spark {
 
   jobserver {
     port = 8090
-    jar-store-rootdir = /tmp/jobserver/jars
 
     context-per-jvm = false
 
