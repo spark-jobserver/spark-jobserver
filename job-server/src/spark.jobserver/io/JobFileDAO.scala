@@ -30,7 +30,7 @@ class JobFileDAO(config: Config) extends JobDAO {
   init()
 
   private def init() {
-    // create the date directory if it doesn't exist
+    // create the data directory if it doesn't exist
     if (!rootDirFile.exists()) {
       if (!rootDirFile.mkdirs()) {
         throw new RuntimeException("Could not create directory " + rootDir)
