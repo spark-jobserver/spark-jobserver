@@ -33,8 +33,18 @@ if [ -z "$SPARK_HOME" ]; then
   exit 1
 fi
 
+if [ ! -d "$SPARK_HOME" ]; then
+  echo "SPARK_HOME doesn't exist: $SPARK_HOME, exiting"
+  exit 1
+fi
+
 if [ -z "$SPARK_CONF_DIR" ]; then
   SPARK_CONF_DIR=$SPARK_HOME/conf
+fi
+
+if [ ! -d "$SPARK_CONF_DIR" ]; then
+  echo "SPARK_CONF_DIR doesn't exist: $SPARK_CONF_DIR, exiting"
+  exit 1
 fi
 
 if [ -z "$LOG_DIR" ]; then
