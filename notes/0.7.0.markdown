@@ -1,5 +1,6 @@
 #Scala #akka @ApacheSpark
 
+* Upgrade Slick to 3.1.1 (@hntd187)
 * Fix broken links to ec2 scripts, #369 (@noorul)
 * Make create job API to return more information (@noorul)
 * Integrate converage into CI using codecov.io service (@hntd187)
