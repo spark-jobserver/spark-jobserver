@@ -68,7 +68,7 @@ object JobServerBuild extends Build {
   lazy val jobServerExtras = Project(id = "job-server-extras",
                                      base = file("job-server-extras"),
                                      settings = commonSettings ++ jobServerExtrasSettings
-                                    ).dependsOn(jobServerApi, jobServer % "test->test")
+                                    ).dependsOn(jobServerApi, jobServer % "compile->compile; test->test")
                                     .disablePlugins(SbtScalariform)
 
 
