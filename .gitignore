@@ -11,8 +11,10 @@ test-reports/
 # ignore deployment configs
 config/*.conf
 config/*.sh
+config/*.ini
 job-server/config/*.conf
 job-server/config/*.sh
+job-server/config/*.ini
 metastore_db/
 
 #ignore generated config
