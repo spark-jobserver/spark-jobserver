@@ -319,6 +319,7 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
         // If and only if job validation fails, JobErroredOut message is dropped silently in JobStatusActor.
         statusActor ! JobErroredOut(jobId, DateTime.now(), wrappedError)
         logger.error("Exception from job " + jobId + ": ", error)
+        self ! PoisonPill
     }(executionContext).andThen {
       case _ =>
         // Make sure to decrement the count of running jobs when a job finishes, in both success and failure
