@@ -3,8 +3,11 @@ package spark.jobserver
 import akka.actor.ActorRef
 import ooyala.common.akka.InstrumentedActor
 import ooyala.common.akka.metrics.YammerMetrics
+
 import scala.collection.mutable
 import spark.jobserver.util.LRUCache
+
+import scala.util.Try
 
 /**
  * It is an actor to manage results that are returned from jobs.
@@ -15,7 +18,8 @@ class JobResultActor extends InstrumentedActor with YammerMetrics {
   import CommonMessages._
 
   private val config = context.system.settings.config
-  private val cache = new LRUCache[String, Any](config.getInt("spark.jobserver.job-result-cache-size"))
+  private val cache = new LRUCache[String, Any](
+    Try(config.getInt("spark.jobserver.job-result-cache-size")).getOrElse(5000))
   private val subscribers = mutable.HashMap.empty[String, ActorRef] // subscribers
 
   // metrics

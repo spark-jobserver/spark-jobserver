@@ -38,7 +38,7 @@ EXTRA_CLASSPATH_OPTS="/etc/hadoop/conf:/etc/hive/conf:/usr/lib/hadoop-lzo/lib/*:
 MAIN="spark.jobserver.JobManager"
 
 if [ "$SPARK_DRIVER_MEMORY" -eq "0" ]; then
-    SPARK_DRIVER_MEMORY=JOBSERVER_MEMORY
+    SPARK_DRIVER_MEMORY="$JOBSERVER_MEMORY"
 fi
 
 cmd="$SPARK_HOME/bin/spark-submit --class $MAIN --driver-memory $SPARK_DRIVER_MEMORY
@@ -46,7 +46,7 @@ cmd="$SPARK_HOME/bin/spark-submit --class $MAIN --driver-memory $SPARK_DRIVER_ME
   --conf \"spark.driver.extraClassPath=$EXTRA_CLASSPATH_OPTS\"
   --conf \"spark.executor.extraClassPath=$EXTRA_CLASSPATH_OPTS\"
   --driver-java-options \"$GC_OPTS $JAVA_OPTS $LOGGING_OPTS $CONFIG_OVERRIDES\"
-  $appdir/spark-job-server.jar $WORK_DIR $CLUSTER_ADDRESS $SPARK_CONFIGURATION"
+  $appdir/spark-job-server.jar $CLUSTER_ADDRESS $SPARK_CONFIGURATION"
 
-eval $cmd > "$WORK_DIR/spark-job-server.log" 2>&1 &
+eval ${cmd} > "${WORK_DIR}/spark-job-server.log" 2>&1 &
 # exec java -cp $CLASSPATH $GC_OPTS $JAVA_OPTS $LOGGING_OPTS $CONFIG_OVERRIDES $MAIN $1 $2 $conffile 2>&1 &

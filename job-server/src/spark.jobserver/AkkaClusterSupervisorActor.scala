@@ -1,6 +1,7 @@
 package spark.jobserver
 
 import java.io.IOException
+import java.net.InetAddress
 import java.nio.charset.Charset
 import java.nio.file.{Files, Paths}
 import java.util.concurrent.TimeUnit
@@ -58,7 +59,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
   private val contexts = mutable.HashMap.empty[String, (ActorRef, ActorRef)]
 
   private val cluster = Cluster(context.system)
-  private val selfAddress = cluster.selfAddress
+  private val selfAddress = cluster.selfAddress.copy(host = Some(InetAddress.getLocalHost.getHostAddress))
 
   // This is for capturing results for ad-hoc jobs. Otherwise when ad-hoc job dies, resultActor also dies,
   // and there is no way to retrieve results.
@@ -199,15 +200,23 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
     logger.info("Starting context with actor name {}", contextActorName)
 
     val contextDir: java.io.File = try {
-        createContextDir(name, contextConfig, isAdHoc, contextActorName)
-      } catch {
-        case e: Exception =>
-          failureFunc(e)
-          return
-      }
+      createContextDir(name)
+    } catch {
+      case e: Exception =>
+        failureFunc(e)
+        return
+    }
+
+    val mergedConfig = ConfigFactory.parseMap(
+      Map("is-adhoc" -> isAdHoc.toString,
+        "context.name" -> name,
+        "context.actorname" -> contextActorName,
+        "akka.actor.provider" -> "akka.cluster.ClusterActorRefProvider"
+      ).asJava
+    ).withFallback(contextConfig)
 
     var sparkConf = ""
-    for (e <- contextConfig.entrySet()) {
+    for (e <- mergedConfig.entrySet()) {
       val key = e.getKey match {
         case "memory-per-node" => "spark.executor.memory"
         case "num-cpu-cores" => "spark.cores.max"
@@ -218,7 +227,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
       sparkConf += key + "=" + value.replace("\"", "\\\"") + "|"
     }
 
-    val driverMemory = Try(contextConfig.getString("spark.driver.memory")).getOrElse("0")
+    val driverMemory = Try(mergedConfig.getString("spark.driver.memory")).getOrElse("0")
 
     val cmdString = s"$managerStartCommand $contextDir ${selfAddress.toString} $name $driverMemory " +
       "\"" + sparkConf + "\""
@@ -244,28 +253,13 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
 
   }
 
-  private def createContextDir(name: String,
-                               contextConfig: Config,
-                               isAdHoc: Boolean,
-                               actorName: String): java.io.File = {
+  private def createContextDir(name: String): java.io.File = {
     // Create a temporary dir, preferably in the LOG_DIR
     val encodedContextName = java.net.URLEncoder.encode(name, "UTF-8")
     val tmpDir = Option(System.getProperty("LOG_DIR")).map { logDir =>
       Files.createTempDirectory(Paths.get(logDir), s"jobserver-$encodedContextName")
     }.getOrElse(Files.createTempDirectory("jobserver"))
     logger.info("Created working directory {} for context {}", tmpDir: Any, name)
-
-    // Now create the contextConfig merged with the values we need
-    val mergedConfig = ConfigFactory.parseMap(
-                         Map("is-adhoc" -> isAdHoc.toString,
-                             "context.name" -> name,
-                             "context.actorname" -> actorName).asJava
-                       ).withFallback(contextConfig)
-
-    // Write out the config to the temp dir
-    Files.write(tmpDir.resolve("context.conf"),
-                Seq(mergedConfig.root.render(ConfigRenderOptions.concise)).asJava,
-                Charset.forName("UTF-8"))
 
     tmpDir.toFile
   }

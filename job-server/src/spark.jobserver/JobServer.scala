@@ -1,12 +1,13 @@
 package spark.jobserver
 
-import akka.actor.{ActorSystem, ActorRef}
+import akka.actor.{ActorRef, ActorSystem}
 import akka.actor.Props
 import akka.pattern.ask
-import com.typesafe.config.{ConfigValueFactory, Config, ConfigFactory}
-
+import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import java.io.File
-import spark.jobserver.io.{JobDAOActor, JobDAO, DataFileDAO}
+import java.net.InetAddress
+
+import spark.jobserver.io.{DataFileDAO, JobDAO, JobDAOActor}
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
@@ -36,7 +37,7 @@ object JobServer {
   // we can have something that stores the ActorSystem so it could be shut down easily later.
   def start(args: Array[String], makeSystem: Config => ActorSystem) {
     val defaultConfig = ConfigFactory.load()
-    val config = if (args.length > 0) {
+    val config = {if (args.length > 0) {
       val configFile = new File(args(0))
       if (!configFile.exists()) {
         println("Could not find configuration file " + configFile)
@@ -45,7 +46,9 @@ object JobServer {
       ConfigFactory.parseFile(configFile).withFallback(defaultConfig).resolve()
     } else {
       defaultConfig
-    }
+    }}.withValue("akka.remote.netty.tcp.hostname",
+        ConfigValueFactory.fromAnyRef(InetAddress.getLocalHost.getHostAddress))
+
     logger.info("Starting JobServer with config {}", config.getConfig("spark").root.render())
     logger.info("Spray config: {}", config.getConfig("spray.can.server").root.render())
     val port = config.getInt("spark.jobserver.port")
