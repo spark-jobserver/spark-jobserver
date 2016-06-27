@@ -1,10 +1,11 @@
 #Scala #akka @ApacheSpark
 
+* New Scala API!   The expanded API includes passing in a `JobEnvironment` which provides access to job ID, context information; it also offers more type safety in job return type, validation etc. (@velvia, others)
+* Make create job API to return more information (@noorul)
 * Upgrade Slick to 3.1.1 (@hntd187)
 * Fix broken links to ec2 scripts, #369 (@noorul)
-* Make create job API to return more information (@noorul)
+* Add Scala version to Docker image (@mariussoutier)
 * Integrate converage into CI using codecov.io service (@hntd187)
-* New Scala API!   The expanded API includes passing in a `JobEnvironment` which provides access to job ID, context information; it also offers more type safety in job return type, validation etc. (@velvia, others)
 * Improve Chinese document (@stanzhai)
 * Make dbcp optional, default: disabled (@noorul)
 * Fix for logging issue in dev mode, #475 (@noorul)
