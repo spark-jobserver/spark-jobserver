@@ -33,38 +33,34 @@ class JobInfoActor(jobDao: JobDAO, contextSupervisor: ActorRef) extends Instrume
 
   override def wrappedReceive: Receive = {
     case GetJobStatuses(limit) =>
-      sender ! jobDao.getJobInfos(limit.get)
+      val originator = sender
+      jobDao.getJobInfos(limit.get).foreach(originator ! _)
 
     case GetJobStatus(jobId) =>
-      val jobInfo = Await.result(jobDao.getJobInfo(jobId), 60 seconds)
-      val resp = if (jobInfo.nonEmpty) NoSuchJobId else jobInfo.get
-      sender ! resp
+      val originator = sender
+
+      jobDao.getJobInfo(jobId).collect {
+        case Some(jobInfo) => originator ! jobInfo
+        case None          => originator ! NoSuchJobId
+      }
 
     case GetJobResult(jobId) =>
-      breakable {
-        val jobInfo: Option[JobInfo] = Await.result(jobDao.getJobInfo(jobId), 60 seconds)
+      val originator = sender
 
-        if (jobInfo.nonEmpty) {
-          sender ! NoSuchJobId
-          break
-        }
-
-        jobInfo.filter { job => job.isRunning || job.isErroredOut }
-          .foreach { jobInfo =>
-            sender ! jobInfo
-            break
+      jobDao.getJobInfo(jobId).collect {
+        case Some(jobInfo) =>
+          if (jobInfo.isRunning || jobInfo.isErroredOut) {
+            originator ! jobInfo
+          } else {
+            // get the context from jobInfo
+            val context = jobInfo.contextName
+            for {
+              resultActor <- (contextSupervisor ? ContextSupervisor.GetResultActor(context)).mapTo[ActorRef]
+              result <- resultActor ? GetJobResult(jobId) } {
+              originator ! result   // a JobResult(jobId, result) object is sent
+            }
           }
-
-        // get the context from jobInfo
-        val context = jobInfo.get.contextName
-
-        val future = (contextSupervisor ? ContextSupervisor.GetResultActor(context)).mapTo[ActorRef]
-        val resultActor = Await.result(future, 3 seconds)
-
-        val receiver = sender // must capture the sender since callbacks are run in a different thread
-        for (result <- resultActor ? GetJobResult(jobId)) {
-          receiver ! result // a JobResult(jobId, result) object is sent
-        }
+        case None => originator ! NoSuchJobId
       }
 
     case GetJobConfig(jobId) =>
