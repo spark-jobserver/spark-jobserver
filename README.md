@@ -680,7 +680,7 @@ serialized properly:
 - If a job result is of scala's Stream[Byte] type it will be serialised directly as a chunk encoded stream.
   This is useful if your job result payload is large and may cause a timeout serialising as objects. Beware, this
   will not currently work as desired with context-per-jvm=true configuration, since it would require serialising
-  Stream[_] blob between processes. For now use Stream[_] job results in context-per-jvm=false configuration, pending
+  Stream[\_] blob between processes. For now use Stream[\_] job results in context-per-jvm=false configuration, pending
   potential future enhancements to support this in context-per-jvm=true mode.
 
 If we encounter a data type that is not supported, then the entire result will be serialized to a string.
