@@ -1,6 +1,9 @@
 package spark.jobserver
 
 import com.typesafe.config.ConfigFactory
+import spark.jobserver.JobInfoActor.GetJobStatuses
+import spark.jobserver.JobManagerActor.{ContextConfig, GetContextConfig}
+import spark.jobserver.io.JobInfo
 import spray.http.StatusCodes._
 import spark.jobserver.util.SparkJobUtils
 
@@ -350,6 +353,18 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         status should be (OK)
       }
       Post("/contexts/meme?num-cpu-cores=3&coarse-mesos-mode=true") ~> sealRoute(routes) ~> check {
+        status should be (OK)
+      }
+    }
+
+    it("should setup a new context with the correct configurations.") {
+      val config =
+        """spark.context-settings {
+          |  test = 1
+          |  override_me = 3
+          |}
+        """.stripMargin
+      Post("/contexts/custom-ctx?num-cpu-cores=2&override_me=2", config) ~> sealRoute(routes) ~> check {
         status should be (OK)
       }
     }

@@ -7,7 +7,7 @@ import javax.net.ssl.SSLContext
 import akka.actor.{ActorRef, ActorSystem}
 import akka.pattern.ask
 import akka.util.Timeout
-import com.typesafe.config.{Config, ConfigException, ConfigFactory, ConfigValueFactory, ConfigRenderOptions}
+import com.typesafe.config.{Config, ConfigException, ConfigFactory, ConfigRenderOptions, ConfigValueFactory}
 import ooyala.common.akka.web.JsonUtils.AnyJsonFormat
 import ooyala.common.akka.web.{CommonRoutes, WebService}
 import org.apache.shiro.SecurityUtils
@@ -227,6 +227,7 @@ class WebApi(system: ActorSystem,
    *    DELETE /data/<filename>       - deletes given file, no-op if file does not exist
    *    POST /data/<filename-prefix>  - upload a new data file, using the given prefix,
    *                                      a time stamp is appended to ensure uniqueness
+   *
    * @author TimMaltGermany
    */
   def dataRoutes: Route = pathPrefix("data") {
@@ -245,7 +246,6 @@ class WebApi(system: ActorSystem,
   def contextRoutes: Route = pathPrefix("contexts") {
     import ContextSupervisor._
 
-    import collection.JavaConverters._
     // user authentication
     authenticate(authenticator) { authInfo =>
       get { ctx =>
@@ -253,25 +253,30 @@ class WebApi(system: ActorSystem,
           .map { contexts =>
             ctx.complete(removeProxyUserPrefix(authInfo, contexts)) }
       } ~
-        post {
-          /**
-           *  POST /contexts/<contextName>?<optional params> -
-           *    Creates a long-running context with contextName and options for context creation
-           *    All options are merged into the defaults in spark.context-settings
-           *
-           * @optional @param num-cpu-cores Int - Number of cores the context will use
-           * @optional @param memory-per-node String - -Xmx style string (512m, 1g, etc)
-           * for max memory per node
-           * @return the string "OK", or error if context exists or could not be initialized
-           */
+      post {
+        /**
+         *  POST /contexts/<contextName>?<optional params> -
+         *    Creates a long-running context with contextName and options for context creation
+         *    All options are merged into the defaults in spark.context-settings
+         *
+         * @optional @entity The POST entity should be a Typesafe Config format file with a
+         *            "spark.context-settings" block containing spark configs for the context.
+         * @optional @param num-cpu-cores Int - Number of cores the context will use
+         * @optional @param memory-per-node String - -Xmx style string (512m, 1g, etc)
+         * for max memory per node
+         * @return the string "OK", or error if context exists or could not be initialized
+         */
+        entity(as[String]) { configString =>
           path(Segment) { (contextName) =>
             // Enforce user context name to start with letters
             if (!contextName.head.isLetter) {
               complete(StatusCodes.BadRequest, errMap("context name must start with letters"))
             } else {
               parameterMap { (params) =>
-                val (cName, config) = determineProxyUser(ConfigFactory.parseMap(params.asJava).resolve(),
-                                                            authInfo, contextName)
+                // parse the config from the body, using url params as fallback values
+                val baseConfig = ConfigFactory.parseString(configString)
+                val contextConfig = getContextConfig(baseConfig, params)
+                val (cName, config) = determineProxyUser(contextConfig, authInfo, contextName)
                 val future = (supervisor ? AddContext(cName, config))(contextTimeout.seconds)
                 respondWithMediaType(MediaTypes.`application/json`) { ctx =>
                   future.map {
@@ -283,7 +288,8 @@ class WebApi(system: ActorSystem,
               }
             }
           }
-        } ~
+        }
+      } ~
         delete {
           //  DELETE /contexts/<contextName>
           //  Stop the context with the given name.  Executors will be shut down and all cached RDDs
@@ -489,8 +495,7 @@ class WebApi(system: ActorSystem,
                     val async = !syncOpt.getOrElse(false)
                     val postedJobConfig = ConfigFactory.parseString(configString)
                     val jobConfig = postedJobConfig.withFallback(config).resolve()
-                    val contextConfig = Try(jobConfig.getConfig("spark.context-settings")).
-                      getOrElse(ConfigFactory.empty)
+                    val contextConfig = getContextConfig(jobConfig)
                     val jobManager = getJobManagerForContext(contextOpt, contextConfig, classPath)
                     val events = if (async) asyncEvents else syncEvents
                     val timeout = timeoutOpt.map(t => Timeout(t.seconds)).getOrElse(DefaultSyncTimeout)
@@ -603,6 +608,14 @@ class WebApi(system: ActorSystem,
       case NoSuchContext                              => None
       case ContextInitError(err)                      => throw new RuntimeException(err)
     }
+  }
+
+  private def getContextConfig(baseConfig: Config, fallbackParams: Map[String, String] = Map()): Config = {
+    import collection.JavaConverters.mapAsJavaMapConverter
+    Try(baseConfig.getConfig("spark.context-settings"))
+      .getOrElse(ConfigFactory.empty)
+      .withFallback(ConfigFactory.parseMap(fallbackParams.asJava))
+      .resolve()
   }
 
 }
