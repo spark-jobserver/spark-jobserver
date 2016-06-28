@@ -12,3 +12,4 @@
 * Fix for logging issue in dev mode, #475 (@noorul)
 * Fix flaky tests (@TimMaltGermany)
 * Update build plugins (@hntd187)
+* README fix (@Vincibean)
