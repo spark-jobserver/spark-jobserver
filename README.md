@@ -76,6 +76,7 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 - [SnappyData](http://www.snappydata.io)
 - [Linkfluence](http://www.linkfluence.com)
 - [Smartsct](http://www.smartsct.com)
+- [Datadog] (https://www.datadoghq.com/)
 
 ## Features
 
