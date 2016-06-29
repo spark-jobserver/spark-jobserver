@@ -48,7 +48,7 @@ cmd='$SPARK_HOME/bin/spark-submit --class $MAIN --driver-memory $JOBSERVER_MEMOR
   --driver-java-options "$GC_OPTS $JAVA_OPTS $LOGGING_OPTS $CONFIG_OVERRIDES"
   $@ $appdir/spark-job-server.jar $conffile'
 if [ -z "$JOBSERVER_FG" ]; then
-  eval $cmd > $LOG_DIR/server_start.sh.log 2>&1 < $LOG_DIR/server_start.sh.log &
+  eval $cmd > $LOG_DIR/server_start.log 2>&1 < /dev/null &
   echo $! > $PIDFILE
 else
   eval $cmd
