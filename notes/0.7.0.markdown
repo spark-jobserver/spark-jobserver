@@ -14,3 +14,4 @@
 * Update build plugins (@hntd187)
 * README fix (@Vincibean)
 * Docs for YARN queue config option (@ash211)
+* Make JMX port configurable (casey-green)
