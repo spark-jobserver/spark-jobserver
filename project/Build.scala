@@ -108,6 +108,19 @@ object JobServerBuild extends Build {
     dockerfile in docker := {
       val artifact = (assemblyOutputPath in assembly in jobServerExtras).value
       val artifactTargetPath = s"/app/${artifact.name}"
+
+      val sparkBuild = s"spark-$sparkVersion"
+      val sparkBuildCmd = scalaBinaryVersion.value match {
+        case "2.10" =>
+          "./make-distribution.sh -Phadoop-2.4 -Phive"
+        case "2.11" =>
+          """
+            |./dev/change-scala-version.sh 2.11 && \
+            |./make-distribution.sh -Dscala-2.11 -Phadoop-2.4 -Phive
+          """.stripMargin.trim
+        case other => throw new RuntimeException(s"Scala version $other is not supported!")
+      }
+
       new sbtdocker.mutable.Dockerfile {
         from(s"java:$javaVersion")
         // Dockerfile best practices: https://docs.docker.com/articles/dockerfile_best-practices/
@@ -123,6 +136,7 @@ object JobServerBuild extends Build {
         copy(artifact, artifactTargetPath)
         copy(baseDirectory(_ / "bin" / "server_start.sh").value, file("app/server_start.sh"))
         copy(baseDirectory(_ / "bin" / "server_stop.sh").value, file("app/server_stop.sh"))
+        copy(baseDirectory(_ / "bin" / "manager_start.sh").value, file("app/manager_start.sh"))
         copy(baseDirectory(_ / "bin" / "setenv.sh").value, file("app/setenv.sh"))
         copy(baseDirectory(_ / "config" / "log4j-stdout.properties").value, file("app/log4j-server.properties"))
         copy(baseDirectory(_ / "config" / "docker.conf").value, file("app/docker.conf"))
@@ -130,14 +144,20 @@ object JobServerBuild extends Build {
         // Including envs in Dockerfile makes it easy to override from docker command
         env("JOBSERVER_MEMORY", "1G")
         env("SPARK_HOME", "/spark")
-        env("SPARK_BUILD", s"spark-$sparkVersion-bin-hadoop2.4")
         // Use a volume to persist database between container invocations
         run("mkdir", "-p", "/database")
-        runRaw("""wget http://d3kbcqa49mib13.cloudfront.net/$SPARK_BUILD.tgz && \
-                  tar -xvf $SPARK_BUILD.tgz && \
-                  mv $SPARK_BUILD /spark && \
-                  rm $SPARK_BUILD.tgz
-               """)
+        runRaw(
+          s"""
+            |wget http://d3kbcqa49mib13.cloudfront.net/$sparkBuild.tgz && \\
+            |tar -xvf $sparkBuild.tgz && \\
+            |cd $sparkBuild && \\
+            |$sparkBuildCmd && \\
+            |cd .. && \\
+            |mv $sparkBuild/dist /spark && \\
+            |rm $sparkBuild.tgz && \\
+            |rm -r $sparkBuild
+          """.stripMargin.trim
+               )
         volume("/database")
         entryPoint("app/server_start.sh")
       }
@@ -184,7 +204,7 @@ object JobServerBuild extends Build {
     organization := "spark.jobserver",
     crossPaths   := true,
     crossScalaVersions := Seq("2.10.6","2.11.8"),
-    scalaVersion := "2.10.6",
+    scalaVersion := sys.env.getOrElse("SCALA_VERSION", "2.10.6"),
     publishTo    := Some(Resolver.file("Unused repo", file("target/unusedrepo"))),
     // scalastyleFailOnError := true,
     runScalaStyle := {
