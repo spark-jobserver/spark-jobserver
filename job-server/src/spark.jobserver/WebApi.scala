@@ -189,6 +189,7 @@ class WebApi(system: ActorSystem,
    *    POST /jars/<appName>   - upload a new jar file
    */
   def jarRoutes: Route = pathPrefix("jars") {
+<<<<<<< HEAD
     // user authentication
     authenticate(authenticator) { authInfo =>
       // GET /jars route returns a JSON map of the app name and the last time a jar was uploaded.
@@ -214,6 +215,30 @@ class WebApi(system: ActorSystem,
                 }.recover {
                   case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
                 }
+=======
+    // GET /jars route returns a JSON map of the app name and the last time a jar was uploaded.
+    get { ctx =>
+      val future = (jarManager ? ListJars).mapTo[collection.Map[String, DateTime]]
+      future.map { jarTimeMap =>
+        val stringTimeMap = jarTimeMap.map { case (app, dt) => (app, dt.toString()) }.toMap
+        ctx.complete(stringTimeMap)
+      }.recover {
+        case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+      }
+    } ~
+      // POST /jars/<appName>
+      // The <appName> needs to be unique; uploading a jar with the same appName will replace it.
+      post {
+        path(Segment) { appName =>
+          entity(as[Array[Byte]]) { jarBytes =>
+            val future = jarManager ? StoreJar(appName, jarBytes)
+            respondWithMediaType(MediaTypes.`application/json`) { ctx =>
+              future.map {
+                case JarStored  => ctx.complete(StatusCodes.OK, Map(StatusKey -> "OK"))
+                case InvalidJar => badRequest(ctx, "Jar is not of the right format")
+              }.recover {
+                case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+>>>>>>> Always respond with correct JSON
               }
             }
           }
@@ -246,6 +271,7 @@ class WebApi(system: ActorSystem,
     import ContextSupervisor._
 
     import collection.JavaConverters._
+<<<<<<< HEAD
     // user authentication
     authenticate(authenticator) { authInfo =>
       get { ctx =>
@@ -279,10 +305,40 @@ class WebApi(system: ActorSystem,
                     case ContextAlreadyExists => badRequest(ctx, "context " + contextName + " exists")
                     case ContextInitError(e)  => ctx.complete(500, errMap(e, "CONTEXT INIT ERROR"))
                   }
+=======
+    get { ctx =>
+      (supervisor ? ListContexts).mapTo[Seq[String]]
+        .map { contexts => ctx.complete(contexts) }
+    } ~
+      post {
+        /**
+         *  POST /contexts/<contextName>?<optional params> -
+         *    Creates a long-running context with contextName and options for context creation
+         *    All options are merged into the defaults in spark.context-settings
+         *
+         * @optional @param num-cpu-cores Int - Number of cores the context will use
+         * @optional @param memory-per-node String - -Xmx style string (512m, 1g, etc) for max memory per node
+         * @return the string "OK", or error if context exists or could not be initialized
+         */
+        path(Segment) { (contextName) =>
+          // Enforce user context name to start with letters
+          if (!contextName.head.isLetter) {
+            complete(StatusCodes.BadRequest, errMap("context name must start with letters"))
+          } else {
+            parameterMap { (params) =>
+              val config = ConfigFactory.parseMap(params.asJava).resolve()
+              val future = (supervisor ? AddContext(contextName, config))(contextTimeout.seconds)
+              respondWithMediaType(MediaTypes.`application/json`) { ctx =>
+                future.map {
+                  case ContextInitialized   => ctx.complete(StatusCodes.OK, Map(StatusKey -> "OK"))
+                  case ContextAlreadyExists => badRequest(ctx, "context " + contextName + " exists")
+                  case ContextInitError(e)  => ctx.complete(500, errMap(e, "CONTEXT INIT ERROR"))
+>>>>>>> Always respond with correct JSON
                 }
               }
             }
           }
+<<<<<<< HEAD
         } ~
         delete {
           //  DELETE /contexts/<contextName>
@@ -296,6 +352,20 @@ class WebApi(system: ActorSystem,
                 case ContextStopped => ctx.complete(StatusCodes.OK)
                 case NoSuchContext  => notFound(ctx, "context " + contextName + " not found")
               }
+=======
+        }
+      } ~
+      delete {
+        //  DELETE /contexts/<contextName>
+        //  Stop the context with the given name.  Executors will be shut down and all cached RDDs
+        //  and currently running jobs will be lost.  Use with care!
+        path(Segment) { (contextName) =>
+          val future = supervisor ? StopContext(contextName)
+          respondWithMediaType(MediaTypes.`text/plain`) { ctx =>
+            future.map {
+              case ContextStopped => ctx.complete(StatusCodes.OK, Map(StatusKey -> "OK"))
+              case NoSuchContext  => notFound(ctx, "context " + contextName + " not found")
+>>>>>>> Always respond with correct JSON
             }
           }
         } ~
@@ -340,7 +410,7 @@ class WebApi(system: ActorSystem,
     //no authentication required
     get { ctx =>
       logger.info("Receiving healthz check request")
-      ctx.complete("OK")
+      ctx.complete(StatusCodes.OK, Map(StatusKey -> "OK"))
     }
   }
 
