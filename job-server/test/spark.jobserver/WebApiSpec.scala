@@ -103,6 +103,13 @@ with ScalatestRouteTest with HttpService {
       case StopContext("none") => sender ! NoSuchContext
       case StopContext(_)      => sender ! ContextStopped
       case AddContext("one", _) => sender ! ContextAlreadyExists
+      case AddContext("custom-ctx", c) =>
+        // see WebApiMainRoutesSpec => "context routes" =>
+        // "should setup a new context with the correct configurations."
+        c.getInt("test") should be(1)
+        c.getInt("num-cpu-cores") should be(2)
+        c.getInt("override_me") should be(3)
+        sender ! ContextInitialized
       case AddContext(_, _)     => sender ! ContextInitialized
 
       case GetContext("no-context") => sender ! NoSuchContext

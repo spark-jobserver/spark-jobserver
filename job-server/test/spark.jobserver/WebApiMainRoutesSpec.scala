@@ -353,6 +353,18 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         status should be (OK)
       }
     }
+
+    it("should setup a new context with the correct configurations.") {
+      val config =
+        """spark.context-settings {
+          |  test = 1
+          |  override_me = 3
+          |}
+        """.stripMargin
+      Post("/contexts/custom-ctx?num-cpu-cores=2&override_me=2", config) ~> sealRoute(routes) ~> check {
+        status should be (OK)
+      }
+    }
   }
 }
 
