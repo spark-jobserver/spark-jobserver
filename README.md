@@ -658,13 +658,9 @@ User impersonation for an already Kerberos authenticated user is supported via `
 
   POST /contexts/my-new-context?spark.proxy.user=<user-to-impersonate>
   
-<<<<<<< 4826ccd138276e3bbe20496a1463904eb729bee2
 However, whenever the flag `shiro.use-as-proxy-user` is set to `on` (and authentication is `on`) then this parameter 
 is ignored and the name of the authenticated user is *always* used as the value of the `spark.proxy.user` 
 parameter when creating contexts. 
-=======
-However, whenever the flag `shiro.use-as-proxy-user` is set to `on` (and authentication is `on`) then this parameter is ignored and the name of the authenticated is *always* used as the value of the `spark.proxy.user` parameter when creating contexts. 
->>>>>>> authenticated proxy users: added option to require that proxy users must be identical to the authenticated user
 
 To pass settings directly to the sparkConf that do not use the "spark." prefix "as-is", use the "passthrough" section.
 
