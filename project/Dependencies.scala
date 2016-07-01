@@ -67,8 +67,8 @@ object Dependencies {
      "org.apache.shiro" % "shiro-core" % shiro
   )
 
-  lazy val serverDeps = apiDeps
-  lazy val apiDeps = sparkDeps ++ miscDeps :+ typeSafeConfigDeps :+ scalaTestDep
+  lazy val serverDeps = apiDeps ++ miscDeps
+  lazy val apiDeps = sparkDeps ++ miscDeps :+ typeSafeConfigDeps
 
   val repos = Seq(
     "Typesafe Repo" at "http://repo.typesafe.com/typesafe/releases/",

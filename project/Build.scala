@@ -1,24 +1,16 @@
-import scalariform.formatter.preferences._
-
-import sbt._
-import Keys._
+import bintray.BintrayPlugin.bintrayPublishSettings
 import bintray.BintrayKeys._
-import com.typesafe.sbt.SbtScalariform._
 import com.typesafe.sbt.SbtScalariform
+import com.typesafe.sbt.SbtScalariform._
+import sbt.Keys._
+import sbt._
 import sbtassembly.AssemblyPlugin.autoImport._
 import scoverage.ScoverageKeys._
-import spray.revolver.RevolverPlugin.autoImport._
 
 // There are advantages to using real Scala build files with SBT:
 //  - Multi-JVM testing won't work without it, for now
 //  - You get full IDE support
 object JobServerBuild extends Build {
-  lazy val dirSettings = Seq(
-    unmanagedSourceDirectories in Compile <<= Seq(baseDirectory(_ / "src" )).join,
-    unmanagedSourceDirectories in Test <<= Seq(baseDirectory(_ / "test" )).join,
-    scalaSource in Compile <<= baseDirectory(_ / "src" ),
-    scalaSource in Test <<= baseDirectory(_ / "test" )
-  )
 
   import Dependencies._
   import JobServerRelease._
@@ -32,13 +24,13 @@ object JobServerBuild extends Build {
 
   lazy val jobServer = Project(id = "job-server", base = file("job-server"),
     settings = commonSettings ++ revolverSettings ++ Assembly.settings ++ Seq(
-      description  := "Spark as a Service: a RESTful job server for Apache Spark",
+      description := "Spark as a Service: a RESTful job server for Apache Spark",
       libraryDependencies ++= sparkDeps ++ slickDeps ++ securityDeps ++ coreTestDeps,
 
       // Automatically package the test jar when we run tests here
       // And always do a clean before package (package depends on clean) to clear out multiple versions
       test in Test <<= (test in Test).dependsOn(packageBin in Compile in jobServerTestJar)
-                                     .dependsOn(clean in Compile in jobServerTestJar),
+        .dependsOn(clean in Compile in jobServerTestJar),
 
       console in Compile <<= Defaults.consoleTask(fullClasspath in Compile, console in Compile),
 
@@ -77,15 +69,15 @@ object JobServerBuild extends Build {
   //
   // NOTE: if we don't define a root project, SBT does it for us, but without our settings
   lazy val root = Project(id = "root", base = file("."),
-                    settings = commonSettings ++ ourReleaseSettings ++ rootSettings ++ dockerSettings
-                  ).aggregate(jobServer, jobServerApi, jobServerTestJar, akkaApp, jobServerExtras).
-                   dependsOn(jobServer, jobServerExtras).disablePlugins(SbtScalariform)
+    settings = commonSettings ++ ourReleaseSettings ++ rootSettings ++ dockerSettings
+  ).aggregate(jobServer, jobServerApi, jobServerTestJar, akkaApp, jobServerExtras).
+    dependsOn(jobServer, jobServerExtras)
 
   lazy val jobServerExtrasSettings = revolverSettings ++ Assembly.settings ++ publishSettings ++ Seq(
     libraryDependencies ++= sparkExtraDeps,
     // Extras packages up its own jar for testing itself
     test in Test <<= (test in Test).dependsOn(packageBin in Compile)
-                                   .dependsOn(clean in Compile),
+      .dependsOn(clean in Compile),
     fork in Test := true,
     // Temporarily disable test for assembly builds so folks can package and get started.  Some tests
     // are flaky in extras esp involving paths.
@@ -97,7 +89,7 @@ object JobServerBuild extends Build {
     libraryDependencies ++= sparkDeps ++ apiDeps,
     publishArtifact := false,
     description := "Test jar for Spark Job Server",
-    exportJars := true        // use the jar instead of target/classes
+    exportJars := true // use the jar instead of target/classes
   )
 
   import sbtdocker.DockerKeys._
@@ -125,14 +117,15 @@ object JobServerBuild extends Build {
         from(s"java:$javaVersion")
         // Dockerfile best practices: https://docs.docker.com/articles/dockerfile_best-practices/
         expose(8090)
-        expose(9999)    // for JMX
+        expose(9999) // for JMX
         env("MESOS_VERSION", mesosVersion)
-        runRaw("""echo "deb http://repos.mesosphere.io/ubuntu/ trusty main" > /etc/apt/sources.list.d/mesosphere.list && \
+        runRaw(
+          """echo "deb http://repos.mesosphere.io/ubuntu/ trusty main" > /etc/apt/sources.list.d/mesosphere.list && \
                   apt-key adv --keyserver keyserver.ubuntu.com --recv E56151BF && \
                   apt-get -y update && \
                   apt-get -y install mesos=${MESOS_VERSION} && \
                   apt-get clean
-               """)
+          """)
         copy(artifact, artifactTargetPath)
         copy(baseDirectory(_ / "bin" / "server_start.sh").value, file("app/server_start.sh"))
         copy(baseDirectory(_ / "bin" / "server_stop.sh").value, file("app/server_stop.sh"))
@@ -156,8 +149,7 @@ object JobServerBuild extends Build {
             |mv $sparkBuild/dist /spark && \\
             |rm $sparkBuild.tgz && \\
             |rm -r $sparkBuild
-          """.stripMargin.trim
-               )
+          """.stripMargin.trim)
         volume("/database")
         entryPoint("app/server_start.sh")
       }
@@ -181,6 +173,8 @@ object JobServerBuild extends Build {
       Tags.limitSum(1, Tags.Test, Tags.Untagged))
   )
 
+  import spray.revolver.RevolverPlugin.autoImport._
+
   lazy val revolverSettings = Seq(
     javaOptions in reStart += jobServerLogging,
     // Give job server a bit more PermGen since it does classloading
@@ -194,13 +188,13 @@ object JobServerBuild extends Build {
   // To add an extra jar to the classpath when doing "re-start" for quick development, set the
   // env var EXTRA_JAR to the absolute full path to the jar
   lazy val extraJarPaths = Option(System.getenv("EXTRA_JAR"))
-                             .map(jarpath => Seq(Attributed.blank(file(jarpath))))
-                             .getOrElse(Nil)
+    .map(jarpath => Seq(Attributed.blank(file(jarpath))))
+    .getOrElse(Nil)
 
   // Create a default Scala style task to run with compiles
   lazy val runScalaStyle = taskKey[Unit]("testScalaStyle")
 
-  lazy val commonSettings = Defaults.coreDefaultSettings ++ dirSettings ++ implicitlySettings ++ Seq(
+  lazy val commonSettings = Defaults.coreDefaultSettings ++ implicitlySettings ++ Seq(
     organization := "spark.jobserver",
     crossPaths   := true,
     crossScalaVersions := Seq("2.10.6","2.11.8"),
@@ -216,10 +210,8 @@ object JobServerBuild extends Build {
     // Need to pass in language options or import scala.language.* to enable them.
     // See SIP-18 (https://docs.google.com/document/d/1nlkvpoIRkx7at1qJEZafJwthZ3GeIklTFhqmXMvTX9Q/edit)
     scalacOptions := Seq("-deprecation", "-feature",
-                         "-language:implicitConversions", "-language:postfixOps"),
-    // For Building on Encrypted File Systems...
-    scalacOptions ++= Seq("-Xmax-classfile-name","128"),
-    resolvers    ++= Dependencies.repos,
+      "-language:implicitConversions", "-language:postfixOps", "-Xmax-classfile-name", "128"),
+    resolvers ++= Dependencies.repos,
     libraryDependencies ++= apiDeps,
     parallelExecution in Test := false,
 
@@ -239,9 +231,9 @@ object JobServerBuild extends Build {
     coverageExcludedPackages := ".+Benchmark.*"
   }
 
-  lazy val publishSettings = Seq(
-    licenses += ("Apache-2.0", url("http://choosealicense.com/licenses/apache/")),
-    bintrayOrganization := Some("spark-jobserver")
+  lazy val publishSettings = bintrayPublishSettings ++ Seq(
+    licenses +=("Apache-2.0", url("http://choosealicense.com/licenses/apache/")),
+    bintrayOrganization in bintray := Some("spark-jobserver")
   )
 
   // change to scalariformSettings for auto format on compile; defaultScalariformSettings to disable
