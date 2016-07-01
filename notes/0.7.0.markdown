@@ -1,6 +1,7 @@
 #Scala #akka @ApacheSpark
 
 * New Scala API!   The expanded API includes passing in a `JobEnvironment` which provides access to job ID, context information; it also offers more type safety in job return type, validation etc. (@velvia, others)
+* Context creation API (POST /contexts) now takes a config in the POST body!  (@casey-green)
 * Make create job API to return more information (@noorul)
 * Upgrade Slick to 3.1.1 (@hntd187)
 * Fix broken links to ec2 scripts, #369 (@noorul)
@@ -14,4 +15,4 @@
 * Update build plugins (@hntd187)
 * README fix (@Vincibean)
 * Docs for YARN queue config option (@ash211)
-* Make JMX port configurable (casey-green)
+* Make JMX port configurable (@casey-green)
