@@ -7,7 +7,7 @@ import javax.net.ssl.SSLContext
 import akka.actor.{ActorRef, ActorSystem}
 import akka.pattern.ask
 import akka.util.Timeout
-import com.typesafe.config.{Config, ConfigException, ConfigFactory, ConfigRenderOptions, ConfigValueFactory}
+import com.typesafe.config.{Config, ConfigException, ConfigFactory, ConfigValueFactory, ConfigRenderOptions}
 import ooyala.common.akka.web.JsonUtils.AnyJsonFormat
 import ooyala.common.akka.web.{CommonRoutes, WebService}
 import org.apache.shiro.SecurityUtils
@@ -227,7 +227,6 @@ class WebApi(system: ActorSystem,
    *    DELETE /data/<filename>       - deletes given file, no-op if file does not exist
    *    POST /data/<filename-prefix>  - upload a new data file, using the given prefix,
    *                                      a time stamp is appended to ensure uniqueness
-   *
    * @author TimMaltGermany
    */
   def dataRoutes: Route = pathPrefix("data") {

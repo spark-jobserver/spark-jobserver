@@ -1,9 +1,6 @@
 package spark.jobserver
 
 import com.typesafe.config.ConfigFactory
-import spark.jobserver.JobInfoActor.GetJobStatuses
-import spark.jobserver.JobManagerActor.{ContextConfig, GetContextConfig}
-import spark.jobserver.io.JobInfo
 import spray.http.StatusCodes._
 import spark.jobserver.util.SparkJobUtils
 
