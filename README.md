@@ -42,6 +42,7 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
   - [Contexts](#contexts)
   - [Jobs](#jobs)
   - [Data](#data)
+    - [Data API Example](#data-api-example)
   - [Context configuration](#context-configuration)
   - [Other configuration settings](#other-configuration-settings)
   - [Job Result Serialization](#job-result-serialization)
@@ -595,6 +596,26 @@ just the same as with any other server-local file. A job could therefore add thi
 it to worker nodes via the SparkContext.addFile command.        
 For files that are larger than a few hundred MB, it is recommended to manually upload these files to the server or
 to directly add them to your HDFS.
+
+#### Data API Example
+
+    $ curl -d "Test data file api" http://localhost:8090/data/test_data_file_upload.txt
+    {
+      "result": {
+        "filename": "/tmp/spark-jobserver/upload/test_data_file_upload.txt-2016-07-04T09_09_57.928+05_30.dat"
+      }
+    }
+
+    $ curl http://localhost:8090/data
+    ["/tmp/spark-jobserver/upload/test_data_file_upload.txt-2016-07-04T09_09_57.928+05_30.dat"]
+
+    $ curl -X DELETE http://localhost:8090/data/%2Ftmp%2Fspark-jobserver%2Fupload%2Ftest_data_file_upload.txt-2016-07-04T09_09_57.928%2B05_30.dat
+    OK
+
+    $ curl http://localhost:8090/data
+    []
+
+Note: Both POST and DELETE requests takes URI encoded file names.
 
 ### Context configuration
 
