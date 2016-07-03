@@ -2,16 +2,21 @@ package spark.jobserver;
 
 import com.typesafe.config.Config;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.scalactic.Every;
+import org.scalactic.Good;
+import org.scalactic.Or;
+import spark.jobserver.api.JobEnvironment;
+import spark.jobserver.api.ValidationProblem;
 
-public class JavaHelloWorldJob implements JavaSparkJob<JavaSparkContext, String>{
+public class JavaHelloWorldJob implements JavaSparkJob<JavaSparkContext, String, String>{
 
     @Override
-    public String runJob(JavaSparkContext context, Config cfg) {
+    public String runJob(JavaSparkContext context, JobEnvironment cfg) {
         return "Hello world!";
     }
 
     @Override
-    public JavaSparkJobValidation validate(JavaSparkContext context, Config cfg) {
-        return JavaSparkJobValidation.JOB_VALID;
+    public Or<String, Every<ValidationProblem>> validate(JavaSparkContext context, JobEnvironment jEnv, Config cfg) {
+        return new Good<>("k");
     }
 }
