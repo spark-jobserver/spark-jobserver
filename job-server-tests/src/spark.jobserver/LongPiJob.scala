@@ -1,9 +1,12 @@
 package spark.jobserver
 
 import com.typesafe.config.{Config, ConfigFactory}
-import org.apache.spark._
-import scala.util.Try
 import java.util.{Random, Date}
+import org.apache.spark._
+import org.scalactic._
+import scala.util.Try
+
+import spark.jobserver.api._
 
 /**
  * A long job for stress tests purpose.
@@ -17,23 +20,34 @@ import java.util.{Random, Date}
  * Longer duration increases precision.
  *
  */
-object LongPiJob extends SparkJob {
+object LongPiJob extends api.SparkJob {
   private val rand = new Random(now)
+
+  type JobData = Int
+  type JobOutput = Double
+
 
   def main(args: Array[String]) {
     val conf = new SparkConf().setMaster("local[4]").setAppName("LongPiJob")
     val sc = new SparkContext(conf)
-    val config = ConfigFactory.parseString("")
-    val results = runJob(sc, config)
+    val env = new JobEnvironment {
+      def jobId: String = "abcdef"
+      //scalastyle:off
+      def namedObjects: NamedObjects = ???
+      def contextConfig: Config = ConfigFactory.empty
+    }
+    val results = runJob(sc, env, 5)
     println("Result is " + results)
   }
 
-  override def validate(sc: SparkContext, config: Config): SparkJobValidation = {
-    SparkJobValid
+  def validate(sc: SparkContext, runtime: JobEnvironment, config: Config):
+    JobData Or Every[ValidationProblem] = {
+    val duration = Try(config.getInt("stress.test.longpijob.duration")).getOrElse(5)
+    Good(duration)
   }
 
-  override def runJob(sc: SparkContext, config: Config): Any = {
-    val duration = Try(config.getInt("stress.test.longpijob.duration")).getOrElse(5)
+  def runJob(sc: SparkContext, runtime: JobEnvironment, data: JobData): JobOutput = {
+    val duration = data
     var hit = 0L
     var total = 0L
     val start = now

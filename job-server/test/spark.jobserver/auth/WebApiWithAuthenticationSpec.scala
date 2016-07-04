@@ -11,14 +11,22 @@ import spray.http.StatusCodes._
 import spray.http.HttpHeaders.Authorization
 import spray.http.BasicHttpCredentials
 import spray.routing.{ HttpService, Route }
+import spray.routing.directives.AuthMagnet
 import spray.testkit.ScalatestRouteTest
 import org.apache.shiro.config.IniSecurityManagerFactory
-import org.apache.shiro.mgt.DefaultSecurityManager
-import org.apache.shiro.mgt.SecurityManager
+import org.apache.shiro.mgt.{ DefaultSecurityManager, SecurityManager }
 import org.apache.shiro.realm.Realm
 import org.apache.shiro.SecurityUtils
 import org.apache.shiro.config.Ini
 import scala.collection.mutable.SynchronizedSet
+import scala.util.Try
+import scala.concurrent.{ Await, ExecutionContext, Future }
+import scala.concurrent.duration._
+import spray.routing.directives.AuthMagnet
+import spray.routing.authentication.UserPass
+import spray.routing.authentication.BasicAuth
+import org.slf4j.LoggerFactory
+import java.util.concurrent.TimeoutException
 
 // Tests authorization only, actual responses are tested elsewhere
 // Does NOT test underlying Supervisor / JarManager functionality
@@ -53,10 +61,31 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
   // for actors declared as inner classes we need to pass this as first arg
   private val dummyActor = system.actorOf(Props(classOf[DummyActor], this))
 
-  private def routesWithTimeout(useAsProxyUser: Boolean, authTimeout: String): Route = {
+  private def routesWithTimeout(useAsProxyUser: Boolean, authTimeout: Int): Route = {
     val testConfig = config.withValue("shiro.authentication-timeout",
       ConfigValueFactory.fromAnyRef(authTimeout)).withValue("shiro.use-as-proxy-user", ConfigValueFactory.fromAnyRef(useAsProxyUser))
     val api = new WebApi(system, testConfig, dummyPort, dummyActor, dummyActor, dummyActor, dummyActor) {
+      private def asShiroAuthenticatorWithWait(authTimeout: Int)(implicit ec: ExecutionContext): AuthMagnet[AuthInfo] = {
+        val logger = LoggerFactory.getLogger(getClass)
+
+        def validate(userPass: Option[UserPass]): Future[Option[AuthInfo]] = {
+          //if (!currentUser.isAuthenticated()) {
+          Future {
+            explicitValidation(userPass getOrElse UserPass("", ""), logger)
+          }
+        }
+
+        def authenticator(userPass: Option[UserPass]): Future[Option[AuthInfo]] = Future {
+          if (authTimeout > 0) {
+            Await.result(validate(userPass), authTimeout.seconds)
+          } else {
+            throw new TimeoutException("forced timeout")
+          }
+        }
+
+        BasicAuth(authenticator _, realm = "Shiro Private")
+      }
+      
       override def initSecurityManager() {
         val ini = {
           val tmp = new Ini()
@@ -68,12 +97,18 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
         val sManager = factory.getInstance()
         SecurityUtils.setSecurityManager(sManager)
       }
+
+      override lazy val authenticator: AuthMagnet[AuthInfo] = {
+        logger.info("Using authentication.")
+        initSecurityManager()
+        asShiroAuthenticatorWithWait(authTimeout)
+      }
     }
     api.myRoutes
   }
 
-  private val routesWithProxyUser = routesWithTimeout(true, "1 s")
-  private val routesWithoutProxyUser = routesWithTimeout(false, "1 s")
+  private val routesWithProxyUser = routesWithTimeout(true, 1000)
+  private val routesWithoutProxyUser = routesWithTimeout(false, 1000)
 
   private val USER_NAME = "presidentskroob"
   private val USER_NAME_2 = USER_NAME + WebApi.NameContextDelimiter + "2"
@@ -185,7 +220,7 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
           status should be(OK)
         }
       while (!addedContexts.contains(USER_NAME + WebApi.NameContextDelimiter + "one") && !addedContexts.contains(USER_NAME + WebApi.NameContextDelimiter + "two") &&
-          !addedContexts.contains(USER_NAME + WebApi.NameContextDelimiter + "three")) {
+        !addedContexts.contains(USER_NAME + WebApi.NameContextDelimiter + "three")) {
         Thread.sleep(3)
       }
 
@@ -224,7 +259,7 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
           status should be(OK)
         }
 
-      while (!addedContexts.contains(USER_NAME + WebApi.NameContextDelimiter  + "c") &&
+      while (!addedContexts.contains(USER_NAME + WebApi.NameContextDelimiter + "c") &&
         !addedContexts.contains(USER_NAME + WebApi.NameContextDelimiter + USER_NAME + "_c") &&
         !addedContexts.contains(USER_NAME + WebApi.NameContextDelimiter + USER_NAME + "_c2")) {
         Thread.sleep(3)
@@ -387,23 +422,23 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
   }
 
   describe("routes with timeout") {
-    ignore("jobs should not allow user with valid authorization when timeout") {
+    it("jobs should not allow user with valid authorization when timeout") {
       Get("/jobs/foobar").withHeaders(authorization) ~>
-        sealRoute(routesWithTimeout(true, "0 s")) ~> check {
+        sealRoute(routesWithTimeout(true, 0)) ~> check {
           status should be(InternalServerError)
         }
     }
 
     it("jars should not allow user with valid authorization when timeout") {
       Get("/jars").withHeaders(authorization) ~>
-        sealRoute(routesWithTimeout(false, "0 s")) ~> check {
+        sealRoute(routesWithTimeout(false, 0)) ~> check {
           status should be(InternalServerError)
         }
     }
 
     it("contexts should not allow user with valid authorization when timeout") {
       Get("/contexts").withHeaders(authorization) ~>
-        sealRoute(routesWithTimeout(true, "0 s")) ~> check {
+        sealRoute(routesWithTimeout(true, 0)) ~> check {
           status should be(InternalServerError)
         }
     }

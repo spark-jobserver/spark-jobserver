@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/spark-jobserver/spark-jobserver.svg?branch=master)](https://travis-ci.org/spark-jobserver/spark-jobserver)
+[![Build Status](https://travis-ci.org/spark-jobserver/spark-jobserver.svg?branch=master)](https://travis-ci.org/spark-jobserver/spark-jobserver) [![Coverage](https://img.shields.io/codecov/c/github/spark-jobserver/spark-jobserver/master.svg)](https://codecov.io/gh/spark-jobserver/spark-jobserver/branch/master)
 
 [![Join the chat at https://gitter.im/spark-jobserver/spark-jobserver](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/spark-jobserver/spark-jobserver?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
@@ -24,6 +24,7 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
     - [Ad-hoc Mode - Single, Unrelated Jobs (Transient Context)](#ad-hoc-mode---single-unrelated-jobs-transient-context)
     - [Persistent Context Mode - Faster & Required for Related Jobs](#persistent-context-mode---faster-&-required-for-related-jobs)
 - [Create a Job Server Project](#create-a-job-server-project)
+  - [NEW SparkJob API](#new-sparkjob-api)
   - [Dependency jars](#dependency-jars)
   - [Named Objects](#named-objects)
     - [Using Named RDDs](#using-named-rdds)
@@ -75,6 +76,7 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 - [SnappyData](http://www.snappydata.io)
 - [Linkfluence](http://www.linkfluence.com)
 - [Smartsct](http://www.smartsct.com)
+- [Datadog] (https://www.datadoghq.com/)
 
 ## Features
 
@@ -169,11 +171,12 @@ server will create its own SparkContext, and return a job ID for subsequent quer
 
     curl -d "input.string = a b c a b see" 'localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample'
     {
+      "duration": "Job not done yet",
+      "classPath": "spark.jobserver.WordCountExample",
+      "startTime": "2016-06-19T16:27:12.196+05:30",
+      "context": "b7ea0eb5-spark.jobserver.WordCountExample",
       "status": "STARTED",
-      "result": {
-        "jobId": "5453779a-f004-45fc-a11d-a39dae0f9bf4",
-        "context": "b7ea0eb5-spark.jobserver.WordCountExample"
-      }
+      "jobId": "5453779a-f004-45fc-a11d-a39dae0f9bf4"
     }⏎
 
 NOTE: If you want to feed in a text file config and POST using curl, you want the `--data-binary` option, otherwise
@@ -247,9 +250,9 @@ For most use cases it's better to have the dependencies be "provided" because yo
 To create a job that can be submitted through the job server, the job must implement the `SparkJob` trait.
 Your job will look like:
 ```scala
-object SampleJob  extends SparkJob {
-    override def runJob(sc:SparkContext, jobConfig: Config): Any = ???
-    override def validate(sc:SparkContext, config: Config): SparkJobValidation = ???
+object SampleJob extends SparkJob {
+    override def runJob(sc: SparkContext, jobConfig: Config): Any = ???
+    override def validate(sc: SparkContext, config: Config): SparkJobValidation = ???
 }
 ```
 
@@ -258,6 +261,29 @@ object SampleJob  extends SparkJob {
 manage and re-use contexts.
 - `validate` allows for an initial validation of the context and any provided configuration. If the context and configuration are OK to run the job, returning `spark.jobserver.SparkJobValid` will let the job execute, otherwise returning `spark.jobserver.SparkJobInvalid(reason)` prevents the job from running and provides means to convey the reason of failure. In this case, the call immediately returns an `HTTP/1.1 400 Bad Request` status code.  
 `validate` helps you preventing running jobs that will eventually fail due to missing or wrong configuration and save both time and resources.  
+
+### NEW SparkJob API
+
+Note: As of version 0.7.0, a new SparkJob API that is significantly better than the old SparkJob API will take over.  Existing jobs should continue to compile against the old `spark.jobserver.SparkJob` API, but this will be deprecated in the future.  Note that jobs before 0.7.0 will need to be recompiled, older jobs may not work with the current SJS example.  The new API looks like this:
+
+```scala
+object WordCountExampleNewApi extends NewSparkJob {
+  type JobData = Seq[String]
+  type JobOutput = collection.Map[String, Long]
+
+  def runJob(sc: SparkContext, runtime: JobEnvironment, data: JobData): JobOutput =
+    sc.parallelize(data).countByValue
+
+  def validate(sc: SparkContext, runtime: JobEnvironment, config: Config):
+    JobData Or Every[ValidationProblem] = {
+    Try(config.getString("input.string").split(" ").toSeq)
+      .map(words => Good(words))
+      .getOrElse(Bad(One(SingleProblem("No input.string param"))))
+  }
+}
+```
+
+It is much more type safe, separates context configuration, job ID, named objects, and other environment variables into a separate JobEnvironment input, and allows the validation method to return specific data for the runJob method.  See the [WordCountExample](job-server-tests/src/spark.jobserver/WordCountExample.scala) and [LongPiJob](job-server-tests/src/spark.jobserver/LongPiJob.scala) for examples.
 
 Let's try running our sample job with an invalid configuration:
 
@@ -498,6 +524,10 @@ database created with necessary rights granted to user.
       }
     }
 
+Also add the following line at the root level.
+
+    flyway.locations="db/postgresql/migration"
+
 It is also important that any dependent jars are to be added to Job Server class path.
 
 ### Chef
@@ -606,7 +636,9 @@ User impersonation for an already Kerberos authenticated user is supported via `
 
   POST /contexts/my-new-context?spark.proxy.user=<user-to-impersonate>
   
-However, whenever the flag `shiro.use-as-proxy-user` is set to `on` (and authentication is `on`) then this parameter is ignored and the name of the authenticated is *always* used as the value of the `spark.proxy.user` parameter when creating contexts. 
+However, whenever the flag `shiro.use-as-proxy-user` is set to `on` (and authentication is `on`) then this parameter 
+is ignored and the name of the authenticated user is *always* used as the value of the `spark.proxy.user` 
+parameter when creating contexts. 
 
 To pass settings directly to the sparkConf that do not use the "spark." prefix "as-is", use the "passthrough" section.
 
@@ -648,7 +680,7 @@ serialized properly:
 - If a job result is of scala's Stream[Byte] type it will be serialised directly as a chunk encoded stream.
   This is useful if your job result payload is large and may cause a timeout serialising as objects. Beware, this
   will not currently work as desired with context-per-jvm=true configuration, since it would require serialising
-  Stream[_] blob between processes. For now use Stream[_] job results in context-per-jvm=false configuration, pending
+  Stream[\_] blob between processes. For now use Stream[\_] job results in context-per-jvm=false configuration, pending
   potential future enhancements to support this in context-per-jvm=true mode.
 
 If we encounter a data type that is not supported, then the entire result will be serialized to a string.

@@ -1,14 +1,23 @@
 package spark.jobserver.io
 
-import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
-import org.joda.time.DateTime
-import org.scalatest.{Matchers, FunSpecLike, BeforeAndAfter}
-import spark.jobserver.TestJarFinder
-import com.google.common.io.Files
+import scala.concurrent.Await
+import scala.concurrent.duration._
+
 import java.io.File
 
-class JobSqlDAOSpec extends TestJarFinder with FunSpecLike with Matchers with BeforeAndAfter {
-  private val config = ConfigFactory.load("local.test.jobsqldao.conf")
+import com.google.common.io.Files
+import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
+import org.joda.time.DateTime
+import org.scalatest.{BeforeAndAfter, FunSpecLike, Matchers}
+import spark.jobserver.TestJarFinder
+
+abstract class JobSqlDAOSpecBase {
+  def config : Config
+}
+
+class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLike with Matchers
+  with BeforeAndAfter {
+  override def config: Config = ConfigFactory.load("local.test.jobsqldao.conf")
 
   var dao: JobSqlDAO = _
 
@@ -94,7 +103,7 @@ class JobSqlDAOSpec extends TestJarFinder with FunSpecLike with Matchers with Be
       dao.saveJar(jarInfo.appName, jarInfo.uploadTime, jarBytes)
 
       // read it back
-      val apps = dao.getApps
+      val apps: Map[String, DateTime] = Await.result(dao.getApps, 60 seconds)
 
       // test
       jarFile.exists() should equal (true)
@@ -117,7 +126,7 @@ class JobSqlDAOSpec extends TestJarFinder with FunSpecLike with Matchers with Be
 
   describe("saveJobConfig() and getJobConfigs() tests") {
     it("should provide an empty map on getJobConfigs() for an empty CONFIGS table") {
-      (Map.empty[String, Config]) should equal (dao.getJobConfigs)
+      Map.empty[String, Config] should equal (Await.result(dao.getJobConfigs, 60 seconds))
     }
 
     it("should save and get the same config") {
@@ -125,7 +134,7 @@ class JobSqlDAOSpec extends TestJarFinder with FunSpecLike with Matchers with Be
       dao.saveJobConfig(jobId, jobConfig)
 
       // get all configs
-      val configs = dao.getJobConfigs
+      val configs = Await.result(dao.getJobConfigs, 60 seconds)
 
       // test
       configs.keySet should equal (Set(jobId))
@@ -136,7 +145,7 @@ class JobSqlDAOSpec extends TestJarFinder with FunSpecLike with Matchers with Be
       // config saved in prior test
 
       // get job configs
-      val configs = dao.getJobConfigs
+      val configs = Await.result(dao.getJobConfigs, 60 seconds)
 
       // test
       configs.keySet should equal (Set(jobId))
@@ -157,7 +166,7 @@ class JobSqlDAOSpec extends TestJarFinder with FunSpecLike with Matchers with Be
       dao = new JobSqlDAO(config)
 
       // Get all configs
-      val configs = dao.getJobConfigs
+      val configs = Await.result(dao.getJobConfigs, 60 seconds)
 
       // test
       configs.keySet should equal (Set(jobId, jobId2))
@@ -167,7 +176,7 @@ class JobSqlDAOSpec extends TestJarFinder with FunSpecLike with Matchers with Be
 
   describe("Basic saveJobInfo() and getJobInfos() tests") {
     it("should provide an empty Seq on getJobInfos() for an empty JOBS table") {
-      (Seq.empty[JobInfo]) should equal (dao.getJobInfos(1))
+      Seq.empty[JobInfo] should equal (Await.result(dao.getJobInfos(1), 60 seconds))
     }
 
     it("should save a new JobInfo and get the same JobInfo") {
@@ -175,9 +184,8 @@ class JobSqlDAOSpec extends TestJarFinder with FunSpecLike with Matchers with Be
       dao.saveJobInfo(jobInfoNoEndNoErr)
 
       // get some JobInfos
-      val jobs = dao.getJobInfos(10)
+      val jobs: Seq[JobInfo] = Await.result(dao.getJobInfos(10), 60 seconds)
 
-      // test
       jobs.head.jobId should equal (jobId)
       jobs.head should equal (expectedJobInfo)
     }
@@ -186,7 +194,7 @@ class JobSqlDAOSpec extends TestJarFinder with FunSpecLike with Matchers with Be
       // jobInfo saved in prior test
 
       // get jobInfos
-      val jobInfo = dao.getJobInfo(jobId).get
+      val jobInfo = Await.result(dao.getJobInfo(jobId), 60 seconds).get
 
       // test
       jobInfo should equal (expectedJobInfo)
@@ -206,7 +214,7 @@ class JobSqlDAOSpec extends TestJarFinder with FunSpecLike with Matchers with Be
       dao = new JobSqlDAO(config)
 
       // Get jobInfos
-      val jobs = dao.getJobInfos(2)
+      val jobs = Await.result(dao.getJobInfos(2), 60 seconds)
       val jobIds = jobs map { _.jobId }
 
       // test
@@ -224,7 +232,7 @@ class JobSqlDAOSpec extends TestJarFinder with FunSpecLike with Matchers with Be
       info.uploadTime should equal (jarInfo.uploadTime)
 
       // Get all jobInfos
-      val jobs: Seq[JobInfo] = dao.getJobInfos(2)
+      val jobs: Seq[JobInfo] = Await.result(dao.getJobInfos(2), 60 seconds)
 
       // First Test
       jobs.size should equal (2)
@@ -234,7 +242,7 @@ class JobSqlDAOSpec extends TestJarFinder with FunSpecLike with Matchers with Be
       // Cannot compare JobInfos directly if error is a Some(Throwable) because
       // Throwable uses referential equality
       dao.saveJobInfo(jobInfoNoEndSomeErr)
-      val jobs2 = dao.getJobInfos(2)
+      val jobs2 = Await.result(dao.getJobInfos(2), 60 seconds)
       jobs2.size should equal (2)
       jobs2.last.endTime should equal (None)
       jobs2.last.error.isDefined should equal (true)
@@ -243,7 +251,7 @@ class JobSqlDAOSpec extends TestJarFinder with FunSpecLike with Matchers with Be
 
       // Third Test
       dao.saveJobInfo(jobInfoSomeEndNoErr)
-      val jobs3 = dao.getJobInfos(2)
+      val jobs3 = Await.result(dao.getJobInfos(2), 60 seconds)
       jobs3.size should equal (2)
       jobs3.last.error.isDefined should equal (false)
       jobs3.last should equal (expectedSomeEndNoErr)
@@ -252,7 +260,7 @@ class JobSqlDAOSpec extends TestJarFinder with FunSpecLike with Matchers with Be
       // Cannot compare JobInfos directly if error is a Some(Throwable) because
       // Throwable uses referential equality
       dao.saveJobInfo(jobInfoSomeEndSomeErr)
-      val jobs4 = dao.getJobInfos(2)
+      val jobs4 = Await.result(dao.getJobInfos(2), 60 seconds)
       jobs4.size should equal (2)
       jobs4.last.endTime should equal (expectedSomeEndSomeErr.endTime)
       jobs4.last.error.isDefined should equal (true)
@@ -260,4 +268,8 @@ class JobSqlDAOSpec extends TestJarFinder with FunSpecLike with Matchers with Be
       jobs4.last.error.get.getMessage should equal (throwable.getMessage)
     }
   }
+}
+
+class JobSqlDAODBCPSpec extends JobSqlDAOSpec {
+  override def config: Config = ConfigFactory.load("local.test.jobsqldao_dbcp.conf")
 }

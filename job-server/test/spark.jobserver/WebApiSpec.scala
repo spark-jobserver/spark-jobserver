@@ -103,6 +103,13 @@ with ScalatestRouteTest with HttpService {
       case StopContext("none") => sender ! NoSuchContext
       case StopContext(_)      => sender ! ContextStopped
       case AddContext("one", _) => sender ! ContextAlreadyExists
+      case AddContext("custom-ctx", c) =>
+        // see WebApiMainRoutesSpec => "context routes" =>
+        // "should setup a new context with the correct configurations."
+        c.getInt("test") should be(1)
+        c.getInt("num-cpu-cores") should be(2)
+        c.getInt("override_me") should be(3)
+        sender ! ContextInitialized
       case AddContext(_, _)     => sender ! ContextInitialized
 
       case GetContext("no-context") => sender ! NoSuchContext
@@ -119,16 +126,18 @@ with ScalatestRouteTest with HttpService {
                                                           new IllegalArgumentException("foo")))
       case StartJob("foo", _, config, events)     =>
         statusActor ! Subscribe("foo", sender, events)
-        statusActor ! JobStatusActor.JobInit(JobInfo("foo", "context", null, "", dt, None, None))
-        statusActor ! JobStarted("foo", "context1", dt)
+        val jobInfo = JobInfo("foo", "context", null, "com.abc.meme", dt, None, None)
+        statusActor ! JobStatusActor.JobInit(jobInfo)
+        statusActor ! JobStarted(jobInfo.jobId, jobInfo)
         val map = config.entrySet().asScala.map { entry => entry.getKey -> entry.getValue.unwrapped }.toMap
         if (events.contains(classOf[JobResult])) sender ! JobResult("foo", map)
         statusActor ! Unsubscribe("foo", sender)
 
       case StartJob("foo.stream", _, config, events)     =>
         statusActor ! Subscribe("foo.stream", sender, events)
-        statusActor ! JobStatusActor.JobInit(JobInfo("foo.stream", "context", null, "", dt, None, None))
-        statusActor ! JobStarted("foo.stream", "context1", dt)
+        val jobInfo = JobInfo("foo.stream", "context", null, "", dt, None, None)
+        statusActor ! JobStatusActor.JobInit(jobInfo)
+        statusActor ! JobStarted(jobInfo.jobId, jobInfo)
         val result = "\"1, 2, 3, 4, 5, 6\"".getBytes().toStream
         if (events.contains(classOf[JobResult])) sender ! JobResult("foo.stream", result)
         statusActor ! Unsubscribe("foo.stream", sender)

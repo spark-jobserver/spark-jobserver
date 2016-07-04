@@ -104,10 +104,14 @@ class WebApiMainRoutesSpec extends WebApiSpec {
     it("async route should return 202 if job starts successfully") {
       Post("/jobs?appName=foo&classPath=com.abc.meme&context=one", "") ~> sealRoute(routes) ~> check {
         status should be (Accepted)
-        responseAs[Map[String, Any]] should be (Map(
-          StatusKey -> "STARTED",
-          ResultKey -> Map("jobId" -> "foo", "context" -> "context1")
-        ))
+        responseAs[Map[String, String]] should be (Map(
+          "jobId" -> "foo",
+          "startTime" -> "2013-05-29T00:00:00.000Z",
+          "classPath" -> "com.abc.meme",
+          "context"  -> "context",
+          "duration" -> "Job not done yet",
+          StatusKey -> "STARTED")
+        )
       }
     }
 
@@ -159,10 +163,14 @@ class WebApiMainRoutesSpec extends WebApiSpec {
     it("adhoc job started successfully of async route should return 202") {
       Post("/jobs?appName=foo&classPath=com.abc.meme", "") ~> sealRoute(routes) ~> check {
         status should be (Accepted)
-        responseAs[Map[String, Any]] should be (Map(
-          StatusKey -> "STARTED",
-          ResultKey -> Map("jobId" -> "foo", "context" -> "context1")
-        ))
+        responseAs[Map[String, String]] should be (Map(
+          "jobId" -> "foo",
+          "startTime" -> "2013-05-29T00:00:00.000Z",
+          "classPath" -> "com.abc.meme",
+          "context"  -> "context",
+          "duration" -> "Job not done yet",
+          StatusKey -> "STARTED")
+        )
       }
     }
 
@@ -342,6 +350,18 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         status should be (OK)
       }
       Post("/contexts/meme?num-cpu-cores=3&coarse-mesos-mode=true") ~> sealRoute(routes) ~> check {
+        status should be (OK)
+      }
+    }
+
+    it("should setup a new context with the correct configurations.") {
+      val config =
+        """spark.context-settings {
+          |  test = 1
+          |  override_me = 3
+          |}
+        """.stripMargin
+      Post("/contexts/custom-ctx?num-cpu-cores=2&override_me=2", config) ~> sealRoute(routes) ~> check {
         status should be (OK)
       }
     }
