@@ -11,7 +11,7 @@ import spark.jobserver.api.ValidationProblem;
 public class JavaJobTest implements JavaSparkJob<JavaSparkContext, Integer, Integer> {
 
     @Override
-    public Integer runJob(JavaSparkContext context, JobEnvironment cfg) {
+    public Integer runJob(JavaSparkContext context, JobEnvironment cfg, Integer data) {
         return 0;
     }
 

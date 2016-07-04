@@ -79,7 +79,7 @@ class JavaToScalaWrapper[J, R, D](job: JavaSparkJob[J, R, D]) extends api.SparkJ
   type JobData = D
 
   def runJob(sc: C, runtime: JobEnvironment, data: D): JobOutput = {
-    job.runJob(sc, runtime)
+    job.runJob(sc, runtime, data)
   }
 
   def validate(sc: C, runtime: JobEnvironment, config: Config): JobData Or Every[ValidationProblem] = {
@@ -148,11 +148,15 @@ class DefaultSparkContextFactory extends ScalaContextFactory {
 }
 
 class JavaSparkContextFactory extends ScalaContextFactory {
-  type C = JavaSparkContext
-  def makeContext(sparkConf: SparkConf, config: Config, contextName: String): C ={
-    new DefaultSparkContextFactory().makeContext(sparkConf, config, contextName)
+  type C = JavaSparkContext with ContextLike
+  def makeContext(sparkConf: SparkConf, config: Config, contextName: String): C = {
+    val sc = new JavaSparkContext(new DefaultSparkContextFactory().
+      makeContext(sparkConf, config, contextName))
+    new JavaSparkContext(sc) with ContextLike {
+      def sparkContext: SparkContext = this.sc
+    }
   }
   def isValidJob(job: api.SparkJobBase): Boolean = {
-    job.isInstanceOf[JavaToScalaWrapper]
+    job.isInstanceOf[JavaToScalaWrapper[_,_,_]]
   }
 }

@@ -11,8 +11,8 @@ import spark.jobserver.api.ValidationProblem;
 public class JavaHelloWorldJob implements JavaSparkJob<JavaSparkContext, String, String>{
 
     @Override
-    public String runJob(JavaSparkContext context, JobEnvironment cfg) {
-        return "Hello world!";
+    public String runJob(JavaSparkContext context, JobEnvironment cfg, String data) {
+        return data;
     }
 
     @Override
