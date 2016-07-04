@@ -83,3 +83,21 @@ If you wish to use the `SQLContext` or `HiveContext`, be sure to pull down the j
 * `streaming.stopGracefully`: if true, stops gracefully by waiting for the processing of all received data to be completed 
 * `streaming.stopSparkContext`: if true, stops the SparkContext with the StreamingContext. The underlying SparkContext will be stopped regardless of whether the StreamingContext has been started.
 
+### Running Multiple HiveContexts (Thanks cgeorge-rms)
+
+This isn't an issue, but wanted to give everyone heads up if someone is searching on this problem.
+When running `context-per-jvm=true` and running multiple HiveContexts without using a shared mysql database you will get an exception about derby locking.
+I found that if you put a hive-site.xml in spark/conf directory containing:
+
+
+    javax.jdo.option.ConnectionURL
+    jdbc:derby:memory:myDB;create=true
+    JDBC connect string for a JDBC metastore
+
+
+    javax.jdo.option.ConnectionDriverName
+    org.apache.derby.jdbc.EmbeddedDriver
+    Driver class name for a JDBC metastore
+
+It will then create an in memory derby instance for the hive metastore (this is assuming you don't need persistent data stored in actual hive metastore) 
+We are doing this because we want context isolation and are running HiveServer2 from a shared context for jdbc access which works really well for us.
