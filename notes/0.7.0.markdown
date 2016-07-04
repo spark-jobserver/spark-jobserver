@@ -16,3 +16,5 @@
 * README fix (@Vincibean)
 * Docs for YARN queue config option (@ash211)
 * Make JMX port configurable (@casey-green)
+* Update test description, PR #481 (@oranda)
+* Per-user authenticated contexts, PR #469 (@TimMaltGermany)
