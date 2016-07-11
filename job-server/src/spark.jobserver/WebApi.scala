@@ -87,12 +87,17 @@ object WebApi {
     }
 
   def getJobReport(jobInfo: JobInfo, jobStarted: Boolean = false): Map[String, Any] = {
-    val statusMap = if (jobStarted) Map(StatusKey -> "STARTED") else (jobInfo match {
+    val statusMap = if (jobStarted) Map(StatusKey -> "STARTED") else jobInfo match {
         case JobInfo(_, _, _, _, _, None, _) => Map(StatusKey -> "RUNNING")
-        case JobInfo(_, _, _, _, _, _, Some(ex)) => Map(StatusKey -> "ERROR",
-          ResultKey -> formatException(ex))
+        case JobInfo(_, _, _, _, _, _, Some(ex)) =>
+          ex.getMessage match {
+            case "killed" =>
+              Map(StatusKey -> "KILLED", ResultKey -> formatException(ex))
+            case _ =>
+              Map(StatusKey -> "ERROR", ResultKey -> formatException(ex))
+          }
         case JobInfo(_, _, _, _, _, Some(e), None) => Map(StatusKey -> "FINISHED")
-    })
+    }
     Map("jobId" -> jobInfo.jobId,
       "startTime" -> jobInfo.startTime.toString(),
       "classPath" -> jobInfo.classPath,

@@ -158,7 +158,7 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
 
     case KillJob(jobId: String) => {
       jobContext.sparkContext.cancelJobGroup(jobId)
-      statusActor ! JobKilled(jobId, DateTime.now())
+      statusActor ! JobKilled(jobId, DateTime.now(), new Exception("killed"))
     }
 
     case SparkContextStatus => {
