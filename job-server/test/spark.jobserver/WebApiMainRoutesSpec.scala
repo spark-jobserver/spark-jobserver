@@ -143,6 +143,16 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         exceptionMap("message") should equal ("test-error")
       }
     }
+    it("should list killed jobs") {
+      Get("/jobs?status=killed") ~> sealRoute(routes) ~> check {
+        status should be (OK)
+        val result = responseAs[Seq[Map[String, Any]]].head
+        result(StatusKey) should equal(JobStatus.Killed)
+
+        val exceptionMap = result(ResultKey).asInstanceOf[Map[String, Any]]
+        exceptionMap("message") should equal ("Job foo-1 killed")
+      }
+    }
     it("should list running jobs") {
       Get("/jobs?status=running") ~> sealRoute(routes) ~> check {
         status should be (OK)

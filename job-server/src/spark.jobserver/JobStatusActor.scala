@@ -5,9 +5,10 @@ import com.yammer.metrics.core.Meter
 import ooyala.common.akka.InstrumentedActor
 import ooyala.common.akka.metrics.YammerMetrics
 import org.joda.time.DateTime
+import spark.jobserver.JobManagerActor.JobKilledException
 import scala.collection.mutable
 import scala.util.Try
-import spark.jobserver.io.{JobDAOActor, JobInfo, JobDAO}
+import spark.jobserver.io.{JobDAOActor, JobInfo}
 
 object JobStatusActor {
   case class JobInit(jobInfo: JobInfo)
@@ -100,7 +101,7 @@ class JobStatusActor(jobDao: ActorRef) extends InstrumentedActor with YammerMetr
     case msg: JobKilled =>
       processStatus(msg, "killed", remove = true) {
         case (info, msg) =>
-          info.copy(endTime = Some(msg.endTime))
+          info.copy(endTime = Some(msg.endTime), error = Some(JobKilledException(info.jobId)))
       }
   }
 
