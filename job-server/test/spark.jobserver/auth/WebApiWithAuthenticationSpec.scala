@@ -4,7 +4,7 @@ import akka.actor.{ Actor, Props }
 import com.typesafe.config.{ ConfigFactory, ConfigValueFactory }
 import spark.jobserver._
 import spark.jobserver.util.SparkJobUtils
-import spark.jobserver.io.{ JobInfo, JarInfo }
+import spark.jobserver.io.{BinaryType, BinaryInfo, JobInfo}
 import org.joda.time.DateTime
 import org.scalatest.{ Matchers, FunSpec, BeforeAndAfterAll }
 import spray.http.StatusCodes._
@@ -118,7 +118,8 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
   private val authorizationInvalidPassword = new Authorization(new BasicHttpCredentials(USER_NAME, "xxx"))
   private val authorizationUnknownUser = new Authorization(new BasicHttpCredentials("whoami", "xxx"))
   private val dt = DateTime.parse("2013-05-29T00Z")
-  private val jobInfo = JobInfo("foo-1", "context", JarInfo("demo", dt), "com.abc.meme", dt, None, None)
+  private val jobInfo =
+    JobInfo("foo-1", "context", BinaryInfo("demo", BinaryType.Jar, dt), "com.abc.meme", dt, None, None)
   private val ResultKey = "result"
 
   private val addedContexts = new scala.collection.mutable.HashSet[String] with SynchronizedSet[String]
@@ -127,7 +128,7 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
     import CommonMessages._
     import JobInfoActor._
     def receive = {
-      case ListJars                       => sender ! Map()
+      case ListBinaries(_)                => sender ! Map()
       case GetJobStatus(id)               => sender ! jobInfo
       case GetJobResult(id)               => sender ! JobResult(id, id + "!!!")
       case ContextSupervisor.ListContexts => sender ! addedContexts.toSeq
@@ -158,7 +159,8 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
     }
 
     it("should not allow user with invalid password") {
-      Post("/jars/foobar", Array[Byte](0, 1, 2)).withHeaders(authorizationInvalidPassword) ~> sealRoute(routesWithProxyUser) ~> check {
+      Post("/jars/foobar", Array[Byte](0, 1, 2)).
+        withHeaders(authorizationInvalidPassword) ~> sealRoute(routesWithProxyUser) ~> check {
         status should be(Unauthorized)
       }
     }
@@ -166,6 +168,31 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
     it("should not allow unknown user") {
       Get("/jars").withHeaders(authorizationUnknownUser) ~> sealRoute(routesWithProxyUser) ~> check {
         status should be(Unauthorized)
+      }
+    }
+  }
+
+  describe("binaries routes") {
+
+    it("should allow user with valid authorization") {
+        Get("/binaries").withHeaders(authorization) ~> sealRoute(routesWithProxyUser) ~> check {
+        status should be (OK)
+      }
+    }
+
+    it("should not allow user with invalid password") {
+      Post("/binaries/pyfoo", Array[Byte](0, 1, 2)).
+        withHeaders(authorizationInvalidPassword, BinaryType.Egg.contentType) ~>
+        sealRoute(routesWithProxyUser) ~> check {
+        status should be (Unauthorized)
+      }
+    }
+
+    it("should not allow unknown user") {
+      Post("/binaries/pyfoo", Array[Byte](0, 1, 2)).
+        withHeaders(authorizationUnknownUser, BinaryType.Egg.contentType) ~>
+        sealRoute(routesWithProxyUser) ~> check {
+        status should be (Unauthorized)
       }
     }
   }

@@ -44,9 +44,15 @@ object Dependencies {
     "org.apache.spark" %% "spark-hive" % sparkVersion % "provided" excludeAll(excludeNettyIo, excludeQQ, excludeScalaTest)
   )
 
+  lazy val sparkPythonDeps = Seq(
+    "net.sf.py4j" % "py4j" % "0.9",
+    "io.spray" %% "spray-json" % sprayJson % "test"
+  ) ++ sparkExtraDeps
+
   lazy val slickDeps = Seq(
     "com.typesafe.slick" %% "slick" % slick,
     "com.h2database" % "h2" % h2,
+    "org.postgresql" % "postgresql" % postgres,
     "commons-dbcp" % "commons-dbcp" % commons,
     "org.flywaydb" % "flyway-core" % flyway
   )

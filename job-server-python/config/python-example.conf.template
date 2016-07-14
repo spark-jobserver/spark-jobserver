@@ -1,0 +1,14 @@
+spark {
+  jobserver {
+     jobdao = spark.jobserver.io.JobSqlDAO
+  }
+
+  context-settings {
+    python {
+      paths = [
+        ${SPARK_HOME}/python,
+        "../job-server-python/target/python/spark_jobserver_python-0.7.0_SNAPSHOT-py2.7.egg"
+      ]
+    }
+  }
+}

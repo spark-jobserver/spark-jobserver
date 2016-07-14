@@ -6,14 +6,18 @@ import akka.util.Timeout
 import org.apache.spark.{SparkContext, SparkEnv}
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
-import spark.jobserver.io.JobDAOActor
+import spark.jobserver.io.{BinaryType, JobDAOActor}
 import spark.jobserver.util.{ContextURLClassLoader, JarUtils, LRUCache}
 
+import scala.concurrent.Await
 import scala.util.{Success, Failure}
+
+import akka.pattern.ask
+import scala.concurrent.Await
 
 /**
  * A cache for SparkJob classes.  A lot of times jobs are run repeatedly, and especially for low-latency
- * jobs, why retrieve the jar and load it every single time?
+ * jobs, why retrieve the binary and load it every single time?
  */
 
 class JobCacheImpl(maxEntries: Int,
@@ -22,28 +26,51 @@ class JobCacheImpl(maxEntries: Int,
                    loader: ContextURLClassLoader) extends JobCache {
   import scala.concurrent.duration._
 
-  private val cache = new LRUCache[(String, DateTime, String), JobJarInfo](maxEntries)
+  private val cache = new LRUCache[(String, DateTime, String), BinaryJobInfo](maxEntries)
   private val logger = LoggerFactory.getLogger(getClass)
   implicit val daoAskTimeout: Timeout = Timeout(3 seconds)
 
   /**
    * Retrieves the given SparkJob class from the cache if it's there, otherwise use the DAO to retrieve it.
-   * @param appName the appName under which the jar was uploaded
-   * @param uploadTime the upload time for the version of the jar wanted
+   * @param appName the appName under which the binary was uploaded
+   * @param uploadTime the upload time for the version of the binary wanted
    * @param classPath the fully qualified name of the class/object to load
    */
   def getSparkJob(appName: String, uploadTime: DateTime, classPath: String): JobJarInfo = {
-    cache.get((appName, uploadTime, classPath), {
-      import akka.pattern.ask
-      import scala.concurrent.Await
+    cache.get((appName, uploadTime, classPath)) match {
+      case Some(j@JobJarInfo(_, _, _)) => j
+      case _ =>
+        val jarPathReq =
+          (dao ? JobDAOActor.GetBinaryPath(appName, BinaryType.Jar, uploadTime)).mapTo[JobDAOActor.BinaryPath]
+        val jarPath = Await.result(jarPathReq, daoAskTimeout.duration).binPath
+        val jarFilePath = new java.io.File(jarPath).getAbsolutePath()
+        sparkContext.addJar(jarFilePath) // Adds jar for remote executors
+        loader.addURL(new URL("file:" + jarFilePath)) // Now jar added for local loader
+        val constructor = JarUtils.loadClassOrObject[spark.jobserver.api.SparkJobBase](classPath, loader)
+        val jj = JobJarInfo(constructor, classPath, jarFilePath)
+        cache.put((appName, uploadTime, classPath), jj)
+        jj
+    }
+  }
 
-      val jarPathReq = (dao ? JobDAOActor.GetJarPath(appName, uploadTime)).mapTo[JobDAOActor.JarPath]
-      val jarPath = Await.result(jarPathReq, daoAskTimeout.duration).jarPath
-      val jarFilePath = new java.io.File(jarPath).getAbsolutePath()
-      sparkContext.addJar(jarFilePath) // Adds jar for remote executors
-      loader.addURL(new URL("file:" + jarFilePath)) // Now jar added for local loader
-      val constructor = JarUtils.loadClassOrObject[spark.jobserver.api.SparkJobBase](classPath, loader)
-      JobJarInfo(constructor, classPath, jarFilePath)
-    })
+  /**
+    * Retrieves a Python job egg location from the cache if it's there, otherwise use the DAO to retrieve it.
+    * @param appName the appName under which the binary was uploaded
+    * @param uploadTime the upload time for the version of the binary wanted
+    * @param classPath the fully qualified name of the class/object to load
+    * @return The case class containing the location of the binary file for the specified job.
+    */
+  override def getPythonJob(appName: String, uploadTime: DateTime, classPath: String): PythonJobInfo = {
+    cache.get((appName, uploadTime, classPath)) match {
+      case Some(p @ PythonJobInfo(_)) => p
+      case _ =>
+        val pyPathReq =
+          (dao ? JobDAOActor.GetBinaryPath(appName, BinaryType.Egg, uploadTime)).mapTo[JobDAOActor.BinaryPath]
+        val pyPath = Await.result(pyPathReq, daoAskTimeout.duration).binPath
+        val pyFilePath = new java.io.File(pyPath).getAbsolutePath()
+        val pj = PythonJobInfo(pyFilePath)
+        cache.put((appName, uploadTime, classPath), pj)
+        pj
+    }
   }
 }

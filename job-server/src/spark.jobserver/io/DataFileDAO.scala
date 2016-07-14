@@ -11,6 +11,8 @@ object DataFileDAO {
   val META_DATA_FILE_NAME = "files.data"
 }
 
+case class DataFileInfo(appName: String, uploadTime: DateTime)
+
 class DataFileDAO(config: Config) {
   private val logger = LoggerFactory.getLogger(getClass)
 
@@ -81,14 +83,14 @@ class DataFileDAO(config: Config) {
     }
 
     // log it into meta data file
-    writeFileInfo(dataOutputStream, JarInfo(name, uploadTime))
+    writeFileInfo(dataOutputStream, DataFileInfo(name, uploadTime))
 
     // track the new file in memory
     addFile(name)
     name
   }
 
-  private def writeFileInfo(out: DataOutputStream, aInfo: JarInfo) {
+  private def writeFileInfo(out: DataOutputStream, aInfo: DataFileInfo) {
     out.writeUTF(aInfo.appName)
     out.writeLong(aInfo.uploadTime.getMillis)
   }
@@ -102,7 +104,7 @@ class DataFileDAO(config: Config) {
     }
   }
 
-  private def readFileInfo(in: DataInputStream) = JarInfo(in.readUTF, new DateTime(in.readLong))
+  private def readFileInfo(in: DataInputStream) = DataFileInfo(in.readUTF, new DateTime(in.readLong))
 
   private def addFile(aName: String) {
     files += aName

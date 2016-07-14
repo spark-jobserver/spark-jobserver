@@ -9,6 +9,11 @@ import scala.collection.mutable
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
 
+/**
+  * NB This class does NOT support persisting binary types
+  * other than Jars (such as Python eggs).
+  * @param config
+  */
 @deprecated("Use JobSqlDAO instead for stability.", "0.7.0")
 class JobFileDAO(config: Config) extends JobDAO {
   private val logger = LoggerFactory.getLogger(getClass)
@@ -96,31 +101,39 @@ class JobFileDAO(config: Config) extends JobDAO {
     jobConfigsOutputStream = new DataOutputStream(new FileOutputStream(jobConfigsFile, true))
   }
 
-  override def saveJar(appName: String, uploadTime: DateTime, jarBytes: Array[Byte]) {
-    // The order is important. Save the jar file first and then log it into jobsFile.
-    val outFile = new File(rootDir, createJarName(appName, uploadTime) + ".jar")
-    val bos = new BufferedOutputStream(new FileOutputStream(outFile))
-    try {
-      logger.debug("Writing {} bytes to file {}", jarBytes.length, outFile.getPath)
-      bos.write(jarBytes)
-      bos.flush()
-    } finally {
-      bos.close()
+  override def saveBinary(appName: String,
+                          binaryType: BinaryType,
+                          uploadTime: DateTime,
+                          jarBytes: Array[Byte]) {
+    if(binaryType == BinaryType.Jar) {
+      // The order is important. Save the jar file first and then log it into jobsFile.
+      val outFile = new File(rootDir, createJarName(appName, uploadTime) + s".${binaryType.extension}")
+      val bos = new BufferedOutputStream(new FileOutputStream(outFile))
+      try {
+        logger.debug("Writing {} bytes to file {}", jarBytes.length, outFile.getPath)
+        bos.write(jarBytes)
+        bos.flush()
+      } finally {
+        bos.close()
+      }
+
+      // log it into jobsFile
+      writeJarInfo(jarsOutputStream, BinaryInfo(appName, binaryType, uploadTime))
+
+      // track the new jar in memory
+      addJar(appName, uploadTime)
+    } else {
+      throw new Exception("JobFileDAO only supports Jars. To use other binary types please use JobSQLDao.")
     }
-
-    // log it into jobsFile
-    writeJarInfo(jarsOutputStream, JarInfo(appName, uploadTime))
-
-    // track the new jar in memory
-    addJar(appName, uploadTime)
   }
 
-  private def writeJarInfo(out: DataOutputStream, jarInfo: JarInfo) {
+  private def writeJarInfo(out: DataOutputStream, jarInfo: BinaryInfo) {
     out.writeUTF(jarInfo.appName)
     out.writeLong(jarInfo.uploadTime.getMillis)
   }
 
-  private def readJarInfo(in: DataInputStream) = JarInfo(in.readUTF, new DateTime(in.readLong))
+  private def readJarInfo(in: DataInputStream) =
+    BinaryInfo(in.readUTF, BinaryType.Jar, new DateTime(in.readLong))
 
   private def addJar(appName: String, uploadTime: DateTime) {
     if (apps.contains(appName)) {
@@ -130,15 +143,15 @@ class JobFileDAO(config: Config) extends JobDAO {
     }
   }
 
-  def getApps: Future[Map[String, DateTime]] = Future {
+  override def getApps: Future[Map[String, (BinaryType, DateTime)]] = Future {
     apps.map {
       case (appName, uploadTimes) =>
-        appName -> uploadTimes.head
+        appName -> (BinaryType.Jar, uploadTimes.head)
     }.toMap
   }
 
-  override def retrieveJarFile(appName: String, uploadTime: DateTime): String =
-    new File(rootDir, createJarName(appName, uploadTime) + ".jar").getAbsolutePath
+  override def retrieveBinaryFile(appName: String, binaryType: BinaryType, uploadTime: DateTime): String =
+    new File(rootDir, createJarName(appName, uploadTime) + s".${binaryType.extension}").getAbsolutePath
 
   private def createJarName(appName: String, uploadTime: DateTime): String =
     appName + "-" + uploadTime.toString().replace(':', '_')
@@ -151,7 +164,7 @@ class JobFileDAO(config: Config) extends JobDAO {
   private def writeJobInfo(out: DataOutputStream, jobInfo: JobInfo) {
     out.writeUTF(jobInfo.jobId)
     out.writeUTF(jobInfo.contextName)
-    writeJarInfo(out, jobInfo.jarInfo)
+    writeJarInfo(out, jobInfo.binaryInfo)
     out.writeUTF(jobInfo.classPath)
     out.writeLong(jobInfo.startTime.getMillis)
     val time = if (jobInfo.endTime.isEmpty) jobInfo.startTime.getMillis else jobInfo.endTime.get.getMillis

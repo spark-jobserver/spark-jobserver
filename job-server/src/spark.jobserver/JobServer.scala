@@ -6,7 +6,7 @@ import akka.pattern.ask
 import com.typesafe.config.{ConfigValueFactory, Config, ConfigFactory}
 
 import java.io.File
-import spark.jobserver.io.{JobDAOActor, JobDAO, DataFileDAO}
+import spark.jobserver.io.{BinaryType, JobDAOActor, JobDAO, DataFileDAO}
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
@@ -70,7 +70,7 @@ object JobServer {
       val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO), "dao-manager")
       val dataManager = system.actorOf(Props(classOf[DataManagerActor],
           new DataFileDAO(config)), "data-manager")
-      val jarManager = system.actorOf(Props(classOf[JarManager], daoActor), "jar-manager")
+      val binManager = system.actorOf(Props(classOf[BinaryManager], daoActor), "binary-manager")
       val supervisor =
         system.actorOf(Props(if (contextPerJvm) { classOf[AkkaClusterSupervisorActor] }
                              else               { classOf[LocalContextSupervisorActor] }, daoActor),
@@ -78,53 +78,69 @@ object JobServer {
       val jobInfo = system.actorOf(Props(classOf[JobInfoActor], jobDAO, supervisor), "job-info")
 
       // Add initial job JARs, if specified in configuration.
-      storeInitialJars(config, jarManager)
+      storeInitialBinaries(config, binManager)
 
       // Create initial contexts
       supervisor ! ContextSupervisor.AddContextsFromConfig
-      new WebApi(system, config, port, jarManager, dataManager, supervisor, jobInfo).start()
+      new WebApi(system, config, port, binManager, dataManager, supervisor, jobInfo).start()
     } catch {
       case e: Exception =>
         logger.error("Unable to start Spark JobServer: ", e)
         sys.exit(1)
     }
-
   }
 
-  private def storeInitialJars(config: Config, jarManager: ActorRef): Unit = {
-    val initialJarPathsKey = "spark.jobserver.job-jar-paths"
-    if (config.hasPath(initialJarPathsKey)) {
-      val initialJarsConfig = config.getConfig(initialJarPathsKey).root
-
+  private def parseInitialBinaryConfig(key: String, config: Config): Map[String, String] = {
+    if (config.hasPath(key)) {
+      val initialJarsConfig = config.getConfig(key).root
       logger.info("Adding initial job jars: {}", initialJarsConfig.render())
+      initialJarsConfig
+        .asScala
+        .map { case (key, value) => (key, value.unwrapped.toString) }
+        .toMap
+    } else {
+      Map()
+    }
+  }
 
-      val initialJars =
-        initialJarsConfig
-          .asScala
-          .map { case (key, value) => (key, value.unwrapped.toString) }
-          .toMap
-
+  private def storeInitialBinaries(config: Config, binaryManager: ActorRef): Unit = {
+    val legacyJarPathsKey = "spark.jobserver.job-jar-paths"
+    val initialBinPathsKey = "spark.jobserver.job-bin-paths"
+    val initialBinaries = parseInitialBinaryConfig(legacyJarPathsKey, config) ++
+      parseInitialBinaryConfig(initialBinPathsKey, config)
+    if(initialBinaries.nonEmpty) {
       // Ensure that the jars exist
-      for(jarPath <- initialJars.values) {
-        val f = new java.io.File(jarPath)
+      for (binPath <- initialBinaries.values) {
+        val f = new java.io.File(binPath)
         if (!f.exists) {
           val msg =
             if (f.isAbsolute) {
-              s"Initial Jar File $jarPath does not exist"
+              s"Initial Binary File $binPath does not exist"
             } else {
-              s"Initial Jar File $jarPath (${f.getAbsolutePath}) does not exist"
+              s"Initial Binary File $binPath (${f.getAbsolutePath}) does not exist"
             }
 
           throw new java.io.IOException(msg)
         }
       }
 
+      val initialBinariesWithTypes = initialBinaries.mapValues {
+        case s if s.endsWith(".jar") => (BinaryType.Jar, s)
+        case s if s.endsWith(".egg") => (BinaryType.Egg, s)
+        case other =>
+          throw new Exception(s"Only Jars (with extension .jar) and " +
+            s"Python egg packages (with extension .egg) are supported. Found $other")
+      }
+
       val contextTimeout = util.SparkJobUtils.getContextTimeout(config)
       val future =
-        (jarManager ? StoreLocalJars(initialJars))(contextTimeout.seconds)
+        (binaryManager ? StoreLocalBinaries(initialBinariesWithTypes))(contextTimeout.seconds)
 
       Await.result(future, contextTimeout.seconds) match {
-        case InvalidJar => sys.error("Could not store initial job jars.")
+        case InvalidBinary => sys.error("Could not store initial job binaries.")
+        case BinaryStorageFailure(ex) =>
+          logger.error("Failed to store initial binaries", ex)
+          sys.error(s"Failed to store initial binaries: ${ex.getMessage}")
         case _ =>
       }
     }

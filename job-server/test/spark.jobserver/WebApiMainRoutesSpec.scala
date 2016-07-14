@@ -1,6 +1,8 @@
 package spark.jobserver
 
 import com.typesafe.config.ConfigFactory
+import spark.jobserver.io.BinaryType
+import spray.http.{MediaTypes, HttpHeaders, HttpHeader}
 import spray.http.StatusCodes._
 import spark.jobserver.io.JobStatus
 import spark.jobserver.util.SparkJobUtils
@@ -41,6 +43,59 @@ class WebApiMainRoutesSpec extends WebApiSpec {
     it("should respond with bad request if jar formatted incorrectly") {
       Post("/jars/badjar", Array[Byte](0, 1, 2)) ~> sealRoute(routes) ~> check {
         status should be (BadRequest)
+      }
+    }
+  }
+
+  describe("binaries routes") {
+    it("should list all binaries") {
+      Get("/binaries") ~> sealRoute(routes) ~> check {
+        status should be (OK)
+        responseAs[Map[String, Map[String, String]]] should be (Map(
+          "demo1" -> Map("binary-type" -> "Jar", "upload-time" -> "2013-05-29T00:00:00.000Z"),
+          "demo2" -> Map("binary-type" -> "Jar", "upload-time" -> "2013-05-29T01:00:00.000Z"),
+          "demo3" -> Map("binary-type" -> "Egg", "upload-time" -> "2013-05-29T02:00:00.000Z")))
+      }
+    }
+
+    it("should respond with OK if jar uploaded successfully") {
+      Post("/binaries/foobar", Array[Byte](0, 1, 2)).
+        withHeaders(BinaryType.Jar.contentType) ~> sealRoute(routes) ~> check {
+        status should be (OK)
+      }
+    }
+
+    it("should respond with OK if egg uploaded successfully") {
+      Post("/binaries/pyfoo", Array[Byte](0, 1, 2)).
+        withHeaders(BinaryType.Egg.contentType) ~> sealRoute(routes) ~> check {
+        status should be (OK)
+      }
+    }
+
+    it("should respond with Unsupported Media Type if upload attempted without content type header") {
+      Post("/binaries/foobar", Array[Byte](0, 1, 2)) ~> sealRoute(routes) ~> check {
+        status should be (UnsupportedMediaType)
+      }
+    }
+
+    it("should respond with Unsupported Media Type if upload attempted with invalid content type header") {
+      Post("/binaries/foobar", Array[Byte](0, 1, 2)).
+        withHeaders(HttpHeaders.`Content-Type`(MediaTypes.`application/json`)) ~> sealRoute(routes) ~> check {
+        status should be (UnsupportedMediaType)
+      }
+    }
+
+    it("should respond with bad request if jar formatted incorrectly") {
+      Post("/binaries/badjar", Array[Byte](0, 1, 2)).
+        withHeaders(BinaryType.Jar.contentType) ~> sealRoute(routes) ~> check {
+        status should be (BadRequest)
+      }
+    }
+
+    it("should respond with internal server error if storage fails") {
+      Post("/binaries/daofail", Array[Byte](0, 1, 2)).
+        withHeaders(BinaryType.Jar.contentType) ~> sealRoute(routes) ~> check {
+        status should be (InternalServerError)
       }
     }
   }
