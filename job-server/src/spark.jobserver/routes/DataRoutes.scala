@@ -40,7 +40,7 @@ trait DataRoutes extends HttpService {
       // DELETE /data/filename delete the given file
       delete {
         path(Segment) { filename =>
-          val future = dataManager ? DeleteData(URLDecoder.decode(filename, "UTF-8"))
+          val future = dataManager ? DeleteData(filename)
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
             future.map {
               case Deleted => ctx.complete(StatusCodes.OK)

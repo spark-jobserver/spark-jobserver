@@ -93,8 +93,8 @@ with ScalatestRouteTest with HttpService {
       case StoreJar("badjar", _) => sender ! InvalidJar
       case StoreJar(_, _)        => sender ! JarStored
 
-      case DataManagerActor.StoreData("/tmp/fileToRemove", _) => sender ! DataManagerActor.Stored("/tmp/fileToRemove-time-stamp")
       case DataManagerActor.StoreData("errorfileToRemove", _) => sender ! DataManagerActor.Error
+      case DataManagerActor.StoreData(filename, _) => sender ! DataManagerActor.Stored(filename + "-time-stamp")        
       case DataManagerActor.ListData => sender ! Set("demo1", "demo2")
       case DataManagerActor.DeleteData("/tmp/fileToRemove") => sender ! DataManagerActor.Deleted
       case DataManagerActor.DeleteData("errorfileToRemove") => sender ! DataManagerActor.Error
