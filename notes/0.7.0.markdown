@@ -18,3 +18,4 @@
 * Make JMX port configurable (@casey-green)
 * Update test description, PR #481 (@oranda)
 * Per-user authenticated contexts, PR #469 (@TimMaltGermany)
+* Fix for Delete file API issue, #507 (@noorul) 
