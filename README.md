@@ -78,6 +78,7 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 - [Linkfluence](http://www.linkfluence.com)
 - [Smartsct](http://www.smartsct.com)
 - [Datadog] (https://www.datadoghq.com/)
+- [Planalytics](http://www.planalytics.com)
 
 ## Features
 
@@ -109,7 +110,7 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 | 0.6.0       | 1.4.1         |
 | 0.6.1       | 1.5.2         |
 | 0.6.2       | 1.6.1         |
-| master      | 1.6.1         |
+| master      | 1.6.2         |
 
 For release notes, look in the `notes/` directory.  They should also be up on [notes.implicit.ly](http://notes.implicit.ly/search/spark-jobserver).
 
