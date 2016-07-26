@@ -38,14 +38,14 @@ class CacheSomethingJob extends SparkTestJob {
                .map(_ * 2)
     dd.setName("numbers")
     dd.cache()
-    dd.collect.toSeq.sum
+    dd.sum.toInt
   }
 }
 
 class AccessCacheJob extends SparkTestJob {
   def runJob(sc: SparkContext, config: Config): Any = {
     val rdd = sc.getPersistentRDDs.values.head.asInstanceOf[RDD[Int]]
-    rdd.collect.toSeq.sum
+    rdd.sum.toInt
   }
 }
 
@@ -56,7 +56,7 @@ class CacheRddByNameJob extends SparkTestJob with NamedRddSupport {
 
     val rdd = namedRdds.getOrElseCreate(getClass.getSimpleName, {
       // anonymous generator function
-      sc.parallelize(Seq(1, 2, 3, 4, 5))
+      sc.parallelize(1 to 5)
     })
 
     // RDD should already be in cache the second time
@@ -77,8 +77,20 @@ class ZookeeperJob extends SparkTestJob {
 
 object SimpleObjectJob extends SparkTestJob {
   def runJob(sc: SparkContext, config: Config): Any = {
-    val rdd = sc.parallelize(Seq(1, 2, 3))
+    val rdd = sc.parallelize(1 to 3)
     rdd.collect().sum
 
+  }
+}
+
+class jobJarDependenciesJob extends SparkTestJob {
+  def runJob(sc: SparkContext, config: Config): Any = {
+    val loadedClasses = Seq(
+      getClass.getClassLoader.loadClass("spark.jobserver.context.SQLContextFactory").getName(),
+      getClass.getClassLoader.loadClass("spark.jobserver.context.HiveContextFactory").getName(),
+      getClass.getClassLoader.loadClass("spark.jobserver.context.StreamingContextFactory").getName()
+      )
+    val input = sc.parallelize(loadedClasses)
+    input.countByValue()
   }
 }

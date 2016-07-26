@@ -1,23 +1,26 @@
 package spark.jobserver
 
-import akka.actor.{Actor, Props}
 import com.typesafe.config.ConfigFactory
-import spark.jobserver.io.{JobInfo, JarInfo}
-import org.joda.time.DateTime
-import org.scalatest.{Matchers, FunSpec, BeforeAndAfterAll}
 import spray.http.StatusCodes._
-import spray.routing.HttpService
-import spray.testkit.ScalatestRouteTest
 
 
 // Tests web response codes and formatting
 // Does NOT test underlying Supervisor / JarManager functionality
 // HttpService trait is needed for the sealRoute() which wraps exception handling
 class WebApiMainRoutesSpec extends WebApiSpec {
-  import scala.collection.JavaConverters._
+  import ooyala.common.akka.web.JsonUtils._
   import spray.httpx.SprayJsonSupport._
   import spray.json.DefaultJsonProtocol._
-  import ooyala.common.akka.web.JsonUtils._
+
+  val getJobStatusInfoMap = {
+    Map(
+      "jobId" -> "foo-1",
+      "startTime" -> "2013-05-29T00:00:00.000Z",
+      "classPath" -> "com.abc.meme",
+      "context"  -> "context",
+      "duration" -> "300.0 secs",
+      StatusKey -> "FINISHED")
+  }
 
   describe("jars routes") {
     it("should list all jars") {
@@ -87,8 +90,13 @@ class WebApiMainRoutesSpec extends WebApiSpec {
           sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, Any]] should be (Map(
-          StatusKey -> "OK",
-          ResultKey -> Map(masterConfKey->"overriden", bindConfKey -> bindConfVal, "foo.baz" -> "booboo", "shiro.authentication" -> "off")
+          ResultKey -> Map(
+            masterConfKey->"overriden",
+            bindConfKey -> bindConfVal,
+            "foo.baz" -> "booboo",
+            "shiro.authentication" -> "off",
+            "spark.jobserver.short-timeout" -> "3 s"
+          )
         ))
       }
     }
@@ -109,8 +117,24 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, Any]] should be (Map(
-          StatusKey -> "OK",
-          ResultKey -> Map(masterConfKey->masterConfVal, bindConfKey -> bindConfVal, "foo.baz" -> "booboo", "shiro.authentication" -> "off")
+          ResultKey -> Map(
+            masterConfKey -> masterConfVal,
+            bindConfKey -> bindConfVal,
+            "foo.baz" -> "booboo",
+            "shiro.authentication" -> "off",
+            "spark.jobserver.short-timeout" -> "3 s"
+          )
+        ))
+      }
+    }
+
+    it("adhoc job with Stream result of sync route should return 200 and chunked result") {
+      val config2 = "foo.baz = booboo"
+      Post("/jobs?appName=foo.stream&classPath=com.abc.meme&sync=true", config2) ~>
+        sealRoute(routes) ~> check {
+        status should be (OK)
+        responseAs[Map[String, Any]] should be (Map(
+          ResultKey -> "1, 2, 3, 4, 5, 6"
         ))
       }
     }
@@ -121,8 +145,13 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, Any]] should be (Map(
-          StatusKey -> "OK",
-          ResultKey -> Map(masterConfKey->masterConfVal, bindConfKey -> bindConfVal, "foo.baz" -> "booboo", "shiro.authentication" -> "off")
+          ResultKey -> Map(
+            masterConfKey -> masterConfVal,
+            bindConfKey -> bindConfVal,
+            "foo.baz" -> "booboo",
+            "shiro.authentication" -> "off",
+            "spark.jobserver.short-timeout" -> "3 s"
+          )
         ))
       }
     }
@@ -141,7 +170,12 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       Get("/jobs/foobar") ~> sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, String]] should be (Map(
-          StatusKey -> "OK",
+          "jobId" -> "foo-1",
+          "startTime" -> "2013-05-29T00:00:00.000Z",
+          "classPath" -> "com.abc.meme",
+          "context"  -> "context",
+          "duration" -> "Job not done yet",
+          StatusKey -> "RUNNING",
           ResultKey -> "foobar!!!"
         ))
       }
@@ -217,17 +251,14 @@ class WebApiMainRoutesSpec extends WebApiSpec {
     it("should be able to serialize nested Seq's and Map's within Map's to JSON") {
       Get("/jobs/_mapseq") ~> sealRoute(routes) ~> check {
         status should be (OK)
-        responseAs[Map[String, Any]] should be (Map(
-          StatusKey -> "OK",
-          ResultKey -> Map("first" -> Seq(1, 2, Seq("a", "b")))
-      ))
+        responseAs[Map[String, Any]] should be (
+          getJobStatusInfoMap ++ Map(ResultKey -> Map("first" -> Seq(1, 2, Seq("a", "b")))))
       }
 
       Get("/jobs/_mapmap") ~> sealRoute(routes) ~> check {
         status should be (OK)
-        responseAs[Map[String, Any]] should be (Map(
-          StatusKey -> "OK",
-          ResultKey -> Map("second" -> Map("K" -> Map("one" -> 1)))
+        responseAs[Map[String, Any]] should be (
+          getJobStatusInfoMap ++ Map(ResultKey -> Map("second" -> Map("K" -> Map("one" -> 1)))
         ))
       }
     }
@@ -236,9 +267,17 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       Get("/jobs/_seq") ~> sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, Any]] should be (
-          Map( StatusKey -> "OK",
-            ResultKey -> Seq(1, 2, Map("3" -> "three"))
+          getJobStatusInfoMap ++ Map(ResultKey -> Seq(1, 2, Map("3" -> "three"))
           )
+        )
+      }
+    }
+
+    it("should be able to chunk serialize Stream with different types to JSON") {
+      Get("/jobs/_stream") ~> sealRoute(routes) ~> check {
+        status should be (OK)
+        responseAs[Map[String, Any]] should be (
+          getJobStatusInfoMap ++ Map(ResultKey -> "1, 2, 3, 4, 5, 6, 7")
         )
       }
     }
@@ -247,7 +286,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       Get("/jobs/_num") ~> sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, Any]] should be (
-          Map(StatusKey -> "OK", ResultKey -> 5000)
+          getJobStatusInfoMap ++ Map(ResultKey -> 5000)
         )
       }
     }
@@ -256,7 +295,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       Get("/jobs/_unk") ~> sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, Any]] should be (
-          Map(StatusKey -> "OK", ResultKey -> Seq(1,  "101"))
+          getJobStatusInfoMap ++ Map(ResultKey -> Seq(1,  "101"))
         )
       }
     }

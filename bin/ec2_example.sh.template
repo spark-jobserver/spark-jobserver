@@ -1,0 +1,16 @@
+DEPLOY_HOSTS=ENTER_DEPLOY_HOST_HERE
+bin=`dirname "${BASH_SOURCE-$0}"`
+bin=`cd "$bin"; pwd`
+
+. "$bin"/../config/ec2.sh
+
+ssh_key_to_use=""
+if [ -n "$SSH_KEY" ]  ; then
+  ssh_key_to_use="-i $SSH_KEY"
+fi
+
+VERSION=$(sed -E 's/version in ThisBuild := "(.*)"/\1/' version.sbt)
+wget -O- --post-file "$bin"/../job-server-extras/target/scala-2.10/job-server-extras_2.10-$VERSION.jar "$DEPLOY_HOSTS/jars/km"
+scp -rp -o StrictHostKeyChecking=no $ssh_key_to_use "$bin"/../job-server-extras/src/main/KMeansExample/* ${APP_USER}@"${DEPLOY_HOSTS%:*}:/var/www/html/"
+
+echo "The example is running at ${DEPLOY_HOSTS%:*}:5080"

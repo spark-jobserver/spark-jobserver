@@ -29,6 +29,22 @@ Then simply restart the job server.
 
 Note that the idle-timeout must be higher than request-timeout, or Spray and the job server won't start.
 
+## Timeout getting large job results
+
+If your job returns a large job result, it may exceed Akka's maximum network message frame size, in which case the result is dropped and you may get a network timeout.  Change the following configuration, which defaults to 10 MiB:
+
+    akka.remote.netty.tcp.maximum-frame-size = 100 MiB
+
+## AskTimeout when starting job server or contexts
+
+If you are loading large jars or dependent jars, either at startup or when creating a large context, the database such as H2 may take a really long time to write those bytes to disk.  You need to adjust the context timeout setting:
+
+    spark.jobserver.context-creation-timeout
+
+Set it to 60 seconds or longer, especially if your jars are in the many MBs.
+
+NOTE: if you are running SJS in Docker, esp on AWS, you might need to enable host-only networking.
+
 ## Job server won't start / cannot bind to 0.0.0.0:8090
 
 Check that another process isn't already using that port.  If it is, you may want to start it on another port:
@@ -48,7 +64,13 @@ after this fixed, I can run jobs submitted from a remote job server successfully
 
 ## Exception in thread "main" java.lang.NoSuchMethodError: akka.actor.ActorRefFactory.dispatcher()Lscala/concurrent/ExecutionContextExecutor;
 
-If you are running CDH 5.3 or older, you may have an incompatible version of Akka bundled together.  :(  Try modifying the version of Akka included with spark-jobserver to match the one in CDH (2.2.4, I think), or upgrade to CDH 5.4.   If you are on CDH 5.4, check that `sparkVersion` in `Dependencies.scala` matches CDH.  Or see [isse #154](https://github.com/spark-jobserver/spark-jobserver/issues/154).
+If you are running CDH 5.3 or older, you may have an incompatible version of Akka bundled together.  :(  Fortunately, one of our users has put together a [branch that works](https://github.com/bjoernlohrmann/spark-jobserver/tree/cdh-5.3) ... try that out!
+
+(Older instructions) Try modifying the version of Akka included with spark-jobserver to match the one in CDH (2.2.4, I think), or upgrade to CDH 5.4.   If you are on CDH 5.4, check that `sparkVersion` in `Dependencies.scala` matches CDH.  Or see [isse #154](https://github.com/spark-jobserver/spark-jobserver/issues/154).
+
+## I am running CDH 5.3 and Job Server doesn't work
+
+See above.
 
 ## I want to run job-server on Windows
 
@@ -80,3 +102,9 @@ You start from SBT using `reStart`, and when try to create a HiveContext or SQLC
 Solution:
 
 Before typing `reStart` in sbt, type `project job-server-extras` and only then start it using `reStart` 
+
+## Accessing a config file in my job jar
+
+```scala
+ConfigFactory.parseReader(paramReader = new InputStreamReader(getClass().getResourceAsStream(s"/$myPassedConfigPath"))
+```

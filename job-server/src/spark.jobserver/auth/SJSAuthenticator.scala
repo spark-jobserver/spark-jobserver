@@ -33,7 +33,7 @@ trait SJSAuthenticator {
     def validate(userPass: Option[UserPass]): Future[Option[AuthInfo]] = {
       //if (!currentUser.isAuthenticated()) {
       Future {
-        explicitValidation(userPass.get, logger)
+        explicitValidation(userPass getOrElse UserPass("",""), logger)
       }
     }
 
