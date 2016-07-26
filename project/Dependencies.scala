@@ -12,21 +12,21 @@ object Dependencies {
 
   lazy val yodaDeps = Seq(
     "org.joda" % "joda-convert" % "1.2",
-    "joda-time" % "joda-time" % "2.1"
+    "joda-time" % "joda-time" % "2.2"
   )
 
   lazy val akkaDeps = Seq(
     // Akka is provided because Spark already includes it, and Spark's version is shaded so it's not safe
     // to use this one
     "com.typesafe.akka" %% "akka-slf4j" % "2.3.4" % "provided",
-    "io.spray" %% "spray-json" % "1.3.1",
+    "io.spray" %% "spray-json" % "1.3.2",
     "io.spray" %% "spray-can" % "1.3.2",
     "io.spray" %% "spray-routing" % "1.3.2",
     "io.spray" %% "spray-client" % "1.3.2",
     yammerDeps
   ) ++ yodaDeps
 
-  val sparkVersion = sys.env.getOrElse("SPARK_VERSION", "1.3.1")
+  val sparkVersion = sys.env.getOrElse("SPARK_VERSION", "1.4.1")
   lazy val sparkDeps = Seq(
     "org.apache.spark" %% "spark-core" % sparkVersion % "provided" excludeAll(excludeNettyIo, excludeQQ),
     // Force netty version.  This avoids some Spark netty dependency problem.
@@ -41,7 +41,9 @@ object Dependencies {
 
   lazy val slickDeps = Seq(
     "com.typesafe.slick" %% "slick" % "2.1.0",
-    "com.h2database" % "h2" % "1.3.170"
+    "com.h2database" % "h2" % "1.3.170",
+    "commons-dbcp" % "commons-dbcp" % "1.4"
+
   )
 
   lazy val logbackDeps = Seq(
@@ -54,7 +56,10 @@ object Dependencies {
     "io.spray" %% "spray-testkit" % "1.3.2" % "test"
   )
 
-
+  lazy val securityDeps = Seq(
+     "org.apache.shiro" % "shiro-core" % "1.2.4"
+  )
+		
   lazy val serverDeps = apiDeps ++ yodaDeps
   lazy val apiDeps = sparkDeps :+ typeSafeConfigDeps
 
