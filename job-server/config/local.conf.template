@@ -13,15 +13,17 @@ spark {
 
   jobserver {
     port = 8090
-    jar-store-rootdir = /tmp/jobserver/jars
 
-    context-per-jvm = true
+    context-per-jvm = false
 
     jobdao = spark.jobserver.io.JobFileDAO
 
     filedao {
       rootdir = /tmp/spark-job-server/filedao/data
     }
+
+    # When using chunked transfer encoding with scala Stream job results, this is the size of each chunk
+    result-chunk-size = 1m
   }
 
   # predefined Spark contexts

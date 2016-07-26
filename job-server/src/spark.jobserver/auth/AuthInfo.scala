@@ -13,6 +13,8 @@ class AuthInfo(val user: User) {
     // someone could add code here to check whether user has the given permission
   }
 
+  override def toString : String = user.login.toString
+
   override def equals(other: Any): Boolean =
     other match {
       case that: AuthInfo =>

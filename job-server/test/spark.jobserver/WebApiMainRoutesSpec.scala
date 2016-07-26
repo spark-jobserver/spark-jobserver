@@ -1,23 +1,16 @@
 package spark.jobserver
 
-import akka.actor.{Actor, Props}
 import com.typesafe.config.ConfigFactory
-import spark.jobserver.io.{JobInfo, JarInfo}
-import org.joda.time.DateTime
-import org.scalatest.{Matchers, FunSpec, BeforeAndAfterAll}
 import spray.http.StatusCodes._
-import spray.routing.HttpService
-import spray.testkit.ScalatestRouteTest
-
+import spark.jobserver.util.SparkJobUtils
 
 // Tests web response codes and formatting
 // Does NOT test underlying Supervisor / JarManager functionality
 // HttpService trait is needed for the sealRoute() which wraps exception handling
 class WebApiMainRoutesSpec extends WebApiSpec {
-  import scala.collection.JavaConverters._
+  import ooyala.common.akka.web.JsonUtils._
   import spray.httpx.SprayJsonSupport._
   import spray.json.DefaultJsonProtocol._
-  import ooyala.common.akka.web.JsonUtils._
 
   val getJobStatusInfoMap = {
     Map(
@@ -111,10 +104,14 @@ class WebApiMainRoutesSpec extends WebApiSpec {
     it("async route should return 202 if job starts successfully") {
       Post("/jobs?appName=foo&classPath=com.abc.meme&context=one", "") ~> sealRoute(routes) ~> check {
         status should be (Accepted)
-        responseAs[Map[String, Any]] should be (Map(
-          StatusKey -> "STARTED",
-          ResultKey -> Map("jobId" -> "foo", "context" -> "context1")
-        ))
+        responseAs[Map[String, String]] should be (Map(
+          "jobId" -> "foo",
+          "startTime" -> "2013-05-29T00:00:00.000Z",
+          "classPath" -> "com.abc.meme",
+          "context"  -> "context",
+          "duration" -> "Job not done yet",
+          StatusKey -> "STARTED")
+        )
       }
     }
 
@@ -131,6 +128,17 @@ class WebApiMainRoutesSpec extends WebApiSpec {
             "shiro.authentication" -> "off",
             "spark.jobserver.short-timeout" -> "3 s"
           )
+        ))
+      }
+    }
+
+    it("adhoc job with Stream result of sync route should return 200 and chunked result") {
+      val config2 = "foo.baz = booboo"
+      Post("/jobs?appName=foo.stream&classPath=com.abc.meme&sync=true", config2) ~>
+        sealRoute(routes) ~> check {
+        status should be (OK)
+        responseAs[Map[String, Any]] should be (Map(
+          ResultKey -> "1, 2, 3, 4, 5, 6"
         ))
       }
     }
@@ -155,10 +163,14 @@ class WebApiMainRoutesSpec extends WebApiSpec {
     it("adhoc job started successfully of async route should return 202") {
       Post("/jobs?appName=foo&classPath=com.abc.meme", "") ~> sealRoute(routes) ~> check {
         status should be (Accepted)
-        responseAs[Map[String, Any]] should be (Map(
-          StatusKey -> "STARTED",
-          ResultKey -> Map("jobId" -> "foo", "context" -> "context1")
-        ))
+        responseAs[Map[String, String]] should be (Map(
+          "jobId" -> "foo",
+          "startTime" -> "2013-05-29T00:00:00.000Z",
+          "classPath" -> "com.abc.meme",
+          "context"  -> "context",
+          "duration" -> "Job not done yet",
+          StatusKey -> "STARTED")
+        )
       }
     }
 
@@ -269,6 +281,15 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       }
     }
 
+    it("should be able to chunk serialize Stream with different types to JSON") {
+      Get("/jobs/_stream") ~> sealRoute(routes) ~> check {
+        status should be (OK)
+        responseAs[Map[String, Any]] should be (
+          getJobStatusInfoMap ++ Map(ResultKey -> "1, 2, 3, 4, 5, 6, 7")
+        )
+      }
+    }
+
     it("should be able to serialize base types (eg float, numbers) to JSON") {
       Get("/jobs/_num") ~> sealRoute(routes) ~> check {
         status should be (OK)
@@ -303,6 +324,13 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       }
     }
 
+    it("should allow anonymous user to delete context with any impersonation when security is off") {
+      Delete("/contexts/xxx?" + SparkJobUtils.SPARK_PROXY_USER_PARAM + "=YYY") ~>
+      sealRoute(routes) ~> check {
+        status should be(OK)
+      }
+    }
+    
     it("should return OK if stopping known context") {
       Delete("/contexts/one", "") ~> sealRoute(routes) ~> check {
         status should be (OK)
@@ -322,6 +350,18 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         status should be (OK)
       }
       Post("/contexts/meme?num-cpu-cores=3&coarse-mesos-mode=true") ~> sealRoute(routes) ~> check {
+        status should be (OK)
+      }
+    }
+
+    it("should setup a new context with the correct configurations.") {
+      val config =
+        """spark.context-settings {
+          |  test = 1
+          |  override_me = 3
+          |}
+        """.stripMargin
+      Post("/contexts/custom-ctx?num-cpu-cores=2&override_me=2", config) ~> sealRoute(routes) ~> check {
         status should be (OK)
       }
     }

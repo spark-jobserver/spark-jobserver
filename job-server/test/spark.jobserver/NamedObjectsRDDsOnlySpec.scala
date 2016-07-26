@@ -1,11 +1,11 @@
 package spark.jobserver
 
-import akka.actor.{ ActorRef, ActorSystem, Props }
+import akka.actor.ActorSystem
 import akka.testkit.{ ImplicitSender, TestKit }
 import org.apache.spark.{ SparkContext, SparkConf }
-import org.apache.spark.rdd.RDD
+
 import org.apache.spark.storage.StorageLevel
-import org.scalatest.{ Matchers, FunSpecLike, FunSpec, BeforeAndAfterAll, BeforeAndAfter }
+import org.scalatest.{ Matchers, FunSpecLike, BeforeAndAfterAll, BeforeAndAfter }
 
 /**
  * please note that this test only uses RDDs as named objects, there exists another test class
@@ -17,10 +17,10 @@ class NamedObjectsRDDsOnlySpec extends TestKit(ActorSystem("NamedObjectsSpec")) 
   val sc = new SparkContext("local[2]", getClass.getSimpleName, new SparkConf)
   val namedObjects: NamedObjects = new JobServerNamedObjects(system)
 
-  implicit def rddPersister[T] = new RDDPersister[T]
+  implicit def rddPersister[T]: RDDPersister[T] = new RDDPersister[T]
 
   before {
-    namedObjects.getNames.foreach { namedObjects.forget(_) }
+    namedObjects.getNames().foreach { namedObjects.forget }
   }
 
   override def afterAll() {
@@ -106,7 +106,7 @@ class NamedObjectsRDDsOnlySpec extends TestKit(ActorSystem("NamedObjectsSpec")) 
     }
 
     it("should include underlying exception when error occurs") {
-      def errorFunc = {
+      def errorFunc: NamedRDD[Int] = {
         throw new IllegalArgumentException("boo!")
         NamedRDD(sc.parallelize(Seq(1, 2)), true, StorageLevel.MEMORY_ONLY)
       }

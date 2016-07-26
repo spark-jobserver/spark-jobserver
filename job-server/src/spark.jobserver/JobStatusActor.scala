@@ -76,7 +76,7 @@ class JobStatusActor(jobDao: ActorRef) extends InstrumentedActor with YammerMetr
     case msg: JobStarted =>
       processStatus(msg, "started") {
         case (info, msg) =>
-          info.copy(startTime = msg.startTime)
+          info.copy(startTime = msg.jobInfo.startTime)
       }
 
     case msg: JobFinished =>

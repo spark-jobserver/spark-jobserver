@@ -3,5 +3,12 @@ env:
   global:
     _JAVA_OPTIONS="-Xmx1500m -XX:MaxPermSize=512m -Dakka.test.timefactor=3"
 scala:
-   - 2.10.4
-   - 2.11.6
+   - 2.10.6
+   - 2.11.8
+jdk:
+   - oraclejdk8
+   - oraclejdk7
+script:
+  - sbt clean coverage test coverageReport
+after_success:
+  - bash <(curl -s https://codecov.io/bash)

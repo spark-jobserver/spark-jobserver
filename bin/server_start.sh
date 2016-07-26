@@ -28,10 +28,10 @@ GC_OPTS="-XX:+UseConcMarkSweepGC
 # To truly enable JMX in AWS and other containerized environments, also need to set
 # -Djava.rmi.server.hostname equal to the hostname in that environment.  This is specific
 # depending on AWS vs GCE etc.
-JAVA_OPTS="-XX:MaxDirectMemorySize=512M \
+JAVA_OPTS="-XX:MaxDirectMemorySize=$MAX_DIRECT_MEMORY \
            -XX:+HeapDumpOnOutOfMemoryError -Djava.net.preferIPv4Stack=true \
-           -Dcom.sun.management.jmxremote.port=9999 \
-           -Dcom.sun.management.jmxremote.rmi.port=9999 \
+           -Dcom.sun.management.jmxremote.port=$JMX_PORT \
+           -Dcom.sun.management.jmxremote.rmi.port=$JMX_PORT \
            -Dcom.sun.management.jmxremote.authenticate=false \
            -Dcom.sun.management.jmxremote.ssl=false"
 
@@ -48,7 +48,7 @@ cmd='$SPARK_HOME/bin/spark-submit --class $MAIN --driver-memory $JOBSERVER_MEMOR
   --driver-java-options "$GC_OPTS $JAVA_OPTS $LOGGING_OPTS $CONFIG_OVERRIDES"
   $@ $appdir/spark-job-server.jar $conffile'
 if [ -z "$JOBSERVER_FG" ]; then
-  eval $cmd > /dev/null 2>&1 < /dev/null &
+  eval $cmd > $LOG_DIR/server_start.log 2>&1 < /dev/null &
   echo $! > $PIDFILE
 else
   eval $cmd

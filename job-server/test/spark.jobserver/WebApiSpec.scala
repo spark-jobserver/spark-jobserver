@@ -1,11 +1,10 @@
 package spark.jobserver
 
-import akka.actor.{Actor, Props}
+import akka.actor.{Actor, ActorSystem, Props}
 import com.typesafe.config.ConfigFactory
-import spark.jobserver.io.{JobDAOActor, JobInfo, JarInfo}
 import org.joda.time.DateTime
-import org.scalatest.{Matchers, FunSpec, BeforeAndAfterAll}
-import spray.http.StatusCodes._
+import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
+import spark.jobserver.io.{JarInfo, JobDAOActor, JobInfo}
 import spray.routing.HttpService
 import spray.testkit.ScalatestRouteTest
 
@@ -16,11 +15,8 @@ import spray.testkit.ScalatestRouteTest
 class WebApiSpec extends FunSpec with Matchers with BeforeAndAfterAll
 with ScalatestRouteTest with HttpService {
   import scala.collection.JavaConverters._
-  import spray.httpx.SprayJsonSupport._
-  import spray.json.DefaultJsonProtocol._
-  import ooyala.common.akka.web.JsonUtils._
 
-  def actorRefFactory = system
+  def actorRefFactory: ActorSystem = system
 
   val bindConfKey = "spark.jobserver.bind-address"
   val bindConfVal = "127.0.0.1"
@@ -28,8 +24,8 @@ with ScalatestRouteTest with HttpService {
   val masterConfVal = "spark://localhost:7077"
   val config = ConfigFactory.parseString(s"""
     spark {
-      master = "${masterConfVal}"
-      jobserver.bind-address = "${bindConfVal}"
+      master = "$masterConfVal"
+      jobserver.bind-address = "$bindConfVal"
       jobserver.short-timeout = 3 s
     }
     shiro {
@@ -60,7 +56,7 @@ with ScalatestRouteTest with HttpService {
     import JobInfoActor._
     import JobManagerActor._
 
-    def receive = {
+    def receive: PartialFunction[Any, Unit] = {
       case GetJobStatus("_mapseq") =>
         sender ! finishedJobInfo
       case GetJobResult("_mapseq") =>
@@ -75,7 +71,11 @@ with ScalatestRouteTest with HttpService {
         sender ! finishedJobInfo
       case GetJobResult("_seq") =>
         sender ! JobResult("_seq", Seq(1, 2, Map("3" -> "three")))
+      case GetJobResult("_stream") =>
+        sender ! JobResult("_stream", "\"1, 2, 3, 4, 5, 6, 7\"".getBytes().toStream)
       case GetJobStatus("_num") =>
+        sender ! finishedJobInfo
+      case GetJobStatus("_stream") =>
         sender ! finishedJobInfo
       case GetJobResult("_num") =>
         sender ! JobResult("_num", 5000)
@@ -93,8 +93,8 @@ with ScalatestRouteTest with HttpService {
       case StoreJar("badjar", _) => sender ! InvalidJar
       case StoreJar(_, _)        => sender ! JarStored
 
-      case DataManagerActor.StoreData("/tmp/fileToRemove", _) => sender ! DataManagerActor.Stored("/tmp/fileToRemove-time-stamp")
       case DataManagerActor.StoreData("errorfileToRemove", _) => sender ! DataManagerActor.Error
+      case DataManagerActor.StoreData(filename, _) => sender ! DataManagerActor.Stored(filename + "-time-stamp")        
       case DataManagerActor.ListData => sender ! Set("demo1", "demo2")
       case DataManagerActor.DeleteData("/tmp/fileToRemove") => sender ! DataManagerActor.Deleted
       case DataManagerActor.DeleteData("errorfileToRemove") => sender ! DataManagerActor.Error
@@ -103,6 +103,13 @@ with ScalatestRouteTest with HttpService {
       case StopContext("none") => sender ! NoSuchContext
       case StopContext(_)      => sender ! ContextStopped
       case AddContext("one", _) => sender ! ContextAlreadyExists
+      case AddContext("custom-ctx", c) =>
+        // see WebApiMainRoutesSpec => "context routes" =>
+        // "should setup a new context with the correct configurations."
+        c.getInt("test") should be(1)
+        c.getInt("num-cpu-cores") should be(2)
+        c.getInt("override_me") should be(3)
+        sender ! ContextInitialized
       case AddContext(_, _)     => sender ! ContextInitialized
 
       case GetContext("no-context") => sender ! NoSuchContext
@@ -117,13 +124,23 @@ with ScalatestRouteTest with HttpService {
       case StartJob("err", _, config, _) =>  sender ! JobErroredOut("foo", dt,
                                                         new RuntimeException("oops",
                                                           new IllegalArgumentException("foo")))
-      case StartJob(_, _, config, events)     =>
+      case StartJob("foo", _, config, events)     =>
         statusActor ! Subscribe("foo", sender, events)
-        statusActor ! JobStatusActor.JobInit(JobInfo("foo", "context", null, "", dt, None, None))
-        statusActor ! JobStarted("foo", "context1", dt)
-        val map = config.entrySet().asScala.map { entry => (entry.getKey -> entry.getValue.unwrapped) }.toMap
+        val jobInfo = JobInfo("foo", "context", null, "com.abc.meme", dt, None, None)
+        statusActor ! JobStatusActor.JobInit(jobInfo)
+        statusActor ! JobStarted(jobInfo.jobId, jobInfo)
+        val map = config.entrySet().asScala.map { entry => entry.getKey -> entry.getValue.unwrapped }.toMap
         if (events.contains(classOf[JobResult])) sender ! JobResult("foo", map)
         statusActor ! Unsubscribe("foo", sender)
+
+      case StartJob("foo.stream", _, config, events)     =>
+        statusActor ! Subscribe("foo.stream", sender, events)
+        val jobInfo = JobInfo("foo.stream", "context", null, "", dt, None, None)
+        statusActor ! JobStatusActor.JobInit(jobInfo)
+        statusActor ! JobStarted(jobInfo.jobId, jobInfo)
+        val result = "\"1, 2, 3, 4, 5, 6\"".getBytes().toStream
+        if (events.contains(classOf[JobResult])) sender ! JobResult("foo.stream", result)
+        statusActor ! Unsubscribe("foo.stream", sender)
 
       case GetJobConfig("badjobid") => sender ! NoSuchJobId
       case GetJobConfig(_)          => sender ! config

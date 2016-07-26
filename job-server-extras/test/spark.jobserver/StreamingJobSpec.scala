@@ -1,11 +1,13 @@
 package spark.jobserver
 
+import scala.concurrent.Await
+
 import com.typesafe.config.ConfigFactory
 import spark.jobserver.context.StreamingContextFactory
-import spark.jobserver.io.{JobInfo, JobDAOActor}
+import spark.jobserver.io.{JobDAOActor, JobInfo}
 
 /**
- * Test for Straming Jobs.
+ * Test for Streaming Jobs.
  */
 object StreamingJobSpec extends JobSpecConfig {
   override val contextFactory = classOf[StreamingContextFactory].getName
@@ -41,13 +43,14 @@ class StreamingJobSpec extends JobSpecBase(StreamingJobSpec.getNewSystem) {
       manager ! JobManagerActor.StartJob("demo", streamingJob, emptyConfig, asyncEvents ++ errorEvents)
 
       jobId = expectMsgPF(6 seconds, "Did not start StreamingTestJob, expecting JobStarted") {
-        case JobStarted(jobid, _, _) => {
+        case JobStarted(jobid, _) => {
           jobid should not be null
           jobid
         }
       }
       Thread sleep 1000
-      dao.getJobInfo(jobId).get match  {
+      val jobInfo = Await.result(dao.getJobInfo(jobId), 60 seconds)
+      jobInfo.get match  {
         case JobInfo(_, _, _, _, _, None, _) => {  }
         case e => fail("Unexpected JobInfo" + e)
       }

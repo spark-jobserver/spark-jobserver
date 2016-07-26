@@ -12,7 +12,7 @@ object Assembly {
         "jetty", "jsp-api-2.0", "antlr", "avro", "slf4j-log4j", "log4j-1.2",
         "scala-actors", "spark", "commons-cli", "stax-api", "mockito").exists(cp.data.getName.startsWith(_))
     } },
-    assembleArtifact in packageScala := false,   // We don't need the Scala library, Spark already includes it
+    assembleArtifact in assemblyPackageScala := false, // We don't need the Scala library, Spark already includes it
     assemblyMergeStrategy in assembly := {
       case m if m.toLowerCase.endsWith("manifest.mf") => MergeStrategy.discard
       case m if m.toLowerCase.matches("meta-inf.*\\.sf$") => MergeStrategy.discard

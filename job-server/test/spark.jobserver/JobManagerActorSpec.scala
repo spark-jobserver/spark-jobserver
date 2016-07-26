@@ -1,7 +1,5 @@
 package spark.jobserver
 
-import akka.actor.Props
-import akka.testkit.TestProbe
 import spark.jobserver.CommonMessages.{JobErroredOut, JobResult}
 import spark.jobserver.io.JobDAOActor
 
@@ -16,6 +14,10 @@ class JobManagerActorSpec extends JobManagerSpec {
     supervisor = TestProbe().ref
   }
 
+  after {
+    ooyala.common.akka.AkkaTestUtils.shutdownAndWait(manager)
+  }
+  
   describe("starting jobs") {
     it("jobs should be able to cache RDDs and retrieve them through getPersistentRDDs") {
       manager ! JobManagerActor.Initialize(daoActor, None)

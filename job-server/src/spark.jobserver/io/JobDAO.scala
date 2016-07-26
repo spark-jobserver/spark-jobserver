@@ -1,7 +1,9 @@
 package spark.jobserver.io
 
 import com.typesafe.config._
-import org.joda.time.{ Duration, DateTime }
+import org.joda.time.{DateTime, Duration}
+import scala.concurrent.{Await, Future}
+import scala.concurrent.duration._
 
 // Uniquely identifies the jar used to run a job
 case class JarInfo(appName: String, uploadTime: DateTime)
@@ -36,7 +38,7 @@ trait JobDAO {
    *
    * @return
    */
-  def getApps: Map[String, DateTime]
+  def getApps: Future[Map[String, DateTime]]
 
   /**
    * TODO(kelvinchu): Remove this method later when JarManager doesn't use it anymore.
@@ -59,14 +61,14 @@ trait JobDAO {
    *
    * @return
    */
-  def getJobInfo(jobId: String): Option[JobInfo]
+  def getJobInfo(jobId: String): Future[Option[JobInfo]]
 
   /**
    * Return all job ids to their job info.
    *
    * @return
    */
-  def getJobInfos(limit: Int): Seq[JobInfo]
+  def getJobInfos(limit: Int): Future[Seq[JobInfo]]
 
   /**
    * Persist a job configuration along with provided jobId.
@@ -81,12 +83,12 @@ trait JobDAO {
    *
    * @return
    */
-  def getJobConfigs: Map[String, Config]
+  def getJobConfigs: Future[Map[String, Config]]
 
   /**
    * Returns the last upload time for a given app name.
    * @return Some(lastUploadedTime) if the app exists and the list of times is nonempty, None otherwise
    */
   def getLastUploadTime(appName: String): Option[DateTime] =
-    getApps.get(appName)
+    Await.result(getApps, 60 seconds).get(appName)
 }

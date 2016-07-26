@@ -15,12 +15,12 @@ class DataManagerActorSpec extends TestKit(DataManagerActorSpec.system) with Imp
     with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
   import com.typesafe.config._
-  import CommonMessages.NoSuchJobId
   import DataManagerActor._
 
   private val bytes = Array[Byte](0, 1, 2)
   private val tmpDir = Files.createTempDirectory("ut")
-  private val config = ConfigFactory.empty().withValue("spark.jobserver.datadao.rootdir", ConfigValueFactory.fromAnyRef(tmpDir.toString))
+  private val config = ConfigFactory.empty().withValue("spark.jobserver.datadao.rootdir",
+    ConfigValueFactory.fromAnyRef(tmpDir.toString))
 
   override def afterAll() {
     dao.shutdown()

@@ -5,7 +5,9 @@ import java.io.{BufferedOutputStream, FileOutputStream}
 import org.joda.time.DateTime
 import scala.collection.mutable
 import spark.jobserver.io.{JobDAO, JobInfo}
-
+import scala.concurrent._
+import scala.concurrent.duration._
+import scala.concurrent.ExecutionContext.Implicits.global
 /**
  * In-memory DAO for easy unit testing
  */
@@ -16,12 +18,14 @@ class InMemoryDAO extends JobDAO {
     jars((appName, uploadTime)) = jarBytes
   }
 
-  def getApps(): Map[String, DateTime] = {
-    jars.keys
+  def getApps: Future[Map[String, DateTime]] = {
+    Future {
+      jars.keys
       .groupBy(_._1)
       .map { case (appName, appUploadTimeTuples) =>
         appName -> appUploadTimeTuples.map(_._2).toSeq.head
-      }.toMap
+      }
+    }
   }
 
   def retrieveJarFile(appName: String, uploadTime: DateTime): String = {
@@ -34,20 +38,26 @@ class InMemoryDAO extends JobDAO {
     } finally {
       bos.close()
     }
-    outFile.getAbsolutePath()
+    outFile.getAbsolutePath
   }
 
   val jobInfos = mutable.HashMap.empty[String, JobInfo]
 
   def saveJobInfo(jobInfo: JobInfo) { jobInfos(jobInfo.jobId) = jobInfo }
 
-  def getJobInfos(limit: Int): Seq[JobInfo] = jobInfos.values.toSeq.sortBy(_.startTime.toString()).take(limit)
+  def getJobInfos(limit: Int): Future[Seq[JobInfo]] = Future {
+    jobInfos.values.toSeq.sortBy(_.startTime.toString()).take(limit)
+  }
 
-  def getJobInfo(jobId: String): Option[JobInfo] = jobInfos.get(jobId)
+  def getJobInfo(jobId: String): Future[Option[JobInfo]] = Future {
+    jobInfos.get(jobId)
+  }
 
   val jobConfigs = mutable.HashMap.empty[String, Config]
 
   def saveJobConfig(jobId: String, jobConfig: Config) { jobConfigs(jobId) = jobConfig }
 
-  def getJobConfigs(): Map[String, Config] = jobConfigs.toMap
+  def getJobConfigs: Future[Map[String, Config]] = Future {
+    jobConfigs.toMap
+  }
 }

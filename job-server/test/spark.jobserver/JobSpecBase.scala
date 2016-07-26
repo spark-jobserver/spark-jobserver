@@ -17,10 +17,12 @@ trait JobSpecConfig {
   import collection.JavaConverters._
 
   val JobResultCacheSize = Integer.valueOf(30)
-  val NumCpuCores = Integer.valueOf(Runtime.getRuntime.availableProcessors())  // number of cores to allocate. Required.
-  val MemoryPerNode = "512m"  // Executor memory per node, -Xmx style eg 512m, 1G, etc.
+  // number of cores to allocate. Required.
+  val NumCpuCores = Integer.valueOf(Runtime.getRuntime.availableProcessors())
+  // Executor memory per node, -Xmx style eg 512m, 1G, etc.
+  val MemoryPerNode = "512m"
   val MaxJobsPerContext = Integer.valueOf(2)
-  def contextFactory = classOf[DefaultSparkContextFactory].getName
+  def contextFactory: String = classOf[DefaultSparkContextFactory].getName
   lazy val config = {
     val ConfigMap = Map(
       "spark.jobserver.job-result-cache-size" -> JobResultCacheSize,
@@ -29,7 +31,7 @@ trait JobSpecConfig {
       "spark.jobserver.max-jobs-per-context" -> MaxJobsPerContext,
       "spark.jobserver.named-object-creation-timeout" -> "60 s",
       "akka.log-dead-letters" -> Integer.valueOf(0),
-      "spark.master" -> "local[4]",
+      "spark.master" -> "local[*]",
       "context-factory" -> contextFactory,
       "spark.context-settings.test" -> ""
     )
@@ -44,14 +46,14 @@ trait JobSpecConfig {
   lazy val contextConfig = {
     val ConfigMap = Map(
       "context-factory" -> contextFactory,
-      "streaming.batch_interval" -> new Integer(40),
-      "streaming.stopGracefully" -> false,
-      "streaming.stopSparkContext" -> true
+      "streaming.batch_interval" -> Integer.valueOf(40),
+      "streaming.stopGracefully" -> Boolean.box(false),
+      "streaming.stopSparkContext" -> Boolean.box(true)
     )
     ConfigFactory.parseMap(ConfigMap.asJava).withFallback(ConfigFactory.defaultOverrides())
   }
 
-  def getNewSystem = ActorSystem("test", config)
+  def getNewSystem: ActorSystem = ActorSystem("test", config)
 }
 
 abstract class JobSpecBaseBase(system: ActorSystem) extends TestKit(system) with ImplicitSender
@@ -63,12 +65,9 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
   var supervisor: ActorRef = _
   def extrasJar: java.io.File
 
-  after {
-    ooyala.common.akka.AkkaTestUtils.shutdownAndWait(manager)
-  }
-
   override def afterAll() {
-    ooyala.common.akka.AkkaTestUtils.shutdownAndWait(system)
+    ooyala.common.akka.AkkaTestUtils.shutdownAndWait(manager)
+    TestKit.shutdownActorSystem(system)
   }
 
   protected def uploadJar(dao: JobDAO, jarFilePath: String, appName: String) {

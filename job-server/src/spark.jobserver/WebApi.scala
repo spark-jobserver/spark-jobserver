@@ -1,38 +1,42 @@
 package spark.jobserver
 
+import java.util.NoSuchElementException
 import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLContext
 
-import akka.actor.{ ActorSystem, ActorRef }
+import akka.actor.{ActorRef, ActorSystem}
 import akka.pattern.ask
 import akka.util.Timeout
-import com.typesafe.config.{ Config, ConfigFactory, ConfigException, ConfigRenderOptions }
-import java.util.NoSuchElementException
-import javax.net.ssl.SSLContext
-import ooyala.common.akka.web.{ WebService, CommonRoutes }
+import com.typesafe.config.{Config, ConfigException, ConfigFactory, ConfigValueFactory, ConfigRenderOptions}
+import ooyala.common.akka.web.JsonUtils.AnyJsonFormat
+import ooyala.common.akka.web.{CommonRoutes, WebService}
+import org.apache.shiro.SecurityUtils
+import org.apache.shiro.config.IniSecurityManagerFactory
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
-import spark.jobserver.util.SparkJobUtils
-import spark.jobserver.util.SSLContextFactory
+import spark.jobserver.auth._
+import spark.jobserver.io.JobInfo
 import spark.jobserver.routes.DataRoutes
+import spark.jobserver.util.{SSLContextFactory, SparkJobUtils}
+import spray.http._
+import spray.httpx.SprayJsonSupport.sprayJsonMarshaller
+import spray.io.ServerSSLEngineProvider
+import spray.json.DefaultJsonProtocol._
+import spray.routing.directives.AuthMagnet
+import spray.routing.{HttpService, RequestContext, Route}
+
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.Try
-import spark.jobserver.io.JobInfo
-import spark.jobserver.auth._
-import spray.http.HttpResponse
-import spray.http.MediaTypes
-import spray.http.StatusCodes
-import spray.httpx.SprayJsonSupport.sprayJsonMarshaller
-import spray.json.DefaultJsonProtocol._
-import spray.routing.{ HttpService, Route, RequestContext }
-import spray.routing.directives.AuthMagnet
-import spray.io.ServerSSLEngineProvider
-import org.apache.shiro.config.IniSecurityManagerFactory
-import org.apache.shiro.mgt.SecurityManager
-import org.apache.shiro.SecurityUtils
+
 
 object WebApi {
   val StatusKey = "status"
   val ResultKey = "result"
+  val ResultKeyStartBytes = "{\n".getBytes
+  val ResultKeyEndBytes = "}".getBytes
+  val ResultKeyBytes = ("\"" + ResultKey + "\":").getBytes
+
+  val NameContextDelimiter = "~"
 
   def badRequest(ctx: RequestContext, msg: String) {
     ctx.complete(StatusCodes.BadRequest, errMap(msg))
@@ -61,6 +65,14 @@ object WebApi {
     Map(ResultKey -> result)
   }
 
+  def resultToByteIterator(jobReport: Map[String, Any], result: Iterator[_]): Iterator[_] = {
+    ResultKeyStartBytes.toIterator ++
+      (jobReport.map(t => Seq(AnyJsonFormat.write(t._1).toString(),
+                AnyJsonFormat.write(t._2).toString()).mkString(":") ).mkString(",") ++
+        (if(jobReport.nonEmpty) "," else "")).getBytes().toIterator ++
+      ResultKeyBytes.toIterator ++ result ++ ResultKeyEndBytes.toIterator
+  }
+
   def formatException(t: Throwable): Any =
     if (t.getCause != null) {
       Map("message" -> t.getMessage,
@@ -74,17 +86,18 @@ object WebApi {
         "stack" -> t.getStackTrace.map(_.toString).toSeq)
     }
 
-  def getJobReport(jobInfo: JobInfo): Map[String, Any] = {
-    Map("jobId" -> jobInfo.jobId,
-      "startTime" -> jobInfo.startTime.toString(),
-      "classPath" -> jobInfo.classPath,
-      "context" -> (if (jobInfo.contextName.isEmpty) "<<ad-hoc>>" else jobInfo.contextName),
-      "duration" -> getJobDurationString(jobInfo)) ++ (jobInfo match {
+  def getJobReport(jobInfo: JobInfo, jobStarted: Boolean = false): Map[String, Any] = {
+    val statusMap = if (jobStarted) Map(StatusKey -> "STARTED") else (jobInfo match {
         case JobInfo(_, _, _, _, _, None, _) => Map(StatusKey -> "RUNNING")
         case JobInfo(_, _, _, _, _, _, Some(ex)) => Map(StatusKey -> "ERROR",
           ResultKey -> formatException(ex))
         case JobInfo(_, _, _, _, _, Some(e), None) => Map(StatusKey -> "FINISHED")
-      })
+    })
+    Map("jobId" -> jobInfo.jobId,
+      "startTime" -> jobInfo.startTime.toString(),
+      "classPath" -> jobInfo.classPath,
+      "context" -> (if (jobInfo.contextName.isEmpty) "<<ad-hoc>>" else jobInfo.contextName),
+      "duration" -> getJobDurationString(jobInfo)) ++ statusMap
   }
 }
 
@@ -94,8 +107,9 @@ class WebApi(system: ActorSystem,
              jarManager: ActorRef,
              dataManager: ActorRef,
              supervisor: ActorRef,
-             jobInfo: ActorRef)
-    extends HttpService with CommonRoutes with DataRoutes with SJSAuthenticator with CORSSupport {
+             jobInfoActor: ActorRef)
+    extends HttpService with CommonRoutes with DataRoutes with SJSAuthenticator with CORSSupport
+                        with ChunkEncodedStreamingSupport {
   import CommonMessages._
   import ContextSupervisor._
   import scala.concurrent.duration._
@@ -112,6 +126,8 @@ class WebApi(system: ActorSystem,
   val DefaultJobLimit = 50
   val StatusKey = "status"
   val ResultKey = "result"
+  val ResultChunkSize = Option("spark.jobserver.result-chunk-size").filter(config.hasPath)
+      .fold(100 * 1024)(config.getBytes(_).toInt)
 
   val contextTimeout = SparkJobUtils.getContextTimeout(config)
   val bindAddress = config.getString("spark.jobserver.bind-address")
@@ -228,32 +244,39 @@ class WebApi(system: ActorSystem,
    */
   def contextRoutes: Route = pathPrefix("contexts") {
     import ContextSupervisor._
-    import collection.JavaConverters._
+
     // user authentication
     authenticate(authenticator) { authInfo =>
       get { ctx =>
         (supervisor ? ListContexts).mapTo[Seq[String]]
-          .map { contexts => ctx.complete(contexts) }
+          .map { contexts =>
+            ctx.complete(removeProxyUserPrefix(authInfo, contexts)) }
       } ~
-        post {
-          /**
-           *  POST /contexts/<contextName>?<optional params> -
-           *    Creates a long-running context with contextName and options for context creation
-           *    All options are merged into the defaults in spark.context-settings
-           *
-           * @optional @param num-cpu-cores Int - Number of cores the context will use
-           * @optional @param memory-per-node String - -Xmx style string (512m, 1g, etc)
-           * for max memory per node
-           * @return the string "OK", or error if context exists or could not be initialized
-           */
+      post {
+        /**
+         *  POST /contexts/<contextName>?<optional params> -
+         *    Creates a long-running context with contextName and options for context creation
+         *    All options are merged into the defaults in spark.context-settings
+         *
+         * @optional @entity The POST entity should be a Typesafe Config format file with a
+         *            "spark.context-settings" block containing spark configs for the context.
+         * @optional @param num-cpu-cores Int - Number of cores the context will use
+         * @optional @param memory-per-node String - -Xmx style string (512m, 1g, etc)
+         * for max memory per node
+         * @return the string "OK", or error if context exists or could not be initialized
+         */
+        entity(as[String]) { configString =>
           path(Segment) { (contextName) =>
             // Enforce user context name to start with letters
             if (!contextName.head.isLetter) {
               complete(StatusCodes.BadRequest, errMap("context name must start with letters"))
             } else {
               parameterMap { (params) =>
-                val config = ConfigFactory.parseMap(params.asJava).resolve()
-                val future = (supervisor ? AddContext(contextName, config))(contextTimeout.seconds)
+                // parse the config from the body, using url params as fallback values
+                val baseConfig = ConfigFactory.parseString(configString)
+                val contextConfig = getContextConfig(baseConfig, params)
+                val (cName, config) = determineProxyUser(contextConfig, authInfo, contextName)
+                val future = (supervisor ? AddContext(cName, config))(contextTimeout.seconds)
                 respondWithMediaType(MediaTypes.`application/json`) { ctx =>
                   future.map {
                     case ContextInitialized   => ctx.complete(StatusCodes.OK)
@@ -264,13 +287,15 @@ class WebApi(system: ActorSystem,
               }
             }
           }
-        } ~
+        }
+      } ~
         delete {
           //  DELETE /contexts/<contextName>
           //  Stop the context with the given name.  Executors will be shut down and all cached RDDs
           //  and currently running jobs will be lost.  Use with care!
           path(Segment) { (contextName) =>
-            val future = supervisor ? StopContext(contextName)
+            val (cName, _) = determineProxyUser(config, authInfo, contextName)
+            val future = supervisor ? StopContext(cName)
             respondWithMediaType(MediaTypes.`text/plain`) { ctx =>
               future.map {
                 case ContextStopped => ctx.complete(StatusCodes.OK)
@@ -359,7 +384,7 @@ class WebApi(system: ActorSystem,
       (get & path(Segment / "config")) { jobId =>
         val renderOptions = ConfigRenderOptions.defaults().setComments(false).setOriginComments(false)
 
-        val future = jobInfo ? GetJobConfig(jobId)
+        val future = jobInfoActor ? GetJobConfig(jobId)
         respondWithMediaType(MediaTypes.`application/json`) { ctx =>
           future.map {
             case NoSuchJobId =>
@@ -374,17 +399,22 @@ class WebApi(system: ActorSystem,
         // If the job isn't finished yet, then {"status": "RUNNING" | "ERROR"} is returned.
         // Returned JSON contains result attribute if status is "FINISHED"
         (get & path(Segment)) { jobId =>
-          val statusFuture = jobInfo ? GetJobStatus(jobId)
+          val statusFuture = jobInfoActor ? GetJobStatus(jobId)
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
             statusFuture.map {
               case NoSuchJobId =>
                 notFound(ctx, "No such job ID " + jobId.toString)
               case info: JobInfo =>
                 val jobReport = getJobReport(info)
-                val resultFuture = jobInfo ? GetJobResult(jobId)
+                val resultFuture = jobInfoActor ? GetJobResult(jobId)
                 resultFuture.map {
                   case JobResult(_, result) =>
-                    ctx.complete(jobReport ++ resultToTable(result))
+                    result match {
+                      case s: Stream[_] =>
+                        sendStreamingResponse(ctx, ResultChunkSize,
+                          resultToByteIterator(jobReport, s.toIterator))
+                      case _ => ctx.complete(jobReport ++ resultToTable(result))
+                    }
                   case _ =>
                     ctx.complete(jobReport)
                 }
@@ -395,7 +425,7 @@ class WebApi(system: ActorSystem,
         //  Stop the current job. All other jobs submited with this spark context
         //  will continue to run
         (delete & path(Segment)) { jobId =>
-          val future = jobInfo ? GetJobStatus(jobId)
+          val future = jobInfoActor ? GetJobStatus(jobId)
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
             future.map {
               case NoSuchJobId =>
@@ -414,14 +444,21 @@ class WebApi(system: ActorSystem,
         /**
          * GET /jobs   -- returns a JSON list of hashes containing job status, ex:
          * [
-         *   {jobId: "word-count-2013-04-22", status: "RUNNING"}
+         *   {
+         *     "duration": "Job not done yet",
+         *     "classPath": "spark.jobserver.WordCountExample",
+         *     "startTime": "2016-06-19T16:27:12.196+05:30",
+         *     "context": "b7ea0eb5-spark.jobserver.WordCountExample",
+         *     "status": "RUNNING",
+         *     "jobId": "5453779a-f004-45fc-a11d-a39dae0f9bf4"
+         *   }
          * ]
          * @optional @param limit Int - optional limit to number of jobs to display, defaults to 50
          */
         get {
           parameters('limit.as[Int] ?) { (limitOpt) =>
             val limit = limitOpt.getOrElse(DefaultJobLimit)
-            val future = (jobInfo ? GetJobStatuses(Some(limit))).mapTo[Seq[JobInfo]]
+            val future = (jobInfoActor ? GetJobStatuses(Some(limit))).mapTo[Seq[JobInfo]]
             respondWithMediaType(MediaTypes.`application/json`) { ctx =>
               future.map { infos =>
                 val jobReport = infos.map { info =>
@@ -457,8 +494,7 @@ class WebApi(system: ActorSystem,
                     val async = !syncOpt.getOrElse(false)
                     val postedJobConfig = ConfigFactory.parseString(configString)
                     val jobConfig = postedJobConfig.withFallback(config).resolve()
-                    val contextConfig = Try(jobConfig.getConfig("spark.context-settings")).
-                      getOrElse(ConfigFactory.empty)
+                    val contextConfig = getContextConfig(jobConfig)
                     val jobManager = getJobManagerForContext(contextOpt, contextConfig, classPath)
                     val events = if (async) asyncEvents else syncEvents
                     val timeout = timeoutOpt.map(t => Timeout(t.seconds)).getOrElse(DefaultSyncTimeout)
@@ -466,13 +502,16 @@ class WebApi(system: ActorSystem,
                       JobManagerActor.StartJob(appName, classPath, jobConfig, events))(timeout)
                     respondWithMediaType(MediaTypes.`application/json`) { ctx =>
                       future.map {
-                        case JobResult(_, res)       => ctx.complete(resultToTable(res))
+                        case JobResult(_, res) =>
+                          res match {
+                            case s: Stream[_] => sendStreamingResponse(ctx, ResultChunkSize,
+                              resultToByteIterator(Map.empty, s.toIterator))
+                            case _ => ctx.complete(resultToTable(res))
+                          }
                         case JobErroredOut(_, _, ex) => ctx.complete(errMap(ex, "ERROR"))
-                        case JobStarted(jobId, context, _) =>
-                          jobInfo ! StoreJobConfig(jobId, postedJobConfig)
-                          ctx.complete(202, Map[String, Any](
-                            StatusKey -> "STARTED",
-                            ResultKey -> Map("jobId" -> jobId, "context" -> context)))
+                        case JobStarted(_, jobInfo) =>
+                          jobInfoActor ! StoreJobConfig(jobInfo.jobId, postedJobConfig)
+                          ctx.complete(202, getJobReport(jobInfo, true))
                         case JobValidationFailed(_, _, ex) =>
                           ctx.complete(400, errMap(ex, "VALIDATION FAILED"))
                         case NoSuchApplication => notFound(ctx, "appName " + appName + " not found")
@@ -507,6 +546,51 @@ class WebApi(system: ActorSystem,
   override def timeoutRoute: Route =
     complete(500, errMap("Request timed out. Try using the /jobs/<jobID>, /jobs APIs to get status/results"))
 
+  /**
+   * appends the NameContextDelimiter to the user name and,
+   * if the user name contains the delimiter as well, then it doubles it so that we can be sure
+   * that our prefix is unique
+   */
+  private def userNamePrefix(authInfo: AuthInfo) : String = {
+    authInfo.toString.replaceAll(NameContextDelimiter,
+                                 NameContextDelimiter + NameContextDelimiter) +
+        NameContextDelimiter
+  }
+
+  /**
+   * if the shiro user is to be used as the proxy user, then this
+   * computes the context name from the user name (and a prefix) and appends the user name
+   * as the spark proxy user parameter to the config
+   */
+  def determineProxyUser(aConfig: Config,
+                         authInfo: AuthInfo,
+                         contextName: String): (String, Config) = {
+    if (config.getBoolean("shiro.authentication") && config.getBoolean("shiro.use-as-proxy-user")) {
+      //proxy-user-param is ignored and the authenticated user name is used
+      val config = aConfig.withValue(SparkJobUtils.SPARK_PROXY_USER_PARAM,
+        ConfigValueFactory.fromAnyRef(authInfo.toString))
+      (userNamePrefix(authInfo) + contextName, config)
+    } else {
+      (contextName, aConfig)
+    }
+  }
+
+  private val regRexPart2 = "([^" + NameContextDelimiter + "]+.*)"
+
+  /**
+   * filter the given context names so that the user may only see his/her own contexts
+   */
+  def removeProxyUserPrefix(authInfo: AuthInfo, contextNames: Seq[String]): Seq[String] = {
+    if (config.getBoolean("shiro.authentication") && config.getBoolean("shiro.use-as-proxy-user")) {
+      val RegExPrefix = ("^" + userNamePrefix(authInfo) + regRexPart2).r
+      contextNames collect {
+        case RegExPrefix(cName) => cName
+      }
+    } else {
+      contextNames
+    }
+  }
+
   private def getJobManagerForContext(context: Option[String],
                                       contextConfig: Config,
                                       classPath: String): Option[ActorRef] = {
@@ -523,6 +607,14 @@ class WebApi(system: ActorSystem,
       case NoSuchContext                              => None
       case ContextInitError(err)                      => throw new RuntimeException(err)
     }
+  }
+
+  private def getContextConfig(baseConfig: Config, fallbackParams: Map[String, String] = Map()): Config = {
+    import collection.JavaConverters.mapAsJavaMapConverter
+    Try(baseConfig.getConfig("spark.context-settings"))
+      .getOrElse(ConfigFactory.empty)
+      .withFallback(ConfigFactory.parseMap(fallbackParams.asJava))
+      .resolve()
   }
 
 }

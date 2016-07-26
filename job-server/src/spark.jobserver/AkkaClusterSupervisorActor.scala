@@ -82,7 +82,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
       }
 
     case ActorIdentity(memberActors, actorRefOpt) =>
-      actorRefOpt.map { actorRef =>
+      actorRefOpt.foreach{ actorRef =>
         val actorName = actorRef.path.name
         if (actorName.startsWith("jobManager")) {
           logger.info("Received identify response, attempting to initialize context at {}", memberActors)
@@ -92,7 +92,6 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
            }).getOrElse({
             logger.warn("No initialization or callback found for jobManager actor {}", actorRef.path)
             actorRef ! PoisonPill
-
           })
         }
       }
@@ -184,6 +183,9 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
         contexts(ctxName) = (ref, resActor)
         context.watch(ref)
         successFunc(ref)
+      case _ => logger.info("Failed for unknown reason.")
+        ref ! PoisonPill
+        failureFunc(new RuntimeException("Failed for unknown reason."))
     }
   }
 
@@ -201,7 +203,15 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
           failureFunc(e)
           return
       }
-    val pb = Process(s"$managerStartCommand $contextDir ${selfAddress.toString}")
+
+    //extract spark.proxy.user from contextConfig, if available and pass it to $managerStartCommand
+    var cmdString = s"$managerStartCommand $contextDir ${selfAddress.toString}"
+
+    if (contextConfig.hasPath(SparkJobUtils.SPARK_PROXY_USER_PARAM)) {
+      cmdString = cmdString + s" ${contextConfig.getString(SparkJobUtils.SPARK_PROXY_USER_PARAM)}"
+    }
+
+    val pb = Process(cmdString)
     val pio = new ProcessIO(_ => (),
                         stdout => scala.io.Source.fromInputStream(stdout)
                           .getLines.foreach(println),
