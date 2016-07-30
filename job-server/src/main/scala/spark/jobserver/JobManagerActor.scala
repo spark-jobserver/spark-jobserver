@@ -90,6 +90,8 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
 
   private val jobCacheSize = Try(config.getInt("spark.job-cache.max-entries")).getOrElse(10000)
   private val jobCacheEnabled = Try(config.getBoolean("spark.job-cache.enabled")).getOrElse(false)
+  private val cacheDriver = Try(config.getString("spark.job-cache.driver"))
+    .getOrElse("spark.jobserver.cache.LRUCache")
   // Use Spark Context's built in classloader when SPARK-1230 is merged.
   private val jarLoader = new ContextURLClassLoader(Array[URL](), getClass.getClassLoader)
   private val contextName = contextConfig.getString("context.name")
@@ -133,7 +135,7 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
         factory = getContextFactory()
         jobContext = factory.makeContext(config, contextConfig, contextName)
         sparkEnv = SparkEnv.get
-        jobCache = new JobCacheImpl(jobCacheSize, daoActor, jobContext.sparkContext, jarLoader)
+        jobCache = new JobCacheImpl(jobCacheSize, cacheDriver, daoActor, jobContext.sparkContext, jarLoader)
         getSideJars(contextConfig).foreach { jarUri => jobContext.sparkContext.addJar(jarUri) }
         sender ! Initialized(contextName, resultActor)
       } catch {

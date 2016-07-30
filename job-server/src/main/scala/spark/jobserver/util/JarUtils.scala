@@ -9,7 +9,6 @@ import org.slf4j.LoggerFactory
  */
 object JarUtils {
   val logger = LoggerFactory.getLogger(getClass)
-
   /**
    * Loads a Scala object or class from a classloader.
    * See http://stackoverflow.com/questions/3216780/problem-reloading-a-jar-using-urlclassloader?lq=1
@@ -24,16 +23,16 @@ object JarUtils {
    *         the object (for objects), or a new instance of a class (for classes) that implement the
    *         SparkJob trait.
    */
-  def loadClassOrObject[C](classOrObjectName: String, loader: ClassLoader): () => C = {
-    def fallBackToClass(): () => C = {
+  def loadClassOrObject[C](classOrObjectName: String, loader: ClassLoader): C = {
+    def fallBackToClass(): C = {
       val constructor = loadConstructor[C](classOrObjectName, loader)
-      () => constructor.newInstance()
+      constructor.newInstance()
     }
 
     // Try loading it as an object first, if that fails, then try it as a class
     try {
       val objectRef = loadObject[C](classOrObjectName + "$", loader)
-      () => objectRef
+      objectRef
     } catch {
       case e: java.lang.ClassNotFoundException => fallBackToClass()
       case e: java.lang.ClassCastException => fallBackToClass()
@@ -65,7 +64,7 @@ object JarUtils {
   }
 
   def validateJarBytes(jarBytes: Array[Byte]): Boolean = {
-    jarBytes.size > 4 &&
+    jarBytes.length > 4 &&
       // For now just check the first few bytes are the ZIP signature: 0x04034b50 little endian
       jarBytes(0) == 0x50 && jarBytes(1) == 0x4b && jarBytes(2) == 0x03 && jarBytes(3) == 0x04
   }

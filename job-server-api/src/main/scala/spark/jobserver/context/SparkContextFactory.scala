@@ -92,6 +92,7 @@ class JavaToScalaWrapper[J, R, D](job: JavaSparkJob[J, R, D]) extends api.SparkJ
  * A SparkContextFactory designed for Scala and Java jobs that loads jars
  */
 trait ScalaContextFactory extends SparkContextFactory {
+
   type J = ScalaJobContainer
 
   val logger = LoggerFactory.getLogger(getClass)
@@ -134,7 +135,9 @@ trait ScalaContextFactory extends SparkContextFactory {
 class DefaultSparkContextFactory extends ScalaContextFactory {
 
   type C = SparkContext with ContextLike
-
+  implicit class JavaJob2Scala[C, D, R](j: JavaSparkJob[C, D, R]) {
+    def toSparkJobBase: api.SparkJobBase = new JavaToScalaWrapper(j)
+  }
   def makeContext(sparkConf: SparkConf, config: Config,  contextName: String): C = {
     val sc = new SparkContext(sparkConf) with ContextLike {
       def sparkContext: SparkContext = this

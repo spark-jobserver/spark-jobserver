@@ -3,9 +3,9 @@ package spark.jobserver
 import akka.actor.ActorRef
 import spark.jobserver.common.akka.InstrumentedActor
 import spark.jobserver.common.akka.metrics.YammerMetrics
-import spark.jobserver.util.LRUCache
-
 import scala.collection.mutable
+
+import spark.jobserver.cache.LRUCache
 
 /**
  * It is an actor to manage results that are returned from jobs.
@@ -39,7 +39,8 @@ class JobResultActor extends InstrumentedActor with YammerMetrics {
       }
 
     case GetJobResult(jobId) =>
-      sender ! cache.get(jobId).map(JobResult(jobId, _)).getOrElse(NoSuchJobId)
+      //sender ! JobResult(jobId, _: Any)
+      sender ! cache.getOption(jobId).map(JobResult(jobId, _)).getOrElse(NoSuchJobId)
 
     case JobResult(jobId, result) =>
       cache.put(jobId, result)

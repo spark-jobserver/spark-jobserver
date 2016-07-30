@@ -67,6 +67,11 @@ object Dependencies {
      "org.apache.shiro" % "shiro-core" % shiro
   )
 
+  lazy val cacheDeps = Seq(
+    "net.debasishg" %% "redisclient" % "3.0",
+    "com.bionicspirit" %% "shade" % "1.7.4"
+  )
+
   lazy val serverDeps = apiDeps ++ miscDeps
   lazy val apiDeps = sparkDeps ++ miscDeps :+ typeSafeConfigDeps
 

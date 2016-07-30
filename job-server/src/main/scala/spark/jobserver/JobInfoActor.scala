@@ -6,10 +6,14 @@ import akka.util.Timeout
 import com.typesafe.config.Config
 import spark.jobserver.common.akka.InstrumentedActor
 import spark.jobserver.io.{JobDAO, JobInfo}
-
 import scala.concurrent.Await
 
+import spark.jobserver.context.JavaToScalaWrapper
+
 object JobInfoActor {
+  implicit class JavaJob2Scala[C, D, R](j: JavaSparkJob[C, D, R]) {
+    def toSparkJobBase: api.SparkJobBase = new JavaToScalaWrapper(j)
+  }
   // Requests
   case class GetJobStatuses(limit: Option[Int], statusOpt: Option[String] = None)
   case class GetJobConfig(jobId: String)
@@ -24,6 +28,7 @@ class JobInfoActor(jobDao: JobDAO, contextSupervisor: ActorRef) extends Instrume
   import CommonMessages._
   import JobInfoActor._
   import context.dispatcher
+  import JobInfoActor.JavaJob2Scala
 
   import scala.concurrent.duration._
   import scala.util.control.Breaks._       // for futures to work
