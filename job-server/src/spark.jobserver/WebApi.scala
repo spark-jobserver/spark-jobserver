@@ -458,7 +458,7 @@ class WebApi(system: ActorSystem,
         get {
           parameters('limit.as[Int] ?,'status.as[String] ?) { (limitOpt,statusOpt) =>
             val limit = limitOpt.getOrElse(DefaultJobLimit)
-            val status = statusOpt.getOrElse("")
+            val status = statusOpt.getOrElse("").toUpperCase()
             val future = (jobInfoActor ? GetJobStatuses(Some(limit),Some(status))).mapTo[Seq[JobInfo]]
             respondWithMediaType(MediaTypes.`application/json`) { ctx =>
               future.map { infos =>
