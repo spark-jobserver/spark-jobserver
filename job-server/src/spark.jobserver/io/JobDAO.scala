@@ -19,7 +19,11 @@ case class JobInfo(jobId: String, contextName: String,
   def isRunning: Boolean = !endTime.isDefined
   def isErroredOut: Boolean = endTime.isDefined && error.isDefined
 }
-
+object JobStatus {
+  val Running = "RUNNING"
+  val Error = "ERROR"
+  val Finished = "FINISHED"
+}
 /**
  * Core trait for data access objects for persisting data such as jars, applications, jobs, etc.
  */
@@ -68,7 +72,7 @@ trait JobDAO {
    *
    * @return
    */
-  def getJobInfos(limit: Int): Future[Seq[JobInfo]]
+  def getJobInfos(limit: Int, status:Option[String] = None): Future[Seq[JobInfo]]
 
   /**
    * Persist a job configuration along with provided jobId.

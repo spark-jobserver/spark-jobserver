@@ -64,6 +64,42 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         ))
       }
     }
+    it("should list finished jobs") {
+      Get("/jobs?status=finished") ~> sealRoute(routes) ~> check {
+        status should be (OK)
+        responseAs[Seq[Map[String, String]]] should be (Seq(
+          Map("jobId" -> "foo-1",
+            "startTime" -> "2013-05-29T00:00:00.000Z",
+            "classPath" -> "com.abc.meme",
+            "context"  -> "context",
+            "duration" -> "300.0 secs",
+            StatusKey -> "FINISHED")
+        ))
+      }
+    }
+    it("should list error jobs") {
+      Get("/jobs?status=error") ~> sealRoute(routes) ~> check {
+        status should be (OK)
+        val result = responseAs[Seq[Map[String, Any]]].head
+        result(StatusKey) should equal("ERROR")
+
+        val exceptionMap = result(ResultKey).asInstanceOf[Map[String, Any]]
+        exceptionMap("message") should equal ("test-error")
+      }
+    }
+    it("should list running jobs") {
+      Get("/jobs?status=running") ~> sealRoute(routes) ~> check {
+        status should be (OK)
+        responseAs[Seq[Map[String, String]]] should be (Seq(
+          Map("jobId" -> "foo-1",
+            "startTime" -> "2013-05-29T00:00:00.000Z",
+            "classPath" -> "com.abc.meme",
+            "context"  -> "context",
+            "duration" -> "Job not done yet",
+            StatusKey -> "RUNNING")
+        ))
+      }
+    }
   }
 
   describe("/jobs routes") {

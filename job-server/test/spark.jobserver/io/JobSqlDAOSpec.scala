@@ -65,7 +65,6 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
 
     def genTestJobInfo(jarInfo: JarInfo, hasEndTime: Boolean, hasError: Boolean, isNew:Boolean): JobInfo = {
       count = count + (if (isNew) 1 else 0)
-
       val id: String = "test-id" + count
       val contextName: String = "test-context"
       val classPath: String = "test-classpath"
@@ -266,6 +265,42 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
       jobs4.last.error.isDefined should equal (true)
       intercept[Throwable] { jobs4.last.error.map(throw _) }
       jobs4.last.error.get.getMessage should equal (throwable.getMessage)
+    }
+    it("retrieve by status equals running should be no end and no error") {
+      //save some job insure exist one running job
+      val dt1 = DateTime.now()
+      val dt2 = Some(DateTime.now())
+      val someError = Some(new Throwable("test-error"))
+      val finishedJob: JobInfo = JobInfo("test-finished", "test", jarInfo, "test-class", dt1, dt2, None)
+      val errorJob: JobInfo = JobInfo("test-error", "test", jarInfo, "test-class", dt1, dt2, someError)
+      val runningJob: JobInfo = JobInfo("test-running", "test", jarInfo, "test-class", dt1, None, None)
+      dao.saveJobInfo(finishedJob)
+      dao.saveJobInfo(runningJob)
+      dao.saveJobInfo(errorJob)
+
+      //retrieve by status equals RUNNING
+      val retrieved = Await.result(dao.getJobInfos(1, Some(JobStatus.Running)), 60 seconds).head
+
+      //test
+      retrieved.endTime.isDefined should equal (false)
+      retrieved.error.isDefined should equal (false)
+    }
+    it("retrieve by status equals finished should be some end and no error") {
+
+      //retrieve by status equals FINISHED
+      val retrieved = Await.result(dao.getJobInfos(1, Some(JobStatus.Finished)), 60 seconds).head
+
+      //test
+      retrieved.endTime.isDefined should equal (true)
+      retrieved.error.isDefined should equal (false)
+    }
+
+    it("retrieve by status equals error should be some error") {
+      //retrieve by status equals ERROR
+      val retrieved = Await.result(dao.getJobInfos(1, Some(JobStatus.Error)), 60 seconds).head
+
+      //test
+      retrieved.error.isDefined should equal (true)
     }
   }
 }

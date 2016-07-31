@@ -11,7 +11,7 @@ import spark.jobserver.io.{JobDAO, JobInfo}
 
 object JobInfoActor {
   // Requests
-  case class GetJobStatuses(limit: Option[Int])
+  case class GetJobStatuses(limit: Option[Int], statusOpt: Option[String] = None)
   case class GetJobConfig(jobId: String)
   case class GetJobStatus(jobId: String)
   case class StoreJobConfig(jobId: String, jobConfig: Config)
@@ -32,9 +32,9 @@ class JobInfoActor(jobDao: JobDAO, contextSupervisor: ActorRef) extends Instrume
   implicit val ShortTimeout = Timeout(3 seconds)
 
   override def wrappedReceive: Receive = {
-    case GetJobStatuses(limit) =>
+    case GetJobStatuses(limit, statusOpt) =>
       val originator = sender
-      jobDao.getJobInfos(limit.get).foreach(originator ! _)
+      jobDao.getJobInfos(limit.get, statusOpt).foreach(originator ! _)
 
     case GetJobStatus(jobId) =>
       val originator = sender
