@@ -234,7 +234,7 @@ class JobSqlDAO(config: Config) extends JobDAO {
                           // endTime.isDefined && error.isDefined
                           case "ERROR" => j.endTime.isDefined && j.error.isDefined
                           // not RUNNING AND NOT ERROR
-                          case "COMPLETE" => j.endTime.isDefined && !j.error.isDefined
+                          case "FINISHED" => j.endTime.isDefined && !j.error.isDefined
                           case _ => true
                 })
     } yield {

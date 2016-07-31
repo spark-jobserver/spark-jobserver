@@ -1,31 +1,30 @@
+function showJobs(filter,$tableBody) {
+    $.getJSON(
+        '/jobs',
+        filter,
+        function(jobs) {
+            $tableBody.empty();
+            var jobsHtml = "";
+            $.each(jobs, function(key, job) {
+                jobsHtml += "<tr>";
+                jobsHtml += "<td><a href='./jobs/" + job.jobId + "'>" + job.jobId + "</a> (<a href='./jobs/" + job.jobId + "/config'>C</a>)</td>";
+                jobsHtml += "<td>" + job.classPath + "</td>";
+                jobsHtml += "<td>" + job.context + "</td>";
+                jobsHtml += "<td>" + job.startTime + "</td>";
+                jobsHtml += "<td>" + job.duration + "</td>";
+                jobsHtml += "</tr>";
+            });
+            $tableBody.html(jobsHtml);
+        });
+}
+
 function getJobs() {
-  $.getJSON(
-    '/jobs',
-    '',
-    function(jobs) {
-      $('#failedJobsTable tbody').empty();
-      $('#runningJobsTable tbody').empty();
-      $('#completedJobsTable tbody').empty();
-
-      $.each(jobs, function(key, job) {
-        var items = [];
-        items.push("<tr>");
-        items.push("<td><a href='./jobs/" + job.jobId + "'>" + job.jobId + "</a> (<a href='./jobs/" + job.jobId + "/config'>C</a>)</td>");
-        items.push("<td>" + job.classPath + "</td>");
-        items.push("<td>" + job.context + "</td>");
-        items.push("<td>" + job.startTime + "</td>");
-        items.push("<td>" + job.duration + "</td>");
-        items.push("</tr>");
-
-        if(job.status == 'ERROR') {
-          $('#failedJobsTable > tbody:last').append(items.join(""));
-        } else if(job.status == 'RUNNING') {
-          $('#runningJobsTable > tbody:last').append(items.join(""));
-        } else {
-          $('#completedJobsTable > tbody:last').append(items.join(""));
-        }
-      });
-    });
+    //show error jobs
+    showJobs({status:"error"},$('#failedJobsTable > tbody:last'));
+    //show running jobs
+    showJobs({status:"running"},$('#runningJobsTable > tbody:last'));
+    //show complete jobs
+    showJobs({status:"finished"},$('#completedJobsTable > tbody:last'));
 }
 
 function getContexts() {
