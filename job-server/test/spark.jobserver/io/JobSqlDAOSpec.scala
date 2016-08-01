@@ -268,10 +268,10 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
       jobs4.last.error.get.getMessage should equal (throwable.getMessage)
     }
     it("retrieve by status equals running should be no end and no error") {
-      //save a job insure exist one running job
+      //save some job insure exist one running job
       dao.saveJobInfo(jobInfoNoEndNoErr)
-
-      //retrieve by status equals running
+      dao.saveJobInfo(jobInfoSomeEndNoErr)
+      //retrieve by status equals RUNNING
       val retrieved = Await.result(dao.getJobInfos(1, "running"), 60 seconds).head
 
       //test
@@ -279,11 +279,11 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
       retrieved.error.isDefined should equal (false)
     }
     it("retrieve by status equals finished should be some end and no error") {
-      //save a job insure exist one finished job
+      //save some job insure exist one finished job
       dao.saveJobInfo(jobInfoSomeEndNoErr)
-
-      //retrieve by status equals running
-      val retrieved = Await.result(dao.getJobInfos(1, "finished"), 60 seconds).head
+      dao.saveJobInfo(jobInfoNoEndSomeErr)
+      //retrieve by status equals FINISHED
+      val retrieved = Await.result(dao.getJobInfos(1, "FINISHED"), 60 seconds).head
 
       //test
       retrieved.endTime.isDefined should equal (true)
@@ -291,11 +291,11 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
     }
 
     it("retrieve by status equals error should be some error") {
-      //save a job insure exist one error job
+      //save some job insure exist one error job
       dao.saveJobInfo(jobInfoNoEndSomeErr)
-
-      //retrieve by status equals running
-      val retrieved = Await.result(dao.getJobInfos(1, "error"), 60 seconds).head
+      dao.saveJobInfo(jobInfoSomeEndNoErr)
+      //retrieve by status equals ERROR
+      val retrieved = Await.result(dao.getJobInfos(1, "ERROR"), 60 seconds).head
 
       //test
       retrieved.error.isDefined should equal (true)

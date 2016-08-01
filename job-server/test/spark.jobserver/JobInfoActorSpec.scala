@@ -107,11 +107,11 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
       dao.saveJobInfo(runningJob)
       dao.saveJobInfo(errorJob)
       dao.saveJobInfo(finishedJob)
-      actor ! GetJobStatuses(Some(1), Some("running"))
+      actor ! GetJobStatuses(Some(1), Some("RUNNING"))
       expectMsg(Seq[JobInfo](runningJob))
-      actor ! GetJobStatuses(Some(1), Some("error"))
+      actor ! GetJobStatuses(Some(1), Some("ERROR"))
       expectMsg(Seq[JobInfo](errorJob))
-      actor ! GetJobStatuses(Some(1), Some("finished"))
+      actor ! GetJobStatuses(Some(1), Some("FINISHED"))
       expectMsg(Seq[JobInfo](finishedJob))
     }
     it("should return empty list if jobs doest not exist") {
