@@ -45,8 +45,15 @@ class InMemoryDAO extends JobDAO {
 
   def saveJobInfo(jobInfo: JobInfo) { jobInfos(jobInfo.jobId) = jobInfo }
 
-  def getJobInfos(limit: Int): Future[Seq[JobInfo]] = Future {
-    jobInfos.values.toSeq.sortBy(_.startTime.toString()).take(limit)
+  def getJobInfos(limit: Int, status:String): Future[Seq[JobInfo]] = Future {
+    val allJobs = jobInfos.values.toSeq.sortBy(_.startTime.toString())
+    val filterJobs = status match {
+      case "RUNNING" => allJobs.filter(_.isRunning)
+      case "ERROR" => allJobs.filter(_.isErroredOut)
+      case "FINISHED" => allJobs.filter(jobInfo => !jobInfo.isRunning && !jobInfo.isErroredOut )
+      case _ => allJobs
+    }
+    filterJobs.take(limit)
   }
 
   def getJobInfo(jobId: String): Future[Option[JobInfo]] = Future {

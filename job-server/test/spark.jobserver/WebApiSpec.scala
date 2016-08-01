@@ -85,7 +85,7 @@ with ScalatestRouteTest with HttpService {
       case GetJobStatus("job_to_kill") => sender ! baseJobInfo
       case GetJobStatus(id) => sender ! baseJobInfo
       case GetJobResult(id) => sender ! JobResult(id, id + "!!!")
-      case GetJobStatuses(limitOpt) =>
+      case GetJobStatuses(limitOpt, statusOpt) =>
         sender ! Seq(baseJobInfo, finishedJobInfo)
 
       case ListJars => sender ! Map("demo1" -> dt, "demo2" -> dt.plusHours(1))
@@ -94,7 +94,9 @@ with ScalatestRouteTest with HttpService {
       case StoreJar(_, _)        => sender ! JarStored
 
       case DataManagerActor.StoreData("errorfileToRemove", _) => sender ! DataManagerActor.Error
-      case DataManagerActor.StoreData(filename, _) => sender ! DataManagerActor.Stored(filename + "-time-stamp")        
+      case DataManagerActor.StoreData(filename, _) => {
+        sender ! DataManagerActor.Stored(filename + "-time-stamp")
+      }
       case DataManagerActor.ListData => sender ! Set("demo1", "demo2")
       case DataManagerActor.DeleteData("/tmp/fileToRemove") => sender ! DataManagerActor.Deleted
       case DataManagerActor.DeleteData("errorfileToRemove") => sender ! DataManagerActor.Error

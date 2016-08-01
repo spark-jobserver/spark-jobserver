@@ -82,7 +82,7 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
       val jobInfo2 = JobInfo("foo-2", "context", JarInfo("demo", dt2), "com.abc.meme", dt2, None, None)
       dao.saveJobInfo(jobInfo1)
       dao.saveJobInfo(jobInfo2)
-      actor ! GetJobStatuses(Some(10))
+      actor ! GetJobStatuses(Some(10), Some(""))
       expectMsg(Seq[JobInfo](jobInfo1, jobInfo2))
     }
 
@@ -93,12 +93,29 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
       val jobInfo2 = JobInfo("foo-2", "context", JarInfo("demo", dt2), "com.abc.meme", dt2, None, None)
       dao.saveJobInfo(jobInfo1)
       dao.saveJobInfo(jobInfo2)
-      actor ! GetJobStatuses(Some(1))
+      actor ! GetJobStatuses(Some(1), Some(""))
       expectMsg(Seq[JobInfo](jobInfo1))
     }
-
+    it("should return job infos as requested status ") {
+      val dt1 = DateTime.now()
+      val dt2 = DateTime.now()
+      val jarInfo = JarInfo("demo", dt1)
+      val someError =  Some(new Throwable("test-error"))
+      val runningJob = JobInfo("running-1", "context", jarInfo, "com.abc.meme", dt1, None, None)
+      val errorJob = JobInfo("error-1", "context", jarInfo, "com.abc.meme", dt1, None, someError)
+      val finishedJob = JobInfo("finished-1", "context", jarInfo, "com.abc.meme", dt1, Some(dt2), None)
+      dao.saveJobInfo(runningJob)
+      dao.saveJobInfo(errorJob)
+      dao.saveJobInfo(finishedJob)
+      actor ! GetJobStatuses(Some(1), Some("running"))
+      expectMsg(Seq[JobInfo](runningJob))
+      actor ! GetJobStatuses(Some(1), Some("error"))
+      expectMsg(Seq[JobInfo](errorJob))
+      actor ! GetJobStatuses(Some(1), Some("finished"))
+      expectMsg(Seq[JobInfo](finishedJob))
+    }
     it("should return empty list if jobs doest not exist") {
-      actor ! GetJobStatuses(Some(1))
+      actor ! GetJobStatuses(Some(1), Some(""))
       expectMsg(Seq.empty)
     }
 

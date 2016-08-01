@@ -225,7 +225,7 @@ class JobSqlDAO(config: Config) extends JobDAO {
     }
   }
 
-  override def getJobInfos(limit: Int,status: String = ""): Future[Seq[JobInfo]] = {
+  override def getJobInfos(limit: Int, status: String = ""): Future[Seq[JobInfo]] = {
     val joinQuery = for {
       jar <- jars
       j <- jobs if j.jarId === jar.jarId && (status match {

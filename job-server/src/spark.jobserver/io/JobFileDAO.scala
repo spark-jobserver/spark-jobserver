@@ -177,12 +177,12 @@ class JobFileDAO(config: Config) extends JobDAO {
     jobs.get(jobId)
   }
 
-  override def getJobInfos(limit: Int,status:String = ""): Future[Seq[JobInfo]] = Future {
+  override def getJobInfos(limit: Int, status:String = ""): Future[Seq[JobInfo]] = Future {
     val allJobs = jobs.values.toSeq.sortBy(-_.startTime.getMillis)
     val filterJobs = status match {
             case "RUNNING" => allJobs.filter(_.isRunning)
             case "ERROR" => allJobs.filter(_.isErroredOut)
-            case "FINISHED" => allJobs.filter(jobInfo => !jobInfo.isRunning && !jobInfo.isErroredOut )
+            case "FINISHED" => allJobs.filter(jobInfo => !jobInfo.isRunning && !jobInfo.isErroredOut)
             case _ => allJobs
     }
     filterJobs.take(limit)

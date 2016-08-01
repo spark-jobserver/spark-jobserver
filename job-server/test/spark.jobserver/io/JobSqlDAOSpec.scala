@@ -267,6 +267,39 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
       intercept[Throwable] { jobs4.last.error.map(throw _) }
       jobs4.last.error.get.getMessage should equal (throwable.getMessage)
     }
+    it("retrieve by status equals running should be no end and no error") {
+      //save a job insure exist one running job
+      dao.saveJobInfo(jobInfoNoEndNoErr)
+
+      //retrieve by status equals running
+      val retrieved = Await.result(dao.getJobInfos(1, "running"), 60 seconds).head
+
+      //test
+      retrieved.endTime.isDefined should equal (false)
+      retrieved.error.isDefined should equal (false)
+    }
+    it("retrieve by status equals finished should be some end and no error") {
+      //save a job insure exist one finished job
+      dao.saveJobInfo(jobInfoSomeEndNoErr)
+
+      //retrieve by status equals running
+      val retrieved = Await.result(dao.getJobInfos(1, "finished"), 60 seconds).head
+
+      //test
+      retrieved.endTime.isDefined should equal (true)
+      retrieved.error.isDefined should equal (false)
+    }
+
+    it("retrieve by status equals error should be some error") {
+      //save a job insure exist one error job
+      dao.saveJobInfo(jobInfoNoEndSomeErr)
+
+      //retrieve by status equals running
+      val retrieved = Await.result(dao.getJobInfos(1, "error"), 60 seconds).head
+
+      //test
+      retrieved.error.isDefined should equal (true)
+    }
   }
 }
 

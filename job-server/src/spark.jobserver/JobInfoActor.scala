@@ -11,7 +11,7 @@ import spark.jobserver.io.{JobDAO, JobInfo}
 
 object JobInfoActor {
   // Requests
-  case class GetJobStatuses(limit: Option[Int],status: Option[String])
+  case class GetJobStatuses(limit: Option[Int], status: Option[String])
   case class GetJobConfig(jobId: String)
   case class GetJobStatus(jobId: String)
   case class StoreJobConfig(jobId: String, jobConfig: Config)

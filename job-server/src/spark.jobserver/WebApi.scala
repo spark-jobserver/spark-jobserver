@@ -456,10 +456,10 @@ class WebApi(system: ActorSystem,
          * @optional @param limit Int - optional limit to number of jobs to display, defaults to 50
          */
         get {
-          parameters('limit.as[Int] ?,'status.as[String] ?) { (limitOpt,statusOpt) =>
+          parameters('limit.as[Int] ?, 'status.as[String] ?) { (limitOpt, statusOpt) =>
             val limit = limitOpt.getOrElse(DefaultJobLimit)
             val status = statusOpt.getOrElse("").toUpperCase()
-            val future = (jobInfoActor ? GetJobStatuses(Some(limit),Some(status))).mapTo[Seq[JobInfo]]
+            val future = (jobInfoActor ? GetJobStatuses(Some(limit), Some(status))).mapTo[Seq[JobInfo]]
             respondWithMediaType(MediaTypes.`application/json`) { ctx =>
               future.map { infos =>
                 val jobReport = infos.map { info =>

@@ -1,4 +1,6 @@
 # Standard sbt ignores
+.gitignore
+config/
 target/
 src_managed/
 project/boot/
