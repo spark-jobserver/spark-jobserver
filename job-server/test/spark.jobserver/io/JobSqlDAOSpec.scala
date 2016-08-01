@@ -36,7 +36,9 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
   val jobInfoSomeEndNoErr: JobInfo = genJobInfo(jarInfo, true, false, false)
   val jobInfoNoEndSomeErr: JobInfo = genJobInfo(jarInfo, false, true, false)
   val jobInfoSomeEndSomeErr: JobInfo = genJobInfo(jarInfo, true, true, false)
-
+  val finishedJob: JobInfo = genJobInfo(jarInfo, true, false, true)
+  val errorJob: JobInfo = genJobInfo(jarInfo, true, true, true)
+  val runningJob: JobInfo = genJobInfo(jarInfo, false, false, true)
   // job config test data
   val jobId: String = jobInfoNoEndNoErr.jobId
   val jobConfig: Config = ConfigFactory.parseString("{marco=pollo}")
@@ -269,8 +271,8 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
     }
     it("retrieve by status equals running should be no end and no error") {
       //save some job insure exist one running job
-      dao.saveJobInfo(jobInfoNoEndNoErr)
-      dao.saveJobInfo(jobInfoSomeEndNoErr)
+      dao.saveJobInfo(runningJob)
+      dao.saveJobInfo(finishedJob)
       //retrieve by status equals RUNNING
       val retrieved = Await.result(dao.getJobInfos(1, "RUNNING"), 60 seconds).head
 
@@ -280,8 +282,8 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
     }
     it("retrieve by status equals finished should be some end and no error") {
       //save some job insure exist one finished job
-      dao.saveJobInfo(jobInfoSomeEndNoErr)
-      dao.saveJobInfo(jobInfoNoEndSomeErr)
+      dao.saveJobInfo(finishedJob)
+      dao.saveJobInfo(runningJob)
       //retrieve by status equals FINISHED
       val retrieved = Await.result(dao.getJobInfos(1, "FINISHED"), 60 seconds).head
 
@@ -292,8 +294,8 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
 
     it("retrieve by status equals error should be some error") {
       //save some job insure exist one error job
-      dao.saveJobInfo(jobInfoNoEndSomeErr)
-      dao.saveJobInfo(jobInfoSomeEndNoErr)
+      dao.saveJobInfo(errorJob)
+      dao.saveJobInfo(runningJob)
       //retrieve by status equals ERROR
       val retrieved = Await.result(dao.getJobInfos(1, "ERROR"), 60 seconds).head
 
