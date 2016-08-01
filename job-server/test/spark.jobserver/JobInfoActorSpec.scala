@@ -97,16 +97,18 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
       expectMsg(Seq[JobInfo](jobInfo1))
     }
     it("should return job infos as requested status ") {
-      val dt1 = DateTime.now()
-      val dt2 = DateTime.now()
+      val dt1 = DateTime.parse("2013-05-28T00Z")
+      val dt2 = DateTime.parse("2013-05-29T00Z")
       val jarInfo = JarInfo("demo", dt1)
       val someError =  Some(new Throwable("test-error"))
       val runningJob = JobInfo("running-1", "context", jarInfo, "com.abc.meme", dt1, None, None)
       val errorJob = JobInfo("error-1", "context", jarInfo, "com.abc.meme", dt1, None, someError)
       val finishedJob = JobInfo("finished-1", "context", jarInfo, "com.abc.meme", dt1, Some(dt2), None)
+
       dao.saveJobInfo(runningJob)
       dao.saveJobInfo(errorJob)
       dao.saveJobInfo(finishedJob)
+
       actor ! GetJobStatuses(Some(1), Some("RUNNING"))
       expectMsg(Seq[JobInfo](runningJob))
       actor ! GetJobStatuses(Some(1), Some("ERROR"))

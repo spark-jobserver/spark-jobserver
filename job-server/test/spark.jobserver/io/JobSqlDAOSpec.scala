@@ -272,7 +272,7 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
       dao.saveJobInfo(jobInfoNoEndNoErr)
       dao.saveJobInfo(jobInfoSomeEndNoErr)
       //retrieve by status equals RUNNING
-      val retrieved = Await.result(dao.getJobInfos(1, "running"), 60 seconds).head
+      val retrieved = Await.result(dao.getJobInfos(1, "RUNNING"), 60 seconds).head
 
       //test
       retrieved.endTime.isDefined should equal (false)
