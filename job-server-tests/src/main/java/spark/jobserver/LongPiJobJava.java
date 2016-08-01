@@ -2,6 +2,7 @@ package spark.jobserver;
 
 import com.typesafe.config.Config;
 import org.apache.spark.SparkConf;
+import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
@@ -19,7 +20,7 @@ import java.util.Random;
 
 import static java.lang.Math.pow;
 
-public class LongPiJobJava implements JavaSparkJob<JavaSparkContext, Double, Integer> {
+public class LongPiJobJava implements JavaSparkJob<Double, Integer> {
 
     private final static Random rand = new Random(new Date().getTime());
 
@@ -28,18 +29,18 @@ public class LongPiJobJava implements JavaSparkJob<JavaSparkContext, Double, Int
         final JavaSparkContext jsc = new JavaSparkContext(conf);
         final JobEnvironment jEnv = new TestJobEnvironment();
         final LongPiJobJava lpj = new LongPiJobJava();
-        final double result = lpj.runJob(jsc, jEnv, 5);
+        final double result = lpj.runJob(jsc.sc(), jEnv, 5);
 
         System.out.println("Pi is " + result);
     }
 
     @Override
-    public Double runJob(JavaSparkContext context, JobEnvironment cfg, Integer data) {
+    public Double runJob(SparkContext context, JobEnvironment cfg, Integer data) {
         long hit = 0L;
         long total = 0L;
         final long start = new Date().getTime();
         while (stillHaveTime(start, data)) {
-            final Tuple2<Integer, Integer> count = estimatePi(context);
+            final Tuple2<Integer, Integer> count = estimatePi(new JavaSparkContext(context));
             hit += count._1();
             total += count._2();
         }
@@ -47,7 +48,7 @@ public class LongPiJobJava implements JavaSparkJob<JavaSparkContext, Double, Int
     }
 
     @Override
-    public Or<Integer, Every<ValidationProblem>> validate(JavaSparkContext context, JobEnvironment jEnv, Config cfg) {
+    public Or<Integer, Every<ValidationProblem>> validate(SparkContext context, JobEnvironment jEnv, Config cfg) {
         final Integer duration;
         if (cfg.hasPath("stress.test.longpijob.duration")) {
             duration = cfg.getInt("stress.test.longpijob.duration");

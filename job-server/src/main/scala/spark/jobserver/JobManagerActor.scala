@@ -10,14 +10,15 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.spark.{SparkConf, SparkEnv}
 import org.joda.time.DateTime
 import org.scalactic.{Bad, Good}
-import spark.jobserver.api.JobEnvironment
+import spark.jobserver.api.{JobEnvironment, SparkJobBase}
 import spark.jobserver.common.akka.InstrumentedActor
-import spark.jobserver.context.{JobContainer, SparkContextFactory}
+import spark.jobserver.context.{JavaToScalaWrapper, JobContainer, SparkContextFactory}
 import spark.jobserver.io.{JarInfo, JobDAOActor, JobInfo}
 import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
-
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
+
+import org.apache.spark.api.java.JavaSparkContext
 
 object JobManagerActor {
   // Messages
@@ -98,7 +99,7 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
   private val isAdHoc = Try(contextConfig.getBoolean("is-adhoc")).getOrElse(false)
 
   //NOTE: Must be initialized after sparkContext is created
-  private var jobCache: JobCache = _
+  private var jobCache: JobCache[api.SparkJobBase] = _
 
   private var statusActor: ActorRef = _
   protected var resultActor: ActorRef = _
@@ -136,6 +137,7 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
         jobContext = factory.makeContext(config, contextConfig, contextName)
         sparkEnv = SparkEnv.get
         jobCache = new JobCacheImpl(jobCacheSize, cacheDriver, daoActor, jobContext.sparkContext, jarLoader)
+
         getSideJars(contextConfig).foreach { jarUri => jobContext.sparkContext.addJar(jarUri) }
         sender ! Initialized(contextName, resultActor)
       } catch {
@@ -222,7 +224,7 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
       daoAskTimeout.duration)
 
     val lastUploadTime = resp.lastUploadTime
-    if (!lastUploadTime.isDefined) return failed(NoSuchApplication)
+    if (lastUploadTime.isEmpty) return failed(NoSuchApplication)
 
     val jobId = java.util.UUID.randomUUID().toString
 
@@ -282,7 +284,6 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
             case Bad(reasons) =>
               val err = new Throwable(reasons.toString)
               statusActor ! JobValidationFailed(jobId, DateTime.now(), err)
-              throw err
             case Good(jobData) =>
               statusActor ! JobStarted(jobId: String, jobInfo)
               val sc = jobContext.sparkContext
@@ -320,6 +321,7 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
         // Wrapping the error inside a RuntimeException to handle the case of throwing custom exceptions.
         val wrappedError = wrapInRuntimeException(error)
         // If and only if job validation fails, JobErroredOut message is dropped silently in JobStatusActor.
+        throw error
         statusActor ! JobErroredOut(jobId, DateTime.now(), wrappedError)
         logger.error("Exception from job " + jobId + ": ", error)
     }(executionContext).andThen {
