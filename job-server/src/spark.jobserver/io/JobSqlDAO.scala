@@ -230,9 +230,9 @@ class JobSqlDAO(config: Config) extends JobDAO {
       jar <- jars
       j <- jobs if j.jarId === jar.jarId && (status match {
                           // !endTime.isDefined
-                          case "RUNNING" => !j.endTime.isDefined
+                          case "RUNNING" => !j.endTime.isDefined && !j.error.isDefined
                           // endTime.isDefined && error.isDefined
-                          case "ERROR" => j.endTime.isDefined && j.error.isDefined
+                          case "ERROR" =>  j.error.isDefined
                           // not RUNNING AND NOT ERROR
                           case "FINISHED" => j.endTime.isDefined && !j.error.isDefined
                           case _ => true
