@@ -279,7 +279,7 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
       dao.saveJobInfo(errorJob)
 
       //retrieve by status equals RUNNING
-      val retrieved = Await.result(dao.getJobInfos(1, Some(JobInfo.STATUS_RUNNING)), 60 seconds).head
+      val retrieved = Await.result(dao.getJobInfos(1, Some(JobStatus.Running)), 60 seconds).head
 
       //test
       retrieved.endTime.isDefined should equal (false)
@@ -288,7 +288,7 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
     it("retrieve by status equals finished should be some end and no error") {
 
       //retrieve by status equals FINISHED
-      val retrieved = Await.result(dao.getJobInfos(1, Some(JobInfo.STATUS_FINISHED)), 60 seconds).head
+      val retrieved = Await.result(dao.getJobInfos(1, Some(JobStatus.Finished)), 60 seconds).head
 
       //test
       retrieved.endTime.isDefined should equal (true)
@@ -297,7 +297,7 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
 
     it("retrieve by status equals error should be some error") {
       //retrieve by status equals ERROR
-      val retrieved = Await.result(dao.getJobInfos(1, Some(JobInfo.STATUS_ERROR)), 60 seconds).head
+      val retrieved = Await.result(dao.getJobInfos(1, Some(JobStatus.Error)), 60 seconds).head
 
       //test
       retrieved.error.isDefined should equal (true)

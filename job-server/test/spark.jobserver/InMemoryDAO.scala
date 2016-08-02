@@ -2,9 +2,12 @@ package spark.jobserver
 
 import com.typesafe.config.Config
 import java.io.{BufferedOutputStream, FileOutputStream}
+
 import org.joda.time.DateTime
+
 import scala.collection.mutable
-import spark.jobserver.io.{JobDAO, JobInfo}
+import spark.jobserver.io.{JobDAO, JobInfo, JobStatus}
+
 import scala.concurrent._
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -48,11 +51,11 @@ class InMemoryDAO extends JobDAO {
   def getJobInfos(limit: Int, statusOpt: Option[String] = None): Future[Seq[JobInfo]] = Future {
     val allJobs = jobInfos.values.toSeq.sortBy(_.startTime.toString())
     val filterJobs = statusOpt match {
-      case Some(JobInfo.STATUS_RUNNING) => {
+      case Some(JobStatus.Running) => {
         allJobs.filter(jobInfo => !jobInfo.endTime.isDefined && !jobInfo.error.isDefined)
       }
-      case Some(JobInfo.STATUS_ERROR) => allJobs.filter(_.error.isDefined)
-      case Some(JobInfo.STATUS_FINISHED) => {
+      case Some(JobStatus.Error) => allJobs.filter(_.error.isDefined)
+      case Some(JobStatus.Finished) => {
         allJobs.filter(jobInfo => jobInfo.endTime.isDefined && !jobInfo.error.isDefined)
       }
       case _ => allJobs

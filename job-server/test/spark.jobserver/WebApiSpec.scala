@@ -4,7 +4,7 @@ import akka.actor.{Actor, ActorSystem, Props}
 import com.typesafe.config.ConfigFactory
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
-import spark.jobserver.io.{JarInfo, JobDAOActor, JobInfo}
+import spark.jobserver.io.{JarInfo, JobDAOActor, JobInfo, JobStatus}
 import spray.routing.HttpService
 import spray.testkit.ScalatestRouteTest
 
@@ -88,9 +88,9 @@ with ScalatestRouteTest with HttpService {
       case GetJobResult(id) => sender ! JobResult(id, id + "!!!")
       case GetJobStatuses(limitOpt, statusOpt) => {
         statusOpt match {
-          case Some(JobInfo.STATUS_ERROR) => sender ! Seq(errorJobInfo)
-          case Some(JobInfo.STATUS_FINISHED) => sender ! Seq(finishedJobInfo)
-          case Some(JobInfo.STATUS_RUNNING) => sender ! Seq(baseJobInfo)
+          case Some(JobStatus.Error) => sender ! Seq(errorJobInfo)
+          case Some(JobStatus.Finished) => sender ! Seq(finishedJobInfo)
+          case Some(JobStatus.Running) => sender ! Seq(baseJobInfo)
           case _ => sender ! Seq(baseJobInfo, finishedJobInfo)
         }
       }

@@ -231,11 +231,11 @@ class JobSqlDAO(config: Config) extends JobDAO {
       jar <- jars
       j <- jobs if j.jarId === jar.jarId && (statusOpt match {
                           // !endTime.isDefined
-                          case Some(JobInfo.STATUS_RUNNING) => !j.endTime.isDefined && !j.error.isDefined
+                          case Some(JobStatus.Running) => !j.endTime.isDefined && !j.error.isDefined
                           // endTime.isDefined && error.isDefined
-                          case Some(JobInfo.STATUS_ERROR) =>  j.error.isDefined
+                          case Some(JobStatus.Error) =>  j.error.isDefined
                           // not RUNNING AND NOT ERROR
-                          case Some(JobInfo.STATUS_FINISHED) => j.endTime.isDefined && !j.error.isDefined
+                          case Some(JobStatus.Finished) => j.endTime.isDefined && !j.error.isDefined
                           case _ => true
                 })
     } yield {

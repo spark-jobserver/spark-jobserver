@@ -1,13 +1,13 @@
 package spark.jobserver
 
-import akka.actor.{Props, ActorRef, ActorSystem}
-import akka.testkit.{TestKit, ImplicitSender}
-import org.scalatest.{FunSpecLike, BeforeAndAfter, BeforeAndAfterAll, Matchers}
+import akka.actor.{ActorRef, ActorSystem, Props}
+import akka.testkit.{ImplicitSender, TestKit}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 import org.joda.time.DateTime
+
 import scala.concurrent._
 import scala.concurrent.duration._
-
-import spark.jobserver.io.{JobDAOActor, JobDAO, JobInfo, JarInfo}
+import spark.jobserver.io._
 
 object JobInfoActorSpec {
   val system = ActorSystem("test")
@@ -109,11 +109,11 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
       dao.saveJobInfo(errorJob)
       dao.saveJobInfo(finishedJob)
 
-      actor ! GetJobStatuses(Some(1), Some(JobInfo.STATUS_RUNNING))
+      actor ! GetJobStatuses(Some(1), Some(JobStatus.Running))
       expectMsg(Seq[JobInfo](runningJob))
-      actor ! GetJobStatuses(Some(1), Some(JobInfo.STATUS_ERROR))
+      actor ! GetJobStatuses(Some(1), Some(JobStatus.Error))
       expectMsg(Seq[JobInfo](errorJob))
-      actor ! GetJobStatuses(Some(1), Some(JobInfo.STATUS_FINISHED))
+      actor ! GetJobStatuses(Some(1), Some(JobStatus.Finished))
       expectMsg(Seq[JobInfo](finishedJob))
     }
     it("should return empty list if jobs doest not exist") {
