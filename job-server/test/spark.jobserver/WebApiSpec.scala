@@ -4,7 +4,7 @@ import akka.actor.{Actor, ActorSystem, Props}
 import com.typesafe.config.ConfigFactory
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
-import spark.jobserver.io.{JarInfo, JobDAOActor, JobInfo}
+import spark.jobserver.io.{JarInfo, JobDAOActor, JobInfo, JobStatus}
 import spray.routing.HttpService
 import spray.testkit.ScalatestRouteTest
 
@@ -47,6 +47,7 @@ with ScalatestRouteTest with HttpService {
   val dt = DateTime.parse("2013-05-29T00Z")
   val baseJobInfo = JobInfo("foo-1", "context", JarInfo("demo", dt), "com.abc.meme", dt, None, None)
   val finishedJobInfo = baseJobInfo.copy(endTime = Some(dt.plusMinutes(5)))
+  val errorJobInfo = finishedJobInfo.copy(error =  Some(new Throwable("test-error")))
   val StatusKey = "status"
   val ResultKey = "result"
   class DummyActor extends Actor {
@@ -85,8 +86,15 @@ with ScalatestRouteTest with HttpService {
       case GetJobStatus("job_to_kill") => sender ! baseJobInfo
       case GetJobStatus(id) => sender ! baseJobInfo
       case GetJobResult(id) => sender ! JobResult(id, id + "!!!")
-      case GetJobStatuses(limitOpt) =>
-        sender ! Seq(baseJobInfo, finishedJobInfo)
+      case GetJobStatuses(limitOpt, statusOpt) => {
+        statusOpt match {
+          case Some(JobStatus.Error) => sender ! Seq(errorJobInfo)
+          case Some(JobStatus.Finished) => sender ! Seq(finishedJobInfo)
+          case Some(JobStatus.Running) => sender ! Seq(baseJobInfo)
+          case _ => sender ! Seq(baseJobInfo, finishedJobInfo)
+        }
+      }
+
 
       case ListJars => sender ! Map("demo1" -> dt, "demo2" -> dt.plusHours(1))
       // Ok these really belong to a JarManager but what the heck, type unsafety!!
@@ -94,7 +102,9 @@ with ScalatestRouteTest with HttpService {
       case StoreJar(_, _)        => sender ! JarStored
 
       case DataManagerActor.StoreData("errorfileToRemove", _) => sender ! DataManagerActor.Error
-      case DataManagerActor.StoreData(filename, _) => sender ! DataManagerActor.Stored(filename + "-time-stamp")        
+      case DataManagerActor.StoreData(filename, _) => {
+        sender ! DataManagerActor.Stored(filename + "-time-stamp")
+      }
       case DataManagerActor.ListData => sender ! Set("demo1", "demo2")
       case DataManagerActor.DeleteData("/tmp/fileToRemove") => sender ! DataManagerActor.Deleted
       case DataManagerActor.DeleteData("errorfileToRemove") => sender ! DataManagerActor.Error

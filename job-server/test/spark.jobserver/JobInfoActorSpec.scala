@@ -1,13 +1,13 @@
 package spark.jobserver
 
-import akka.actor.{Props, ActorRef, ActorSystem}
-import akka.testkit.{TestKit, ImplicitSender}
-import org.scalatest.{FunSpecLike, BeforeAndAfter, BeforeAndAfterAll, Matchers}
+import akka.actor.{ActorRef, ActorSystem, Props}
+import akka.testkit.{ImplicitSender, TestKit}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 import org.joda.time.DateTime
+
 import scala.concurrent._
 import scala.concurrent.duration._
-
-import spark.jobserver.io.{JobDAOActor, JobDAO, JobInfo, JarInfo}
+import spark.jobserver.io._
 
 object JobInfoActorSpec {
   val system = ActorSystem("test")
@@ -96,7 +96,34 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
       actor ! GetJobStatuses(Some(1))
       expectMsg(Seq[JobInfo](jobInfo1))
     }
+    it("should return job infos as requested status ") {
+      val dt1 = DateTime.parse("2013-05-28T00Z")
+      val dt2 = dt1.plusMinutes(5)
+      val dt3 = dt2.plusMinutes(5)
+      val dt4 = dt3.plusMinutes(5)
+      val jarInfo = JarInfo("demo", dt1)
+      val someError =  Some(new Throwable("test-error"))
+      val runningJob = JobInfo("running-1", "context", jarInfo, "com.abc.meme", dt1, None, None)
+      val errorJob = JobInfo("error-1", "context", jarInfo, "com.abc.meme", dt2, None, someError)
+      val finishedJob = JobInfo("finished-1", "context", jarInfo, "com.abc.meme", dt3, Some(dt4), None)
 
+      dao.saveJobInfo(runningJob)
+      dao.saveJobInfo(errorJob)
+      dao.saveJobInfo(finishedJob)
+
+      actor ! GetJobStatuses(Some(1), Some(JobStatus.Running))
+      expectMsg(Seq[JobInfo](runningJob))
+      actor ! GetJobStatuses(Some(1), Some(JobStatus.Error))
+      expectMsg(Seq[JobInfo](errorJob))
+      actor ! GetJobStatuses(Some(1), Some(JobStatus.Finished))
+      expectMsg(Seq[JobInfo](finishedJob))
+      actor ! GetJobStatuses(Some(10), None)
+      expectMsg(Seq[JobInfo](runningJob, errorJob, finishedJob))
+      actor ! GetJobStatuses(Some(10))
+      expectMsg(Seq[JobInfo](runningJob, errorJob, finishedJob))
+
+
+    }
     it("should return empty list if jobs doest not exist") {
       actor ! GetJobStatuses(Some(1))
       expectMsg(Seq.empty)

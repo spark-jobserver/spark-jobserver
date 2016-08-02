@@ -225,10 +225,19 @@ class JobSqlDAO(config: Config) extends JobDAO {
     }
   }
 
-  override def getJobInfos(limit: Int): Future[Seq[JobInfo]] = {
+  override def getJobInfos(limit: Int, statusOpt: Option[String] = None): Future[Seq[JobInfo]] = {
+
     val joinQuery = for {
       jar <- jars
-      j <- jobs if j.jarId === jar.jarId
+      j <- jobs if j.jarId === jar.jarId && (statusOpt match {
+                          // !endTime.isDefined
+                          case Some(JobStatus.Running) => !j.endTime.isDefined && !j.error.isDefined
+                          // endTime.isDefined && error.isDefined
+                          case Some(JobStatus.Error) =>  j.error.isDefined
+                          // not RUNNING AND NOT ERROR
+                          case Some(JobStatus.Finished) => j.endTime.isDefined && !j.error.isDefined
+                          case _ => true
+                })
     } yield {
       (j.jobId, j.contextName, jar.appName, jar.uploadTime, j.classPath, j.startTime, j.endTime, j.error)
     }
