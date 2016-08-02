@@ -1,13 +1,11 @@
 package spark.jobserver
 
 import spark.jobserver.CommonMessages.{JobErroredOut, JobResult}
-import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.io.JobDAOActor
 
 class JobManagerActorSpec extends JobManagerSpec {
-  import akka.testkit._
-
   import scala.concurrent.duration._
+  import akka.testkit._
 
   before {
     dao = new InMemoryDAO
@@ -17,9 +15,9 @@ class JobManagerActorSpec extends JobManagerSpec {
   }
 
   after {
-    AkkaTestUtils.shutdownAndWait(manager)
+    spark.jobserver.common.akka.AkkaTestUtils.shutdownAndWait(manager)
   }
-  
+
   describe("starting jobs") {
     it("jobs should be able to cache RDDs and retrieve them through getPersistentRDDs") {
       manager ! JobManagerActor.Initialize(daoActor, None)

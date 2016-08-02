@@ -8,7 +8,7 @@ import org.slf4j.LoggerFactory
  *  A set of utilities for dynamically loading classes from a jar file, and saving the jar file.
  */
 object JarUtils {
-  val logger = LoggerFactory.getLogger(getClass)
+  private val logger = LoggerFactory.getLogger(getClass)
   /**
    * Loads a Scala object or class from a classloader.
    * See http://stackoverflow.com/questions/3216780/problem-reloading-a-jar-using-urlclassloader?lq=1
@@ -26,6 +26,7 @@ object JarUtils {
   def loadClassOrObject[C](classOrObjectName: String, loader: ClassLoader): C = {
     def fallBackToClass(): C = {
       val constructor = loadConstructor[C](classOrObjectName, loader)
+
       constructor.newInstance()
     }
 
@@ -39,6 +40,12 @@ object JarUtils {
       case e: java.lang.NoSuchMethodException => fallBackToClass()
       case e: java.lang.NoSuchFieldException => fallBackToClass()
     }
+  }
+
+  def loadClassWithArgs[C](c: String, args: Seq[java.lang.Object]): C = {
+    val constructor = Class.forName(c).getDeclaredConstructors.head
+    constructor.setAccessible(true)
+    constructor.newInstance(args: _*).asInstanceOf[C]
   }
 
   private def loadConstructor[C](className: String, loader: ClassLoader): Constructor[C] = {

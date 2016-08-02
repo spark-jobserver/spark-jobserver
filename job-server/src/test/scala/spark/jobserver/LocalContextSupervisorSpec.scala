@@ -3,9 +3,8 @@ package spark.jobserver
 import akka.actor._
 import akka.testkit.{ImplicitSender, TestKit}
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
-import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.io.{JobDAO, JobDAOActor}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 
 import scala.concurrent.duration._
 
@@ -43,16 +42,16 @@ object LocalContextSupervisorSpec {
       }
     }
     akka.log-dead-letters = 0
-    """)
+                                         """)
 
   val system = ActorSystem("test", config)
 }
 
 class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.system) with ImplicitSender
-    with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
+  with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
   override def afterAll() {
-    AkkaTestUtils.shutdownAndWait(LocalContextSupervisorSpec.system)
+    spark.jobserver.common.akka.AkkaTestUtils.shutdownAndWait(LocalContextSupervisorSpec.system)
   }
 
   var supervisor: ActorRef = _
@@ -71,7 +70,7 @@ class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.syst
   }
 
   after {
-    common.akka.AkkaTestUtils.shutdownAndWait(supervisor)
+    spark.jobserver.common.akka.AkkaTestUtils.shutdownAndWait(supervisor)
   }
 
   import ContextSupervisor._

@@ -1,13 +1,11 @@
 package spark.jobserver.context
 
 import com.typesafe.config.Config
-import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.{SparkConf, SparkContext}
 import org.joda.time.DateTime
 import org.scalactic._
 import org.slf4j.LoggerFactory
 import spark.jobserver._
-import spark.jobserver.api.{JobEnvironment, ValidationProblem}
 import spark.jobserver.util.SparkJobUtils
 
 trait JobContainer {
@@ -69,26 +67,10 @@ case class ScalaJobContainer(job: api.SparkJobBase) extends JobContainer {
   def getSparkJob: api.SparkJobBase = job
 }
 
-class JavaToScalaWrapper[R, D](job: JavaSparkJob[R, D]) extends api.SparkJobBase {
-  override type C = SparkContext
-  override type JobOutput = R
-  override type JobData = D
-
-  def runJob(sc: C, runtime: JobEnvironment, data: D): R = {
-    job.runJob(sc, runtime, data)
-  }
-
-  def validate(sc: C, runtime: JobEnvironment, config: Config): D Or Every[ValidationProblem] = {
-    job.validate(sc, runtime, config)
-  }
-}
-
-
 /**
  * A SparkContextFactory designed for Scala and Java jobs that loads jars
  */
 trait ScalaContextFactory extends SparkContextFactory {
-
   type J = ScalaJobContainer
 
   val logger = LoggerFactory.getLogger(getClass)
@@ -105,9 +87,7 @@ trait ScalaContextFactory extends SparkContextFactory {
       case err: Exception            => return Bad(JobLoadError(err))
     }
 
-
     val job = jobJarInfo.constructor()
-    println()
     if (isValidJob(job)) { Good(ScalaJobContainer(job)) }
     else                 { Bad(JobWrongType) }
   }
@@ -130,7 +110,6 @@ trait ScalaContextFactory extends SparkContextFactory {
  * If you create your own SparkContextFactory, please make sure it has zero constructor args.
  */
 class DefaultSparkContextFactory extends ScalaContextFactory {
-  implicit def sparkCtx2Java(ctx: SparkContext): JavaSparkContext = new JavaSparkContext(ctx)
   type C = SparkContext with ContextLike
 
   def makeContext(sparkConf: SparkConf, config: Config,  contextName: String): C = {
@@ -142,21 +121,5 @@ class DefaultSparkContextFactory extends ScalaContextFactory {
   }
 
   def isValidJob(job: api.SparkJobBase): Boolean =
-    job.isInstanceOf[SparkJob] ||
-    job.isInstanceOf[api.SparkJob] ||
-    job.isInstanceOf[JavaToScalaWrapper[_,_]]
-}
-
-class JavaSparkContextFactory extends ScalaContextFactory {
-  type C = JavaSparkContext with ContextLike
-  def makeContext(sparkConf: SparkConf, config: Config, contextName: String): C = {
-    val sc = new JavaSparkContext(new DefaultSparkContextFactory().
-      makeContext(sparkConf, config, contextName))
-    new JavaSparkContext(sc) with ContextLike {
-      def sparkContext: SparkContext = this.sc
-    }
-  }
-  def isValidJob(job: api.SparkJobBase): Boolean = {
-    job.isInstanceOf[JavaToScalaWrapper[_,_]]
-  }
+    job.isInstanceOf[SparkJob] || job.isInstanceOf[api.SparkJob]
 }

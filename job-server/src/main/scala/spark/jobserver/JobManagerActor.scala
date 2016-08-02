@@ -5,20 +5,19 @@ import java.util.concurrent.Executors._
 import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor.{ActorRef, PoisonPill, Props}
-import com.typesafe.config.Config
+import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.{SparkConf, SparkEnv}
 import org.joda.time.DateTime
-import org.scalactic.{Bad, Good}
-import spark.jobserver.api.{JobEnvironment, SparkJobBase}
+import org.scalactic._
+import spark.jobserver.api.JobEnvironment
 import spark.jobserver.common.akka.InstrumentedActor
-import spark.jobserver.context.{JavaToScalaWrapper, JobContainer, SparkContextFactory}
+import spark.jobserver.context.{JobContainer, SparkContextFactory}
 import spark.jobserver.io.{JarInfo, JobDAOActor, JobInfo}
 import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
+
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
-
-import org.apache.spark.api.java.JavaSparkContext
 
 object JobManagerActor {
   // Messages
@@ -42,33 +41,33 @@ object JobManagerActor {
 }
 
 /**
- * The JobManager actor supervises jobs running in a single SparkContext, as well as shared metadata.
- * It creates a SparkContext (or a StreamingContext etc. depending on the factory class)
- * It also creates and supervises a JobResultActor and JobStatusActor, although an existing JobResultActor
- * can be passed in as well.
- *
- * == contextConfig ==
- * {{{
- *  num-cpu-cores = 4         # Total # of CPU cores to allocate across the cluster
- *  memory-per-node = 512m    # -Xmx style memory string for total memory to use for executor on one node
- *  dependent-jar-uris = ["local://opt/foo/my-foo-lib.jar"]
- *                            # URIs for dependent jars to load for entire context
- *  context-factory = "spark.jobserver.context.DefaultSparkContextFactory"
- *  spark.mesos.coarse = true  # per-context, rather than per-job, resource allocation
- *  rdd-ttl = 24 h            # time-to-live for RDDs in a SparkContext.  Don't specify = forever
- *  is-adhoc = false          # true if context is ad-hoc context
- *  context.name = "sql"      # Name of context
- * }}}
- *
- * == global configuration ==
- * {{{
- *   spark {
- *     jobserver {
- *       max-jobs-per-context = 16      # Number of jobs that can be run simultaneously per context
- *     }
- *   }
- * }}}
- */
+  * The JobManager actor supervises jobs running in a single SparkContext, as well as shared metadata.
+  * It creates a SparkContext (or a StreamingContext etc. depending on the factory class)
+  * It also creates and supervises a JobResultActor and JobStatusActor, although an existing JobResultActor
+  * can be passed in as well.
+  *
+  * == contextConfig ==
+  * {{{
+  *  num-cpu-cores = 4         # Total # of CPU cores to allocate across the cluster
+  *  memory-per-node = 512m    # -Xmx style memory string for total memory to use for executor on one node
+  *  dependent-jar-uris = ["local://opt/foo/my-foo-lib.jar"]
+  *                            # URIs for dependent jars to load for entire context
+  *  context-factory = "spark.jobserver.context.DefaultSparkContextFactory"
+  *  spark.mesos.coarse = true  # per-context, rather than per-job, resource allocation
+  *  rdd-ttl = 24 h            # time-to-live for RDDs in a SparkContext.  Don't specify = forever
+  *  is-adhoc = false          # true if context is ad-hoc context
+  *  context.name = "sql"      # Name of context
+  * }}}
+  *
+  * == global configuration ==
+  * {{{
+  *   spark {
+  *     jobserver {
+  *       max-jobs-per-context = 16      # Number of jobs that can be run simultaneously per context
+  *     }
+  *   }
+  * }}}
+  */
 class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
 
   import CommonMessages._
@@ -89,10 +88,7 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
   // to executors.  We do not want to add the same jar every time we start a new job, as that will cause
   // the executors to re-download the jar every time, and causes race conditions.
 
-  private val jobCacheSize = Try(config.getInt("spark.job-cache.max-entries")).getOrElse(10000)
-  private val jobCacheEnabled = Try(config.getBoolean("spark.job-cache.enabled")).getOrElse(false)
-  private val cacheDriver = Try(config.getString("spark.job-cache.driver"))
-    .getOrElse("spark.jobserver.cache.LRUCache")
+  private val cacheConfig = Try(contextConfig.getConfig("spark.job-cache")).getOrElse(ConfigFactory.empty())
   // Use Spark Context's built in classloader when SPARK-1230 is merged.
   private val jarLoader = new ContextURLClassLoader(Array[URL](), getClass.getClassLoader)
   private val contextName = contextConfig.getString("context.name")
@@ -136,8 +132,7 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
         factory = getContextFactory()
         jobContext = factory.makeContext(config, contextConfig, contextName)
         sparkEnv = SparkEnv.get
-        jobCache = new JobCacheImpl(jobCacheSize, cacheDriver, daoActor, jobContext.sparkContext, jarLoader)
-
+        jobCache = new JobCacheImpl(cacheConfig, daoActor, jobContext.sparkContext, jarLoader)
         getSideJars(contextConfig).foreach { jarUri => jobContext.sparkContext.addJar(jarUri) }
         sender ! Initialized(contextName, resultActor)
       } catch {
@@ -204,10 +199,10 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
                        events: Set[Class[_]],
                        jobContext: ContextLike,
                        sparkEnv: SparkEnv): Option[Future[Any]] = {
-
     import akka.pattern.ask
     import akka.util.Timeout
     import spark.jobserver.context._
+
     import scala.concurrent.Await
     import scala.concurrent.duration._
 
@@ -227,9 +222,8 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
     if (lastUploadTime.isEmpty) return failed(NoSuchApplication)
 
     val jobId = java.util.UUID.randomUUID().toString
-
     val jobContainer = factory.loadAndValidateJob(appName, lastUploadTime.get,
-                                                  classPath, jobCache) match {
+      classPath, jobCache) match {
       case Good(container)       => container
       case Bad(JobClassNotFound) => return failed(NoSuchClass)
       case Bad(JobWrongType)     => return failed(WrongJobType)
@@ -284,6 +278,7 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
             case Bad(reasons) =>
               val err = new Throwable(reasons.toString)
               statusActor ! JobValidationFailed(jobId, DateTime.now(), err)
+              throw err
             case Good(jobData) =>
               statusActor ! JobStarted(jobId: String, jobInfo)
               val sc = jobContext.sparkContext
@@ -321,7 +316,6 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
         // Wrapping the error inside a RuntimeException to handle the case of throwing custom exceptions.
         val wrappedError = wrapInRuntimeException(error)
         // If and only if job validation fails, JobErroredOut message is dropped silently in JobStatusActor.
-        throw error
         statusActor ! JobErroredOut(jobId, DateTime.now(), wrappedError)
         logger.error("Exception from job " + jobId + ": ", error)
     }(executionContext).andThen {
@@ -333,23 +327,23 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
         statusActor ! Unsubscribe(jobId, subscriber)
         postEachJob()
     }(executionContext)
-    }
-
+  }
 
   // Wraps a Throwable object into a RuntimeException. This is useful in case
   // a custom exception is thrown. Currently, throwing a custom exception doesn't
   // work and this is a workaround to wrap it into a standard exception.
   protected def wrapInRuntimeException(t: Throwable): RuntimeException = {
-    val cause: Throwable = getRootCause(t)
-    val e: RuntimeException = new RuntimeException("%s: %s".format(cause.getClass.getName ,cause.getMessage))
+    val cause : Throwable = getRootCause(t)
+    val e : RuntimeException = new RuntimeException("%s: %s"
+      .format(cause.getClass.getName ,cause.getMessage))
     e.setStackTrace(cause.getStackTrace)
     e
   }
 
   // Gets the very first exception that caused the current exception to be thrown.
   protected def getRootCause(t: Throwable): Throwable = {
-    var result: Throwable = t
-    var cause: Throwable = result.getCause
+    var result : Throwable = t
+    var cause : Throwable = result.getCause
     while(cause != null  && (result != cause) ) {
       result = cause
       cause = result.getCause
@@ -392,6 +386,6 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
   // Each one should be an URL (http, ftp, hdfs, local, or file). local URLs are local files
   // present on every node, whereas file:// will be assumed only present on driver node
   private def getSideJars(config: Config): Seq[String] =
-    Try(config.getStringList("dependent-jar-uris").asScala).
-     orElse(Try(config.getString("dependent-jar-uris").split(",").toSeq)).getOrElse(Nil)
+  Try(config.getStringList("dependent-jar-uris").asScala.toSeq).
+    orElse(Try(config.getString("dependent-jar-uris").split(",").toSeq)).getOrElse(Nil)
 }
