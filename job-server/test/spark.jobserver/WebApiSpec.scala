@@ -47,6 +47,7 @@ with ScalatestRouteTest with HttpService {
   val dt = DateTime.parse("2013-05-29T00Z")
   val baseJobInfo = JobInfo("foo-1", "context", JarInfo("demo", dt), "com.abc.meme", dt, None, None)
   val finishedJobInfo = baseJobInfo.copy(endTime = Some(dt.plusMinutes(5)))
+  val errorJobInfo = finishedJobInfo.copy(error =  Some(new Throwable("test-error")))
   val StatusKey = "status"
   val ResultKey = "result"
   class DummyActor extends Actor {
@@ -85,8 +86,15 @@ with ScalatestRouteTest with HttpService {
       case GetJobStatus("job_to_kill") => sender ! baseJobInfo
       case GetJobStatus(id) => sender ! baseJobInfo
       case GetJobResult(id) => sender ! JobResult(id, id + "!!!")
-      case GetJobStatuses(limitOpt, statusOpt) =>
-        sender ! Seq(baseJobInfo, finishedJobInfo)
+      case GetJobStatuses(limitOpt, statusOpt) => {
+        statusOpt match {
+          case Some(JobInfo.STATUS_ERROR) => sender ! Seq(errorJobInfo)
+          case Some(JobInfo.STATUS_FINISHED) => sender ! Seq(finishedJobInfo)
+          case Some(JobInfo.STATUS_RUNNING) => sender ! Seq(baseJobInfo)
+          case _ => sender ! Seq(baseJobInfo, finishedJobInfo)
+        }
+      }
+
 
       case ListJars => sender ! Map("demo1" -> dt, "demo2" -> dt.plusHours(1))
       // Ok these really belong to a JarManager but what the heck, type unsafety!!

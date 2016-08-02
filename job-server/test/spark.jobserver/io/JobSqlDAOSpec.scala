@@ -36,9 +36,7 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
   val jobInfoSomeEndNoErr: JobInfo = genJobInfo(jarInfo, true, false, false)
   val jobInfoNoEndSomeErr: JobInfo = genJobInfo(jarInfo, false, true, false)
   val jobInfoSomeEndSomeErr: JobInfo = genJobInfo(jarInfo, true, true, false)
-  val finishedJob: JobInfo = genJobInfo(jarInfo, true, false, true)
-  val errorJob: JobInfo = genJobInfo(jarInfo, true, true, true)
-  val runningJob: JobInfo = genJobInfo(jarInfo, false, false, true)
+
   // job config test data
   val jobId: String = jobInfoNoEndNoErr.jobId
   val jobConfig: Config = ConfigFactory.parseString("{marco=pollo}")
@@ -67,7 +65,6 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
 
     def genTestJobInfo(jarInfo: JarInfo, hasEndTime: Boolean, hasError: Boolean, isNew:Boolean): JobInfo = {
       count = count + (if (isNew) 1 else 0)
-
       val id: String = "test-id" + count
       val contextName: String = "test-context"
       val classPath: String = "test-classpath"
@@ -271,21 +268,27 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
     }
     it("retrieve by status equals running should be no end and no error") {
       //save some job insure exist one running job
-      dao.saveJobInfo(runningJob)
+      val dt1 = DateTime.now()
+      val dt2 = Some(DateTime.now())
+      val someError = Some(new Throwable("test-error"))
+      val finishedJob: JobInfo = JobInfo("test-finished", "test", jarInfo, "test-class", dt1, dt2, None)
+      val errorJob: JobInfo = JobInfo("test-error", "test", jarInfo, "test-class", dt1, dt2, someError)
+      val runningJob: JobInfo = JobInfo("test-running", "test", jarInfo, "test-class", dt1, None, None)
       dao.saveJobInfo(finishedJob)
+      dao.saveJobInfo(runningJob)
+      dao.saveJobInfo(errorJob)
+
       //retrieve by status equals RUNNING
-      val retrieved = Await.result(dao.getJobInfos(1, "RUNNING"), 60 seconds).head
+      val retrieved = Await.result(dao.getJobInfos(1, Some(JobInfo.STATUS_RUNNING)), 60 seconds).head
 
       //test
       retrieved.endTime.isDefined should equal (false)
       retrieved.error.isDefined should equal (false)
     }
     it("retrieve by status equals finished should be some end and no error") {
-      //save some job insure exist one finished job
-      dao.saveJobInfo(finishedJob)
-      dao.saveJobInfo(runningJob)
+
       //retrieve by status equals FINISHED
-      val retrieved = Await.result(dao.getJobInfos(1, "FINISHED"), 60 seconds).head
+      val retrieved = Await.result(dao.getJobInfos(1, Some(JobInfo.STATUS_FINISHED)), 60 seconds).head
 
       //test
       retrieved.endTime.isDefined should equal (true)
@@ -293,11 +296,8 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
     }
 
     it("retrieve by status equals error should be some error") {
-      //save some job insure exist one error job
-      dao.saveJobInfo(errorJob)
-      dao.saveJobInfo(runningJob)
       //retrieve by status equals ERROR
-      val retrieved = Await.result(dao.getJobInfos(1, "ERROR"), 60 seconds).head
+      val retrieved = Await.result(dao.getJobInfos(1, Some(JobInfo.STATUS_ERROR)), 60 seconds).head
 
       //test
       retrieved.error.isDefined should equal (true)
