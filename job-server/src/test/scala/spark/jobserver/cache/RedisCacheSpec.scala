@@ -28,7 +28,7 @@ object Testjob extends SparkJobBase {
 }
 
 class RedisCacheSpec extends FunSpec with Matchers {
-  val redis = new RedisCache[JobJarInfo[SparkJobBase]]("localhost", 6379)
+  val redis = new RedisCache[JobJarInfo]("localhost", 6379)
   val dt = DateTime.now()
   val k = ("app", dt, "classpath.jar:tools.jar").toString()
   val serializedK = List("app", dt.toString, "classpath.jar:tools.jar")

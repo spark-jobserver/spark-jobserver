@@ -9,7 +9,8 @@ import spark.jobserver.api._
 import scala.util.Try
 
 /**
- * A super-simple Spark job example that implements the SparkJob trait and can be submitted to the job server.
+ * A super-simple Spark job example that implements the JSparkJob
+ * trait and can be submitted to the job server.
  *
  * Set the config with the sentence to split or count:
  * input.string = "adsfasdf asdkf  safksf a sdfa"
@@ -37,7 +38,7 @@ object WordCountExample extends SparkJob {
 }
 
 /**
- * This is the same WordCountExample above but implementing the new SparkJob API.  A couple things
+ * This is the same WordCountExample above but implementing the new JSparkJob API.  A couple things
  * to notice:
  * - runJob no longer needs to re-parse the input.  The split words are passed straight to RunJob
  * - The output of runJob is typed now so it's more type safe

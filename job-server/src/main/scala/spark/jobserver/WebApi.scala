@@ -478,7 +478,7 @@ class WebApi(system: ActorSystem,
         } ~
         /**
          * POST /jobs   -- Starts a new job.  The job JAR must have been previously uploaded, and
-         *                 the classpath must refer to an object that implements SparkJob.  The `validate()`
+         *                 the classpath must refer to an object that implements JSparkJob.  The `validate()`
          *                 API will be invoked before `runJob`.
          *
          * @entity         The POST entity should be a Typesafe Config format file;

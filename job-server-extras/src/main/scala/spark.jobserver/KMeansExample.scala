@@ -7,7 +7,7 @@ import org.apache.spark.ml.feature.{StandardScaler, VectorAssembler}
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 
 /**
- * A Spark job example that implements the SparkJob trait and can be submitted to the job server.
+ * A Spark job example that implements the JSparkJob trait and can be submitted to the job server.
  *
  * Set the config with the sentence to split or count:
  * input.string = "adsfasdf asdkf  safksf a sdfa"

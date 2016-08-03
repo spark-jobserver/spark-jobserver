@@ -91,7 +91,7 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 - Kill running jobs via stop context and delete job
 - Separate jar uploading step for faster job startup
 - Asynchronous and synchronous job API.  Synchronous API is great for low latency jobs!
-- Preliminary support for Java (see `JavaSparkJob`)
+- Preliminary support for Java (see `JSparkJob`)
 - Works with Standalone Spark as well as Mesos and yarn-client
 - Job and jar info is persisted via a pluggable DAO interface
 - Named Objects (such as RDDs or DataFrames) to cache and retrieve RDDs or DataFrames by name, improving object sharing and reuse among jobs.
@@ -249,7 +249,7 @@ If a SQL or Hive job/context is desired, you also want to pull in `job-server-ex
 
 For most use cases it's better to have the dependencies be "provided" because you don't want SBT assembly to include the whole job server jar.
 
-To create a job that can be submitted through the job server, the job must implement the `SparkJob` trait.
+To create a job that can be submitted through the job server, the job must implement the `JSparkJob` trait.
 Your job will look like:
 ```scala
 object SampleJob extends SparkJob {
@@ -266,7 +266,7 @@ manage and re-use contexts.
 
 ### NEW SparkJob API
 
-Note: As of version 0.7.0, a new SparkJob API that is significantly better than the old SparkJob API will take over.  Existing jobs should continue to compile against the old `spark.jobserver.SparkJob` API, but this will be deprecated in the future.  Note that jobs before 0.7.0 will need to be recompiled, older jobs may not work with the current SJS example.  The new API looks like this:
+Note: As of version 0.7.0, a new SparkJob API that is significantly better than the old SparkJob API will take over.  Existing jobs should continue to compile against the old `spark.jobserver.JSparkJob` API, but this will be deprecated in the future.  Note that jobs before 0.7.0 will need to be recompiled, older jobs may not work with the current SJS example.  The new API looks like this:
 
 ```scala
 object WordCountExampleNewApi extends NewSparkJob {
@@ -568,7 +568,7 @@ Spark context configuration params can follow `POST /contexts/<name>` as query p
 
 ### Jobs
 
-Jobs submitted to the job server must implement a `SparkJob` trait.  It has a main `runJob` method which is
+Jobs submitted to the job server must implement a `JSparkJob` trait.  It has a main `runJob` method which is
 passed a SparkContext and a typesafe Config object.  Results returned by the method are made available through
 the REST API.
 
@@ -689,7 +689,7 @@ For all of the Spark Job Server configuration settings, see `job-server/src/main
 
 ### Job Result Serialization
 
-The result returned by the `SparkJob` `runJob` method is serialized by the job server into JSON for routes
+The result returned by the `JSparkJob` `runJob` method is serialized by the job server into JSON for routes
 that return the result (GET /jobs with sync=true, GET /jobs/<jobId>).  Currently the following types can be
 serialized properly:
 

@@ -7,12 +7,13 @@ import java.util.concurrent.atomic.AtomicInteger
 import akka.actor.{ActorRef, PoisonPill, Props}
 import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.hadoop.conf.Configuration
+import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.{SparkConf, SparkEnv}
 import org.joda.time.DateTime
 import org.scalactic._
-import spark.jobserver.api.JobEnvironment
+import spark.jobserver.api.{JSparkJob, JobEnvironment}
 import spark.jobserver.common.akka.InstrumentedActor
-import spark.jobserver.context.{JobContainer, SparkContextFactory}
+import spark.jobserver.context.{ContextFactoryBase, JContextFactory, JobContainer, SparkContextFactory}
 import spark.jobserver.io.{JarInfo, JobDAOActor, JobInfo}
 import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
 
@@ -95,7 +96,7 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
   private val isAdHoc = Try(contextConfig.getBoolean("is-adhoc")).getOrElse(false)
 
   //NOTE: Must be initialized after sparkContext is created
-  private var jobCache: JobCache[api.SparkJobBase] = _
+  private var jobCache: JobCache = _
 
   private var statusActor: ActorRef = _
   protected var resultActor: ActorRef = _
@@ -129,7 +130,7 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
         getSideJars(contextConfig).foreach { jarUri =>
           jarLoader.addURL(new URL(convertJarUriSparkToJava(jarUri)))
         }
-        factory = getContextFactory()
+        factory = getContextFactory
         jobContext = factory.makeContext(config, contextConfig, contextName)
         sparkEnv = SparkEnv.get
         jobCache = new JobCacheImpl(cacheConfig, daoActor, jobContext.sparkContext, jarLoader)
@@ -236,11 +237,80 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
 
     val jarInfo = JarInfo(appName, lastUploadTime.get)
     val jobInfo = JobInfo(jobId, contextName, jarInfo, classPath, DateTime.now(), None, None)
-
-    Some(getJobFuture(jobContainer, jobInfo, jobConfig, sender, jobContext, sparkEnv))
+    jobContainer match {
+      case c: ScalaJobContainer => Some(getJobFuture(c, jobInfo, jobConfig, sender, jobContext, sparkEnv))
+      case c: JavaJobContainer => Some(getJavaFuture(c, jobInfo, jobConfig, sender, jobContext, sparkEnv))
+    }
   }
 
-  private def getJobFuture(container: JobContainer,
+  private def getJavaFuture(container: JobContainer[JSparkJob[_]],
+                            jobInfo: JobInfo,
+                            jobConfig: Config,
+                            subscriber: ActorRef,
+                            jobContext: ContextLike,
+                            sparkEnv: SparkEnv): Future[Any] = {
+
+      val jobId = jobInfo.jobId
+      logger.info(s"Starting Spark job $jobId [${jobInfo.classPath}]...")
+      if (currentRunningJobs.getAndIncrement() >= maxRunningJobs) {
+        currentRunningJobs.decrementAndGet()
+        sender ! NoJobSlotsAvailable(maxRunningJobs)
+        return Future[Any](None)(context.dispatcher)
+      }
+
+      Future {
+        org.slf4j.MDC.put("jobId", jobId)
+        logger.info("Starting job future thread")
+        try {
+          SparkEnv.set(sparkEnv)
+          Thread.currentThread.setContextClassLoader(jarLoader)
+          val job = container.getSparkJob
+          try {
+            statusActor ! JobStatusActor.JobInit(jobInfo)
+            val jobEnv = getEnvironment(jobId)
+            job.validate(jobContext, jobEnv, jobConfig) match {
+              case Bad(reasons) =>
+                val err = new Throwable(reasons.toString)
+                statusActor ! JobValidationFailed(jobId, DateTime.now(), err)
+                throw err
+              case Good(jobData) =>
+                statusActor ! JobStarted(jobId: String, jobInfo)
+                val sc = jobContext.sparkContext
+                sc.setJobGroup(jobId, s"Job group for $jobId and spark context ${sc.applicationId}", true)
+                job.runJob(jobContext, jobEnv, jobData)
+            }
+          } finally {
+            org.slf4j.MDC.remove("jobId")
+          }
+        } catch {
+          case e: java.lang.AbstractMethodError => {
+            logger.error("Oops, there's an AbstractMethodError... maybe you compiled " +
+              "your code with an older version of SJS? here's the exception:", e)
+            throw e
+          }
+          case e: Throwable => {
+            logger.error("Got Throwable", e)
+            throw e
+          };
+        }
+      }(executionContext).andThen {
+        case Success(result: Any) =>
+          statusActor ! JobFinished(jobId, DateTime.now())
+          resultActor ! JobResult(jobId, result)
+        case Failure(error: Throwable) =>
+          val wrappedError = wrapInRuntimeException(error)
+          statusActor ! JobErroredOut(jobId, DateTime.now(), wrappedError)
+          logger.error("Exception from job " + jobId + ": ", error)
+      }(executionContext).andThen {
+        case _ =>
+          currentRunningJobs.getAndDecrement()
+          resultActor ! Unsubscribe(jobId, subscriber)
+          statusActor ! Unsubscribe(jobId, subscriber)
+          postEachJob()
+      }(executionContext)
+  }
+
+  private def getJobFuture(container: JobContainer[api.SparkJobBase],
                            jobInfo: JobInfo,
                            jobConfig: Config,
                            subscriber: ActorRef,
@@ -354,7 +424,7 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
   // Use our classloader and a factory to create the SparkContext.  This ensures the SparkContext will use
   // our class loader when it spins off threads, and ensures SparkContext can find the job and dependent jars
   // when doing serialization, for example.
-  def getContextFactory(): SparkContextFactory = {
+  def getContextFactory: SparkContextFactory = {
     val factoryClassName = contextConfig.getString("context-factory")
     val factoryClass = jarLoader.loadClass(factoryClassName)
     val factory = factoryClass.newInstance.asInstanceOf[SparkContextFactory]
@@ -385,7 +455,10 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
   // They are loaded from the context/job config.
   // Each one should be an URL (http, ftp, hdfs, local, or file). local URLs are local files
   // present on every node, whereas file:// will be assumed only present on driver node
-  private def getSideJars(config: Config): Seq[String] =
-  Try(config.getStringList("dependent-jar-uris").asScala.toSeq).
-    orElse(Try(config.getString("dependent-jar-uris").split(",").toSeq)).getOrElse(Nil)
+  private def getSideJars(config: Config): Seq[String] = {
+    Try(config.getStringList("dependent-jar-uris").asScala)
+      .orElse(Try(config.getString("dependent-jar-uris")
+      .split(",").toSeq))
+      .getOrElse(Nil)
+  }
 }

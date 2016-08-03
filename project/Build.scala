@@ -210,7 +210,7 @@ object JobServerBuild extends Build {
     // Need to pass in language options or import scala.language.* to enable them.
     // See SIP-18 (https://docs.google.com/document/d/1nlkvpoIRkx7at1qJEZafJwthZ3GeIklTFhqmXMvTX9Q/edit)
     scalacOptions := Seq("-deprecation", "-feature",
-      "-language:implicitConversions", "-language:postfixOps", "-Xmax-classfile-name", "128"),
+      "-language:implicitConversions", "-language:postfixOps", "-language:existentials", "-Xmax-classfile-name", "128"),
     resolvers ++= Dependencies.repos,
     libraryDependencies ++= apiDeps,
     parallelExecution in Test := false,

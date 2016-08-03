@@ -7,7 +7,7 @@ import org.apache.spark.SparkConf
 import scala.util.Try
 
 /**
- * Holds a few functions common to Job Server SparkJob's and SparkContext's
+ * Holds a few functions common to Job Server JSparkJob's and SparkContext's
  */
 object SparkJobUtils {
   import collection.JavaConverters._

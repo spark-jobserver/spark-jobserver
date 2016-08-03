@@ -16,12 +16,12 @@ object JarUtils {
    *
    *
    * @param classOrObjectName must be the fully qualified name of the Scala object or class that
-   *                          implements the SparkJob trait. If an object is used, do not include the
+   *                          implements the JSparkJob trait. If an object is used, do not include the
    *                          trailing '$'.
    * @param loader the ClassLoader to use to load the class or object.  Typically a URLClassLoader.
    * @return Function0[C] to obtain the object/class. Calling the function will return a reference to
    *         the object (for objects), or a new instance of a class (for classes) that implement the
-   *         SparkJob trait.
+   *         JSparkJob trait.
    */
   def loadClassOrObject[C](classOrObjectName: String, loader: ClassLoader): C = {
     def fallBackToClass(): C = {

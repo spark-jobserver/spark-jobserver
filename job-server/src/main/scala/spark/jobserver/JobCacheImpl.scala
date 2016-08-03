@@ -11,6 +11,7 @@ import com.typesafe.config.Config
 import org.apache.spark.SparkContext
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
+import spark.jobserver.api.JSparkJob
 import spark.jobserver.cache.Cache
 import spark.jobserver.io.JobDAOActor
 import spark.jobserver.util.{ContextURLClassLoader, JarUtils}
@@ -22,9 +23,9 @@ import scala.util.Try
 class JobCacheImpl(cacheConfig: Config,
                    dao: ActorRef,
                    sparkContext: SparkContext,
-                   loader: ContextURLClassLoader) extends JobCache[api.SparkJobBase] {
+                   loader: ContextURLClassLoader) extends JobCache {
 
-  type CacheType = Cache[String, JobJarInfo[api.SparkJobBase]]
+  type CacheType = Cache[String, SparkJobInfo]
 
   implicit private val daoAskTimeout: Timeout = Timeout(3 seconds)
 
@@ -38,22 +39,47 @@ class JobCacheImpl(cacheConfig: Config,
     Seq(Integer.valueOf(maxEntries), Float.valueOf(loadingFactor))
   )
 
-  def getJobViaDao(appName: String, uploadTime: DateTime, classPath: String): JobJarInfo[api.SparkJobBase] = {
+  private def getJavaViaDao(appName: String, uploadTime: DateTime, classPath: String): JavaJarInfo = {
+    val jarPathReq = (dao ? JobDAOActor.GetJarPath(appName, uploadTime)).mapTo[JobDAOActor.JarPath]
+    val jarPath = Await.result(jarPathReq, daoAskTimeout.duration).jarPath
+    val jarFilePath = new File(jarPath).getAbsolutePath
+    sparkContext.addJar(jarFilePath)
+    loader.addURL(new URL("file:" + jarFilePath))
+    val constructor = Try(JarUtils.loadClassOrObject[JSparkJob[_]](classPath, loader)).get
+    JavaJarInfo(() => constructor, classPath, jarFilePath)
+  }
+
+  private def getJobViaDao(appName: String, uploadTime: DateTime, classPath: String): JobJarInfo = {
     val jarPathReq = (dao ? JobDAOActor.GetJarPath(appName, uploadTime)).mapTo[JobDAOActor.JarPath]
     val jarPath = Await.result(jarPathReq, daoAskTimeout.duration).jarPath
     val jarFilePath = new File(jarPath).getAbsolutePath
     sparkContext.addJar(jarFilePath)
     loader.addURL(new URL("file:" + jarFilePath))
     val constructor = Try(JarUtils.loadClassOrObject[api.SparkJobBase](classPath, loader)).get
-    JobJarInfo[api.SparkJobBase](() => constructor, classPath, jarFilePath)
+    JobJarInfo(() => constructor, classPath, jarFilePath)
   }
 
-  def getSparkJob(appName: String, uploadTime: DateTime, classPath: String): JobJarInfo[api.SparkJobBase] = {
+  def getSparkJob(appName: String, uploadTime: DateTime, classPath: String): JobJarInfo = {
     logger.info(s"Loading app: $appName at $uploadTime")
     if (cacheEnabled) {
-      cache.getOrPut((appName, uploadTime, classPath).toString, getJobViaDao(appName, uploadTime, classPath))
+      cache.getOrPut(
+        (appName, uploadTime, classPath).toString,
+        getJobViaDao(appName, uploadTime, classPath)
+      ).asInstanceOf[JobJarInfo]
     }else{
       getJobViaDao(appName, uploadTime, classPath)
+    }
+  }
+
+  def getJavaJob(appName: String, uploadTime: DateTime, classPath: String): JavaJarInfo = {
+    logger.info(s"Loading app: $appName at $uploadTime")
+    if (cacheEnabled) {
+      cache.getOrPut(
+        (appName, uploadTime, classPath).toString,
+        getJavaViaDao(appName, uploadTime, classPath)
+      ).asInstanceOf[JavaJarInfo]
+    }else{
+      getJavaViaDao(appName, uploadTime, classPath)
     }
   }
 }

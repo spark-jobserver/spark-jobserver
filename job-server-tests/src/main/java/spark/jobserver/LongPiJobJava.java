@@ -1,8 +1,8 @@
 package spark.jobserver;
 
 import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 import org.apache.spark.SparkConf;
-import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
@@ -13,6 +13,7 @@ import org.scalactic.Or;
 import scala.Tuple2;
 import spark.jobserver.api.JobEnvironment;
 import spark.jobserver.api.ValidationProblem;
+import spark.jobserver.api.JSparkJob;
 
 import java.util.Arrays;
 import java.util.Date;
@@ -20,27 +21,29 @@ import java.util.Random;
 
 import static java.lang.Math.pow;
 
-public class LongPiJobJava implements JavaSparkJob<Double, Integer> {
+public class LongPiJobJava implements JSparkJob<Double> {
 
     private final static Random rand = new Random(new Date().getTime());
 
     public static void main (String[] args){
         final SparkConf conf = new SparkConf().setMaster("local[4]").setAppName("LongPiJob");
-        final JavaSparkContext jsc = new JavaSparkContext(conf);
+        final JSC jsc = new JSC(conf);
+        final Config c = ConfigFactory.parseString("duration = 5");
         final JobEnvironment jEnv = new TestJobEnvironment();
         final LongPiJobJava lpj = new LongPiJobJava();
-        final double result = lpj.runJob(jsc.sc(), jEnv, 5);
+        final double result = lpj.runJob(jsc, jEnv, c);
 
         System.out.println("Pi is " + result);
     }
 
     @Override
-    public Double runJob(SparkContext context, JobEnvironment cfg, Integer data) {
+    public Double runJob(ContextLike context, JobEnvironment cfg, Config data) {
         long hit = 0L;
         long total = 0L;
+        int duration = data.getInt("duration");
         final long start = new Date().getTime();
-        while (stillHaveTime(start, data)) {
-            final Tuple2<Integer, Integer> count = estimatePi(new JavaSparkContext(context));
+        while (stillHaveTime(start, duration)) {
+            final Tuple2<Integer, Integer> count = estimatePi(javaSparkContext(context));
             hit += count._1();
             total += count._2();
         }
@@ -48,14 +51,14 @@ public class LongPiJobJava implements JavaSparkJob<Double, Integer> {
     }
 
     @Override
-    public Or<Integer, Every<ValidationProblem>> validate(SparkContext context, JobEnvironment jEnv, Config cfg) {
+    public Or<Config, Every<ValidationProblem>> validate(ContextLike context, JobEnvironment jEnv, Config cfg) {
         final Integer duration;
         if (cfg.hasPath("stress.test.longpijob.duration")) {
             duration = cfg.getInt("stress.test.longpijob.duration");
         } else {
             duration = 5;
         }
-        return new Good<>(duration);
+        return new Good<>(ConfigFactory.parseString("duration = "+duration));
     }
 
     private Tuple2<Integer, Integer> estimatePi(JavaSparkContext jsc) {

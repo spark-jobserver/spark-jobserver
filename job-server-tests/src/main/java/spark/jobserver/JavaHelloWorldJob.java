@@ -1,22 +1,23 @@
 package spark.jobserver;
 
 import com.typesafe.config.Config;
-import org.apache.spark.SparkContext;
+import com.typesafe.config.ConfigFactory;
 import org.scalactic.Every;
 import org.scalactic.Good;
 import org.scalactic.Or;
 import spark.jobserver.api.JobEnvironment;
 import spark.jobserver.api.ValidationProblem;
+import spark.jobserver.api.JSparkJob;
 
-public class JavaHelloWorldJob implements JavaSparkJob<String, String>{
+public class JavaHelloWorldJob implements JSparkJob<String> {
 
     @Override
-    public String runJob(SparkContext context, JobEnvironment cfg, String data) {
-        return data;
+    public String runJob(ContextLike context, JobEnvironment cfg, Config data) {
+        return data.getString("data");
     }
 
     @Override
-    public Or<String, Every<ValidationProblem>> validate(SparkContext context, JobEnvironment jEnv, Config cfg) {
-        return new Good<>("k");
+    public Or<Config, Every<ValidationProblem>> validate(ContextLike context, JobEnvironment jEnv, Config cfg) {
+        return new Good<>(ConfigFactory.parseString("data = s"));
     }
 }
