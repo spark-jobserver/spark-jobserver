@@ -3,6 +3,7 @@ package spark.jobserver.routes
 import spray.http.StatusCodes._
 import com.typesafe.config.ConfigFactory
 import java.net.URLEncoder
+import spark.jobserver.io.JobStatus
 import spark.jobserver.WebApiSpec
 
 class DataRoutesSpec extends WebApiSpec {
@@ -27,7 +28,7 @@ class DataRoutesSpec extends WebApiSpec {
       Post("/data/errorfileToRemove", Array[Byte](0, 1, 2)) ~> sealRoute(routes) ~> check {
         status should be(BadRequest)
         responseAs[Map[String, String]] should be(Map(
-          StatusKey -> "ERROR", ResultKey -> "Failed to store data file 'errorfileToRemove'."))
+          StatusKey -> JobStatus.Error, ResultKey -> "Failed to store data file 'errorfileToRemove'."))
       }
     }
 
@@ -49,7 +50,7 @@ class DataRoutesSpec extends WebApiSpec {
       Delete("/data/errorfileToRemove") ~> sealRoute(routes) ~> check {
         status should be(BadRequest)
         responseAs[Map[String, String]] should be(Map(
-          StatusKey -> "ERROR", ResultKey -> "Unable to delete data file 'errorfileToRemove'."))
+          StatusKey -> JobStatus.Error, ResultKey -> "Unable to delete data file 'errorfileToRemove'."))
       }
     }
 

@@ -2,6 +2,7 @@ package spark.jobserver
 
 import com.typesafe.config.ConfigFactory
 import spray.http.StatusCodes._
+import spark.jobserver.io.JobStatus
 import spark.jobserver.util.SparkJobUtils
 
 // Tests web response codes and formatting
@@ -19,7 +20,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       "classPath" -> "com.abc.meme",
       "context"  -> "context",
       "duration" -> "300.0 secs",
-      StatusKey -> "FINISHED")
+      StatusKey -> JobStatus.Finished)
   }
 
   describe("jars routes") {
@@ -54,13 +55,13 @@ class WebApiMainRoutesSpec extends WebApiSpec {
               "classPath" -> "com.abc.meme",
               "context"  -> "context",
               "duration" -> "Job not done yet",
-              StatusKey -> "RUNNING"),
+              StatusKey -> JobStatus.Running),
           Map("jobId" -> "foo-1",
               "startTime" -> "2013-05-29T00:00:00.000Z",
               "classPath" -> "com.abc.meme",
               "context"  -> "context",
               "duration" -> "300.0 secs",
-              StatusKey -> "FINISHED")
+              StatusKey -> JobStatus.Finished)
         ))
       }
     }
@@ -73,7 +74,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
             "classPath" -> "com.abc.meme",
             "context"  -> "context",
             "duration" -> "300.0 secs",
-            StatusKey -> "FINISHED")
+            StatusKey -> JobStatus.Finished)
         ))
       }
     }
@@ -81,7 +82,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       Get("/jobs?status=error") ~> sealRoute(routes) ~> check {
         status should be (OK)
         val result = responseAs[Seq[Map[String, Any]]].head
-        result(StatusKey) should equal("ERROR")
+        result(StatusKey) should equal(JobStatus.Error)
 
         val exceptionMap = result(ResultKey).asInstanceOf[Map[String, Any]]
         exceptionMap("message") should equal ("test-error")
@@ -96,7 +97,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
             "classPath" -> "com.abc.meme",
             "context"  -> "context",
             "duration" -> "Job not done yet",
-            StatusKey -> "RUNNING")
+            StatusKey -> JobStatus.Running)
         ))
       }
     }
@@ -108,14 +109,14 @@ class WebApiMainRoutesSpec extends WebApiSpec {
           sealRoute(routes) ~> check {
         status should be (BadRequest)
         val result = responseAs[Map[String, String]]
-        result(StatusKey) should equal("ERROR")
+        result(StatusKey) should equal(JobStatus.Error)
         result(ResultKey) should startWith ("Cannot parse")
       }
       Post("/jobs?appName=foo&classPath=com.abc.meme&sync=true", "Not parseable jobConfig!!") ~>
           sealRoute(routes) ~> check {
         status should be (BadRequest)
         val result = responseAs[Map[String, String]]
-        result(StatusKey) should equal("ERROR")
+        result(StatusKey) should equal(JobStatus.Error)
         result(ResultKey) should startWith ("Cannot parse")
       }
     }
@@ -146,7 +147,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
           "classPath" -> "com.abc.meme",
           "context"  -> "context",
           "duration" -> "Job not done yet",
-          StatusKey -> "STARTED")
+          StatusKey -> JobStatus.Started)
         )
       }
     }
@@ -205,7 +206,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
           "classPath" -> "com.abc.meme",
           "context"  -> "context",
           "duration" -> "Job not done yet",
-          StatusKey -> "STARTED")
+          StatusKey -> JobStatus.Started)
         )
       }
     }
@@ -219,7 +220,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
           "classPath" -> "com.abc.meme",
           "context"  -> "context",
           "duration" -> "Job not done yet",
-          StatusKey -> "RUNNING",
+          StatusKey -> JobStatus.Running,
           ResultKey -> "foobar!!!"
         ))
       }
@@ -229,7 +230,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       Delete("/jobs/job_to_kill") ~> sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, String]] should be (Map(
-          StatusKey -> "KILLED"
+          StatusKey -> JobStatus.Killed
         ))
       }
     }
@@ -251,7 +252,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       Post("/jobs?appName=foo&classPath=com.abc.meme&context=no-context", " ") ~> sealRoute(routes) ~> check {
         status should be (NotFound)
         val resultMap = responseAs[Map[String, String]]
-        resultMap(StatusKey) should be ("ERROR")
+        resultMap(StatusKey) should be (JobStatus.Error)
       }
     }
 
@@ -259,7 +260,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       Post("/jobs?appName=no-app&classPath=com.abc.meme&context=one", " ") ~> sealRoute(routes) ~> check {
         status should be (NotFound)
         val resultMap = responseAs[Map[String, String]]
-        resultMap(StatusKey) should be ("ERROR")
+        resultMap(StatusKey) should be (JobStatus.Error)
       }
 
       Post("/jobs?appName=foobar&classPath=no-class&context=one", " ") ~> sealRoute(routes) ~> check {
@@ -271,7 +272,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       Post("/jobs?appName=wrong-type&classPath=com.abc.meme", " ") ~> sealRoute(routes) ~> check {
         status should be (BadRequest)
         val resultMap = responseAs[Map[String, String]]
-        resultMap(StatusKey) should be ("ERROR")
+        resultMap(StatusKey) should be (JobStatus.Error)
       }
     }
 
@@ -280,7 +281,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
           sealRoute(routes) ~> check {
         status should be (OK)
         val result = responseAs[Map[String, Any]]
-        result(StatusKey) should equal("ERROR")
+        result(StatusKey) should equal(JobStatus.Error)
         result.keys should equal (Set(StatusKey, ResultKey))
         val exceptionMap = result(ResultKey).asInstanceOf[Map[String, Any]]
         exceptionMap should contain key ("cause")
@@ -377,7 +378,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       Post("/contexts/one") ~> sealRoute(routes) ~> check {
         status should be (BadRequest)
         val result = responseAs[Map[String, String]]
-        result(StatusKey) should equal("ERROR")
+        result(StatusKey) should equal(JobStatus.Error)
       }
     }
 

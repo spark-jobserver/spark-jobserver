@@ -23,6 +23,8 @@ object JobStatus {
   val Running = "RUNNING"
   val Error = "ERROR"
   val Finished = "FINISHED"
+  val Started = "STARTED"
+  val Killed = "KILLED"
 }
 /**
  * Core trait for data access objects for persisting data such as jars, applications, jobs, etc.
