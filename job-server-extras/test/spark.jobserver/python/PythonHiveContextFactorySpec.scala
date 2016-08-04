@@ -35,6 +35,7 @@ class PythonHiveContextFactorySpec extends FunSpec with Matchers with BeforeAndA
     if(context != null) {
       context.stop()
     }
+    PythonHiveContextFactorySpec.resetDerby()
   }
 
   describe("PythonHiveContextFactory") {
@@ -43,7 +44,6 @@ class PythonHiveContextFactorySpec extends FunSpec with Matchers with BeforeAndA
       val factory = new PythonHiveContextFactory()
       context = factory.makeContext(sparkConf, config, "test-create")
       context shouldBe an[HiveContext with PythonContextLike]
-      PythonHiveContextFactorySpec.resetDerby()
     }
 
     it("should create JobContainers") {
@@ -88,7 +88,6 @@ class PythonHiveContextFactorySpec extends FunSpec with Matchers with BeforeAndA
         Seq("jon", 21, 1),
         Seq("sue", 21, 2)
       ))
-      PythonHiveContextFactorySpec.resetDerby()
     }
 
     it("should return jobs which can be successfully run") {

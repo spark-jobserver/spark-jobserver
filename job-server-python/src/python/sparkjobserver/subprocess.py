@@ -8,7 +8,7 @@ from pyspark.context import SparkContext, SparkConf
 from pyspark.sql import SQLContext, HiveContext
 from sparkjobserver.api import ValidationProblem
 
-def exitWithFailure(message, exitCode = 1):
+def exit_with_failure(message, exitCode = 1):
     print(message, file = sys.stderr)
     sys.exit(exitCode)
 
@@ -50,20 +50,20 @@ if __name__ == "__main__":
         if customContext is not None:
             context = customContext
         else:
-            exitWithFailure("Expected JavaSparkContext, SQLContext or HiveContext but received "+repr(contextClass), 2)
+            exit_with_failure("Expected JavaSparkContext, SQLContext or HiveContext but received "+repr(contextClass), 2)
     jobConfig = ConfigFactory.parse_string(entry_point.jobConfigAsHocon())
     jobClass = import_class(entry_point.jobClass())
     job = jobClass()
     try:
         jobData = job.validate(context, None, jobConfig)
     except Exception as error:
-        exitWithFailure("Error while calling 'validate'" + repr(error), 3)
+        exit_with_failure("Error while calling 'validate'" + repr(error), 3)
     if isinstance(jobData, list) and isinstance(jobData[0], ValidationProblem):
         entry_point.setValidationProblems([p.problem for p in jobData])
-        exitWithFailure("Validation problems in job, exiting")
+        exit_with_failure("Validation problems in job, exiting")
     else:
         try:
             result = job.run_job(context, None, jobData)
         except Exception as error:
-            exitWithFailure("Error while calling 'run_job'" + repr(error), 4)
+            exit_with_failure("Error while calling 'run_job'" + repr(error), 4)
         entry_point.setResult(result)

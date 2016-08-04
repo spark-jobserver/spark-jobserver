@@ -112,31 +112,14 @@ trait DefaultContextLikeImplementations {
 
   protected def pythonPaths(config: Config): Seq[String] = {
     val envPaths = sys.env.get("PYTHONPATH").map(_.split(":").toSeq).getOrElse(Seq())
-    val configPaths =
-      if (config.hasPath("python.paths")) {
-        config.getStringList("python.paths").asScala
-      } else {
-        Seq()
-      }
+    val configPaths = config.getStringList("python.paths").asScala
     //Allow relative paths in config:
     val pyPaths = (envPaths ++ configPaths).map(p => new File(p).getAbsolutePath)
     logger.info(s"Python paths for context: ${pyPaths.mkString("[", ", ", "]")}")
     pyPaths
   }
 
-  override lazy val pythonExecutable: String = getPythonExecutable(config)
-
-  /*
-  If not specified in config, then PythonJobs assume that
-  an executable called `python` exists in the PATH.
- */
-  protected def getPythonExecutable(config: Config): String = {
-    if (config.hasPath("python.executable")) {
-      config.getString("python.executable")
-    }else {
-      "python"
-    }
-  }
+  override lazy val pythonExecutable: String = config.getString("python.executable")
 
   override def setupTasks(): Unit = {
     for ((k, v) <- SparkJobUtils.getHadoopConfig(config)) sparkContext.hadoopConfiguration.set(k, v)

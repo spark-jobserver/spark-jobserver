@@ -30,10 +30,10 @@ A basic config supporting Python might look like:
         python {
           paths = [
             ${SPARK_HOME}/python,
-            "/home/kss_admin/code/sjs/spark-jobserver/job-server-extras/job-server-python/target/python/spark_jobserver_python-0.7.0_SNAPSHOT-py2.7.egg"
+            "/home/user/spark-jobserver/job-server-extras/job-server-python/target/python/spark_jobserver_python-0.7.0_SNAPSHOT-py2.7.egg"
           ]
           
-          #This can be omitted to use the default value of "python"
+          #The default value in application.conf is "python"
           executable = "python3"
         }
       }
@@ -44,7 +44,7 @@ python instance to be used for running the jobs, or added to the list of paths i
 
 In development, you can run a Python ready job server locally with the following `reStart` task:
 
-    job-server-extras/reStart ../job-server-python/config/python-example.conf.template
+    job-server-extras/reStart ../config/python-example.conf.template
 
 ## Writing a Python job
 

@@ -100,6 +100,8 @@ object PythonSparkContextFactorySpec {
       |  "${py4jPath.getOrElse("")}",
       |  "${originalPythonPath.getOrElse("")}"
       |]
+      |
+      |python.executable = "python"
     """.stripMargin)
 
   lazy val sparkConf = new SparkConf().setMaster("local[*]").setAppName("PythonSparkContextFactorySpec")
