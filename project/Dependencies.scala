@@ -60,7 +60,8 @@ object Dependencies {
   lazy val coreTestDeps = Seq(
     scalaTestDep,
     "com.typesafe.akka" %% "akka-testkit" % akka % "test",
-    "io.spray" %% "spray-testkit" % spray % "test"
+    "io.spray" %% "spray-testkit" % spray % "test",
+    "com.github.zxl0714" % "redis-mock" % "0.1"
   )
 
   lazy val securityDeps = Seq(
