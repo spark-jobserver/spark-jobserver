@@ -121,6 +121,8 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
       expectMsg(Seq[JobInfo](runningJob, errorJob, finishedJob))
       actor ! GetJobStatuses(Some(10))
       expectMsg(Seq[JobInfo](runningJob, errorJob, finishedJob))
+
+      
     }
     it("should return empty list if jobs doest not exist") {
       actor ! GetJobStatuses(Some(1))
