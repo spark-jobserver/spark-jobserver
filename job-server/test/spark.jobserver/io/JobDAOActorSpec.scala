@@ -38,7 +38,8 @@ object JobDAOActorSpec {
 
     override def saveJobConfig(jobId: String, jobConfig: Config): Unit = ???
 
-    override def getJobInfos(limit: Int): Future[Seq[JobInfo]] = Future.successful(Seq())
+    override def getJobInfos(limit: Int, status: Option[String]): Future[Seq[JobInfo]] =
+      Future.successful(Seq())
 
     override def getJobInfo(jobId: String): Future[Option[JobInfo]] = ???
 

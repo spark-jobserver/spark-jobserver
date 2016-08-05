@@ -526,8 +526,7 @@ class WebApi(system: ActorSystem,
          *     "jobId": "5453779a-f004-45fc-a11d-a39dae0f9bf4"
          *   }
          * ]
-          *
-          * @optional @param limit Int - optional limit to number of jobs to display, defaults to 50
+         * @optional @param limit Int - optional limit to number of jobs to display, defaults to 50
          */
         get {
           parameters('limit.as[Int] ?, 'status.as[String] ?) { (limitOpt, statusOpt) =>
