@@ -191,7 +191,7 @@ class JobSqlDAO(config: Config) extends JobDAO {
     }
   }
 
-  private def createJarName(appName: String, uploadTime: DateTime): String = appName + "-" + uploadTime
+  private def createJarName(appName: String, uploadTime: DateTime): String = appName + "-" + uploadTime.toString("yyyyMMdd_hhmmss_SSS")
 
   // Convert from joda DateTime to java.sql.Timestamp
   private def convertDateJodaToSql(dateTime: DateTime): Timestamp = new Timestamp(dateTime.getMillis)
