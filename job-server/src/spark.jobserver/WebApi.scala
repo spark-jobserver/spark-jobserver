@@ -15,7 +15,7 @@ import org.apache.shiro.config.IniSecurityManagerFactory
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import spark.jobserver.auth._
-import spark.jobserver.io.JobInfo
+import spark.jobserver.io.{JobInfo, JobStatus}
 import spark.jobserver.routes.DataRoutes
 import spark.jobserver.util.{SSLContextFactory, SparkJobUtils}
 import spray.http._
@@ -46,7 +46,7 @@ object WebApi {
     ctx.complete(StatusCodes.NotFound, errMap(msg))
   }
 
-  def errMap(errMsg: String) : Map[String, String] = Map(StatusKey -> "ERROR", ResultKey -> errMsg)
+  def errMap(errMsg: String) : Map[String, String] = Map(StatusKey -> JobStatus.Error, ResultKey -> errMsg)
 
   def errMap(t: Throwable, status: String) : Map[String, Any] =
     Map(StatusKey -> status, ResultKey -> formatException(t))
@@ -87,11 +87,11 @@ object WebApi {
     }
 
   def getJobReport(jobInfo: JobInfo, jobStarted: Boolean = false): Map[String, Any] = {
-    val statusMap = if (jobStarted) Map(StatusKey -> "STARTED") else (jobInfo match {
-        case JobInfo(_, _, _, _, _, None, _) => Map(StatusKey -> "RUNNING")
-        case JobInfo(_, _, _, _, _, _, Some(ex)) => Map(StatusKey -> "ERROR",
+    val statusMap = if (jobStarted) Map(StatusKey -> JobStatus.Started) else (jobInfo match {
+        case JobInfo(_, _, _, _, _, None, _) => Map(StatusKey -> JobStatus.Running)
+        case JobInfo(_, _, _, _, _, _, Some(ex)) => Map(StatusKey -> JobStatus.Error,
           ResultKey -> formatException(ex))
-        case JobInfo(_, _, _, _, _, Some(e), None) => Map(StatusKey -> "FINISHED")
+        case JobInfo(_, _, _, _, _, Some(e), None) => Map(StatusKey -> JobStatus.Finished)
     })
     Map("jobId" -> jobInfo.jobId,
       "startTime" -> jobInfo.startTime.toString(),
@@ -433,9 +433,9 @@ class WebApi(system: ActorSystem,
               case JobInfo(_, contextName, _, classPath, _, None, _) =>
                 val jobManager = getJobManagerForContext(Some(contextName), config, classPath)
                 jobManager.get ! KillJob(jobId)
-                ctx.complete(Map(StatusKey -> "KILLED"))
+                ctx.complete(Map(StatusKey -> JobStatus.Killed))
               case JobInfo(_, _, _, _, _, _, Some(ex)) =>
-                ctx.complete(Map(StatusKey -> "ERROR", "ERROR" -> formatException(ex)))
+                ctx.complete(Map(StatusKey -> JobStatus.Error, "ERROR" -> formatException(ex)))
               case JobInfo(_, _, _, _, _, Some(e), None) =>
                 notFound(ctx, "No running job with ID " + jobId.toString)
             }

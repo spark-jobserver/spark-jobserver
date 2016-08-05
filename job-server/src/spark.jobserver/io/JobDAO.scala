@@ -19,11 +19,15 @@ case class JobInfo(jobId: String, contextName: String,
   def isRunning: Boolean = !endTime.isDefined
   def isErroredOut: Boolean = endTime.isDefined && error.isDefined
 }
+
 object JobStatus {
   val Running = "RUNNING"
   val Error = "ERROR"
   val Finished = "FINISHED"
+  val Started = "STARTED"
+  val Killed = "KILLED"
 }
+
 /**
  * Core trait for data access objects for persisting data such as jars, applications, jobs, etc.
  */
