@@ -1,13 +1,10 @@
 package spark.jobserver.routes
 
 import java.net.URLEncoder
-<<<<<<< 2229a2b141eaed023f1724478313be8dd120f950:job-server/test/spark.jobserver/routes/DataRoutesSpec.scala
-import spark.jobserver.io.JobStatus
-=======
 
->>>>>>> Clean up commits for Java API:job-server/src/test/scala/spark/jobserver/routes/DataRoutesSpec.scala
 import spark.jobserver.WebApiSpec
 import spark.jobserver.common.akka.web.JsonUtils
+import spark.jobserver.io.JobStatus
 import spray.http.StatusCodes._
 
 class DataRoutesSpec extends WebApiSpec {
