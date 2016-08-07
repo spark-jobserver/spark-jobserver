@@ -17,14 +17,6 @@ case object JobClassNotFound extends LoadingError
 case object JobWrongType extends LoadingError
 case class JobLoadError(ex: Exception) extends LoadingError
 
-trait ContextFactoryBase[C]{
-  def loadAndValidateJob(appName: String,
-                         uploadTime: DateTime,
-                         classPath: String,
-                         jobCache: JobCache): JobContainer[_] Or LoadingError
-  def makeContext(sparkConf: SparkConf, config: Config,  contextName: String): C
-  def makeContext(config: Config, contextConfig: Config, contextName: String): C
-}
 /**
  * Factory trait for creating a SparkContext or any derived Contexts,
  * such as SQLContext, StreamingContext, HiveContext, etc.
