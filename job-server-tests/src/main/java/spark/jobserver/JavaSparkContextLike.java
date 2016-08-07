@@ -4,8 +4,8 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.SparkContext;
 import org.apache.spark.api.java.JavaSparkContext;
 
-public class JSC extends JavaSparkContext implements ContextLike {
-    JSC(SparkConf conf){
+public class JavaSparkContextLike extends JavaSparkContext implements ContextLike {
+    JavaSparkContextLike(SparkConf conf){
         super(conf);
     }
     @Override

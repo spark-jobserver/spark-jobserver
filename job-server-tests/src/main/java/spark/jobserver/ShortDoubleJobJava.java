@@ -6,22 +6,19 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
-import org.scalactic.Every;
-import org.scalactic.Good;
-import org.scalactic.Or;
 import spark.jobserver.api.JobEnvironment;
-import spark.jobserver.api.ValidationProblem;
-import spark.jobserver.api.JSparkJob;
+import spark.jobserver.api.JobValidation;
+import spark.jobserver.api.JSparkContextJob;
 
 import java.util.Arrays;
 import java.util.List;
 
-public class ShortDoubleJobJava implements JSparkJob<List<Double>> {
+public class ShortDoubleJobJava extends JSparkContextJob<List<Double>> {
     private final Double[] data = new Double[]{1.0, 2.0, 3.0};
 
     public static void main(String[] args) {
         final SparkConf conf = new SparkConf().setMaster("local[4]").setAppName("ShortDoubleJob");
-        final JSC jsc = new JSC(conf);
+        final JavaSparkContext jsc = new JavaSparkContext(conf);
         final JobEnvironment jEnv = new TestJobEnvironment();
         final ShortDoubleJobJava sdj = new ShortDoubleJobJava();
         final List<Double> result = sdj.runJob(jsc, jEnv, ConfigFactory.empty());
@@ -30,9 +27,8 @@ public class ShortDoubleJobJava implements JSparkJob<List<Double>> {
     }
 
     @Override
-    public List<Double> runJob(ContextLike context, JobEnvironment cfg, Config data) {
-        final JavaSparkContext jsc = javaSparkContext(context);
-        final JavaRDD<Double> rdd = jsc.parallelize(Arrays.asList(this.data));
+    public List<Double> runJob(JavaSparkContext context, JobEnvironment cfg, Config data) {
+        final JavaRDD<Double> rdd = context.parallelize(Arrays.asList(this.data));
         return rdd.map(new Function<Double, Double>() {
             @Override
             public Double call(Double t) throws Exception {
@@ -42,7 +38,7 @@ public class ShortDoubleJobJava implements JSparkJob<List<Double>> {
     }
 
     @Override
-    public Or<Config, Every<ValidationProblem>> validate(ContextLike context, JobEnvironment jEnv, Config cfg) {
-        return new Good<>(ConfigFactory.parseString("num = 5.0"));
+    public JobValidation validate(JavaSparkContext context, JobEnvironment jEnv, Config cfg) {
+        return new JobValidation.JOB_VALID(ConfigFactory.parseString("num = 5.0"));
     }
 }

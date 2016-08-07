@@ -10,7 +10,7 @@ class HiveContextFactory extends ScalaContextFactory {
 
   def isValidJob(job: api.SparkJobBase): Boolean = job.isInstanceOf[SparkHiveJob]
 
-  def makeContext(sparkConf: SparkConf, config: Config,  contextName: String): C = {
+  def makeContext(sparkConf: SparkConf, config: Config, contextName: String): C = {
     contextFactory(sparkConf)
   }
 
@@ -20,5 +20,7 @@ class HiveContextFactory extends ScalaContextFactory {
 }
 
 private[jobserver] trait HiveContextLike extends ContextLike {
-  def stop() { this.sparkContext.stop() }
+  def stop() {
+    this.sparkContext.stop()
+  }
 }

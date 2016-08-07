@@ -5,19 +5,21 @@ import java.util.concurrent.Executors._
 import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor.{ActorRef, PoisonPill, Props}
+import akka.pattern.ask
+import akka.util.Timeout
 import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.hadoop.conf.Configuration
-import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.{SparkConf, SparkEnv}
 import org.joda.time.DateTime
 import org.scalactic._
-import spark.jobserver.api.{JSparkJob, JobEnvironment}
+import spark.jobserver.api.{JobEnvironment, JobValidation}
 import spark.jobserver.common.akka.InstrumentedActor
-import spark.jobserver.context.{ContextFactoryBase, JContextFactory, JobContainer, SparkContextFactory}
+import spark.jobserver.context.{JobContainer, SparkContextFactory, _}
 import spark.jobserver.io.{JarInfo, JobDAOActor, JobInfo}
 import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.duration._
+import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 
 object JobManagerActor {
@@ -200,12 +202,7 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
                        events: Set[Class[_]],
                        jobContext: ContextLike,
                        sparkEnv: SparkEnv): Option[Future[Any]] = {
-    import akka.pattern.ask
-    import akka.util.Timeout
-    import spark.jobserver.context._
 
-    import scala.concurrent.Await
-    import scala.concurrent.duration._
 
     def failed(msg: Any): Option[Future[Any]] = {
       sender ! msg
@@ -238,79 +235,14 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
     val jarInfo = JarInfo(appName, lastUploadTime.get)
     val jobInfo = JobInfo(jobId, contextName, jarInfo, classPath, DateTime.now(), None, None)
     jobContainer match {
-      case c: ScalaJobContainer => Some(getJobFuture(c, jobInfo, jobConfig, sender, jobContext, sparkEnv))
-      case c: JavaJobContainer => Some(getJavaFuture(c, jobInfo, jobConfig, sender, jobContext, sparkEnv))
+      case c: ScalaJobContainer =>
+        Some(getJobFuture[api.SparkJobBase](c, jobInfo, jobConfig, sender, jobContext, sparkEnv))
+      case c: JavaJobContainer =>
+        Some(getJobFuture[api.JSparkJob[_,_]](c, jobInfo, jobConfig, sender, jobContext, sparkEnv))
     }
   }
 
-  private def getJavaFuture(container: JobContainer[JSparkJob[_]],
-                            jobInfo: JobInfo,
-                            jobConfig: Config,
-                            subscriber: ActorRef,
-                            jobContext: ContextLike,
-                            sparkEnv: SparkEnv): Future[Any] = {
-
-      val jobId = jobInfo.jobId
-      logger.info(s"Starting Spark job $jobId [${jobInfo.classPath}]...")
-      if (currentRunningJobs.getAndIncrement() >= maxRunningJobs) {
-        currentRunningJobs.decrementAndGet()
-        sender ! NoJobSlotsAvailable(maxRunningJobs)
-        return Future[Any](None)(context.dispatcher)
-      }
-
-      Future {
-        org.slf4j.MDC.put("jobId", jobId)
-        logger.info("Starting job future thread")
-        try {
-          SparkEnv.set(sparkEnv)
-          Thread.currentThread.setContextClassLoader(jarLoader)
-          val job = container.getSparkJob
-          try {
-            statusActor ! JobStatusActor.JobInit(jobInfo)
-            val jobEnv = getEnvironment(jobId)
-            job.validate(jobContext, jobEnv, jobConfig) match {
-              case Bad(reasons) =>
-                val err = new Throwable(reasons.toString)
-                statusActor ! JobValidationFailed(jobId, DateTime.now(), err)
-                throw err
-              case Good(jobData) =>
-                statusActor ! JobStarted(jobId: String, jobInfo)
-                val sc = jobContext.sparkContext
-                sc.setJobGroup(jobId, s"Job group for $jobId and spark context ${sc.applicationId}", true)
-                job.runJob(jobContext, jobEnv, jobData)
-            }
-          } finally {
-            org.slf4j.MDC.remove("jobId")
-          }
-        } catch {
-          case e: java.lang.AbstractMethodError => {
-            logger.error("Oops, there's an AbstractMethodError... maybe you compiled " +
-              "your code with an older version of SJS? here's the exception:", e)
-            throw e
-          }
-          case e: Throwable => {
-            logger.error("Got Throwable", e)
-            throw e
-          };
-        }
-      }(executionContext).andThen {
-        case Success(result: Any) =>
-          statusActor ! JobFinished(jobId, DateTime.now())
-          resultActor ! JobResult(jobId, result)
-        case Failure(error: Throwable) =>
-          val wrappedError = wrapInRuntimeException(error)
-          statusActor ! JobErroredOut(jobId, DateTime.now(), wrappedError)
-          logger.error("Exception from job " + jobId + ": ", error)
-      }(executionContext).andThen {
-        case _ =>
-          currentRunningJobs.getAndDecrement()
-          resultActor ! Unsubscribe(jobId, subscriber)
-          statusActor ! Unsubscribe(jobId, subscriber)
-          postEachJob()
-      }(executionContext)
-  }
-
-  private def getJobFuture(container: JobContainer[api.SparkJobBase],
+  private def getJobFuture[C](container: JobContainer[C],
                            jobInfo: JobInfo,
                            jobConfig: Config,
                            subscriber: ActorRef,
@@ -341,19 +273,36 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
         Thread.currentThread.setContextClassLoader(jarLoader)
         val job = container.getSparkJob
         try {
-          statusActor ! JobStatusActor.JobInit(jobInfo)
-          val jobC = jobContext.asInstanceOf[job.C]
-          val jobEnv = getEnvironment(jobId)
-          job.validate(jobC, jobEnv, jobConfig) match {
-            case Bad(reasons) =>
-              val err = new Throwable(reasons.toString)
-              statusActor ! JobValidationFailed(jobId, DateTime.now(), err)
-              throw err
-            case Good(jobData) =>
-              statusActor ! JobStarted(jobId: String, jobInfo)
-              val sc = jobContext.sparkContext
-              sc.setJobGroup(jobId, s"Job group for $jobId and spark context ${sc.applicationId}", true)
-              job.runJob(jobC, jobEnv, jobData)
+          job match {
+            case job: api.SparkJobBase =>
+              statusActor ! JobStatusActor.JobInit(jobInfo)
+              val jobC = jobContext.asInstanceOf[job.C]
+              val jobEnv = getEnvironment(jobId)
+              job.validate(jobC, jobEnv, jobConfig) match {
+                case Bad(reasons) =>
+                  val err = new Throwable(reasons.toString)
+                  statusActor ! JobValidationFailed(jobId, DateTime.now(), err)
+                  throw err
+                case Good(jobData) =>
+                  statusActor ! JobStarted(jobId: String, jobInfo)
+                  val sc = jobContext.sparkContext
+                  sc.setJobGroup(jobId, s"Job group for $jobId and spark context ${sc.applicationId}", true)
+                  job.runJob(jobC, jobEnv, jobData)
+              }
+            case job: api.JSparkJob[_, _] =>
+              statusActor ! JobStatusActor.JobInit(jobInfo)
+              val jobEnv = getEnvironment(jobId)
+              job.validateImpl(jobContext, jobEnv, jobConfig) match {
+              case j: JobValidation.JOB_INVALID =>
+                val err = new Throwable(j.getError.getMessage)
+                statusActor ! JobValidationFailed(jobId, DateTime.now(), err)
+                throw err
+              case j: JobValidation.JOB_VALID =>
+                statusActor ! JobStarted(jobId: String, jobInfo)
+                val sc = jobContext.sparkContext
+                sc.setJobGroup(jobId, s"Job group for $jobId and spark context ${sc.applicationId}", true)
+                job.runJobImpl(jobContext, jobEnv, j.getConfig)
+            }
           }
         } finally {
           org.slf4j.MDC.remove("jobId")

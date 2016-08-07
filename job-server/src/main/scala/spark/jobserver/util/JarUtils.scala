@@ -2,6 +2,7 @@ package spark.jobserver.util
 
 import java.lang.reflect.Constructor
 
+import com.typesafe.config.Config
 import org.slf4j.LoggerFactory
 
 /**
@@ -42,10 +43,10 @@ object JarUtils {
     }
   }
 
-  def loadClassWithArgs[C](c: String, args: Seq[java.lang.Object]): C = {
+  def loadClassWithArgs[C](c: String, args: Config): C = {
     val constructor = Class.forName(c).getDeclaredConstructors.head
     constructor.setAccessible(true)
-    constructor.newInstance(args: _*).asInstanceOf[C]
+    constructor.newInstance(args).asInstanceOf[C]
   }
 
   private def loadConstructor[C](className: String, loader: ClassLoader): Constructor[C] = {

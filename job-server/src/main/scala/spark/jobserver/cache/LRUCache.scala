@@ -3,6 +3,10 @@ package spark.jobserver.cache
 import java.util
 import java.util.Map.Entry
 
+import com.typesafe.config.Config
+
+import scala.util.Try
+
 /**
   * A convenience class to define a Least-Recently-Used Cache with a maximum size.
   * The oldest entries by time of last access will be removed when the number of entries exceeds
@@ -10,7 +14,10 @@ import java.util.Map.Entry
   * For definitions of cacheSize and loadingFactor, see the docs for java.util.LinkedHashMap
   * @see LinkedHashMap
   */
-class LRUCache[K, V](cacheSize: Int, loadingFactor: Float = 0.75F) extends Cache[K, V] {
+class LRUCache[K, V](cfg: Config) extends Cache[K, V] {
+
+  private val cacheSize = Try(cfg.getInt("cache-size")).getOrElse(10000)
+  private val loadingFactor = Try(cfg.getDouble("loading-factor")).getOrElse(0.75).toFloat
 
   private val cache = {
     val initialCapacity = math.ceil(cacheSize / loadingFactor).toInt + 1
@@ -40,4 +47,8 @@ class LRUCache[K, V](cacheSize: Int, loadingFactor: Float = 0.75F) extends Cache
   }
 
   override def put(k: K, v: V): V = cache.put(k, v)
+}
+
+object LRUCache {
+  def apply[K,V](cfg: Config): LRUCache[K,V] = new LRUCache[K,V](cfg)
 }

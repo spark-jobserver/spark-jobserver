@@ -13,7 +13,7 @@ import spark.jobserver.{ContextLike, JobCache}
 class JavaContextFactory extends SparkContextFactory {
   type C = JavaSparkContext with ContextLike
   type J = JavaJobContainer
-  type JC = JSparkJob[_]
+  type JC = JSparkJob[_, _]
 
   private val logger = LoggerFactory.getLogger(getClass)
   def loadAndValidateJob(appName: String,
@@ -45,6 +45,6 @@ class JavaContextFactory extends SparkContextFactory {
   def isValidJob(job: JC): Boolean = job.isInstanceOf[JC]
 }
 
-case class JavaJobContainer(job: JSparkJob[_]) extends JobContainer[JSparkJob[_]] {
-  override def getSparkJob: JSparkJob[_] = job
+case class JavaJobContainer(job: JSparkJob[_, _]) extends JobContainer[JSparkJob[_, _]] {
+  override def getSparkJob: JSparkJob[_, _] = job
 }

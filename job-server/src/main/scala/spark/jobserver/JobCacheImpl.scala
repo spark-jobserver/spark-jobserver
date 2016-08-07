@@ -1,7 +1,6 @@
 package spark.jobserver
 
 import java.io.File
-import java.lang.Float
 import java.net.URL
 
 import akka.actor.ActorRef
@@ -14,46 +13,47 @@ import org.slf4j.LoggerFactory
 import spark.jobserver.api.JSparkJob
 import spark.jobserver.cache.Cache
 import spark.jobserver.io.JobDAOActor
+import spark.jobserver.io.JobDAOActor.JarPath
 import spark.jobserver.util.{ContextURLClassLoader, JarUtils}
 
-import scala.concurrent.Await
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
+import scala.concurrent.{Await, Future}
 import scala.util.Try
 
-class JobCacheImpl(cacheConfig: Config,
-                   dao: ActorRef,
-                   sparkContext: SparkContext,
-                   loader: ContextURLClassLoader) extends JobCache {
+class JobCacheImpl(cacheConfig: Config, dao: ActorRef, ctx: SparkContext, loader: ContextURLClassLoader)
+  extends JobCache {
 
   type CacheType = Cache[String, SparkJobInfo]
 
   implicit private val daoAskTimeout: Timeout = Timeout(3 seconds)
 
   private val cacheDriver = Try(cacheConfig.getString("driver")).getOrElse("spark.jobserver.cache.LRUCache")
-  private val maxEntries = Try(cacheConfig.getInt("max-entries")).getOrElse(10000)
-  private val loadingFactor = Try(cacheConfig.getDouble("load-factor")).getOrElse(0.75).toFloat
   private val cacheEnabled = Try(cacheConfig.getBoolean("enabled")).getOrElse(true)
   private val logger = LoggerFactory.getLogger(getClass)
-  private val cache = JarUtils.loadClassWithArgs[CacheType](
-    cacheDriver,
-    Seq(Integer.valueOf(maxEntries), Float.valueOf(loadingFactor))
-  )
+  private val cache = JarUtils.loadClassWithArgs[CacheType](cacheDriver, cacheConfig)
 
-  private def getJavaViaDao(appName: String, uploadTime: DateTime, classPath: String): JavaJarInfo = {
-    val jarPathReq = (dao ? JobDAOActor.GetJarPath(appName, uploadTime)).mapTo[JobDAOActor.JarPath]
-    val jarPath = Await.result(jarPathReq, daoAskTimeout.duration).jarPath
-    val jarFilePath = new File(jarPath).getAbsolutePath
-    sparkContext.addJar(jarFilePath)
-    loader.addURL(new URL("file:" + jarFilePath))
-    val constructor = Try(JarUtils.loadClassOrObject[JSparkJob[_]](classPath, loader)).get
-    JavaJarInfo(() => constructor, classPath, jarFilePath)
+  private def getJarPath(name: String, uploadTime: DateTime): Future[JarPath] = {
+    (dao ? JobDAOActor.GetJarPath(name, uploadTime)).mapTo[JobDAOActor.JarPath]
+  }
+
+  private def getJavaViaDao(appName: String, uploadTime: DateTime, classPath: String): Future[JavaJarInfo] = {
+    getJarPath(appName, uploadTime)
+      .map(j => j.jarPath)
+      .map(f => new File(f).getAbsolutePath)
+      .map { path =>
+        ctx.addJar(path)
+        loader.addURL(new URL("file:" + path))
+        val constructor = Try(JarUtils.loadClassOrObject[JSparkJob[_, _]](classPath, loader)).get
+        JavaJarInfo(() => constructor, classPath, path)
+      }
   }
 
   private def getJobViaDao(appName: String, uploadTime: DateTime, classPath: String): JobJarInfo = {
     val jarPathReq = (dao ? JobDAOActor.GetJarPath(appName, uploadTime)).mapTo[JobDAOActor.JarPath]
     val jarPath = Await.result(jarPathReq, daoAskTimeout.duration).jarPath
     val jarFilePath = new File(jarPath).getAbsolutePath
-    sparkContext.addJar(jarFilePath)
+    ctx.addJar(jarFilePath)
     loader.addURL(new URL("file:" + jarFilePath))
     val constructor = Try(JarUtils.loadClassOrObject[api.SparkJobBase](classPath, loader)).get
     JobJarInfo(() => constructor, classPath, jarFilePath)
@@ -74,12 +74,12 @@ class JobCacheImpl(cacheConfig: Config,
   def getJavaJob(appName: String, uploadTime: DateTime, classPath: String): JavaJarInfo = {
     logger.info(s"Loading app: $appName at $uploadTime")
     if (cacheEnabled) {
-      cache.getOrPut(
-        (appName, uploadTime, classPath).toString,
-        getJavaViaDao(appName, uploadTime, classPath)
-      ).asInstanceOf[JavaJarInfo]
+        cache.getOrPut(
+          (appName, uploadTime, classPath).toString,
+          Await.result(getJavaViaDao(appName, uploadTime, classPath), 3 seconds)
+        ).asInstanceOf[JavaJarInfo]
     }else{
-      getJavaViaDao(appName, uploadTime, classPath)
+      Await.result(getJavaViaDao(appName, uploadTime, classPath), 3 seconds)
     }
   }
 }

@@ -1,7 +1,7 @@
 package spark.jobserver.cache
 
 import com.github.zxl0714.redismock.RedisServer
-import com.typesafe.config.Config
+import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.commons.lang.SerializationUtils
 import org.apache.spark.SparkContext
 import org.joda.time.DateTime
@@ -34,10 +34,13 @@ object RedisCacheSpec{
 }
 
 class RedisCacheSpec extends FunSpec with Matchers with BeforeAndAfter {
-  val redis: RedisCache[JobJarInfo] = new RedisCache[JobJarInfo](
-    RedisCacheSpec.mockRedis.getHost,
-    RedisCacheSpec.mockRedis.getBindPort
-  )
+
+  val cfg = ConfigFactory.parseString(s"""
+      |host = ${RedisCacheSpec.mockRedis.getHost}
+      |port = ${RedisCacheSpec.mockRedis.getBindPort}
+    """.stripMargin)
+
+  val redis: RedisCache[JobJarInfo] = new RedisCache[JobJarInfo](cfg)
   val dt = DateTime.now()
   val k = ("app", dt, "classpath.jar:tools.jar").toString()
   val serializedK = List("app", dt.toString, "classpath.jar:tools.jar")

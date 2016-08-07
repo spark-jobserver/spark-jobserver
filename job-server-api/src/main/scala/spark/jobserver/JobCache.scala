@@ -8,10 +8,10 @@ case class JobJarInfo(constructor: () => api.SparkJobBase,
                       className: String,
                       jarFilePath: String) extends SparkJobInfo
 
-case class JavaJarInfo(constructor: () => JSparkJob[_],
+case class JavaJarInfo(constructor: () => JSparkJob[_, _],
                        className: String,
                        jarFilePath: String) extends SparkJobInfo {
-  def job(): JSparkJob[_] = constructor.apply()
+  def job(): JSparkJob[_, _] = constructor.apply()
 }
 
 trait JobCache {

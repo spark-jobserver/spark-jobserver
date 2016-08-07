@@ -81,6 +81,7 @@ case class ScalaJobContainer(job: api.SparkJobBase) extends JobContainer[api.Spa
 trait ScalaContextFactory extends SparkContextFactory {
   type J = ScalaJobContainer
   type JC = api.SparkJobBase
+
   val logger = LoggerFactory.getLogger(getClass)
 
   def loadAndValidateJob(appName: String,

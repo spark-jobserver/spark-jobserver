@@ -2,11 +2,16 @@ package spark.jobserver.cache
 
 import com.redis._
 import com.redis.serialization.Parse.Implicits._
+import com.typesafe.config.Config
 import org.apache.commons.lang.SerializationUtils
 
-class RedisCache[V <: Serializable](host: String, port: Int) extends Cache[String, V] {
+import scala.util.Try
 
-  private val client = new RedisClientPool(host, port)
+class RedisCache[V <: Serializable](config: Config) extends Cache[String, V] {
+
+  private val host: String = Try(config.getString("host")).getOrElse("localhost")
+  private val port: Int = Try(config.getInt("port")).getOrElse(8080)
+  private val client: RedisClientPool = new RedisClientPool(host, port)
 
   private[cache] def valueToBytes(v: V): Array[Byte] = {
     SerializationUtils.serialize(v)

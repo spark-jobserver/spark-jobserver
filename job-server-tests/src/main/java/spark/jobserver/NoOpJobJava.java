@@ -3,18 +3,16 @@ package spark.jobserver;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import org.apache.spark.SparkConf;
-import org.scalactic.Every;
-import org.scalactic.Good;
-import org.scalactic.Or;
+import org.apache.spark.api.java.JavaSparkContext;
 import spark.jobserver.api.JobEnvironment;
-import spark.jobserver.api.ValidationProblem;
-import spark.jobserver.api.JSparkJob;
+import spark.jobserver.api.JobValidation;
+import spark.jobserver.api.JSparkContextJob;
 
-public class NoOpJobJava implements JSparkJob<Integer> {
+public class NoOpJobJava extends JSparkContextJob<Integer> {
 
     public static void main(String[] args) {
         final SparkConf conf = new SparkConf().setMaster("local[4]").setAppName("NoOpJob");
-        final JSC jsc = new JSC(conf);
+        final JavaSparkContext jsc = new JavaSparkContext(conf);
         final JobEnvironment jEnv = new TestJobEnvironment();
         final NoOpJobJava nojj = new NoOpJobJava();
         final Integer results = nojj.runJob(jsc, jEnv, ConfigFactory.empty());
@@ -23,12 +21,12 @@ public class NoOpJobJava implements JSparkJob<Integer> {
     }
 
     @Override
-    public Integer runJob(ContextLike context, JobEnvironment cfg, Config data) {
+    public Integer runJob(JavaSparkContext context, JobEnvironment cfg, Config data) {
         return 6;
     }
 
     @Override
-    public Or<Config, Every<ValidationProblem>> validate(ContextLike context, JobEnvironment jEnv, Config cfg) {
-        return new Good<>(cfg);
+    public JobValidation validate(JavaSparkContext context, JobEnvironment jEnv, Config cfg) {
+        return new JobValidation.JOB_VALID(cfg);
     }
 }
