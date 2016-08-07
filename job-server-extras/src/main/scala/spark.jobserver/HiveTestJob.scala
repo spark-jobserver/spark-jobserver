@@ -10,7 +10,7 @@ import org.apache.spark.sql.hive.HiveContext
  * Initializes some dummy data into a table, reads it back out, and returns a count
  * (Will create Hive metastore at job-server/metastore_db if Hive isn't configured)
  */
-object HiveLoaderJob extends SparkHiveJob {
+class HiveLoaderJob extends SparkHiveJob {
   // The following data is stored at ./hive_test_job_addresses.txt
   // val addresses = Seq(
   //   Address("Bob", "Charles", "101 A St.", "San Jose"),
@@ -45,7 +45,7 @@ object HiveLoaderJob extends SparkHiveJob {
 /**
  * This job simply runs the Hive SQL in the config.
  */
-object HiveTestJob extends SparkHiveJob {
+class HiveTestJob extends SparkHiveJob {
   def validate(hive: HiveContext, config: Config): SparkJobValidation = SparkJobValid
 
   def runJob(hive: HiveContext, config: Config): Any = {

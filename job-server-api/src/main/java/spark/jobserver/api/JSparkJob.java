@@ -3,6 +3,8 @@ package spark.jobserver.api;
 import com.typesafe.config.Config;
 import spark.jobserver.ContextLike;
 
+import java.io.Serializable;
+
 /**
  * This is the top level class fo the Java API, users shouldn't have many
  * reasons to extend this class.
@@ -11,7 +13,7 @@ import spark.jobserver.ContextLike;
  * @param <R> The return type of the job
  */
 
-public abstract class JSparkJob<C, R> {
+public abstract class JSparkJob<C, R> implements Serializable {
 
     /**
      * These are the internal methods the SJS executes in order to pass it's ContextLike

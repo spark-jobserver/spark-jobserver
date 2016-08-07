@@ -17,7 +17,7 @@ import scala.util.Try
  *
  * validate() returns SparkJobInvalid if there is no input.string
  */
-object WordCountExample extends SparkJob {
+class WordCountExample extends SparkJob {
   def main(args: Array[String]) {
     val conf = new SparkConf().setMaster("local[4]").setAppName("WordCountExample")
     val sc = new SparkContext(conf)
@@ -38,14 +38,14 @@ object WordCountExample extends SparkJob {
 }
 
 /**
- * This is the same WordCountExample above but implementing the new JSparkJob API.  A couple things
+ * This is the same WordCountExample above but implementing the new SparkJobBase API.  A couple things
  * to notice:
  * - runJob no longer needs to re-parse the input.  The split words are passed straight to RunJob
  * - The output of runJob is typed now so it's more type safe
  * - the config input no longer is mixed with context settings, it purely has the job input
  * - the job could parse the jobId and other environment vars from JobEnvironment
  */
-object WordCountExampleNewApi extends NewSparkJob {
+class WordCountExampleNewApi extends NewSparkJob {
   type JobData = Seq[String]
   type JobOutput = collection.Map[String, Long]
 

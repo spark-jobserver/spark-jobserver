@@ -4,6 +4,7 @@ import java.util
 import java.util.Map.Entry
 
 import com.typesafe.config.Config
+import net.spy.memcached.compat.log.LoggerFactory
 
 import scala.util.Try
 
@@ -12,12 +13,15 @@ import scala.util.Try
   * The oldest entries by time of last access will be removed when the number of entries exceeds
   * cacheSize.
   * For definitions of cacheSize and loadingFactor, see the docs for java.util.LinkedHashMap
+  *
   * @see LinkedHashMap
   */
 class LRUCache[K, V](cfg: Config) extends Cache[K, V] {
-
+  private val logger = LoggerFactory.getLogger(getClass)
   private val cacheSize = Try(cfg.getInt("cache-size")).getOrElse(10000)
   private val loadingFactor = Try(cfg.getDouble("loading-factor")).getOrElse(0.75).toFloat
+
+  logger.debug(s"Initilizing $getClass with Size: $cacheSize, Loading Factor: $loadingFactor")
 
   private val cache = {
     val initialCapacity = math.ceil(cacheSize / loadingFactor).toInt + 1
@@ -35,8 +39,10 @@ class LRUCache[K, V](cfg: Config) extends Cache[K, V] {
   override def getOption(k: K): Option[V] = Option(this.get(k))
 
   override def getOrPut(k: K, v: => V): V = {
+    logger.debug(s"Getting $k from cache...")
     cache.get(k) match {
       case null =>
+        logger.debug(s"$k does not exist in cache, adding it...")
         cache.put(k, v)
         misses += 1
         v
@@ -50,5 +56,5 @@ class LRUCache[K, V](cfg: Config) extends Cache[K, V] {
 }
 
 object LRUCache {
-  def apply[K,V](cfg: Config): LRUCache[K,V] = new LRUCache[K,V](cfg)
+  def apply[K, V](cfg: Config): LRUCache[K, V] = new LRUCache[K, V](cfg)
 }

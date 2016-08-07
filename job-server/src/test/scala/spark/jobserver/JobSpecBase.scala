@@ -5,7 +5,6 @@ import akka.testkit.{ImplicitSender, TestKit}
 import com.typesafe.config.{Config, ConfigFactory}
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
-import spark.jobserver.common.akka
 import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.context.DefaultSparkContextFactory
 import spark.jobserver.io.JobDAO
@@ -15,7 +14,7 @@ import scala.collection.JavaConverters._
  * Provides a base Config for tests.  Override the vals to configure.  Mix into an object.
  * Also, defaults for values not specified here could be provided as java system properties.
  */
-trait JobSpecConfig {
+trait JobSpecConfig extends Serializable {
 
   val JobResultCacheSize = Integer.valueOf(30)
   // number of cores to allocate. Required.
@@ -54,11 +53,12 @@ trait JobSpecConfig {
     ConfigFactory.parseMap(ConfigMap.asJava).withFallback(ConfigFactory.defaultOverrides())
   }
 
+  @transient
   def getNewSystem: ActorSystem = ActorSystem("test", config)
 }
 
 abstract class JobSpecBaseBase(system: ActorSystem) extends TestKit(system) with ImplicitSender
-with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
+with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll with Serializable {
   var dao: JobDAO = _
   var daoActor: ActorRef = _
   var manager: ActorRef = _

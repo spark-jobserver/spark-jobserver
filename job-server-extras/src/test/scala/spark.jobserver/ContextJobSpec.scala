@@ -2,19 +2,20 @@ package spark.jobserver
 
 import com.typesafe.config.ConfigFactory
 import spark.jobserver.io.JobDAOActor
+import scala.concurrent.duration._
 
 /**
  * This is just to test that you cannot load a SqlJob into a normal job context.
  */
 object ContextJobSpec extends JobSpecConfig
 
-class ContextJobSpec extends JobSpecBase(ContextJobSpec.getNewSystem) {
-  import scala.concurrent.duration._
+class ContextJobSpec extends JobSpecBase(ContextJobSpec.getNewSystem) with Serializable {
+
 
   val classPrefix = "spark.jobserver."
   private val sqlTestClass = classPrefix + "SqlLoaderJob"
 
-  protected val emptyConfig = ConfigFactory.parseString("spark.master = bar")
+  protected val emptyConfig = ConfigFactory.empty()
 
   before {
     dao = new InMemoryDAO

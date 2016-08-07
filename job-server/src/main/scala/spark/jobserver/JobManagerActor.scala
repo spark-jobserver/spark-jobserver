@@ -225,6 +225,7 @@ class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
       case Good(container)       => container
       case Bad(JobClassNotFound) => return failed(NoSuchClass)
       case Bad(JobWrongType)     => return failed(WrongJobType)
+      //case Bad(JobLoadError(ex)) => throw ex
       case Bad(JobLoadError(ex)) => return failed(JobLoadingError(ex))
     }
 

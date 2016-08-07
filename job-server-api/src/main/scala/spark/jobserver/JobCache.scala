@@ -4,6 +4,7 @@ import org.joda.time.DateTime
 import spark.jobserver.api.JSparkJob
 
 trait SparkJobInfo
+
 case class JobJarInfo(constructor: () => api.SparkJobBase,
                       className: String,
                       jarFilePath: String) extends SparkJobInfo

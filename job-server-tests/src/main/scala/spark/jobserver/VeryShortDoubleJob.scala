@@ -7,7 +7,7 @@ import org.apache.spark._
  * A very short job for stress tests purpose.
  * Small data. Double every value in the data.
  */
-object VeryShortDoubleJob extends SparkJob {
+class VeryShortDoubleJob extends SparkJob {
   private val data = Array(1, 2, 3)
 
   def main(args: Array[String]) {

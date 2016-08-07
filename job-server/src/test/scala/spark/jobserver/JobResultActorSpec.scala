@@ -8,6 +8,7 @@ import spark.jobserver.common.akka.AkkaTestUtils
 
 
 object JobResultActorSpec {
+  @transient
   val system = ActorSystem("test")
 }
 

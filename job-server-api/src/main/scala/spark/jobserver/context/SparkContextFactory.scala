@@ -85,7 +85,8 @@ trait ScalaContextFactory extends SparkContextFactory {
       jobCache.getSparkJob(appName, uploadTime, classPath)
     } catch {
       case _: ClassNotFoundException => return Bad(JobClassNotFound)
-      case err: Exception            => return Bad(JobLoadError(err))
+      case err: Exception => throw err
+      //case err: Exception            => return Bad(JobLoadError(err))
     }
 
     val job = jobJarInfo.constructor()

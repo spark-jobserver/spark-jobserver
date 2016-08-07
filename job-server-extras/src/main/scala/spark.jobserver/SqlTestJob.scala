@@ -7,8 +7,9 @@ import org.apache.spark.sql.SQLContext
  * A test job that accepts a SQLContext, as opposed to the regular SparkContext.
  * Just initializes some dummy data into a table.
  */
-object SqlLoaderJob extends SparkSqlJob {
-  case class Address(firstName: String, lastName: String, street: String, city: String)
+case class Address(firstName: String, lastName: String, street: String, city: String) extends Serializable
+
+class SqlLoaderJob extends SparkSqlJob {
 
   val addresses = Seq(
     Address("Bob", "Charles", "101 A St.", "San Jose"),
@@ -29,7 +30,7 @@ object SqlLoaderJob extends SparkSqlJob {
 /**
  * This job simply runs the SQL in the config.
  */
-object SqlTestJob extends SparkSqlJob {
+class SqlTestJob extends SparkSqlJob {
   def validate(sql: SQLContext, config: Config): SparkJobValidation = SparkJobValid
 
   def runJob(sql: SQLContext, config: Config): Any = {

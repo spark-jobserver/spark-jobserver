@@ -21,8 +21,8 @@ import scala.util.{Random, Try}
   * Longer duration increases precision.
   *
   */
-object LongPiJob extends api.SparkJob {
-  private val rand = new Random(now)
+class LongPiJob extends api.SparkJob with Serializable {
+  private val rand = new Random(now) with Serializable
 
   type JobData = Int
   type JobOutput = Double
