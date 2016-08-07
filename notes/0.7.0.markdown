@@ -20,3 +20,4 @@
 * Per-user authenticated contexts, PR #469 (@TimMaltGermany)
 * Fix for Delete file API issue, #507 (@noorul) 
 * Fix UI not showing running jobs if completed jobs fills the limit, #547 (@TianLangStudio)
+* Fix Jar name issue on Windows (@TianLangStudio)
