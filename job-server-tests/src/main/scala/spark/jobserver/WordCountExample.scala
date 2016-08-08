@@ -17,7 +17,7 @@ import scala.util.Try
  *
  * validate() returns SparkJobInvalid if there is no input.string
  */
-class WordCountExample extends SparkJob {
+object WordCountExample extends SparkJob {
   def main(args: Array[String]) {
     val conf = new SparkConf().setMaster("local[4]").setAppName("WordCountExample")
     val sc = new SparkContext(conf)
@@ -45,7 +45,7 @@ class WordCountExample extends SparkJob {
  * - the config input no longer is mixed with context settings, it purely has the job input
  * - the job could parse the jobId and other environment vars from JobEnvironment
  */
-class WordCountExampleNewApi extends NewSparkJob {
+object WordCountExampleNewApi extends NewSparkJob {
   type JobData = Seq[String]
   type JobOutput = collection.Map[String, Long]
 

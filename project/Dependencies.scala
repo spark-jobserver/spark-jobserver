@@ -59,17 +59,11 @@ object Dependencies {
   lazy val coreTestDeps = Seq(
     scalaTestDep,
     "com.typesafe.akka" %% "akka-testkit" % akka % "test",
-    "io.spray" %% "spray-testkit" % spray % "test",
-    "com.github.zxl0714" % "redis-mock" % "0.1"
+    "io.spray" %% "spray-testkit" % spray % "test"
   )
 
   lazy val securityDeps = Seq(
      "org.apache.shiro" % "shiro-core" % shiro
-  )
-
-  lazy val cacheDeps = Seq(
-    "net.debasishg" %% "redisclient" % "3.0",
-    "com.bionicspirit" %% "shade" % "1.7.4"
   )
 
   lazy val serverDeps = apiDeps ++ miscDeps

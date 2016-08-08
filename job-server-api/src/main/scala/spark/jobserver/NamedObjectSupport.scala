@@ -2,13 +2,13 @@ package spark.jobserver
 
 import akka.util.Timeout
 
-trait NamedObject extends Serializable
+trait NamedObject
 
 /**
  * implementations of this abstract class should handle the specifics
  * of each named object's persistence
  */
-abstract class NamedObjectPersister[O <: NamedObject] extends Serializable {
+abstract class NamedObjectPersister[O <: NamedObject] {
 
   /**
    * persists an object with the given name
@@ -41,7 +41,7 @@ abstract class NamedObjectPersister[O <: NamedObject] extends Serializable {
  * Note that to take advantage of NamedObjectSupport, a job must mix this in and use the APIs here instead of
  * the native DataFrame/RDD `cache()`, otherwise we will not know about the names.
  */
-trait NamedObjects extends Serializable {
+trait NamedObjects {
 
   def defaultTimeout : Timeout
 
@@ -139,4 +139,4 @@ trait NamedObjects extends Serializable {
 // NamedObjectSupport is not needed anymore due to JobEnvironment in api.SparkJobBase.  It is also
 // imported into the old spark.jobserver.SparkJobBase automatically for compatibility.
 @Deprecated
-trait NamedObjectSupport extends Serializable
+trait NamedObjectSupport

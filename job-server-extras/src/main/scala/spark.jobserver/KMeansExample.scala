@@ -14,7 +14,7 @@ import org.apache.spark.sql.{DataFrame, Row, SQLContext}
  *
  * validate() returns SparkJobInvalid if there is no input.string
  */
-class KMeansExample extends SparkJob with NamedRddSupport {
+object KMeansExample extends SparkJob with NamedRddSupport {
   val NUM_ITERATIONS = 100
   val K = 7
 

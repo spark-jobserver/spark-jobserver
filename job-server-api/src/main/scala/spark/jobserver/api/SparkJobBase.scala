@@ -6,13 +6,13 @@ import org.scalactic._
 
 import spark.jobserver.NamedObjects
 
-trait JobEnvironment extends Serializable {
+trait JobEnvironment {
   def jobId: String
   def namedObjects: NamedObjects
   def contextConfig: Config
 }
 
-trait ValidationProblem extends Serializable
+trait ValidationProblem
 
 case class SingleProblem(problem: String) extends ValidationProblem
 
@@ -22,7 +22,7 @@ case class SingleProblem(problem: String) extends ValidationProblem
  *  The idea is that validate() will translate the config into another type, and runJob will
  *  operate on that type.
  */
-trait SparkJobBase extends java.io.Serializable {
+trait SparkJobBase {
   type C
   type JobData
   type JobOutput

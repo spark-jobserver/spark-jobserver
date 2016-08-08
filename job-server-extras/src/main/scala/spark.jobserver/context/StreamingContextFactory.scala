@@ -1,11 +1,11 @@
 package spark.jobserver.context
 
 import com.typesafe.config.Config
-import net.spy.memcached.compat.log.LoggerFactory
-import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.streaming.{Milliseconds, StreamingContext}
+import org.apache.spark.{SparkConf, SparkContext}
 import org.joda.time.DateTime
 import org.scalactic.{Bad, Good, Or}
+import org.slf4j.LoggerFactory
 import spark.jobserver._
 import spark.jobserver.api.JSparkJob
 

@@ -9,7 +9,7 @@ import scala.concurrent.duration._
  */
 object ContextJobSpec extends JobSpecConfig
 
-class ContextJobSpec extends JobSpecBase(ContextJobSpec.getNewSystem) with Serializable {
+class ContextJobSpec extends JobSpecBase(ContextJobSpec.getNewSystem) {
 
 
   val classPrefix = "spark.jobserver."

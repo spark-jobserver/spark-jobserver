@@ -4,7 +4,7 @@ import java.util
 import java.util.Map.Entry
 
 import com.typesafe.config.Config
-import net.spy.memcached.compat.log.LoggerFactory
+import org.slf4j.LoggerFactory
 
 import scala.util.Try
 
