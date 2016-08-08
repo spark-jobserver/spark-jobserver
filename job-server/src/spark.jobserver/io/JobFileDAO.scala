@@ -9,6 +9,7 @@ import scala.collection.mutable
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
 
+@deprecated("Use JobSqlDAO instead for stability.", "0.7.0")
 class JobFileDAO(config: Config) extends JobDAO {
   private val logger = LoggerFactory.getLogger(getClass)
 

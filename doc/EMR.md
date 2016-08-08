@@ -80,6 +80,8 @@ InstanceCount=10,BidPrice=2.99,Name=sparkSlave,InstanceGroupType=CORE,InstanceTy
    master = "yarn-client"
    jobserver {
      port = 8090
+     # Note: JobFileDAO is deprecated from v0.7.0 because of issues in
+     # production and will be removed in future.
      jobdao = spark.jobserver.io.JobFileDAO
      filedao {
        rootdir = /mnt/tmp/spark-jobserver/filedao/data
