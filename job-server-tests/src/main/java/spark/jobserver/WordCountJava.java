@@ -29,7 +29,7 @@ public class WordCountJava extends JSparkContextJob<Map<String, Long>> {
     }
 
     @Override
-    public Map<String, Long> runJob(JavaSparkContext context, JobEnvironment cfg, Config data) {
+    public Map<String, Long> runJob(JavaSparkContext context, JobEnvironment jEnv, Config data) {
         return context.parallelize(data.getStringList("input")).countByValue();
     }
 

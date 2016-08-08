@@ -9,7 +9,7 @@ import spark.jobserver.api.JSparkContextJob;
 public class JavaJobTest extends JSparkContextJob<Integer> {
 
     @Override
-    public Integer runJob(JavaSparkContext context, JobEnvironment cfg, Config data) {
+    public Integer runJob(JavaSparkContext context, JobEnvironment jEnv, Config data) {
         return 0;
     }
 

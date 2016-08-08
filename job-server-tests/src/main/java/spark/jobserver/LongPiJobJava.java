@@ -34,7 +34,7 @@ public class LongPiJobJava extends JSparkContextJob<Double> {
     }
 
     @Override
-    public Double runJob(JavaSparkContext context, JobEnvironment cfg, Config data) {
+    public Double runJob(JavaSparkContext context, JobEnvironment jEnv, Config data) {
         long hit = 0L;
         long total = 0L;
         int duration = data.getInt("duration");

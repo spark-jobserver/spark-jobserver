@@ -9,7 +9,7 @@ import spark.jobserver.context.JSparkSqlJob;
 
 public class SqlTestJob extends JSparkSqlJob<Long> {
     @Override
-    public Long runJob(SQLContext context, JobEnvironment cfg, Config data) {
+    public Long runJob(SQLContext context, JobEnvironment jEnv, Config data) {
         final DataFrame df = context.range(1, 100).toDF();
         return df.count();
     }

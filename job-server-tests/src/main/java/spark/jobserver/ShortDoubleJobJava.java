@@ -27,7 +27,7 @@ public class ShortDoubleJobJava extends JSparkContextJob<List<Double>> {
     }
 
     @Override
-    public List<Double> runJob(JavaSparkContext context, JobEnvironment cfg, Config data) {
+    public List<Double> runJob(JavaSparkContext context, JobEnvironment jEnv, Config data) {
         final JavaRDD<Double> rdd = context.parallelize(Arrays.asList(this.data));
         return rdd.map(new Function<Double, Double>() {
             @Override

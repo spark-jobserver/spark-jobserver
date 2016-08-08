@@ -15,7 +15,7 @@ import java.util.LinkedList;
 
 public class StreamingTestJob extends JSparkStreamingJob<Void> {
     @Override
-    public Void runJob(StreamingContext context, JobEnvironment cfg, Config data) {
+    public Void runJob(StreamingContext context, JobEnvironment jEnv, Config data) {
         final JavaStreamingContext jsc = new JavaStreamingContext(context);
         final JavaRDD<Integer> d = jsc.sparkContext().parallelize(Arrays.asList(1, 2, 3, 4, 5));
 

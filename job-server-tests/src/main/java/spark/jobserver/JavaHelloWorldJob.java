@@ -10,7 +10,7 @@ import spark.jobserver.api.JSparkContextJob;
 public class JavaHelloWorldJob extends JSparkContextJob<String> {
 
     @Override
-    public String runJob(JavaSparkContext context, JobEnvironment cfg, Config data) {
+    public String runJob(JavaSparkContext context, JobEnvironment jEnv, Config data) {
         return data.getString("data");
     }
 

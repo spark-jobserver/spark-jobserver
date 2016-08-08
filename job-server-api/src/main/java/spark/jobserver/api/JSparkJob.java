@@ -21,13 +21,13 @@ public abstract class JSparkJob<C, R> implements Serializable {
      * type rather than having to deal with a nebulous ContextLike
      *
      * @param context The SparkContext being passed in
-     * @param cfg     The JobEnvironment the job is running in
+     * @param jEnv     The JobEnvironment the job is running in
      * @param data    The validated job config from the validate() method
      * @return R
      */
-    final public R runJobImpl(ContextLike context, JobEnvironment cfg, Config data) {
+    final public R runJobImpl(ContextLike context, JobEnvironment jEnv, Config data) {
         final C ctx = this.findContext(context);
-        return this.runJob(ctx, cfg, data);
+        return this.runJob(ctx, jEnv, data);
     }
 
     final public JobValidation validateImpl(ContextLike context, JobEnvironment jEnv, Config cfg) {
@@ -49,12 +49,12 @@ public abstract class JSparkJob<C, R> implements Serializable {
      * type (R) are pamaterized and will be filled in down the chain.
      *
      * @param context The actual type of the SparkContext
-     * @param cfg     The JobEnvironment the job is running in
+     * @param jEnv     The JobEnvironment the job is running in
      * @param data    The validated data passed from the validate method
      * @return The job results of type R
      */
 
-    abstract public R runJob(C context, JobEnvironment cfg, Config data);
+    abstract public R runJob(C context, JobEnvironment jEnv, Config data);
 
     abstract public JobValidation validate(C context, JobEnvironment jEnv, Config cfg);
 }
