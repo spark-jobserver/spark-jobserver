@@ -1,6 +1,6 @@
 package spark.jobserver.io
 
-import java.io.{BufferedOutputStream, File, FileOutputStream}
+import java.io.File
 import java.sql.Timestamp
 import javax.sql.DataSource
 
@@ -16,7 +16,7 @@ import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
 import scala.reflect.runtime.universe
 
-class JobSqlDAO(config: Config) extends JobDAO {
+class JobSqlDAO(config: Config) extends JobDAO with FileCasher {
   val slickDriverClass = config.getString("spark.jobserver.sqldao.slick-driver")
   val jdbcDriverClass = config.getString("spark.jobserver.sqldao.jdbc-driver")
 
@@ -29,8 +29,8 @@ class JobSqlDAO(config: Config) extends JobDAO {
   private val logger = LoggerFactory.getLogger(getClass)
 
   // NOTE: below is only needed for H2 drivers
-  private val rootDir = config.getString("spark.jobserver.sqldao.rootdir")
-  private val rootDirFile = new File(rootDir)
+  val rootDir = config.getString("spark.jobserver.sqldao.rootdir")
+  val rootDirFile = new File(rootDir)
   logger.info("rootDir is " + rootDirFile.getAbsolutePath)
 
   // Definition of the tables
@@ -106,11 +106,7 @@ class JobSqlDAO(config: Config) extends JobDAO {
 
   private def init() {
     // Create the data directory if it doesn't exist
-    if (!rootDirFile.exists()) {
-      if (!rootDirFile.mkdirs()) {
-        throw new RuntimeException("Could not create directory " + rootDir)
-      }
-    }
+    initFileDirectory()
 
     // Flyway migration
     val flyway = new Flyway()
@@ -162,7 +158,7 @@ class JobSqlDAO(config: Config) extends JobDAO {
   }
 
   override def retrieveBinaryFile(appName: String, binaryType: BinaryType, uploadTime: DateTime): String = {
-    val binFile = new File(rootDir, createBinaryName(appName, uploadTime) + s".${binaryType.extension}")
+    val binFile = new File(rootDir, createBinaryName(appName, binaryType, uploadTime))
     if (!binFile.exists()) {
       fetchAndCacheBinFile(appName, binaryType, uploadTime)
     }
@@ -194,25 +190,7 @@ class JobSqlDAO(config: Config) extends JobDAO {
     db.run(query.head)
   }
 
-  // Cache the jar file into local file system.
-  private def cacheBinary(appName: String,
-                          binaryType: BinaryType,
-                          uploadTime: DateTime,
-                          binBytes: Array[Byte]) {
-    val outFile =
-      new File(rootDir, createBinaryName(appName, uploadTime) + s".${binaryType.extension}")
-    val bos = new BufferedOutputStream(new FileOutputStream(outFile))
-    try {
-      logger.debug("Writing {} bytes to file {}", binBytes.length, outFile.getPath)
-      bos.write(binBytes)
-      bos.flush()
-    } finally {
-      bos.close()
-    }
-  }
 
-  private def createBinaryName(appName: String, uploadTime: DateTime): String =
-    appName + "-" + uploadTime.toString("yyyyMMdd_hhmmss_SSS")
 
   // Convert from joda DateTime to java.sql.Timestamp
   private def convertDateJodaToSql(dateTime: DateTime): Timestamp = new Timestamp(dateTime.getMillis)
@@ -303,7 +281,7 @@ class JobSqlDAO(config: Config) extends JobDAO {
           BinaryInfo(app, BinaryType.fromString(binType), convertDateSqlToJoda(upload)),
           classpath,
           convertDateSqlToJoda(start),
-          end.map(convertDateSqlToJoda(_)),
+          end.map(convertDateSqlToJoda),
           err.map(new Throwable(_)))
       }.headOption
 

@@ -1,5 +1,5 @@
 CREATE TABLE "JARS" (
-  "JAR_ID"         SERIAL                         NOT NULL PRIMARY KEY,
+  "JAR_ID"          SERIAL                        NOT NULL PRIMARY KEY,
   "APP_NAME"        VARCHAR(255)                  NOT NULL,
   "UPLOAD_TIME"     TIMESTAMP WITHOUT TIME ZONE   NOT NULL,
   "JAR"             BYTEA                         NOT NULL

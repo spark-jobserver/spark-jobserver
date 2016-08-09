@@ -192,6 +192,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
           sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, Any]] should be (Map(
+          JobId -> "foo",
           ResultKey -> Map(
             masterConfKey->"overriden",
             bindConfKey -> bindConfVal,
@@ -223,6 +224,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, Any]] should be (Map(
+          JobId -> "foo",
           ResultKey -> Map(
             masterConfKey -> masterConfVal,
             bindConfKey -> bindConfVal,
@@ -251,6 +253,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, Any]] should be (Map(
+          JobId -> "foo",
           ResultKey -> Map(
             masterConfKey -> masterConfVal,
             bindConfKey -> bindConfVal,
@@ -347,7 +350,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         status should be (OK)
         val result = responseAs[Map[String, Any]]
         result(StatusKey) should equal(JobStatus.Error)
-        result.keys should equal (Set(StatusKey, ResultKey))
+        result.keys should equal (Set(JobId, StatusKey, ResultKey))
         val exceptionMap = result(ResultKey).asInstanceOf[Map[String, Any]]
         exceptionMap should contain key ("cause")
         exceptionMap should contain key ("causingClass")
