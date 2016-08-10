@@ -505,7 +505,7 @@ database created with necessary rights granted to user.
 
     sqldao {
       # Slick database driver, full classpath
-      slick-driver = scala.slick.driver.PostgresDriver
+      slick-driver = slick.driver.PostgresDriver
 
       # JDBC driver, full classpath
       jdbc-driver = org.postgresql.Driver
