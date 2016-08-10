@@ -51,9 +51,6 @@ if __name__ == "__main__":
             context = customContext
         else:
             exit_with_failure("Expected JavaSparkContext, SQLContext or HiveContext but received "+repr(contextClass), 2)
-    jobConfig = ConfigFactory.parse_string(entry_point.jobConfigAsHocon())
-    jobClass = import_class(entry_point.jobClass())
-    job = jobClass()
     try:
         jobData = job.validate(context, None, jobConfig)
     except Exception as error:
