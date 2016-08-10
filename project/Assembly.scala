@@ -1,5 +1,5 @@
+import sbt.Keys._
 import sbt._
-import Keys._
 import sbtassembly.AssemblyPlugin.autoImport._
 
 object Assembly {

@@ -1,0 +1,76 @@
+package spark.jobserver
+
+import java.io.{BufferedOutputStream, FileOutputStream}
+
+import com.typesafe.config.Config
+import org.joda.time.DateTime
+import spark.jobserver.io.{JobDAO, JobInfo, JobStatus}
+
+import scala.concurrent._
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.collection.mutable
+
+/**
+ * In-memory DAO for easy unit testing
+ */
+class InMemoryDAO extends JobDAO {
+  val jars = mutable.HashMap.empty[(String, DateTime), Array[Byte]]
+
+  def saveJar(appName: String, uploadTime: DateTime, jarBytes: Array[Byte]) {
+    jars((appName, uploadTime)) = jarBytes
+  }
+
+  def getApps: Future[Map[String, DateTime]] = {
+    Future {
+      jars.keys
+      .groupBy(_._1)
+      .map { case (appName, appUploadTimeTuples) =>
+        appName -> appUploadTimeTuples.map(_._2).toSeq.head
+      }
+    }
+  }
+
+  def retrieveJarFile(appName: String, uploadTime: DateTime): String = {
+    // Write the jar bytes to a temporary file
+    val outFile = java.io.File.createTempFile("InMemoryDAO", ".jar")
+    outFile.deleteOnExit()
+    val bos = new BufferedOutputStream(new FileOutputStream(outFile))
+    try {
+      bos.write(jars((appName, uploadTime)))
+    } finally {
+      bos.close()
+    }
+    outFile.getAbsolutePath
+  }
+
+  val jobInfos = mutable.HashMap.empty[String, JobInfo]
+
+  def saveJobInfo(jobInfo: JobInfo) { jobInfos(jobInfo.jobId) = jobInfo }
+
+  def getJobInfos(limit: Int, statusOpt: Option[String] = None): Future[Seq[JobInfo]] = Future {
+    val allJobs = jobInfos.values.toSeq.sortBy(_.startTime.toString())
+    val filterJobs = statusOpt match {
+      case Some(JobStatus.Running) => {
+        allJobs.filter(jobInfo => !jobInfo.endTime.isDefined && !jobInfo.error.isDefined)
+      }
+      case Some(JobStatus.Error) => allJobs.filter(_.error.isDefined)
+      case Some(JobStatus.Finished) => {
+        allJobs.filter(jobInfo => jobInfo.endTime.isDefined && !jobInfo.error.isDefined)
+      }
+      case _ => allJobs
+    }
+    filterJobs.take(limit)
+  }
+
+  def getJobInfo(jobId: String): Future[Option[JobInfo]] = Future {
+    jobInfos.get(jobId)
+  }
+
+  val jobConfigs = mutable.HashMap.empty[String, Config]
+
+  def saveJobConfig(jobId: String, jobConfig: Config) { jobConfigs(jobId) = jobConfig }
+
+  def getJobConfigs: Future[Map[String, Config]] = Future {
+    jobConfigs.toMap
+  }
+}

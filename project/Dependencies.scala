@@ -33,7 +33,6 @@ object Dependencies {
   val sparkVersion = sys.env.getOrElse("SPARK_VERSION", spark)
   lazy val sparkDeps = Seq(
     "org.apache.spark" %% "spark-core" % sparkVersion % "provided" excludeAll(excludeNettyIo, excludeQQ),
-    // Force netty version.  This avoids some Spark netty dependency problem.
     "io.netty" % "netty-all" % "4.0.29.Final"
   )
 
@@ -67,8 +66,8 @@ object Dependencies {
      "org.apache.shiro" % "shiro-core" % shiro
   )
 
-  lazy val serverDeps = apiDeps
-  lazy val apiDeps = sparkDeps ++ miscDeps :+ typeSafeConfigDeps :+ scalaTestDep
+  lazy val serverDeps = apiDeps ++ miscDeps
+  lazy val apiDeps = sparkDeps ++ miscDeps :+ typeSafeConfigDeps
 
   val repos = Seq(
     "Typesafe Repo" at "http://repo.typesafe.com/typesafe/releases/",
