@@ -1,6 +1,8 @@
 #Scala #akka @ApacheSpark
 
 * New Scala API!   The expanded API includes passing in a `JobEnvironment` which provides access to job ID, context information; it also offers more type safety in job return type, validation etc. (@velvia, others)
+
+* Deprecate JobFileDAO.  H2 is now the default.  Furthermore, H2 and JobFileDAO cannot be used with context-per-jvm. (@noorul)
 * Context creation API (POST /contexts) now takes a config in the POST body!  (@casey-green)
 * Make create job API to return more information (@noorul)
 * Upgrade Slick to 3.1.1 (@hntd187)
