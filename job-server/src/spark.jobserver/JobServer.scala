@@ -55,12 +55,22 @@ object JobServer {
     val clazz = Class.forName(config.getString("spark.jobserver.jobdao"))
     val ctor = clazz.getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
     try {
+      val contextPerJvm = config.getBoolean("spark.jobserver.context-per-jvm")
+      // Check if we are using correct DB backend when context-per-jvm is enabled.
+      // JobFileDAO and H2 mem is not supported.
+      if (contextPerJvm) {
+        if (clazz.getName == "spark.jobserver.io.JobFileDAO") {
+          throw new RuntimeException("JobFileDAO is not supported with context-per-jvm, use JobSqlDAO.")
+        } else if (clazz.getName == "spark.jobserver.io.JobSqlDAO" &&
+          config.getString("spark.jobserver.sqldao.jdbc.url").startsWith("jdbc:h2:mem")) {
+            throw new RuntimeException("H2 mem backend is not support with context-per-jvm.")
+        }
+      }
       val jobDAO = ctor.newInstance(config).asInstanceOf[JobDAO]
       val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO), "dao-manager")
       val dataManager = system.actorOf(Props(classOf[DataManagerActor],
           new DataFileDAO(config)), "data-manager")
       val jarManager = system.actorOf(Props(classOf[JarManager], daoActor), "jar-manager")
-      val contextPerJvm = config.getBoolean("spark.jobserver.context-per-jvm")
       val supervisor =
         system.actorOf(Props(if (contextPerJvm) { classOf[AkkaClusterSupervisorActor] }
                              else               { classOf[LocalContextSupervisorActor] }, daoActor),

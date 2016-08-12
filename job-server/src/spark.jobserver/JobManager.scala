@@ -44,12 +44,18 @@ object JobManager {
     } else {
       defaultConfig
     }
+
+    val system = makeSystem(config.resolve())
+    val clazz = Class.forName(config.getString("spark.jobserver.jobdao"))
+    val ctor = clazz.getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
+    val jobDAO = ctor.newInstance(config).asInstanceOf[JobDAO]
+    val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO), "dao-manager-jobmanager")
+
     logger.info("Starting JobManager named " + managerName + " with config {}",
       config.getConfig("spark").root.render())
     logger.info("..and context config:\n" + contextConfig.root.render)
 
-    val system = makeSystem(config.resolve())
-    val jobManager = system.actorOf(JobManagerActor.props(contextConfig), managerName)
+    val jobManager = system.actorOf(JobManagerActor.props(contextConfig, daoActor), managerName)
 
     //Join akka cluster
     logger.info("Joining cluster at address {}", clusterAddress)
