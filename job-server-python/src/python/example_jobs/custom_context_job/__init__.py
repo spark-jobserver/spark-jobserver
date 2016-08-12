@@ -1,14 +1,17 @@
 from sparkjobserver.api import SparkJob, build_problems
 from pyspark import SparkContext
 
+
 class CustomContext(SparkContext):
 
     def __init__(self, gateway, customContext, sparkConf):
         self.jcustomContext = customContext
-        SparkContext.__init__(self, gateway = gateway, jsc = customContext, conf = sparkConf)
+        SparkContext.__init__(
+                self, gateway=gateway, jsc=customContext, conf=sparkConf)
 
     def customMethod(self):
         return self.jcustomContext.customMethod()
+
 
 class CustomContextJob(SparkJob):
 

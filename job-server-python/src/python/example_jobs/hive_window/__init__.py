@@ -1,6 +1,7 @@
 from sparkjobserver.api import SparkJob, build_problems
 from pyspark.sql import HiveContext
 
+
 class HiveWindowJob(SparkJob):
 
     def validate(self, context, runtime, config):
@@ -17,14 +18,15 @@ class HiveWindowJob(SparkJob):
         else:
             return build_problems(problems)
 
-
     def run_job(self, context, runtime, data):
         rdd = context._sc.parallelize(data)
         df = context.createDataFrame(rdd, ['name', 'age', 'salary'])
         df.registerTempTable('people')
-        #Window functions only available on HiveContext so differentiates from a SQLContext job
+        # Window functions only available on
+        # HiveContext so differentiates from a SQLContext job
         query = context.sql("""
-          SELECT name, age, RANK() OVER (partition by age order by name) FROM people ORDER BY age
+          SELECT name, age, RANK() OVER (partition by age order by name)
+          FROM people ORDER BY age
         """)
         results = query.collect()
-        return [ (r[0], r[1], r[2]) for r in results]
+        return [(r[0], r[1], r[2]) for r in results]

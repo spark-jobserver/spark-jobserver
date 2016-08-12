@@ -1,5 +1,6 @@
 from sparkjobserver.api import SparkJob, build_problems
 
+
 class WordCountSparkJob(SparkJob):
 
     def validate(self, context, runtime, config):

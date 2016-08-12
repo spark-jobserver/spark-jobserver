@@ -4,6 +4,7 @@ from pyspark import SparkConf, SparkContext
 from pyspark.sql import SQLContext, HiveContext
 from sparkjobserver.api import SparkJob, build_problems, ValidationProblem
 
+
 class WordCountSparkJob(SparkJob):
     """
     Simple example of a SparkContext job for use in tests
@@ -17,6 +18,7 @@ class WordCountSparkJob(SparkJob):
 
     def run_job(self, context, runtime, data):
         return context.parallelize(data).countByValue()
+
 
 class SQLJob(SparkJob):
     """
@@ -42,9 +44,12 @@ class SQLJob(SparkJob):
         rdd = context._sc.parallelize(data)
         df = context.createDataFrame(rdd, ['name', 'age', 'salary'])
         df.registerTempTable('people')
-        query = context.sql("SELECT age, AVG(salary) from people GROUP BY age ORDER BY age")
+        query = context.sql("""
+            SELECT age, AVG(salary)
+            from people GROUP BY age ORDER BY age""")
         results = query.collect()
-        return [ (r[0], r[1]) for r in results]
+        return [(r[0], r[1]) for r in results]
+
 
 class TestSJSApi(unittest.TestCase):
 
@@ -64,12 +69,18 @@ class TestSJSApi(unittest.TestCase):
 
     def test_validation_success(self):
         job = WordCountSparkJob()
-        result = job.validate(self.sc, None, ConfigFactory.parse_string('input.strings = ["a", "a", "b"]'))
+        result = job.validate(
+                self.sc,
+                None,
+                ConfigFactory.parse_string('input.strings = ["a", "a", "b"]'))
         self.assertEqual(result, ['a', 'a', 'b'])
 
     def test_run_job(self):
         job = WordCountSparkJob()
-        jobData = job.validate(None, self.sc, ConfigFactory.parse_string('input.strings = ["a", "a", "b"]'))
+        jobData = job.validate(
+                None,
+                self.sc,
+                ConfigFactory.parse_string('input.strings = ["a", "a", "b"]'))
         result = job.run_job(self.sc, None, jobData)
         self.assertEqual(result['a'], 2)
         self.assertEqual(result['b'], 1)
@@ -98,7 +109,6 @@ class TestSJSApi(unittest.TestCase):
         jobData = job.validate(sqlContext, None, config)
         result = job.run_job(sqlContext, None, jobData)
         self.assertEqual([(20, 1250), (21, 1500)], result)
-
 
     def test_run_hive_job(self):
         job = SQLJob()
