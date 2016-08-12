@@ -52,7 +52,9 @@ case class TestEndpoint(context: Any,
                        jobClass: String,
                        py4JImports: Seq[String]){
 
-  def jobConfigAsHocon: String = jobConfig.root().render(ConfigRenderOptions.concise())
+  val jobConfigAsHocon: String = jobConfig.root().render(ConfigRenderOptions.concise())
+  val contextConfigAsHocon = jobConfigAsHocon
+  val jobId= "ABC"
 
   var validationProblems: Option[Seq[String]] = None
 
@@ -107,12 +109,15 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
     setAppName("SubprocessSpec").
     set("spark.sql.shuffle.partitions", "5")
   lazy val sc = new SparkContext(conf)
-  lazy val jsc = new JavaSparkContext(sc)
-    with IdentifiedContext{ def contextType = classOf[JavaSparkContext].getCanonicalName}
-  lazy val sqlContext = new SQLContext(sc)
-    with IdentifiedContext{ def contextType = classOf[SQLContext].getCanonicalName}
-  lazy val hiveContext = new HiveContext(sc)
-    with IdentifiedContext{ def contextType = classOf[HiveContext].getCanonicalName}
+  lazy val jsc = new JavaSparkContext(sc) with IdentifiedContext{
+    def contextType = classOf[JavaSparkContext].getCanonicalName
+  }
+  lazy val sqlContext = new SQLContext(sc) with IdentifiedContext{
+    def contextType = classOf[SQLContext].getCanonicalName
+  }
+  lazy val hiveContext = new HiveContext(sc) with IdentifiedContext{
+    def contextType = classOf[HiveContext].getCanonicalName
+  }
 
   override def afterAll(): Unit = {
     sc.stop()

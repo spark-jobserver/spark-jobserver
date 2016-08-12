@@ -1,26 +1,23 @@
-class JobEnvironment:
-    def __init__(self, job_id, named_objects, context_config):
-        self.jobId = job_id
-        self.namedObjects = named_objects
-        self.contextConfig = context_config
-
-class ValidationProblem:
-    def __init__(self, problem):
-        self.problem = problem
-
-def build_problems(problems):
-    """
-    A helper method for converting a list of string problems into instances
-    of the validation problem class. It is important to return a list of the correct
-    type since otherwise it cannot be differentiated from a list of job data.
-    :param problems: a list of strings describing the problems
-    :return: a list of ValidationProblem objects, one for each string in the input
-    """
-    return [ValidationProblem(p) for p in problems]
+"""
+This module defines the interfaces for Python based
+Spark Job Server Jobs. Due to Python's typing, jobs
+do not need to inherit from these classes but they must
+implement the relevant methods described in SparkJob.
+"""
 
 class SparkJob:
+    """
+    The primary interface for Python jobs in SparkJob server.
+    A job implementation must implement `validate` and `run_job`.
+    `build_context` only needs to be implemented if using a custom
+    context.
+    """
 
     def __init__(self):
+        """
+        All python jobs should have a zero-args constructor.
+        :return: an instance of this job
+        """
         pass
 
     def validate(self, context, runtime, config):
@@ -42,7 +39,7 @@ class SparkJob:
         Could be a sparkcontext, sqlcontext, hivecontext etc. May be reused across jobs
         :param runtime: the JobEnvironment containing run time information pertaining to the job and context.
         :param data: the JobData returned by the validate method
-        :return: the job result
+        :return: the job result OR a list of ValidationProblem objects.
         """
         raise NotImplementedError("Concrete implementations should override run_job")
 
@@ -58,6 +55,48 @@ class SparkJob:
         :return: Should return a python context object of the appropriate type. Will return None if not overridden
         """
         return None
+
+class ValidationProblem:
+    """
+    If the validation stage of a job fails, it MUST return a list of this type
+    of object. This is how the main program differentiates validation problems
+    from valid job data.
+    """
+
+    def __init__(self, problem):
+        """
+
+        :param problem: A string describing the problem
+        :return: An instance of this class
+        """
+        self.problem = problem
+
+def build_problems(problems):
+    """
+    A helper method for converting a list of string problems into instances
+    of the validation problem class. It is important to return a list of the correct
+    type since otherwise it cannot be differentiated from a list of job data.
+    :param problems: a list of strings describing the problems
+    :return: a list of ValidationProblem objects, one for each string in the input
+    """
+    return [ValidationProblem(p) for p in problems]
+
+class JobEnvironment:
+    """
+    The analog of spark.jobserver.api.JobEnvironment in the JVM job api.
+    """
+
+    def __init__(self, job_id, named_objects, context_config):
+        """
+
+        :param job_id: identifier for this job, as a string
+        :param named_objects: NamedObjects not implemented, so should be None
+        :param context_config: the Hocon configuration of the current context
+        :return: an instance of this class
+        """
+        self.jobId = job_id
+        self.namedObjects = named_objects
+        self.contextConfig = context_config
 
 #NamedObjects not currently supported in Python, but below is a skeleton for a possible interface.
 class NamedObject:

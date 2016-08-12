@@ -133,15 +133,10 @@ class PythonSparkContextFactory extends PythonContextFactory {
   override def makeContext(sparkConf: SparkConf,
                            contextConfig: Config,
                            contextName: String): JavaSparkContext with PythonContextLike = {
-
     val sc = new SparkContext(sparkConf)
-
     val jsc = new JavaSparkContext(sc) with PythonContextLike with DefaultContextLikeImplementations {
-
       override val config = contextConfig
-
       override val sparkContext: SparkContext = sc
-
       override val contextType = classOf[JavaSparkContext].getCanonicalName
     }
     jsc.setupTasks()
@@ -163,11 +158,8 @@ class PythonSQLContextFactory extends PythonContextFactory {
                            contextName: String): SQLContext with PythonContextLike = {
     val sc = new SparkContext(sparkConf)
     val jSqlContext = new SQLContext(sc) with PythonContextLike with DefaultContextLikeImplementations {
-
       override val config = contextConfig
-
       override val contextType: String = classOf[SQLContext].getCanonicalName
-
       override def stop(): Unit = sc.stop()
     }
     jSqlContext.setupTasks()
@@ -187,15 +179,11 @@ class PythonHiveContextFactory extends PythonContextFactory {
                            contextName: String): HiveContext with PythonContextLike = {
     val sc = new SparkContext(sparkConf)
     val jHiveContext = new HiveContext(sc) with PythonContextLike with DefaultContextLikeImplementations {
-
       override val contextType: String = classOf[HiveContext].getCanonicalName
-
       override def config: Config = contextConfig
-
       override def stop(): Unit = sc.stop()
     }
     jHiveContext.setupTasks()
     jHiveContext
   }
 }
-

@@ -2,6 +2,7 @@ package spark.jobserver.python
 
 import com.typesafe.config.{ConfigRenderOptions, Config}
 import org.apache.spark.SparkConf
+import spark.jobserver.api.JobEnvironment
 import scala.collection.JavaConverters._
 
 /**
@@ -16,10 +17,19 @@ import scala.collection.JavaConverters._
   */
 case class JobEndpoint[C <: PythonContextLike](context: C,
                                                sparkConf: SparkConf,
+                                               contextConfig: Config,
+                                               jobId: String,
                                                jobConfig: Config,
                                                jobClass: String,
                                                py4JImports: Seq[String]
                                               ){
+
+  /**
+    * @return The contextConfig, which is a Typesafe Config object, serialized to HOCON,
+    *         so that it can be deserialized by the Python implementation of Typesafe
+    *         Config (pyhocon) in the subprocess.
+    */
+  def contextConfigAsHocon: String = contextConfig.root().render(ConfigRenderOptions.concise())
 
   /**
     * @return The jobConfig, which is a Typesafe Config object, serialized to HOCON,
@@ -45,6 +55,7 @@ case class JobEndpoint[C <: PythonContextLike](context: C,
 
   /**
     * Method for the python subprocess to return jobdata after validate stage
+ *
     * @param data the job data to be held for the run stage
     */
   def setJobData(data: Any): Unit = {
@@ -53,6 +64,7 @@ case class JobEndpoint[C <: PythonContextLike](context: C,
 
   /**
     * Method for python subprocess to retrieve job data in run stage.
+ *
     * @return the jobData if it exists, else null
     */
   def getJobData: Any = jobData.getOrElse(null)

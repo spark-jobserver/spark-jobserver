@@ -26,7 +26,7 @@ class JobCacheImpl(maxEntries: Int,
                    loader: ContextURLClassLoader) extends JobCache {
   import scala.concurrent.duration._
 
-  private val cache = new LRUCache[(String, DateTime, String), BinaryJobInfo](maxEntries)
+  private val cache = new LRUCache[(String, DateTime, String, BinaryType), BinaryJobInfo](maxEntries)
   private val logger = LoggerFactory.getLogger(getClass)
   implicit val daoAskTimeout: Timeout = Timeout(3 seconds)
 
@@ -37,20 +37,16 @@ class JobCacheImpl(maxEntries: Int,
    * @param classPath the fully qualified name of the class/object to load
    */
   def getSparkJob(appName: String, uploadTime: DateTime, classPath: String): JobJarInfo = {
-    cache.get((appName, uploadTime, classPath)) match {
-      case Some(j@JobJarInfo(_, _, _)) => j
-      case _ =>
-        val jarPathReq =
-          (dao ? JobDAOActor.GetBinaryPath(appName, BinaryType.Jar, uploadTime)).mapTo[JobDAOActor.BinaryPath]
-        val jarPath = Await.result(jarPathReq, daoAskTimeout.duration).binPath
-        val jarFilePath = new java.io.File(jarPath).getAbsolutePath()
-        sparkContext.addJar(jarFilePath) // Adds jar for remote executors
-        loader.addURL(new URL("file:" + jarFilePath)) // Now jar added for local loader
-        val constructor = JarUtils.loadClassOrObject[spark.jobserver.api.SparkJobBase](classPath, loader)
-        val jj = JobJarInfo(constructor, classPath, jarFilePath)
-        cache.put((appName, uploadTime, classPath), jj)
-        jj
-    }
+    cache.get((appName, uploadTime, classPath, BinaryType.Jar), {
+      val jarPathReq =
+        (dao ? JobDAOActor.GetBinaryPath(appName, BinaryType.Jar, uploadTime)).mapTo[JobDAOActor.BinaryPath]
+      val jarPath = Await.result(jarPathReq, daoAskTimeout.duration).binPath
+      val jarFilePath = new java.io.File(jarPath).getAbsolutePath()
+      sparkContext.addJar(jarFilePath) // Adds jar for remote executors
+      loader.addURL(new URL("file:" + jarFilePath)) // Now jar added for local loader
+      val constructor = JarUtils.loadClassOrObject[spark.jobserver.api.SparkJobBase](classPath, loader)
+      JobJarInfo(constructor, classPath, jarFilePath)
+    }).asInstanceOf[JobJarInfo]
   }
 
   /**
@@ -61,16 +57,12 @@ class JobCacheImpl(maxEntries: Int,
     * @return The case class containing the location of the binary file for the specified job.
     */
   override def getPythonJob(appName: String, uploadTime: DateTime, classPath: String): PythonJobInfo = {
-    cache.get((appName, uploadTime, classPath)) match {
-      case Some(p @ PythonJobInfo(_)) => p
-      case _ =>
-        val pyPathReq =
-          (dao ? JobDAOActor.GetBinaryPath(appName, BinaryType.Egg, uploadTime)).mapTo[JobDAOActor.BinaryPath]
-        val pyPath = Await.result(pyPathReq, daoAskTimeout.duration).binPath
-        val pyFilePath = new java.io.File(pyPath).getAbsolutePath()
-        val pj = PythonJobInfo(pyFilePath)
-        cache.put((appName, uploadTime, classPath), pj)
-        pj
-    }
+    cache.get((appName, uploadTime, classPath, BinaryType.Egg), {
+      val pyPathReq =
+        (dao ? JobDAOActor.GetBinaryPath(appName, BinaryType.Egg, uploadTime)).mapTo[JobDAOActor.BinaryPath]
+      val pyPath = Await.result(pyPathReq, daoAskTimeout.duration).binPath
+      val pyFilePath = new java.io.File(pyPath).getAbsolutePath()
+      PythonJobInfo(pyFilePath)
+    }).asInstanceOf[PythonJobInfo]
   }
 }

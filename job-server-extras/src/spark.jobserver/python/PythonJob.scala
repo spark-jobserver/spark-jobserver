@@ -69,9 +69,9 @@ case class PythonJob[X <: PythonContextLike](eggPath: String,
 
   val logger = LoggerFactory.getLogger(getClass)
 
-  private def endpoint(context: C, config:Config) = {
+  private def endpoint(context: C, contextConfig:Config, jobId: String, jobConfig:Config) = {
     val sparkConf = context.sparkContext.getConf
-    JobEndpoint(context, sparkConf, config, modulePath, py4JImports)
+    JobEndpoint(context, sparkConf, contextConfig, jobId, jobConfig, modulePath, py4JImports)
   }
 
   def gateway(endpoint: JobEndpoint[C]): GatewayServer = new GatewayServer(endpoint, 0)
@@ -105,7 +105,7 @@ case class PythonJob[X <: PythonContextLike](eggPath: String,
     */
   override def runJob(sc: X, runtime: JobEnvironment, data: Config): Any = {
     logger.info(s"Running $modulePath from $eggPath")
-    val ep = endpoint(sc, data)
+    val ep = endpoint(sc, runtime.contextConfig, runtime.jobId, data)
     val server = new GatewayServer(ep, 0)
     val pythonPath = (eggPath +: sc.pythonPath).mkString(":")
     logger.info(s"Using python path of ${pythonPath}")

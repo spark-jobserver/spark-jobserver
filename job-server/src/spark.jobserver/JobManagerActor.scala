@@ -221,7 +221,7 @@ class JobManagerActor(contextConfig: Config, daoActor: ActorRef) extends Instrum
 
     val lastUploadTimeAndType = resp.uploadTimeAndType
     if (!lastUploadTimeAndType.isDefined) return failed(NoSuchApplication)
-    val(lastUploadTime, binaryType) = lastUploadTimeAndType.get
+    val (lastUploadTime, binaryType) = lastUploadTimeAndType.get
 
     val jobId = java.util.UUID.randomUUID().toString()
     val jobContainer = factory.loadAndValidateJob(appName, lastUploadTime,

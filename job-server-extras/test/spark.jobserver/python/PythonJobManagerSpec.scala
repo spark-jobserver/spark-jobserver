@@ -15,8 +15,6 @@ class PythonJobManagerSpec extends ExtrasJobSpecBase(PythonJobManagerSpec.getNew
   before {
     dao = new InMemoryDAO
     daoActor = system.actorOf(JobDAOActor.props(dao))
-    manager = system.actorOf(JobManagerActor.props(
-      PythonJobManagerSpec.getContextConfig(false, PythonJobManagerSpec.contextConfig)))
   }
 
   describe("PythonContextFactory used with JobManager") {
@@ -28,14 +26,14 @@ class PythonJobManagerSpec extends ExtrasJobSpecBase(PythonJobManagerSpec.getNew
           |context.actorName = "python_ctx"
         """.stripMargin).
         withFallback(PythonSparkContextFactorySpec.config)
-      val pyManager = system.actorOf(JobManagerActor.props(pyContextConfig))
+      manager = system.actorOf(JobManagerActor.props(pyContextConfig, daoActor))
 
-      pyManager ! JobManagerActor.Initialize(daoActor, None)
+      manager ! JobManagerActor.Initialize(None)
       expectMsgClass(classOf[JobManagerActor.Initialized])
 
       uploadTestEgg("python-demo")
 
-      pyManager ! JobManagerActor.StartJob(
+      manager ! JobManagerActor.StartJob(
         "python-demo",
         "example_jobs.word_count.WordCountSparkJob",
         ConfigFactory.parseString("""input.strings = ["a", "b", "a"]"""),

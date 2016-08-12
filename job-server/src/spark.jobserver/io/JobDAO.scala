@@ -12,16 +12,17 @@ trait BinaryType {
   def mediaType: MediaType
 }
 object BinaryType {
+
   case object Jar extends BinaryType {
-    val extension: String = "jar"
-    val name: String = "Jar"
+    val extension = "jar"
+    val name = "Jar"
     val mediaType: MediaType = MediaTypes.register(MediaType.custom("application/java-archive"))
     val contentType = HttpHeaders.`Content-Type`(mediaType)
   }
 
   case object Egg extends BinaryType {
-    val extension: String = "egg"
-    val name: String = "Egg"
+    val extension = "egg"
+    val name = "Egg"
     val mediaType: MediaType = MediaTypes.register(MediaType.custom("application/python-archive"))
     val contentType = HttpHeaders.`Content-Type`(mediaType)
   }

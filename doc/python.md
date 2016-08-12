@@ -54,52 +54,56 @@ expected by the Python bootstrapping code would be sufficient.
 
 The interface to conform to is shown by the `SparkJob` python class:
 
-    class SparkJob:
-    
-        def __init__(self):
-            pass
-    
-        def validate(self, context, runtime, config):
-            """
-            This method is called by the job server to allow jobs to validate their input and reject
-            invalid job requests.
-            :param context: the context to be used for the job.
-            Could be a sparkcontext, sqlcontext, hivecontext etc. May be reused across jobs
-            :param runtime: the JobEnvironment containing run time information pertaining to the job and context.
-            :param config: the HOCON config object passed into the job request
-            :return: either JobData, which is parsed from config, or a list of validation problems.
-            """
-            raise NotImplementedError("Concrete implementations should override validate")
-    
-        def run_job(self, context, runtime, data):
-            """
-            Entry point for the execution of a job
-            :param context: the context to be used for the job.
-            Could be a sparkcontext, sqlcontext, hivecontext etc. May be reused across jobs
-            :param runtime: the JobEnvironment containing run time information pertaining to the job and context.
-            :param data: the JobData returned by the validate method
-            :return: the job result
-            """
-            raise NotImplementedError("Concrete implementations should override run_job")
-            
+```python
+class SparkJob:
+
+def __init__(self):
+    pass
+
+def validate(self, context, runtime, config):
+    """
+    This method is called by the job server to allow jobs to validate their input and reject
+    invalid job requests.
+    :param context: the context to be used for the job.
+    Could be a sparkcontext, sqlcontext, hivecontext etc. May be reused across jobs
+    :param runtime: the JobEnvironment containing run time information pertaining to the job and context.
+    :param config: the HOCON config object passed into the job request
+    :return: either JobData, which is parsed from config, or a list of validation problems.
+    """
+    raise NotImplementedError("Concrete implementations should override validate")
+
+def run_job(self, context, runtime, data):
+    """
+    Entry point for the execution of a job
+    :param context: the context to be used for the job.
+    Could be a sparkcontext, sqlcontext, hivecontext etc. May be reused across jobs
+    :param runtime: the JobEnvironment containing run time information pertaining to the job and context.
+    :param data: the JobData returned by the validate method
+    :return: the job result
+    """
+    raise NotImplementedError("Concrete implementations should override run_job")
+```         
+
 It is possible but not necessary to override this class when providing a conforming job class. When returning a list of
 validation problems, it is necessary to return instances of `sparkjobserver.api.ValidationProblem` since otherwise there
 is no way to differentiate between validation errors and valid job data. instances of `ValidationProblem` can be built
 from the `build_problems` utility method. Consider the following basic implementation of a python job:
 
-    from sparkjobserver.api import SparkJob, build_problems
-    
-    class WordCountSparkJob(SparkJob):
-    
-        def validate(self, context, runtime, config):
-            if config.get('input.strings', None):
-                return config.get('input.strings')
-            else:
-                return build_problems(['config input.strings not found'])
-    
-        def run_job(self, context, runtime, data):
-            return context.parallelize(data).countByValue()
-            
+```python
+from sparkjobserver.api import SparkJob, build_problems
+
+class WordCountSparkJob(SparkJob):
+
+    def validate(self, context, runtime, config):
+        if config.get('input.strings', None):
+            return config.get('input.strings')
+        else:
+            return build_problems(['config input.strings not found'])
+
+    def run_job(self, context, runtime, data):
+        return context.parallelize(data).countByValue()
+```
+   
 ### Return types
 
 Due to job results needing to be converted from Python objects to objects which are serializable by Spray JSON,
@@ -126,12 +130,14 @@ In the most basic setup, a job ready for packaging would be structured as:
 
 `setup.py` would contain something like:
 
+```python
     from setuptools import setup,
     
     setup(
         name='my_job_package',
         packages=['my_job_package']
     )
+```
     
 Then, running `python setup.py bdist_egg` will create a file `dist/my_job_package-0.0.0-py2.7.egg`.
 
@@ -166,31 +172,33 @@ When implementing the Python job, simply you can simply assume that the `context
 is of the appropriate type (due to dynamic typing in Python, this is not enforced in the method definitions).
 For example:
 
-    class SQLAverageJob(SparkJob):
-    
-        def validate(self, context, runtime, config):
-            problems = []
-            job_data = None
-            if not isinstance(context, SQLContext):
-                problems.append('Expected a SQL context')
-            if config.get('input.data', None):
-                job_data = config.get('input.data')
-            else:
-                problems.append('config input.data not found')
-            if len(problems) == 0:
-                return job_data
-            else:
-                return build_problems(problems)
-    
-    
-        def run_job(self, context, runtime, data):
-            rdd = context._sc.parallelize(data)
-            df = context.createDataFrame(rdd, ['name', 'age', 'salary'])
-            df.registerTempTable('people')
-            query = context.sql("SELECT age, AVG(salary) from people GROUP BY age ORDER BY age")
-            results = query.collect()
-            return [ (r[0], r[1]) for r in results]
-            
+```python
+class SQLAverageJob(SparkJob):
+
+    def validate(self, context, runtime, config):
+        problems = []
+        job_data = None
+        if not isinstance(context, SQLContext):
+            problems.append('Expected a SQL context')
+        if config.get('input.data', None):
+            job_data = config.get('input.data')
+        else:
+            problems.append('config input.data not found')
+        if len(problems) == 0:
+            return job_data
+        else:
+            return build_problems(problems)
+
+
+    def run_job(self, context, runtime, data):
+        rdd = context._sc.parallelize(data)
+        df = context.createDataFrame(rdd, ['name', 'age', 'salary'])
+        df.registerTempTable('people')
+        query = context.sql("SELECT age, AVG(salary) from people GROUP BY age ORDER BY age")
+        results = query.collect()
+        return [ (r[0], r[1]) for r in results]
+```
+   
 The above job implementation checks during the `validate` stage that the `context` object is of the correct type.
 Then in `run_job` dataframe operations are used, which exist on `SQLContext`.
 
