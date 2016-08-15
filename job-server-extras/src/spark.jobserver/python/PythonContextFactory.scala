@@ -79,6 +79,27 @@ trait PythonContextFactory extends SparkContextFactory {
     *         using the form `java_import(gateway.jvm, "org.apache.spark.SparkConf")`
     */
   def py4JImports: Seq[String]
+
+  /**
+    * Partial implementation of makeContext to avoid repetition in the ContextFactory implementations.
+    * Does the generic setup tasks and delegates to doMakeContext
+    * @param sparkConf the Spark Context configuration.
+    * @param contextConfig
+    * @param contextName the name of the context to start
+    * @return the newly created context.
+    */
+  override def makeContext(sparkConf: SparkConf,
+                           contextConfig: Config,
+                           contextName: String): C = {
+    val sc = new SparkContext(sparkConf.set("spark.yarn.isPython", "true"))
+    val specificSc = doMakeContext(sc, contextConfig, contextName)
+    specificSc.setupTasks()
+    specificSc
+  }
+
+  protected def doMakeContext(sc: SparkContext,
+                    contextConfig: Config,
+                    contextName: String): C
 }
 
 object PythonContextFactory {
@@ -130,16 +151,16 @@ class PythonSparkContextFactory extends PythonContextFactory {
 
   override type C = JavaSparkContext with PythonContextLike
 
-  override def makeContext(sparkConf: SparkConf,
+  override def doMakeContext(sc: SparkContext,
                            contextConfig: Config,
                            contextName: String): JavaSparkContext with PythonContextLike = {
-    val sc = new SparkContext(sparkConf)
+    //val sc = new SparkContext(sparkConf)
     val jsc = new JavaSparkContext(sc) with PythonContextLike with DefaultContextLikeImplementations {
       override val config = contextConfig
       override val sparkContext: SparkContext = sc
       override val contextType = classOf[JavaSparkContext].getCanonicalName
     }
-    jsc.setupTasks()
+    //jsc.setupTasks()
     jsc
   }
 
@@ -153,16 +174,16 @@ class PythonSQLContextFactory extends PythonContextFactory {
   override def py4JImports: Seq[String] =
     PythonContextFactory.sqlContextImports
 
-  override def makeContext(sparkConf: SparkConf,
+  override def doMakeContext(sc: SparkContext,
                            contextConfig: Config,
                            contextName: String): SQLContext with PythonContextLike = {
-    val sc = new SparkContext(sparkConf)
+    //val sc = new SparkContext(sparkConf)
     val jSqlContext = new SQLContext(sc) with PythonContextLike with DefaultContextLikeImplementations {
       override val config = contextConfig
       override val contextType: String = classOf[SQLContext].getCanonicalName
       override def stop(): Unit = sc.stop()
     }
-    jSqlContext.setupTasks()
+    //jSqlContext.setupTasks()
     jSqlContext
   }
 }
@@ -174,16 +195,16 @@ class PythonHiveContextFactory extends PythonContextFactory {
   override def py4JImports: Seq[String] =
     PythonContextFactory.hiveContextImports
 
-  override def makeContext(sparkConf: SparkConf,
+  override def doMakeContext(sc: SparkContext,
                            contextConfig: Config,
                            contextName: String): HiveContext with PythonContextLike = {
-    val sc = new SparkContext(sparkConf)
+    //val sc = new SparkContext(sparkConf)
     val jHiveContext = new HiveContext(sc) with PythonContextLike with DefaultContextLikeImplementations {
       override val contextType: String = classOf[HiveContext].getCanonicalName
       override def config: Config = contextConfig
       override def stop(): Unit = sc.stop()
     }
-    jHiveContext.setupTasks()
+    //jHiveContext.setupTasks()
     jHiveContext
   }
 }
