@@ -10,56 +10,6 @@ import scala.sys.process.{ProcessLogger, Process}
 import scala.util.{Failure, Success, Try}
 import scala.collection.JavaConverters._
 
-object PythonJob {
-
-  case class ConversionException(unconvertibleValue: Any, message: String) extends Exception(message)
-
-  /**
-    * Py4J will autoconvert the jobOutput from Python primitives and collections
-    * to Java primitives and collections from java.util see
-    * https://www.py4j.org/advanced_topics.html#converting-python-collections-to-java-collections
-    *
-    * This method converts such objects to Scala types that we expect spray.json
-    * to be able to serialize.
-    *
-    * Due to type erasure, we cannot check that collections are collections of a type
-    * that can subsequently be serialized so this is not a fool-proof check.
-    *
-    * @param rawResult the object returned from the Python subprocess.
-    * @return the Scala equivalent if successful, else an error.
-    */
-  def convertRawResult(rawResult: Any): Try[Any] = rawResult match {
-    case z: Boolean => Success(z)
-    case b: Byte => Success(b)
-    case c: Char => Success(c)
-    case s: Short => Success(s)
-    case i: Int => Success(i)
-    case l: Long => Success(l)
-    case f: Float => Success(f)
-    case d: Double => Success(d)
-    case s: String => Success(s)
-    case m: java.util.HashMap[_,_] =>
-      val scalaMap = m.asScala.toMap
-      val recursedMap = scalaMap.mapValues(convertRawResult)
-      recursedMap.foldLeft(Success(Map.empty[Any, Any]): Try[Map[Any, Any]]) {
-        case (f@Failure(ex: Throwable), _) => f
-        case (Success(_), (k, f@Failure(ex: Throwable))) => Failure(ex)
-        case (Success(m), (k, Success(v))) => Success(m + ((k, v)))
-      }
-    case l: java.util.ArrayList[_] =>
-      val scalaSeq = l.asScala.toSeq
-      val recursedSeq = scalaSeq.map(convertRawResult)
-      recursedSeq.foldLeft(Success(Seq.empty[Any]): Try[Seq[Any]]) {
-        case (f@Failure(ex: Throwable), _) => f
-        case (Success(_), f@Failure(ex: Throwable)) => Failure(ex)
-        case (Success(l), Success(v)) => Success(l :+ v)
-      }
-    case other =>
-      Failure(ConversionException(other,
-        s"Unable to convert $rawResult of type ${rawResult.getClass.getCanonicalName}"))
-  }
-}
-
 case class PythonJob[X <: PythonContextLike](eggPath: String,
                                              modulePath:String,
                                              py4JImports: Seq[String]) extends SparkJobBase {
@@ -136,11 +86,7 @@ case class PythonJob[X <: PythonContextLike](eggPath: String,
       }
     }
     server.shutdown()
-    val jobResult = for {
-      rawResult <- subProcessOutcome
-      converted <- PythonJob.convertRawResult(rawResult)
-    } yield converted
-    jobResult match {
+    subProcessOutcome match {
       case Success(res) => res
       case Failure(ex) => throw ex
     }

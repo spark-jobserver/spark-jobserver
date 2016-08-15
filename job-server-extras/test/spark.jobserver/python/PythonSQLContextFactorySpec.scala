@@ -4,6 +4,7 @@ import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.spark.sql.SQLContext
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, Matchers, FunSpec}
+import scala.collection.JavaConverters._
 
 class PythonSQLContextFactorySpec extends FunSpec with Matchers with BeforeAndAfter{
 
@@ -61,7 +62,11 @@ class PythonSQLContextFactorySpec extends FunSpec with Matchers with BeforeAndAf
       jobDataOrProblem.isGood should be (true)
       val jobData = jobDataOrProblem.get
       val result = job.runJob(context, jobEnv, jobData)
-      result should be (Seq(Seq(20, 1250.0), Seq(21, 1500.0)))
+      result should matchPattern {
+        case l: java.util.List[_]
+          if l.asScala.toSeq.map(_.asInstanceOf[java.util.List[AnyVal]].asScala.toSeq) ==
+            Seq(Seq(20, 1250.0), Seq(21, 1500.0)) =>
+      }
     }
 
     it("should return jobs which can be successfully run") {

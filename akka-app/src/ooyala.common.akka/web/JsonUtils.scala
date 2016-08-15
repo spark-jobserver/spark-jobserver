@@ -2,6 +2,7 @@ package ooyala.common.akka.web
 
 import spray.json._
 import spray.json.DefaultJsonProtocol._
+import scala.collection.JavaConverters._
 
 
 /**
@@ -38,6 +39,8 @@ object JsonUtils {
       case false       => JsFalse
       case p: Product  => seqFormat[Any].write(p.productIterator.toSeq)
       case null        => JsNull
+      case m: java.util.Map[_, _] => AnyJsonFormat.write(m.asScala.toMap)
+      case l: java.util.List[_] => seqFormat[Any].write(l.asScala)
       case x           => JsString(x.toString)
     }
     def read(value: JsValue): Any = value match {

@@ -5,6 +5,7 @@ import spark.jobserver.CommonMessages.{JobErroredOut, JobResult}
 import spark.jobserver.io.JobDAOActor
 import spark.jobserver._
 import scala.concurrent.duration._
+import scala.collection.JavaConverters._
 
 object PythonJobManagerSpec extends JobSpecConfig {
   override val contextFactory = classOf[PythonSparkContextFactory].getName
@@ -39,7 +40,9 @@ class PythonJobManagerSpec extends ExtrasJobSpecBase(PythonJobManagerSpec.getNew
         ConfigFactory.parseString("""input.strings = ["a", "b", "a"]"""),
         errorEvents ++ syncEvents)
       expectMsgPF(3 seconds, "Expected a JobResult or JobErroredOut message!") {
-        case JobResult(_, x) => x should be(Map("b" -> 1, "a" -> 2))
+        case JobResult(_, x) => x should matchPattern {
+          case m: java.util.Map[_, _] if m.asScala == Map("b" -> 1, "a" -> 2) =>
+        }
         case JobErroredOut(_, _, error: Throwable) => throw error
       }
     }

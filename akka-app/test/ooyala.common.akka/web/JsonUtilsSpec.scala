@@ -67,6 +67,42 @@ class JsonUtilsSpec extends FunSpec with Matchers {
       Seq(1, 2, DateTime.parse(Dt1)).toJson.compactPrint should equal (expected)
     }
 
+    it("should serialize java.util.Maps as similarly to scala Maps") {
+      val expected = """{"a":1,"b":{"a1":1,"b1":{"a2":1,"b2":{}}}}"""
+      import JsonUtils._
+      //Using tree map to get predictable key ordering when converted to scala.
+      //Any java.util.Map is supported.
+      import java.util.{TreeMap => JMap}
+      val firstLevelMap = new JMap[String, Any]()
+      firstLevelMap.put("a", 1)
+      val secondLevelMap = new JMap[String, Any]()
+      secondLevelMap.put("a1", 1)
+      val thirdLevelMap = new JMap[String, Any]()
+      thirdLevelMap.put("a2", 1)
+      val fourthLevelMap = new JMap[String, Any]()
+      thirdLevelMap.put("b2", fourthLevelMap)
+      secondLevelMap.put("b1", thirdLevelMap)
+      firstLevelMap.put("b", secondLevelMap)
+      val returnObj: Any = firstLevelMap
+      returnObj.toJson.compactPrint should equal (expected)
+    }
+
+    it("should serialize java.util.Lists") {
+      val expected = "[1,[2,[3]]]"
+      import JsonUtils._
+      import java.util.{ArrayList => JList}
+      val firstLevelList = new JList[Any]()
+      val secondLevelList = new JList[Any]()
+      val thirdLevelList = new JList[Any]()
+      thirdLevelList.add(3)
+      secondLevelList.add(2)
+      secondLevelList.add(thirdLevelList)
+      firstLevelList.add(1)
+      firstLevelList.add(secondLevelList)
+      val returnObj: Any = firstLevelList
+      returnObj.toJson.compactPrint should equal (expected)
+    }
+
     it("should throw exception for invalid JSON") {
       val badJson1 = """{123: 456}"""    // objects must have string keys
       val badJson2 = """["abc]"""         // unbalanced quotes

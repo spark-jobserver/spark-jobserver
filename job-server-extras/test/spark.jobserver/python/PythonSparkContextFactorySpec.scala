@@ -10,6 +10,7 @@ import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, FunSpec, Matchers}
 import spark.jobserver._
 import spark.jobserver.api.JobEnvironment
+import scala.collection.JavaConverters._
 
 case class DummyJobEnvironment(jobId: String, contextConfig: Config) extends JobEnvironment {
 
@@ -157,7 +158,9 @@ class PythonSparkContextFactorySpec extends FunSpec with Matchers with BeforeAnd
       jobDataOrProblem.isGood should be (true)
       val jobData = jobDataOrProblem.get
       val result = job.runJob(context, jobEnv, jobData)
-      result should be (Map("a" -> 2, "b" -> 3, "c" -> 1))
+      result should matchPattern {
+        case m: java.util.Map[_, _] if m.asScala.toMap == Map("a" -> 2, "b" -> 3, "c" -> 1) =>
+      }
     }
 
     it("should return jobs which can be successfully run") {

@@ -6,6 +6,7 @@ import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, Matchers, FunSpec}
 
 import scala.reflect.io.File
+import scala.collection.JavaConverters._
 
 
 object PythonHiveContextFactorySpec {
@@ -82,12 +83,15 @@ class PythonHiveContextFactorySpec extends FunSpec with Matchers with BeforeAndA
       jobDataOrProblem.isGood should be (true)
       val jobData = jobDataOrProblem.get
       val result = job.runJob(context, jobEnv, jobData)
-      result should be (Seq(
-        Seq("bob", 20, 1),
-        Seq("mary", 20, 2),
-        Seq("jon", 21, 1),
-        Seq("sue", 21, 2)
-      ))
+      result should matchPattern {
+        case l: java.util.List[_]
+          if l.asScala.toSeq.map(_.asInstanceOf[java.util.List[AnyVal]].asScala.toSeq) ==
+            Seq(
+              Seq("bob", 20, 1),
+              Seq("mary", 20, 2),
+              Seq("jon", 21, 1),
+              Seq("sue", 21, 2)) =>
+      }
     }
 
     it("should return jobs which can be successfully run") {
