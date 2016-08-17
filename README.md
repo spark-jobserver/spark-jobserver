@@ -698,7 +698,9 @@ serialized properly:
 - Scala Seq's
 - Array's
 - Anything that implements Product (Option, case classes) -- they will be serialized as lists
-- Maps and Seqs may contain nested values of any of the above
+- Subclasses of java.util.List
+- Subclasses of java.util.Map with string key values (non-string keys may be converted to strings)
+- Maps, Seqs, Java Maps and Java Lists may contain nested values of any of the above
 - If a job result is of scala's Stream[Byte] type it will be serialised directly as a chunk encoded stream.
   This is useful if your job result payload is large and may cause a timeout serialising as objects. Beware, this
   will not currently work as desired with context-per-jvm=true configuration, since it would require serialising

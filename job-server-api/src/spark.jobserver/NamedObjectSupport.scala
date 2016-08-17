@@ -60,7 +60,7 @@ trait NamedObjects {
    * NObj within that time, then thread B will throw a timeout exception.
    *
    * @param name the unique name of the NObj. The uniqueness is scoped to the current SparkContext.
-   * @param rddGen a 0-ary function which will generate the NObj if it doesn't already exist.
+   * @param objGen a 0-ary function which will generate the NObj if it doesn't already exist.
    * @param timeout if the named object isn't created within this timeout, an error will be thrown.
    * @tparam O <: NamedObject the generic type of the named object.
    * @return the NObj with the given name.

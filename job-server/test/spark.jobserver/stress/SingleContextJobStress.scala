@@ -7,7 +7,7 @@ import com.typesafe.config.ConfigFactory
 import org.joda.time.DateTime
 import scala.concurrent.Await
 import spark.jobserver._
-import spark.jobserver.io.JobFileDAO
+import spark.jobserver.io.{BinaryType, JobFileDAO}
 
 /**
  * A stress test for launching many jobs within a job context
@@ -41,7 +41,7 @@ object SingleContextJobStress extends App with TestJarFinder {
 
   private def uploadJar(jarFilePath: String, appName: String) {
     val bytes = scala.io.Source.fromFile(jarFilePath, "ISO-8859-1").map(_.toByte).toArray
-    dao.saveJar(appName, DateTime.now, bytes)
+    dao.saveBinary(appName, BinaryType.Jar, DateTime.now, bytes)
   }
 
   private val demoJarPath = testJar.getAbsolutePath

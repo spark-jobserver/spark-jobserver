@@ -13,7 +13,7 @@ import org.joda.time.DateTime
 import org.scalactic._
 import spark.jobserver.api.JobEnvironment
 import spark.jobserver.context.{JobContainer, SparkContextFactory}
-import spark.jobserver.io.{JarInfo, JobDAOActor, JobInfo}
+import spark.jobserver.io.{BinaryInfo, JobDAOActor, JobInfo}
 import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -215,14 +215,16 @@ class JobManagerActor(contextConfig: Config, daoActor: ActorRef) extends Instrum
     val daoAskTimeout = Timeout(3 seconds)
     // TODO: refactor so we don't need Await, instead flatmap into more futures
     val resp = Await.result(
-      (daoActor ? JobDAOActor.GetLastUploadTime(appName))(daoAskTimeout).mapTo[JobDAOActor.LastUploadTime],
+      (daoActor ? JobDAOActor.GetLastUploadTimeAndType(appName))(daoAskTimeout).
+        mapTo[JobDAOActor.LastUploadTimeAndType],
       daoAskTimeout.duration)
 
-    val lastUploadTime = resp.lastUploadTime
-    if (!lastUploadTime.isDefined) return failed(NoSuchApplication)
+    val lastUploadTimeAndType = resp.uploadTimeAndType
+    if (!lastUploadTimeAndType.isDefined) return failed(NoSuchApplication)
+    val (lastUploadTime, binaryType) = lastUploadTimeAndType.get
 
     val jobId = java.util.UUID.randomUUID().toString()
-    val jobContainer = factory.loadAndValidateJob(appName, lastUploadTime.get,
+    val jobContainer = factory.loadAndValidateJob(appName, lastUploadTime,
                                                   classPath, jobCache) match {
       case Good(container)       => container
       case Bad(JobClassNotFound) => return failed(NoSuchClass)
@@ -234,8 +236,8 @@ class JobManagerActor(contextConfig: Config, daoActor: ActorRef) extends Instrum
     resultActor ! Subscribe(jobId, sender, events)
     statusActor ! Subscribe(jobId, sender, events)
 
-    val jarInfo = JarInfo(appName, lastUploadTime.get)
-    val jobInfo = JobInfo(jobId, contextName, jarInfo, classPath, DateTime.now(), None, None)
+    val binInfo = BinaryInfo(appName, binaryType, lastUploadTime)
+    val jobInfo = JobInfo(jobId, contextName, binInfo, classPath, DateTime.now(), None, None)
 
     Some(getJobFuture(jobContainer, jobInfo, jobConfig, sender, jobContext, sparkEnv))
   }

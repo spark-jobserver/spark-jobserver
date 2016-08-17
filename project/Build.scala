@@ -38,7 +38,9 @@ object JobServerBuild extends Build {
       // Automatically package the test jar when we run tests here
       // And always do a clean before package (package depends on clean) to clear out multiple versions
       test in Test <<= (test in Test).dependsOn(packageBin in Compile in jobServerTestJar)
-                                     .dependsOn(clean in Compile in jobServerTestJar),
+                                     .dependsOn(clean in Compile in jobServerTestJar)
+                                     .dependsOn(buildPython in jobServerPython)
+                                     .dependsOn(clean in Compile in jobServerPython),
 
       console in Compile <<= Defaults.consoleTask(fullClasspath in Compile, console in Compile),
 
@@ -67,9 +69,22 @@ object JobServerBuild extends Build {
 
   lazy val jobServerExtras = Project(id = "job-server-extras",
                                      base = file("job-server-extras"),
-                                     settings = commonSettings ++ jobServerExtrasSettings
+                                     settings = commonSettings ++ jobServerExtrasSettings ++ Seq(
+                                       test in Test <<= (test in Test)
+                                         .dependsOn(packageBin in Compile in jobServerTestJar)
+                                         .dependsOn(clean in Compile in jobServerTestJar)
+                                         .dependsOn(buildPython in jobServerPython)
+                                         .dependsOn(buildPyExamples in jobServerPython)
+                                         .dependsOn(clean in Compile in jobServerPython)
+                                     )
                                     ).dependsOn(jobServerApi, jobServer % "compile->compile; test->test")
                                     .disablePlugins(SbtScalariform)
+
+
+  lazy val jobServerPython = Project(id = "job-server-python",
+    base = file("job-server-python"),
+    settings = commonSettings ++ jobServerPythonSettings
+  ).dependsOn(jobServerApi, akkaApp % "test").disablePlugins(SbtScalariform)
 
 
   // This meta-project aggregates all of the sub-projects and can be used to compile/test/style check
@@ -78,7 +93,8 @@ object JobServerBuild extends Build {
   // NOTE: if we don't define a root project, SBT does it for us, but without our settings
   lazy val root = Project(id = "root", base = file("."),
                     settings = commonSettings ++ ourReleaseSettings ++ rootSettings ++ dockerSettings
-                  ).aggregate(jobServer, jobServerApi, jobServerTestJar, akkaApp, jobServerExtras).
+                  ).aggregate(jobServer, jobServerApi, jobServerTestJar,
+                              akkaApp, jobServerExtras, jobServerPython).
                    dependsOn(jobServer, jobServerExtras).disablePlugins(SbtScalariform)
 
   lazy val jobServerExtrasSettings = revolverSettings ++ Assembly.settings ++ publishSettings ++ Seq(
@@ -91,6 +107,20 @@ object JobServerBuild extends Build {
     // are flaky in extras esp involving paths.
     test in assembly := {},
     exportJars := true
+  )
+
+  lazy val testPython = taskKey[Unit]("Launch a sub process to run the Python tests")
+  lazy val buildPython = taskKey[Unit]("Build the python side of python support into an egg")
+  lazy val buildPyExamples = taskKey[Unit]("Build the examples of python jobs into an egg")
+
+  lazy val jobServerPythonSettings = revolverSettings ++ Assembly.settings ++ publishSettings ++ Seq(
+    libraryDependencies ++= sparkPythonDeps,
+    fork in Test := true,
+    cancelable in Test := true,
+    testPython := PythonTasks.testPythonTask(baseDirectory.value),
+    buildPython := PythonTasks.buildPythonTask(baseDirectory.value, version.value),
+    buildPyExamples := PythonTasks.buildExamplesTask(baseDirectory.value, version.value),
+    assembly <<= assembly.dependsOn(buildPython)
   )
 
   lazy val jobServerTestJarSettings = Seq(

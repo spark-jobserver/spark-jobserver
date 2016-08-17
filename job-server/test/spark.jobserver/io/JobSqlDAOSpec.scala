@@ -25,12 +25,17 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
   val time: DateTime = new DateTime()
   val throwable: Throwable = new Throwable("test-error")
   // jar test data
-  val jarInfo: JarInfo = genJarInfo(false, false)
+  val jarInfo: BinaryInfo = genJarInfo(false, false)
   val jarBytes: Array[Byte] = Files.toByteArray(testJar)
   var jarFile: File = new File(
       config.getString("spark.jobserver.sqldao.rootdir"),
       jarInfo.appName + "-" + jarInfo.uploadTime.toString("yyyyMMdd_hhmmss_SSS") + ".jar"
   )
+
+  val eggBytes: Array[Byte] = Files.toByteArray(emptyEgg)
+  val eggInfo: BinaryInfo = BinaryInfo("myEggBinary", BinaryType.Egg, time)
+  val eggFile: File = new File(config.getString("spark.jobserver.sqldao.rootdir"),
+    eggInfo.appName + "-" + jarInfo.uploadTime.toString("yyyyMMdd_hhmmss_SSS") + ".egg")
 
   // jobInfo test data
   val jobInfoNoEndNoErr:JobInfo = genJobInfo(jarInfo, false, false, false)
@@ -42,21 +47,22 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
   // job config test data
   val jobId: String = jobInfoNoEndNoErr.jobId
   val jobConfig: Config = ConfigFactory.parseString("{marco=pollo}")
-  val expectedConfig: Config = ConfigFactory.empty().withValue("marco", ConfigValueFactory.fromAnyRef("pollo"))
+  val expectedConfig: Config =
+    ConfigFactory.empty().withValue("marco", ConfigValueFactory.fromAnyRef("pollo"))
 
   // Helper functions and closures!!
   private def genJarInfoClosure = {
     var appCount: Int = 0
     var timeCount: Int = 0
 
-    def genTestJarInfo(newAppName: Boolean, newTime: Boolean): JarInfo = {
+    def genTestJarInfo(newAppName: Boolean, newTime: Boolean): BinaryInfo = {
       appCount = appCount + (if (newAppName) 1 else 0)
       timeCount = timeCount + (if (newTime) 1 else 0)
 
       val app = "test-appName" + appCount
       val upload = if (newTime) time.plusMinutes(timeCount) else time
 
-      JarInfo(app, upload)
+      BinaryInfo(app, BinaryType.Jar, upload)
     }
 
     genTestJarInfo _
@@ -65,7 +71,10 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
   private def genJobInfoClosure = {
     var count: Int = 0
 
-    def genTestJobInfo(jarInfo: JarInfo, hasEndTime: Boolean, hasError: Boolean, isNew:Boolean): JobInfo = {
+    def genTestJobInfo(jarInfo: BinaryInfo,
+                       hasEndTime: Boolean,
+                       hasError: Boolean,
+                       isNew:Boolean): JobInfo = {
       count = count + (if (isNew) 1 else 0)
       val id: String = "test-id" + count
       val contextName: String = "test-context"
@@ -86,13 +95,14 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
     genTestJobInfo _
   }
 
-  def genJarInfo: (Boolean, Boolean) => JarInfo = genJarInfoClosure
-  def genJobInfo: (JarInfo, Boolean, Boolean, Boolean) => JobInfo = genJobInfoClosure
+  def genJarInfo: (Boolean, Boolean) => BinaryInfo = genJarInfoClosure
+  def genJobInfo: (BinaryInfo, Boolean, Boolean, Boolean) => JobInfo = genJobInfoClosure
   //**********************************
 
   before {
     dao = new JobSqlDAO(config)
     jarFile.delete()
+    eggFile.delete()
   }
 
   describe("save and get the jars") {
@@ -101,15 +111,16 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
       jarFile.exists() should equal (false)
 
       // save
-      dao.saveJar(jarInfo.appName, jarInfo.uploadTime, jarBytes)
+      dao.saveBinary(jarInfo.appName, BinaryType.Jar, jarInfo.uploadTime, jarBytes)
 
       // read it back
-      val apps: Map[String, DateTime] = Await.result(dao.getApps, 60 seconds)
+      val apps: Map[String, (BinaryType, DateTime)] =
+        Await.result(dao.getApps, 60 seconds).filter(_._2._1 == BinaryType.Jar)
 
       // test
       jarFile.exists() should equal (true)
       apps.keySet should equal (Set(jarInfo.appName))
-      apps(jarInfo.appName) should equal (jarInfo.uploadTime)
+      apps(jarInfo.appName) should equal ((BinaryType.Jar, jarInfo.uploadTime))
     }
 
     it("should be able to retrieve the jar file") {
@@ -117,11 +128,42 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
       jarFile.exists() should equal (false)
 
       // retrieve the jar file
-      val jarFilePath: String = dao.retrieveJarFile(jarInfo.appName, jarInfo.uploadTime)
+      val jarFilePath: String = dao.retrieveBinaryFile(jarInfo.appName, BinaryType.Jar, jarInfo.uploadTime)
 
       // test
       jarFile.exists() should equal (true)
       jarFilePath should equal (jarFile.getAbsolutePath)
+    }
+  }
+
+  describe("save and get Python eggs") {
+    it("should be able to save one egg and get it back") {
+
+      // check the pre-condition
+      eggFile.exists() should equal (false)
+
+      // save
+      dao.saveBinary(eggInfo.appName, BinaryType.Egg, eggInfo.uploadTime, eggBytes)
+
+      // read it back
+      val apps: Map[String, (BinaryType, DateTime)] =
+        Await.result(dao.getApps, 60 seconds).filter(_._2._1 == BinaryType.Egg)
+
+      // test
+      eggFile.exists() should equal (true)
+      apps.keySet should equal (Set(eggInfo.appName))
+      apps(eggInfo.appName) should equal ((BinaryType.Egg, eggInfo.uploadTime))
+    }
+
+    it("should be able to retrieve the egg file") {
+      // check the pre-condition
+      eggFile.exists() should equal (false)
+
+      // retrieve the jar file
+      val eggFilePath: String = dao.retrieveBinaryFile(eggInfo.appName, BinaryType.Egg, eggInfo.uploadTime)
+      // test
+      eggFile.exists() should equal (true)
+      eggFilePath should equal (eggFile.getAbsolutePath)
     }
   }
 
