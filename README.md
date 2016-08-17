@@ -84,6 +84,7 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 
 - *"Spark as a Service"*: Simple REST interface (including HTTPS) for all aspects of job, context management
 - Support for Spark SQL, Hive, Streaming Contexts/jobs and custom job contexts!  See [Contexts](doc/contexts.md).
+- [Python](doc/python.md), Scala, and preliminary Java (see `JavaSparkJob`) support
 - LDAP Auth support via Apache Shiro integration
 - Separate JVM per SparkContext for isolation (EXPERIMENTAL)
 - Supports sub-second low-latency jobs via long-running job contexts
@@ -91,7 +92,6 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 - Kill running jobs via stop context and delete job
 - Separate jar uploading step for faster job startup
 - Asynchronous and synchronous job API.  Synchronous API is great for low latency jobs!
-- Preliminary support for Java (see `JavaSparkJob`)
 - Works with Standalone Spark as well as Mesos and yarn-client
 - Job and jar info is persisted via a pluggable DAO interface
 - Named Objects (such as RDDs or DataFrames) to cache and retrieve RDDs or DataFrames by name, improving object sharing and reuse among jobs.
