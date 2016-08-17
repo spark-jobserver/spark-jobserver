@@ -51,6 +51,8 @@ object WebApi {
   def errMap(t: Throwable, status: String) : Map[String, Any] =
     Map(StatusKey -> status, ResultKey -> formatException(t))
 
+  def successMap(msg:String):Map[String,String] = Map(StatusKey -> "SUCCESS", ResultKey -> msg)
+
   def getJobDurationString(info: JobInfo): String =
     info.jobLengthMillis.map { ms => ms / 1000.0 + " secs" }.getOrElse("Job not done yet")
 
@@ -209,7 +211,7 @@ class WebApi(system: ActorSystem,
               val future = jarManager ? StoreJar(appName, jarBytes)
               respondWithMediaType(MediaTypes.`application/json`) { ctx =>
                 future.map {
-                  case JarStored  => ctx.complete(StatusCodes.OK)
+                  case JarStored  => ctx.complete(StatusCodes.OK, successMap("Jar uploaded"))
                   case InvalidJar => badRequest(ctx, "Jar is not of the right format")
                 }.recover {
                   case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
@@ -279,7 +281,8 @@ class WebApi(system: ActorSystem,
                 val future = (supervisor ? AddContext(cName, config))(contextTimeout.seconds)
                 respondWithMediaType(MediaTypes.`application/json`) { ctx =>
                   future.map {
-                    case ContextInitialized   => ctx.complete(StatusCodes.OK)
+                    case ContextInitialized   => ctx.complete(StatusCodes.OK,
+                        successMap("Context initialized"))
                     case ContextAlreadyExists => badRequest(ctx, "context " + contextName + " exists")
                     case ContextInitError(e)  => ctx.complete(500, errMap(e, "CONTEXT INIT ERROR"))
                   }
@@ -298,7 +301,7 @@ class WebApi(system: ActorSystem,
             val future = supervisor ? StopContext(cName)
             respondWithMediaType(MediaTypes.`text/plain`) { ctx =>
               future.map {
-                case ContextStopped => ctx.complete(StatusCodes.OK)
+                case ContextStopped => ctx.complete(StatusCodes.OK, successMap("Context stopped"))
                 case NoSuchContext  => notFound(ctx, "context " + contextName + " not found")
               }
             }
@@ -327,7 +330,7 @@ class WebApi(system: ActorSystem,
                   (supervisor ? AddContextsFromConfig).onFailure {
                     case t => ctx.complete("ERROR")
                   }
-                  ctx.complete(StatusCodes.OK)
+                  ctx.complete(StatusCodes.OK, successMap("Context reset"))
                 }
                 case _ => ctx.complete("ERROR")
               }
