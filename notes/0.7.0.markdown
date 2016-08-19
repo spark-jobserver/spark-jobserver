@@ -25,3 +25,4 @@
 * Fix UI not showing running jobs if completed jobs fills the limit, #547 (@TianLangStudio)
 * Fix Jar name issue on Windows (@TianLangStudio)
 * Forked JVM processes must have their own JobDAO, #353, First step towards HA (@noorul)
+* Include Python exception stacktrace on failure (@CalebFenton)
