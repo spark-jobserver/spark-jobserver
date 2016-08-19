@@ -24,6 +24,7 @@ from pyspark.sql import SQLContext, HiveContext
 from sparkjobserver.api import ValidationProblem, JobEnvironment
 import traceback
 
+
 def exit_with_failure(message, exit_code=1):
     """
     Terminate the process with a specific message and error code
@@ -94,7 +95,9 @@ if __name__ == "__main__":
     try:
         job_data = job.validate(context, None, job_config)
     except Exception as error:
-        exit_with_failure("Error while calling 'validate': %s\n%s" % (repr(error), traceback.format_exc()), 3)
+        exit_with_failure(
+            "Error while calling 'validate': %s\n%s" %
+            (repr(error), traceback.format_exc()), 3)
     if isinstance(job_data, list) and \
             isinstance(job_data[0], ValidationProblem):
         entry_point.setValidationProblems([p.problem for p in job_data])
@@ -103,5 +106,7 @@ if __name__ == "__main__":
         try:
             result = job.run_job(context, job_env, job_data)
         except Exception as error:
-            exit_with_failure("Error while calling 'run_job': %s\n%s" % (repr(error), traceback.format_exc()), 4)
+            exit_with_failure(
+                "Error while calling 'run_job': %s\n%s" %
+                (repr(error), traceback.format_exc()), 4)
         entry_point.setResult(result)
