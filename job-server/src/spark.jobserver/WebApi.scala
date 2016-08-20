@@ -299,7 +299,7 @@ class WebApi(system: ActorSystem,
           path(Segment) { (contextName) =>
             val (cName, _) = determineProxyUser(config, authInfo, contextName)
             val future = supervisor ? StopContext(cName)
-            respondWithMediaType(MediaTypes.`text/plain`) { ctx =>
+            respondWithMediaType(MediaTypes.`application/json`) { ctx =>
               future.map {
                 case ContextStopped => ctx.complete(StatusCodes.OK, successMap("Context stopped"))
                 case NoSuchContext  => notFound(ctx, "context " + contextName + " not found")
@@ -309,7 +309,7 @@ class WebApi(system: ActorSystem,
         } ~
         put {
           parameter("reset") { reset =>
-            respondWithMediaType(MediaTypes.`text/plain`) { ctx =>
+            respondWithMediaType(MediaTypes.`application/json`) { ctx =>
               reset match {
                 case "reboot" => {
                   import ContextSupervisor._
@@ -328,11 +328,11 @@ class WebApi(system: ActorSystem,
                   Thread.sleep(1000) // we apparently need some sleeping in here, so spark can catch up
 
                   (supervisor ? AddContextsFromConfig).onFailure {
-                    case t => ctx.complete("ERROR")
+                    case t => ctx.complete(500, errMap("ERROR"))
                   }
                   ctx.complete(StatusCodes.OK, successMap("Context reset"))
                 }
-                case _ => ctx.complete("ERROR")
+                case _ => ctx.complete(500, errMap("ERROR"))
               }
             }
           }

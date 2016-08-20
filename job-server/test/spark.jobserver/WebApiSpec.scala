@@ -3,23 +3,31 @@ package spark.jobserver
 import akka.actor.{Actor, ActorSystem, Props}
 import com.typesafe.config.ConfigFactory
 import org.joda.time.DateTime
+import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
 import spark.jobserver.io.{JarInfo, JobDAOActor, JobInfo}
+import spray.client.pipelining._
+import spray.http.{HttpHeader, HttpHeaders, HttpRequest, HttpResponse}
+import JobServerSprayProtocol._
+import org.scalatest.time.{Seconds, Span}
+import spray.httpx.SprayJsonSupport
 import spray.routing.HttpService
 import spray.testkit.ScalatestRouteTest
+
+import scala.concurrent.{Await, Future}
 
 
 // Tests web response codes and formatting
 // Does NOT test underlying Supervisor / JarManager functionality
 // HttpService trait is needed for the sealRoute() which wraps exception handling
 class WebApiSpec extends FunSpec with Matchers with BeforeAndAfterAll
-with ScalatestRouteTest with HttpService {
+with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport {
   import scala.collection.JavaConverters._
 
   def actorRefFactory: ActorSystem = system
 
   val bindConfKey = "spark.jobserver.bind-address"
-  val bindConfVal = "127.0.0.1"
+  val bindConfVal = "0.0.0.0"
   val masterConfKey = "spark.master"
   val masterConfVal = "spark://localhost:7077"
   val config = ConfigFactory.parseString(s"""
@@ -28,6 +36,7 @@ with ScalatestRouteTest with HttpService {
       jobserver.bind-address = "$bindConfVal"
       jobserver.short-timeout = 3 s
     }
+    spray.can.server {}
     shiro {
       authentication = off
     }
@@ -146,5 +155,54 @@ with ScalatestRouteTest with HttpService {
       case GetJobConfig(_)          => sender ! config
     }
   }
+
+  implicit override val patienceConfig = PatienceConfig(timeout = Span(5, Seconds), interval = Span(1, Seconds))
+
+  override def beforeAll():Unit = {
+    api.start()
+  }
+
+  describe ("The WebApi") {
+    it ("Should return valid JSON when a jar is uploaded succesfully") {
+      val p = sendReceive ~> unmarshal[JobServerResponse]
+      val valid:Future[JobServerResponse] = p(Post("http://127.0.0.1:9999/jars/test-app","valid"))
+      whenReady(valid) { r=>
+        r.isSuccess shouldBe true
+        r.status shouldBe "SUCCESS"
+        r.result shouldBe "Jar uploaded"
+      }
+    }
+
+    it ("Should return valid JSON when creating a context") {
+      val p = sendReceive ~> unmarshal[JobServerResponse]
+      val valid:Future[JobServerResponse] = p(Post("http://127.0.0.1:9999/contexts/test-ctx","{}"))
+      whenReady(valid) { r=>
+        r.isSuccess shouldBe true
+        r.status shouldBe "SUCCESS"
+        r.result shouldBe "Context initialized"
+      }
+    }
+
+    it ("Should return valid JSON when stopping a context") {
+      val p = sendReceive ~> unmarshal[JobServerResponse]
+      val valid:Future[JobServerResponse] = p(Delete("http://127.0.0.1:9999/contexts/test-ctx"))
+      whenReady(valid) { r=>
+        r.isSuccess shouldBe true
+        r.status shouldBe "SUCCESS"
+        r.result shouldBe "Context stopped"
+      }
+    }
+
+    it ("Should return valid JSON when resetting a context") {
+      val p = sendReceive ~> unmarshal[JobServerResponse]
+      val valid:Future[JobServerResponse] = p(Put("http://127.0.0.1:9999/contexts?reset=reboot"))
+      whenReady(valid) { r=>
+        r.isSuccess shouldBe true
+        r.status shouldBe "SUCCESS"
+        r.result shouldBe "Context reset"
+      }
+    }
+  }
 }
+
 
