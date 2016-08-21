@@ -2,15 +2,16 @@ package spark.jobserver.python
 
 import java.io.File
 
-import akka.util.Timeout
 import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.SparkConf
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, FunSpec, Matchers}
 import spark.jobserver._
 import spark.jobserver.api.JobEnvironment
-import scala.collection.JavaConverters._
+
+import scala.collection.convert.Wrappers.JMapWrapper
+import scala.concurrent.duration.FiniteDuration
 
 case class DummyJobEnvironment(jobId: String, contextConfig: Config) extends JobEnvironment {
 
@@ -26,16 +27,18 @@ case class DummyJobEnvironment(jobId: String, contextConfig: Config) extends Job
 
     override def getOrElseCreate[O <: _root_.spark.jobserver.NamedObject]
     (name: _root_.scala.Predef.String, objGen: => O)
-    (implicit timeout: _root_.akka.util.Timeout,
+    (implicit timeout: FiniteDuration,
      persister: _root_.spark.jobserver.NamedObjectPersister[O]): O = throw error
 
     override def update[O <: NamedObject](name: String, objGen: => O)
-                                         (implicit timeout: Timeout,
+                                         (implicit timeout: FiniteDuration,
                                           persister: NamedObjectPersister[O]): O = throw error
 
-    override def defaultTimeout: Timeout = throw error
+    override def defaultTimeout: FiniteDuration = throw error
 
-    override def get[O <: NamedObject](name: String)(implicit timeout: Timeout): Option[O] = throw error
+    override def get[O <: NamedObject](name: String)(implicit timeout: FiniteDuration): Option[O] = {
+      throw error
+    }
 
     override def forget(name: String): Unit = throw error
 
@@ -69,7 +72,7 @@ object PythonSparkContextFactorySpec {
   }
 
   lazy val jobServerAPIPath = jobServerPaths.filterNot(_.getAbsolutePath.contains("examples")).headOption
-  lazy val jobServerAPIExamplePath = jobServerPaths.filter(_.getAbsolutePath.contains("examples")).headOption
+  lazy val jobServerAPIExamplePath = jobServerPaths.find(_.getAbsolutePath.contains("examples"))
 
   lazy val pysparkPath = sys.env.get("SPARK_HOME").map(d => s"$d/python/lib/pyspark.zip")
   lazy val py4jPath  = sys.env.get("SPARK_HOME").map(d => s"$d/python/lib/py4j-0.9-src.zip")
@@ -159,7 +162,7 @@ class PythonSparkContextFactorySpec extends FunSpec with Matchers with BeforeAnd
       val jobData = jobDataOrProblem.get
       val result = job.runJob(context, jobEnv, jobData)
       result should matchPattern {
-        case m: java.util.Map[_, _] if m.asScala.toMap == Map("a" -> 2, "b" -> 3, "c" -> 1) =>
+        case m: java.util.Map[_, _] if JMapWrapper(m).toMap == Map("a" -> 2, "b" -> 3, "c" -> 1) =>
       }
     }
 
