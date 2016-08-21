@@ -1,6 +1,9 @@
 #Scala #akka @ApacheSpark
 
+* Python job support!   (@mattinbits)
 * New Scala API!   The expanded API includes passing in a `JobEnvironment` which provides access to job ID, context information; it also offers more type safety in job return type, validation etc. (@velvia, others)
+
+* Deprecate JobFileDAO.  H2 is now the default.  Furthermore, H2 and JobFileDAO cannot be used with context-per-jvm. (@noorul)
 * Context creation API (POST /contexts) now takes a config in the POST body!  (@casey-green)
 * Make create job API to return more information (@noorul)
 * Upgrade Slick to 3.1.1 (@hntd187)
@@ -21,3 +24,5 @@
 * Fix for Delete file API issue, #507 (@noorul) 
 * Fix UI not showing running jobs if completed jobs fills the limit, #547 (@TianLangStudio)
 * Fix Jar name issue on Windows (@TianLangStudio)
+* Forked JVM processes must have their own JobDAO, #353, First step towards HA (@noorul)
+* Include Python exception stacktrace on failure (@CalebFenton)

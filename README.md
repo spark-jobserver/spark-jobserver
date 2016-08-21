@@ -84,6 +84,7 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 
 - *"Spark as a Service"*: Simple REST interface (including HTTPS) for all aspects of job, context management
 - Support for Spark SQL, Hive, Streaming Contexts/jobs and custom job contexts!  See [Contexts](doc/contexts.md).
+- [Python](doc/python.md), Scala, and preliminary Java (see `JavaSparkJob`) support
 - LDAP Auth support via Apache Shiro integration
 - Separate JVM per SparkContext for isolation (EXPERIMENTAL)
 - Supports sub-second low-latency jobs via long-running job contexts
@@ -91,7 +92,6 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 - Kill running jobs via stop context and delete job
 - Separate jar uploading step for faster job startup
 - Asynchronous and synchronous job API.  Synchronous API is great for low latency jobs!
-- Preliminary support for Java (see `JavaSparkJob`)
 - Works with Standalone Spark as well as Mesos and yarn-client
 - Job and jar info is persisted via a pluggable DAO interface
 - Named Objects (such as RDDs or DataFrames) to cache and retrieve RDDs or DataFrames by name, improving object sharing and reuse among jobs.
@@ -505,7 +505,7 @@ database created with necessary rights granted to user.
 
     sqldao {
       # Slick database driver, full classpath
-      slick-driver = scala.slick.driver.PostgresDriver
+      slick-driver = slick.driver.PostgresDriver
 
       # JDBC driver, full classpath
       jdbc-driver = org.postgresql.Driver
@@ -698,7 +698,9 @@ serialized properly:
 - Scala Seq's
 - Array's
 - Anything that implements Product (Option, case classes) -- they will be serialized as lists
-- Maps and Seqs may contain nested values of any of the above
+- Subclasses of java.util.List
+- Subclasses of java.util.Map with string key values (non-string keys may be converted to strings)
+- Maps, Seqs, Java Maps and Java Lists may contain nested values of any of the above
 - If a job result is of scala's Stream[Byte] type it will be serialised directly as a chunk encoded stream.
   This is useful if your job result payload is large and may cause a timeout serialising as objects. Beware, this
   will not currently work as desired with context-per-jvm=true configuration, since it would require serialising

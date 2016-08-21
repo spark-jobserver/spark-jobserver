@@ -10,10 +10,12 @@ class NamedObjectsJobSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
   override def beforeAll() {
     dao = new InMemoryDAO
     daoActor = system.actorOf(JobDAOActor.props(dao))
-    manager = system.actorOf(JobManagerActor.props(JobManagerSpec.getContextConfig(adhoc = false)))
+    manager = system.actorOf(JobManagerActor.props(
+      JobManagerSpec.getContextConfig(adhoc = false),
+      daoActor))
     supervisor = TestProbe().ref
 
-    manager ! JobManagerActor.Initialize(daoActor, None)
+    manager ! JobManagerActor.Initialize(None)
     
     expectMsgClass(classOf[JobManagerActor.Initialized])
 

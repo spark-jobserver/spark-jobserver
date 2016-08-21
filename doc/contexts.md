@@ -40,13 +40,14 @@ NOTE: you will get an error if you run the wrong type of job, such as a regular 
 
 ## Initializing a Hive/SQLContext Automatically
 
-You can skip the steps of context creation and jar upload with the latest job server using some config options.  Add the following to your job server config:
+You can skip the steps of context creation and jar upload with the latest job server using some config options.  
+Add the following to your job server config (the deprecated `job-jar-paths` will also work):
 
 ```apache
 spark {
   jobserver {
     # Automatically load a set of jars at startup time.  Key is the appName, value is the path/URL.
-    job-jar-paths {    # NOTE: you may need an absolute path below
+    job-binary-paths {    # NOTE: you may need an absolute path below
       sql = job-server-extras/target/scala-2.10/job-server-extras_2.10-0.6.2-SNAPSHOT-tests.jar
     }
   }

@@ -66,9 +66,10 @@ object JarUtils {
     objectRef
   }
 
-  def validateJarBytes(jarBytes: Array[Byte]): Boolean = {
-    jarBytes.size > 4 &&
+  //Jars and Eggs are both zip files
+  def binaryIsZip(binaryBytes: Array[Byte]): Boolean = {
+    binaryBytes.length > 4 &&
       // For now just check the first few bytes are the ZIP signature: 0x04034b50 little endian
-      jarBytes(0) == 0x50 && jarBytes(1) == 0x4b && jarBytes(2) == 0x03 && jarBytes(3) == 0x04
+      binaryBytes(0) == 0x50 && binaryBytes(1) == 0x4b && binaryBytes(2) == 0x03 && binaryBytes(3) == 0x04
   }
 }

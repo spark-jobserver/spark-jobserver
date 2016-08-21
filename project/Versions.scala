@@ -12,6 +12,7 @@ object Versions {
   lazy val netty =  "4.0.29.Final"
   lazy val slick = "3.1.1"
   lazy val h2 = "1.3.176"
+  lazy val postgres = "9.4.1209"
   lazy val commons = "1.4"
   lazy val flyway = "3.2.1"
   lazy val logback = "1.0.7"

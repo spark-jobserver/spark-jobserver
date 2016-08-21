@@ -32,12 +32,13 @@ class StreamingJobSpec extends JobSpecBase(StreamingJobSpec.getNewSystem) {
     dao = new InMemoryDAO
     daoActor = system.actorOf(JobDAOActor.props(dao))
     manager = system.actorOf(JobManagerActor.props(
-                             StreamingJobSpec.getContextConfig(false, StreamingJobSpec.contextConfig)))
+      StreamingJobSpec.getContextConfig(false, StreamingJobSpec.contextConfig),
+      daoActor))
   }
 
   describe("Spark Streaming Jobs") {
     it("should be able to process data using Streaming jobs") {
-      manager ! JobManagerActor.Initialize(daoActor, None)
+      manager ! JobManagerActor.Initialize(None)
       expectMsgClass(10 seconds, classOf[JobManagerActor.Initialized])
       uploadTestJar()
       manager ! JobManagerActor.StartJob("demo", streamingJob, emptyConfig, asyncEvents ++ errorEvents)
