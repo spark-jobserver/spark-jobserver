@@ -1,13 +1,14 @@
 package spark.jobserver
 
-import akka.actor.{ ActorRef, ActorSystem, Props }
-import akka.testkit.{ ImplicitSender, TestKit }
-import org.apache.spark.{ SparkContext, SparkConf }
-import org.apache.spark.sql.{ SQLContext, Row, DataFrame }
+import akka.actor.ActorSystem
+import akka.testkit.{ImplicitSender, TestKit}
+import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.sql.{Row, SQLContext}
 import org.apache.spark.sql.types._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
-import org.scalatest.{ Matchers, FunSpecLike, FunSpec, BeforeAndAfterAll, BeforeAndAfter }
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
+import scala.concurrent.duration.{FiniteDuration, _}
 
 /**
  * this Spec is a more complex version of the same one in the job-server project,
@@ -111,7 +112,7 @@ class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with Fun
       val df2: NamedDataFrame = namedObjects.getOrElseCreate("df", {
         generatorCalled = true
         throw new RuntimeException("ERROR")
-      })(1234, dataFramePersister)
+      })(FiniteDuration(1234, MILLISECONDS), dataFramePersister)
       generatorCalled should equal(false)
       df2 should equal(df1)
     }
@@ -155,8 +156,8 @@ class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with Fun
 
     it("should create object only once, parallel gets should wait") {
       var obj: Option[NamedObject] = None
-      def creatorThread = new Thread {
-        override def run {
+      def creatorThread: Thread = new Thread {
+        override def run() {
           //System.err.println("creator started")
           namedObjects.getOrElseCreate("sleep", {
             //wait so that other threads have a chance to start
@@ -165,26 +166,26 @@ class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with Fun
             obj = Some(r)
             //System.err.println("creator finished")
             r
-          })(99, dataFramePersister)
+          })(FiniteDuration(99, MILLISECONDS), dataFramePersister)
         }
       }
 
-      def otherThreads(ix: Int) = new Thread {
-        override def run {
+      def otherThreads(ix: Int): Thread = new Thread {
+        override def run() {
           //System.err.println(ix + " started")
           namedObjects.getOrElseCreate("sleep", {
             throw new IllegalArgumentException("boo!")
-          })(60, dataFramePersister)
+          })(FiniteDuration(60, MILLISECONDS), dataFramePersister)
         }
       }
-      creatorThread.start
+      creatorThread.start()
       //give creator thread a bit of a head start
       Thread.sleep(21)
       //now fire more threads
-      otherThreads(1).start
-      otherThreads(2).start
-      otherThreads(3).start
-      otherThreads(4).start
+      otherThreads(1).start()
+      otherThreads(2).start()
+      otherThreads(3).start()
+      otherThreads(4).start()
       namedObjects.get("sleep") should equal(obj)
     }
   }

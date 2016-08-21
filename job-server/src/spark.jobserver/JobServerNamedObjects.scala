@@ -1,7 +1,6 @@
 package spark.jobserver
 
 import akka.actor.ActorSystem
-import akka.util.Timeout
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
@@ -26,9 +25,8 @@ class JobServerNamedObjects(system: ActorSystem) extends NamedObjects {
 
   // Default timeout is 60 seconds. Hopefully that is enough
   // to let most RDD/DataFrame generator functions finish.
-  val defaultTimeout = Timeout(
-    config.getDuration("spark.jobserver.named-object-creation-timeout",
-      SECONDS), SECONDS)
+  val defaultTimeout = FiniteDuration(
+    config.getDuration("spark.jobserver.named-object-creation-timeout", SECONDS), SECONDS)
 
   // we must store a reference to each NamedObject even though only its ID is used here
   // this reference prevents the object from being GCed and cleaned by sparks ContextCleaner
@@ -36,7 +34,7 @@ class JobServerNamedObjects(system: ActorSystem) extends NamedObjects {
   private val namesToObjects: Cache[NamedObject] = LruCache()
 
   override def getOrElseCreate[O <: NamedObject](name: String, objGen: => O)
-                                 (implicit timeout: Timeout = defaultTimeout,
+                                 (implicit timeout: FiniteDuration = defaultTimeout,
                                            persister: NamedObjectPersister[O]): O = {
     val obj = cachedOp(name, createObject(objGen, name)).await(timeout).asInstanceOf[O]
     logger.info(s"Named object [$name] of type [${obj.getClass.toString}] created")
@@ -62,12 +60,12 @@ class JobServerNamedObjects(system: ActorSystem) extends NamedObjects {
   }
 
   override def get[O <: NamedObject](name: String)
-                (implicit timeout : Timeout = defaultTimeout): Option[O] = {
+                (implicit timeout : FiniteDuration = defaultTimeout): Option[O] = {
     namesToObjects.get(name).map(_.await(timeout).asInstanceOf[O])
   }
 
   override def update[O <: NamedObject](name: String, objGen: => O)
-                                        (implicit timeout : Timeout = defaultTimeout,
+                                        (implicit timeout : FiniteDuration = defaultTimeout,
                                             persister: NamedObjectPersister[O]): O = {
     get(name) match {
       case None    => {}
