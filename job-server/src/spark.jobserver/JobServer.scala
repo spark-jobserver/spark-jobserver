@@ -129,7 +129,7 @@ object JobServer {
         case s if s.endsWith(".egg") => (BinaryType.Egg, s)
         case other =>
           throw new Exception(s"Only Jars (with extension .jar) and " +
-            s"Python egg packages (with extension .egg) are supported. Found $other")
+            s"Python Egg packages (with extension .egg) are supported. Found $other")
       }
 
       val contextTimeout = util.SparkJobUtils.getContextTimeout(config)

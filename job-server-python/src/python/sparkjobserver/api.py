@@ -26,7 +26,8 @@ class SparkJob:
         This method is called by the job server to allow jobs to validate their
         input and reject invalid job requests.
         :param context: the context to be used for the job. Could be a
-        sparkcontext, sqlcontext, hivecontext etc. May be reused across jobs
+        SparkContext, SQLContext, HiveContext etc.
+        May be reused across jobs.
         :param runtime: the JobEnvironment containing run time information
         pertaining to the job and context.
         :param config: the HOCON config object passed into the job request
@@ -40,7 +41,7 @@ class SparkJob:
         """
         Entry point for the execution of a job
         :param context: the context to be used for the job.
-        Could be a sparkcontext, sqlcontext, hivecontext etc.
+        SparkContext, SQLContext, HiveContext etc.
         May be reused across jobs
         :param runtime: the JobEnvironment containing run time information
         pertaining to the job and context.
@@ -97,7 +98,7 @@ def build_problems(problems):
 
 class JobEnvironment:
     """
-    The analog of spark.jobserver.api.JobEnvironment in the JVM job api.
+    The analog of spark.jobserver.api.JobEnvironment in the JVM job API.
     """
 
     def __init__(self, job_id, named_objects, context_config):
@@ -128,7 +129,7 @@ class NamedObjects:
 
     def get(self, name):
         """
-        Gets an named object (NObj) with the given name if it already exists
+        Gets a named object (NObj) with the given name if it already exists
         and is cached. If the NObj does not exist, None is returned.
 
         Note that a previously-known name object could 'disappear' if it hasn't
@@ -180,8 +181,8 @@ class NamedObjects:
         Removes the named object with the given name, if one existed, from
         the cache. Has no effect if no named object with this name exists.
 
-        The persister is not (!) asked to unpersist the object,
-        use destroy instead if that is desired
+        The persister is not (!) asked to unpersist the object;
+        use destroy instead if that is desired.
 
         :param name: the unique name of the object.
         The uniqueness is scoped to the current SparkContext.
@@ -195,7 +196,7 @@ class NamedObjects:
         Destroys the named object with the given name, if one existed. The
         reference to the object is removed from the cache and the persister
         is asked asynchronously to unpersist the
-        object iff it was found in the list of named objects.
+        object if it was found in the list of named objects.
         Has no effect if no named object with this name is known to the cache.
 
         :param name: the unique name of the object.
