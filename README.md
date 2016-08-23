@@ -261,8 +261,8 @@ object SampleJob extends SparkJob {
 - `runJob` contains the implementation of the Job. The SparkContext is managed by the JobServer and will be provided to the job through this method.
   This relieves the developer from the boiler-plate configuration management that comes with the creation of a Spark job and allows the Job Server to
 manage and re-use contexts.
-- `validate` allows for an initial validation of the context and any provided configuration. If the context and configuration are OK to run the job, returning `spark.jobserver.SparkJobValid` will let the job execute, otherwise returning `spark.jobserver.SparkJobInvalid(reason)` prevents the job from running and provides means to convey the reason of failure. In this case, the call immediately returns an `HTTP/1.1 400 Bad Request` status code.  
-`validate` helps you preventing running jobs that will eventually fail due to missing or wrong configuration and save both time and resources.  
+- `validate` allows for an initial validation of the context and any provided configuration. If the context and configuration are OK to run the job, returning `spark.jobserver.SparkJobValid` will let the job execute, otherwise returning `spark.jobserver.SparkJobInvalid(reason)` prevents the job from running and provides means to convey the reason of failure. In this case, the call immediately returns an `HTTP/1.1 400 Bad Request` status code.
+`validate` helps you preventing running jobs that will eventually fail due to missing or wrong configuration and save both time and resources.
 
 ### NEW SparkJob API
 
@@ -325,7 +325,7 @@ You have a couple options to package and upload dependency jars.
         ````
         curl -d "" 'localhost:8090/contexts/test-context?num-cpu-cores=4&memory-per-node=512m'
         OK⏎
-        ````      
+        ````
         ````
         curl 'localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample&context=test-context&sync=true' -d '{
             dependent-jar-uris = ["file:///myjars/deps01.jar", "file:///myjars/deps02.jar"],
@@ -360,7 +360,7 @@ val rdd = this.namedRdds.get[(String, String)]("french_dictionary").get
 (note the explicit type provided to get. This will allow to cast the retrieved RDD that otherwise is of type RDD[_])
 
 For jobs that depends on a named RDDs it's a good practice to check for the existence of the NamedRDD in the `validate` method as explained earlier:
-```scala   
+```scala
 def validate(sc:SparkContext, config: Config): SparkJobValidation = {
   ...
   val rdd = this.namedRdds.get[(Long, scala.Seq[String])]("dictionary")
@@ -401,7 +401,7 @@ val NamedDataFrame(frenchDictionaryDF, _, _) = namedObjects.get[NamedDataFrame](
 (Note the explicit type provided to get. This will allow to cast the retrieved RDD/DataFrame object to the proper result type.)
 
 For jobs that depends on a named objects it's a good practice to check for the existence of the NamedObject in the `validate` method as explained earlier:
-```scala   
+```scala
 def validate(sc:SparkContext, config: Config): SparkJobValidation = {
   ...
   val obj = this.namedObjects.get("dictionary")
@@ -422,7 +422,7 @@ You will need a keystore that contains the server certificate. The bare minimum 
 ```
  keytool -genkey -keyalg RSA -alias jobserver -keystore ~/sjs.jks -storepass changeit -validity 360 -keysize 2048
 ```
-You may place the keystore anywhere.    
+You may place the keystore anywhere.
 Here is an example of a simple curl command that utilizes ssl:
 ```
 curl -k https://localhost:8090/contexts
@@ -587,14 +587,14 @@ It is sometime necessary to programmatically upload files to the server. Use the
     GET /data                - Lists previously uploaded files that were not yet deleted
     POST /data/<prefix>      - Uploads a new file, the full path of the file on the server is returned, the
                                prefix is the prefix of the actual filename used on the server (a timestamp is
-                               added to ensure uniqueness)                                                         
+                               added to ensure uniqueness)
     DELETE /data/<filename>  - Deletes the specified file (only if under control of the JobServer)
 
 These files are uploaded to the server and are stored in a local temporary
-directory on the server where the JobServer runs. The POST command returns the full
+directory where the JobServer runs. The POST command returns the full
 pathname and filename of the uploaded file so that later jobs can work with this
 just the same as with any other server-local file. A job could therefore add this file to HDFS or distribute
-it to worker nodes via the SparkContext.addFile command.        
+it to worker nodes via the SparkContext.addFile command.
 For files that are larger than a few hundred MB, it is recommended to manually upload these files to the server or
 to directly add them to your HDFS.
 
@@ -636,7 +636,7 @@ spark.context-settings.  For example,
 
 would override the default spark.context-settings.num-cpu-cores setting.
 
-When starting a job, and the context= query param is not specified, then an ad-hoc context is created.  Any
+When starting a job, and the `context=` query param is not specified, then an ad-hoc context is created.  Any
 settings specified in spark.context-settings will override the defaults in the job server config when it is
 started up.
 
@@ -657,10 +657,10 @@ or in the job config when using POST /jobs,
 User impersonation for an already Kerberos authenticated user is supported via `spark.proxy.user` query param:
 
   POST /contexts/my-new-context?spark.proxy.user=<user-to-impersonate>
-  
-However, whenever the flag `shiro.use-as-proxy-user` is set to `on` (and authentication is `on`) then this parameter 
-is ignored and the name of the authenticated user is *always* used as the value of the `spark.proxy.user` 
-parameter when creating contexts. 
+
+However, whenever the flag `shiro.use-as-proxy-user` is set to `on` (and authentication is `on`) then this parameter
+is ignored and the name of the authenticated user is *always* used as the value of the `spark.proxy.user`
+parameter when creating contexts.
 
 To pass settings directly to the sparkConf that do not use the "spark." prefix "as-is", use the "passthrough" section.
 
@@ -756,7 +756,7 @@ Apache 2.0, see LICENSE.md
 ## TODO
 
 - More debugging for classpath issues
-- Update .g8 template, consider creating Activator template for sample job      
+- Update .g8 template, consider creating Activator template for sample job
 - Add Swagger support.  See the spray-swagger project.
 - Implement an interactive SQL window.  See: [spark-admin](https://github.com/adatao/spark-admin)
 
