@@ -1,6 +1,6 @@
 #!/bin/bash
 # Script for packaging all the job server files to .tar.gz for Mesos or other single-image deploys
-WORK_DIR=/tmp/job-server
+WORK_DIR="$TMPDIR"/tmp/job-server
 
 ENV=$1
 if [ -z "$ENV" ]; then

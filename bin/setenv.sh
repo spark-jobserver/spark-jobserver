@@ -38,7 +38,7 @@ if [ -z "$SPARK_CONF_DIR" ]; then
 fi
 
 if [ -z "$LOG_DIR" ]; then
-  LOG_DIR=/tmp/job-server
+  LOG_DIR="$TMPDIR"/tmp/job-server
   echo "LOG_DIR empty; logging will go to $LOG_DIR"
 fi
 mkdir -p $LOG_DIR
