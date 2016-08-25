@@ -25,8 +25,8 @@ class LdapGroupRealm extends JndiLdapRealm {
   private val logger = LoggerFactory.getLogger(getClass)
 
   private val searchCtls: SearchControls = {
-    val c = new SearchControls();
-    c.setSearchScope(SearchControls.SUBTREE_SCOPE);
+    val c = new SearchControls()
+    c.setSearchScope(SearchControls.SUBTREE_SCOPE)
     c
   }
 
@@ -71,7 +71,7 @@ class LdapGroupRealm extends JndiLdapRealm {
     try {
       queryForAuthorizationInfo(ldapContext, username)
     } finally {
-      LdapUtils.closeContext(ldapContext);
+      LdapUtils.closeContext(ldapContext)
     }
   }
 

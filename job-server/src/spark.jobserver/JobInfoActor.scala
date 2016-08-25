@@ -6,13 +6,14 @@ import akka.util.Timeout
 import com.typesafe.config.Config
 import ooyala.common.akka.InstrumentedActor
 import scala.concurrent.Await
-import spark.jobserver.ContextSupervisor.{GetContext, GetAdHocContext}
+import spark.jobserver.ContextSupervisor.{GetContext, StartAdHocContext}
 import spark.jobserver.io.JobDAO
 
 object JobInfoActor {
   // Requests
   case class GetJobStatuses(limit: Option[Int])
   case class GetJobConfig(jobId: String)
+  case class GetJobStatus(jobId: String)
   case class StoreJobConfig(jobId: String, jobConfig: Config)
 
   // Responses
@@ -32,6 +33,11 @@ class JobInfoActor(jobDao: JobDAO, contextSupervisor: ActorRef) extends Instrume
   override def wrappedReceive: Receive = {
     case GetJobStatuses(limit) =>
       sender ! jobDao.getJobInfos(limit.get)
+
+    case GetJobStatus(jobId) =>
+      val jobInfo = jobDao.getJobInfo(jobId)
+      val resp = if (!jobInfo.isDefined) NoSuchJobId else jobInfo.get
+      sender ! resp
 
     case GetJobResult(jobId) =>
       breakable {

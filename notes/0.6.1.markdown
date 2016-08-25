@@ -1,0 +1,13 @@
+#Scala #akka @ApacheSpark
+
+* New route POST /contexts?reset=reboot to close and restart all contexts defined in config (@wildwood)
+* CORS support and EC2 deploy scripts (@David-Durst)
+* Updated to Spark 1.5.2 (@zeitos, @apivovarov)
+* Updated Docker container, much smaller (based on jre-java7) with configurable Mesos version
+* Return job status uniformly for both /jobs and /jobs/<jobId> routes (@noorul)
+* Fix issue #247: Allow non-computed named RDDs (@TimMaltGermany / KNIME)
+* Fix for PostgreSQL varchar issue (@ffarozan)
+* Update Yarn docs, set `--master yarn-client` in start script (@lant)
+* Update Spray to 1.3.3 (@v-gerasimov)
+* Allow Web API timeouts to be configurable via `short-timeout` (@v-gerasimov)
+* Chinese documentation at doc/chinese/ !  (@linrunzhang)

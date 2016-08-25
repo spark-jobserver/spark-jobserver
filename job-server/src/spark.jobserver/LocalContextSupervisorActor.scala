@@ -21,7 +21,7 @@ object ContextSupervisor {
   case object AddContextsFromConfig // Start up initial contexts
   case object ListContexts
   case class AddContext(name: String, contextConfig: Config)
-  case class GetAdHocContext(classPath: String, contextConfig: Config)
+  case class StartAdHocContext(classPath: String, contextConfig: Config)
   case class GetContext(name: String) // returns JobManager, JobResultActor
   case class GetResultActor(name: String)  // returns JobResultActor
   case class StopContext(name: String)
@@ -67,7 +67,7 @@ object ContextSupervisor {
  *   }
  * }}}
  */
-class LocalContextSupervisorActor(dao: JobDAO) extends InstrumentedActor {
+class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
   import ContextSupervisor._
   import scala.collection.JavaConverters._
   import scala.concurrent.duration._
@@ -77,8 +77,7 @@ class LocalContextSupervisorActor(dao: JobDAO) extends InstrumentedActor {
   val contextTimeout = SparkJobUtils.getContextTimeout(config)
   import context.dispatcher   // to get ExecutionContext for futures
 
-  private val contexts = mutable.HashMap.empty[String, ActorRef]
-  private val resultActors = mutable.HashMap.empty[String, ActorRef]
+  private val contexts = mutable.HashMap.empty[String, (ActorRef, ActorRef)]
 
   // This is for capturing results for ad-hoc jobs. Otherwise when ad-hoc job dies, resultActor also dies,
   // and there is no way to retrieve results.
@@ -104,7 +103,7 @@ class LocalContextSupervisorActor(dao: JobDAO) extends InstrumentedActor {
         }
       }
 
-    case GetAdHocContext(classPath, contextConfig) =>
+    case StartAdHocContext(classPath, contextConfig) =>
       val originator = sender // Sender is a mutable reference, must capture in immutable val
       logger.info("Creating SparkContext for adhoc jobs.")
 
@@ -118,20 +117,20 @@ class LocalContextSupervisorActor(dao: JobDAO) extends InstrumentedActor {
 
       // Create JobManagerActor and JobResultActor
       startContext(contextName, mergedConfig, true, contextTimeout) { contextMgr =>
-        originator ! (contexts(contextName), resultActors(contextName))
+        originator ! contexts(contextName)
       } { err =>
         originator ! ContextInitError(err)
       }
 
     case GetResultActor(name) =>
-      sender ! resultActors.get(name).getOrElse(globalResultActor)
+      sender ! contexts.get(name).map(_._2).getOrElse(globalResultActor)
 
     case GetContext(name) =>
       if (contexts contains name) {
-        val future = (contexts(name) ? SparkContextStatus) (contextTimeout.seconds)
+        val future = (contexts(name)._1 ? SparkContextStatus) (contextTimeout.seconds)
         val originator = sender
         future.collect {
-          case SparkContextAlive => originator ! (contexts(name), resultActors(name))
+          case SparkContextAlive => originator ! contexts(name)
           case SparkContextDead =>
             logger.info("SparkContext {} is dead", name)
             self ! StopContext(name)
@@ -144,17 +143,14 @@ class LocalContextSupervisorActor(dao: JobDAO) extends InstrumentedActor {
     case StopContext(name) =>
       if (contexts contains name) {
         logger.info("Shutting down context {}", name)
-
-        context.watch(contexts(name))
-        contexts(name) ! PoisonPill
-        resultActors.remove(name)
+        contexts(name)._1 ! PoisonPill
         sender ! ContextStopped
       } else {
         sender ! NoSuchContext
       }
 
     case Terminated(actorRef) =>
-      val name :String = actorRef.path.name
+      val name = actorRef.path.name
       logger.info("Actor terminated: " + name)
       contexts.remove(name)
   }
@@ -166,18 +162,23 @@ class LocalContextSupervisorActor(dao: JobDAO) extends InstrumentedActor {
     logger.info("Creating a SparkContext named {}", name)
 
     val resultActorRef = if (isAdHoc) Some(globalResultActor) else None
-    val ref = context.actorOf(Props(
-      classOf[JobManagerActor], dao, name, contextConfig, isAdHoc, resultActorRef), name)
-    (ref ? JobManagerActor.Initialize)(Timeout(timeoutSecs.second)).onComplete {
+    val mergedConfig = ConfigFactory.parseMap(
+                         Map("is-adhoc" -> isAdHoc.toString,
+                             "context.name" -> name,
+                             "context.actorname" -> name).asJava
+                       ).withFallback(contextConfig)
+    val ref = context.actorOf(JobManagerActor.props(mergedConfig), name)
+    (ref ? JobManagerActor.Initialize(
+      dao, resultActorRef))(Timeout(timeoutSecs.second)).onComplete {
       case Failure(e: Exception) =>
         logger.error("Exception after sending Initialize to JobManagerActor", e)
         // Make sure we try to shut down the context in case it gets created anyways
         ref ! PoisonPill
         failureFunc(e)
-      case Success(JobManagerActor.Initialized(resultActor)) =>
+      case Success(JobManagerActor.Initialized(_, resultActor)) =>
         logger.info("SparkContext {} initialized", name)
-        contexts(name) = ref
-        resultActors(name) = resultActor
+        contexts(name) = (ref, resultActor)
+        context.watch(ref)
         successFunc(ref)
       case Success(JobManagerActor.InitError(t)) =>
         ref ! PoisonPill

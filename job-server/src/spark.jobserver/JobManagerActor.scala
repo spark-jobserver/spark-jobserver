@@ -1,38 +1,42 @@
 package spark.jobserver
 
 import java.util.concurrent.Executors._
-import akka.actor.{ActorRef, Props, PoisonPill}
+
+import akka.actor.{ActorRef, PoisonPill, Props}
 import com.typesafe.config.Config
 import java.net.{URI, URL}
 import java.util.concurrent.atomic.AtomicInteger
+
 import ooyala.common.akka.InstrumentedActor
-import org.apache.spark.{ SparkEnv, SparkContext }
+import org.apache.hadoop.conf.Configuration
+import org.apache.spark.{SparkConf, SparkContext, SparkEnv}
 import org.joda.time.DateTime
-import scala.concurrent.{ Future, ExecutionContext }
+
+import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 import spark.jobserver.ContextSupervisor.StopContext
-import spark.jobserver.io.{ JobDAO, JobInfo, JarInfo }
+import spark.jobserver.io.{JarInfo, JobDAO, JobDAOActor, JobInfo}
 import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
 
 object JobManagerActor {
   // Messages
-  case object Initialize
+  case class Initialize(daoActor: ActorRef, resultActorOpt: Option[ActorRef])
   case class StartJob(appName: String, classPath: String, config: Config,
                       subscribedEvents: Set[Class[_]])
   case class KillJob(jobId: String)
+  case object GetContextConfig
   case object SparkContextStatus
 
   // Results/Data
-  case class Initialized(resultActor: ActorRef)
+  case class ContextConfig(contextName: String, contextConfig: SparkConf, hadoopConfig: Configuration)
+  case class Initialized(contextName: String, resultActor: ActorRef)
   case class InitError(t: Throwable)
   case class JobLoadingError(err: Throwable)
   case object SparkContextAlive
   case object SparkContextDead
 
   // Akka 2.2.x style actor props for actor creation
-  def props(dao: JobDAO, name: String, config: Config, isAdHoc: Boolean,
-            resultActorRef: Option[ActorRef] = None): Props =
-    Props(classOf[JobManagerActor], dao, name, config, isAdHoc, resultActorRef)
+  def props(contextConfig: Config): Props = Props(classOf[JobManagerActor], contextConfig)
 }
 
 /**
@@ -50,6 +54,8 @@ object JobManagerActor {
  *  context-factory = "spark.jobserver.context.DefaultSparkContextFactory"
  *  spark.mesos.coarse = true  # per-context, rather than per-job, resource allocation
  *  rdd-ttl = 24 h            # time-to-live for RDDs in a SparkContext.  Don't specify = forever
+ *  is-adhoc = false          # true if context is ad-hoc context
+ *  context.name = "sql"      # Name of context
  * }}}
  *
  * == global configuration ==
@@ -61,11 +67,7 @@ object JobManagerActor {
  *   }
  * }}}
  */
-class JobManagerActor(dao: JobDAO,
-                      contextName: String,
-                      contextConfig: Config,
-                      isAdHoc: Boolean,
-                      resultActorRef: Option[ActorRef] = None) extends InstrumentedActor {
+class JobManagerActor(contextConfig: Config) extends InstrumentedActor {
 
   import CommonMessages._
   import JobManagerActor._
@@ -78,21 +80,28 @@ class JobManagerActor(dao: JobDAO,
 
   var jobContext: ContextLike = _
   var sparkEnv: SparkEnv = _
-  protected var rddManagerActor: ActorRef = _
 
   private val currentRunningJobs = new AtomicInteger(0)
 
   // When the job cache retrieves a jar from the DAO, it also adds it to the SparkContext for distribution
   // to executors.  We do not want to add the same jar every time we start a new job, as that will cause
   // the executors to re-download the jar every time, and causes race conditions.
-  // NOTE: It's important that jobCache be lazy as sparkContext is not initialized until later
+
   private val jobCacheSize = Try(config.getInt("spark.job-cache.max-entries")).getOrElse(10000)
+  private val jobCacheEnabled = Try(config.getBoolean("spark.job-cache.enabled")).getOrElse(false)
   // Use Spark Context's built in classloader when SPARK-1230 is merged.
   private val jarLoader = new ContextURLClassLoader(Array[URL](), getClass.getClassLoader)
-  lazy val jobCache = new JobCache(jobCacheSize, dao, jobContext.sparkContext, jarLoader)
+  private val contextName = contextConfig.getString("context.name")
+  private val isAdHoc = Try(contextConfig.getBoolean("is-adhoc")).getOrElse(false)
 
-  private val statusActor = context.actorOf(Props(classOf[JobStatusActor], dao), "status-actor")
-  protected val resultActor = resultActorRef.getOrElse(context.actorOf(Props[JobResultActor], "result-actor"))
+  //NOTE: Must be initialized after sparkContext is created
+  private var jobCache: JobCache = _
+
+  private var statusActor: ActorRef = _
+  protected var resultActor: ActorRef = _
+  private var daoActor: ActorRef = _
+
+  private val jobServerNamedObjects = new JobServerNamedObjects(context.system)
 
   override def postStop() {
     logger.info("Shutting down SparkContext {}", contextName)
@@ -100,7 +109,11 @@ class JobManagerActor(dao: JobDAO,
   }
 
   def wrappedReceive: Receive = {
-    case Initialize =>
+    case Initialize(dao, resOpt) =>
+      daoActor = dao
+      statusActor = context.actorOf(JobStatusActor.props(daoActor))
+      resultActor = resOpt.getOrElse(context.actorOf(Props[JobResultActor]))
+
       try {
         // Load side jars first in case the ContextFactory comes from it
         getSideJars(contextConfig).foreach { jarUri =>
@@ -108,10 +121,9 @@ class JobManagerActor(dao: JobDAO,
         }
         jobContext = createContextFromConfig()
         sparkEnv = SparkEnv.get
-        rddManagerActor = context.actorOf(Props(classOf[RddManagerActor], jobContext.sparkContext),
-                                          "rdd-manager-actor")
+        jobCache = new JobCache(jobCacheSize, daoActor, jobContext.sparkContext, jarLoader)
         getSideJars(contextConfig).foreach { jarUri => jobContext.sparkContext.addJar(jarUri) }
-        sender ! Initialized(resultActor)
+        sender ! Initialized(contextName, resultActor)
       } catch {
         case t: Throwable =>
           logger.error("Failed to create context " + contextName + ", shutting down actor", t)
@@ -119,8 +131,18 @@ class JobManagerActor(dao: JobDAO,
           self ! PoisonPill
       }
 
-    case StartJob(appName, classPath, jobConfig, events) =>
-      startJobInternal(appName, classPath, jobConfig, events, jobContext, sparkEnv, rddManagerActor)
+    case StartJob(appName, classPath, jobConfig, events) => {
+      val loadedJars = jarLoader.getURLs
+      getSideJars(jobConfig).foreach { jarUri =>
+        val jarToLoad = new URL(convertJarUriSparkToJava(jarUri))
+        if(! loadedJars.contains(jarToLoad)){
+          logger.info("Adding {} to Current Job Class path", jarUri)
+          jarLoader.addURL(new URL(convertJarUriSparkToJava(jarUri)))
+          jobContext.sparkContext.addJar(jarUri)
+        }
+      }
+      startJobInternal(appName, classPath, jobConfig, events, jobContext, sparkEnv)
+    }
 
     case KillJob(jobId: String) => {
       jobContext.sparkContext.cancelJobGroup(jobId)
@@ -136,7 +158,23 @@ class JobManagerActor(dao: JobDAO,
           sender ! SparkContextAlive
         } catch {
           case e: Exception => {
-            logger.error("SparkContext is not exist!")
+            logger.error("SparkContext does not exist!")
+            sender ! SparkContextDead
+          }
+        }
+      }
+    }
+    case GetContextConfig => {
+      if (jobContext.sparkContext == null) {
+        sender ! SparkContextDead
+      } else {
+        try {
+          val conf: SparkConf = jobContext.sparkContext.getConf
+          val hadoopConf: Configuration = jobContext.sparkContext.hadoopConfiguration
+          sender ! ContextConfig(jobContext.sparkContext.appName, conf, hadoopConf)
+        } catch {
+          case e: Exception => {
+            logger.error("SparkContext does not exist!")
             sender ! SparkContextDead
           }
         }
@@ -149,13 +187,24 @@ class JobManagerActor(dao: JobDAO,
                        jobConfig: Config,
                        events: Set[Class[_]],
                        jobContext: ContextLike,
-                       sparkEnv: SparkEnv,
-                       rddManagerActor: ActorRef): Option[Future[Any]] = {
+                       sparkEnv: SparkEnv): Option[Future[Any]] = {
     var future: Option[Future[Any]] = None
     breakable {
-      val lastUploadTime = dao.getLastUploadTime(appName)
+      import akka.pattern.ask
+      import akka.util.Timeout
+      import scala.concurrent.duration._
+      import scala.concurrent.Await
+
+      val daoAskTimeout = Timeout(3 seconds)
+      // TODO: refactor so we don't need Await, instead flatmap into more futures
+      val resp = Await.result(
+        (daoActor ? JobDAOActor.GetLastUploadTime(appName))(daoAskTimeout).mapTo[JobDAOActor.LastUploadTime],
+        daoAskTimeout.duration)
+
+      val lastUploadTime = resp.lastUploadTime
       if (!lastUploadTime.isDefined) {
         sender ! NoSuchApplication
+        postEachJob()
         break
       }
 
@@ -191,8 +240,7 @@ class JobManagerActor(dao: JobDAO,
 
       val jobInfo = JobInfo(jobId, contextName, jarInfo, classPath, DateTime.now(), None, None)
       future =
-        Option(getJobFuture(jobJarInfo, jobInfo, jobConfig, sender, jobContext, sparkEnv,
-                            rddManagerActor))
+        Option(getJobFuture(jobJarInfo, jobInfo, jobConfig, sender, jobContext, sparkEnv))
     }
 
     future
@@ -203,8 +251,7 @@ class JobManagerActor(dao: JobDAO,
                            jobConfig: Config,
                            subscriber: ActorRef,
                            jobContext: ContextLike,
-                           sparkEnv: SparkEnv,
-                           rddManagerActor: ActorRef): Future[Any] = {
+                           sparkEnv: SparkEnv): Future[Any] = {
 
     val jobId = jobInfo.jobId
     val constructor = jobJarInfo.constructor
@@ -222,49 +269,71 @@ class JobManagerActor(dao: JobDAO,
     Future {
       org.slf4j.MDC.put("jobId", jobId)
       logger.info("Starting job future thread")
-
-      // Need to re-set the SparkEnv because it's thread-local and the Future runs on a diff thread
-      SparkEnv.set(sparkEnv)
-
-      // Use the Spark driver's class loader as it knows about all our jars already
-      // NOTE: This may not even be necessary if we set the driver ActorSystem classloader correctly
-      Thread.currentThread.setContextClassLoader(jarLoader)
-      val job = constructor()
-      if (job.isInstanceOf[NamedRddSupport]) {
-        val namedRdds = job.asInstanceOf[NamedRddSupport].namedRddsPrivate
-        if (namedRdds.get() == null) {
-          namedRdds.compareAndSet(null, new JobServerNamedRdds(rddManagerActor))
-        }
-      }
-
       try {
-        statusActor ! JobStatusActor.JobInit(jobInfo)
+        // Need to re-set the SparkEnv because it's thread-local and the Future runs on a diff thread
+        SparkEnv.set(sparkEnv)
 
-        val jobC = jobContext.asInstanceOf[job.C]
-        job.validate(jobC, jobConfig) match {
-          case SparkJobInvalid(reason) => {
-            val err = new Throwable(reason)
-            statusActor ! JobValidationFailed(jobId, DateTime.now(), err)
-            throw err
-          }
-          case SparkJobValid => {
-            statusActor ! JobStarted(jobId: String, contextName, jobInfo.startTime)
-            val sc = jobContext.sparkContext
-            sc.setJobGroup(jobId, s"Job group for $jobId and spark context ${sc.applicationId}", true)
-            job.runJob(jobC, jobConfig)
+        // Use the Spark driver's class loader as it knows about all our jars already
+        // NOTE: This may not even be necessary if we set the driver ActorSystem classloader correctly
+        Thread.currentThread.setContextClassLoader(jarLoader)
+        val job = constructor()
+        if (job.isInstanceOf[NamedObjectSupport]) {
+          val namedObjects = job.asInstanceOf[NamedObjectSupport].namedObjectsPrivate
+          if (namedObjects.get() == null) {
+            namedObjects.compareAndSet(null, jobServerNamedObjects)
           }
         }
-      } finally {
-        org.slf4j.MDC.remove("jobId")
+
+        try {
+          statusActor ! JobStatusActor.JobInit(jobInfo)
+
+          val jobC = jobContext.asInstanceOf[job.C]
+          job.validate(jobC, jobConfig) match {
+            case SparkJobInvalid(reason) => {
+              val err = new Throwable(reason)
+              statusActor ! JobValidationFailed(jobId, DateTime.now(), err)
+              throw err
+            }
+            case SparkJobValid => {
+              statusActor ! JobStarted(jobId: String, contextName, jobInfo.startTime)
+              val sc = jobContext.sparkContext
+              sc.setJobGroup(jobId, s"Job group for $jobId and spark context ${sc.applicationId}", true)
+              job.runJob(jobC, jobConfig)
+            }
+          }
+        } finally {
+          org.slf4j.MDC.remove("jobId")
+        }
+      } catch {
+        case e: java.lang.AbstractMethodError => {
+          logger.error("Oops, there's an AbstractMethodError... maybe you compiled " +
+            "your code with an older version of SJS? here's the exception:", e)
+          throw e
+        }
+        case e: Throwable => {
+          logger.error("Got Throwable", e)
+          throw e
+        };
       }
     }(executionContext).andThen {
       case Success(result: Any) =>
         statusActor ! JobFinished(jobId, DateTime.now())
+        // TODO: If the result is Stream[_] and this is running with context-per-jvm=true configuration
+        // serializing a Stream[_] blob across process boundaries is not desirable.
+        // In that scenario an enhancement is required here to chunk stream results back.
+        // Something like ChunkedJobResultStart, ChunkJobResultMessage, and ChunkJobResultEnd messages
+        // might be a better way to send results back and then on the other side use chunked encoding
+        // transfer to send the chunks back. Alternatively the stream could be persisted here to HDFS
+        // and the streamed out of InputStream on the other side.
+        // Either way an enhancement would be required here to make Stream[_] responses work
+        // with context-per-jvm=true configuration
         resultActor ! JobResult(jobId, result)
       case Failure(error: Throwable) =>
+        // Wrapping the error inside a RuntimeException to handle the case of throwing custom exceptions.
+        val wrappedError = wrapInRuntimeException(error)
         // If and only if job validation fails, JobErroredOut message is dropped silently in JobStatusActor.
-        statusActor ! JobErroredOut(jobId, DateTime.now(), error)
-        logger.warn("Exception from job " + jobId + ": ", error)
+        statusActor ! JobErroredOut(jobId, DateTime.now(), wrappedError)
+        logger.error("Exception from job " + jobId + ": ", error)
     }(executionContext).andThen {
       case _ =>
         // Make sure to decrement the count of running jobs when a job finishes, in both success and failure
@@ -274,6 +343,28 @@ class JobManagerActor(dao: JobDAO,
         currentRunningJobs.getAndDecrement()
         postEachJob()
     }(executionContext)
+  }
+
+  // Wraps a Throwable object into a RuntimeException. This is useful in case
+  // a custom exception is thrown. Currently, throwing a custom exception doesn't
+  // work and this is a workaround to wrap it into a standard exception.
+  protected def wrapInRuntimeException(t: Throwable): RuntimeException = {
+    val cause : Throwable = getRootCause(t)
+    val e : RuntimeException = new RuntimeException("%s: %s"
+      .format(cause.getClass().getName() ,cause.getMessage))
+    e.setStackTrace(cause.getStackTrace())
+    return e
+  }
+
+  // Gets the very first exception that caused the current exception to be thrown.
+  protected def getRootCause(t: Throwable): Throwable = {
+    var result : Throwable = t
+    var cause : Throwable = result.getCause()
+    while(cause != null  && (result != cause) ) {
+      result = cause
+      cause = result.getCause()
+    }
+    return result
   }
 
   // Use our classloader and a factory to create the SparkContext.  This ensures the SparkContext will use
@@ -289,8 +380,8 @@ class JobManagerActor(dao: JobDAO,
 
   // This method should be called after each job is succeeded or failed
   private def postEachJob() {
-    // Delete the JobManagerActor after each adhoc job
-    if (isAdHoc) context.parent ! StopContext(contextName) // its parent is LocalContextSupervisorActor
+    // Delete myself after each adhoc job
+    if (isAdHoc) self ! PoisonPill
   }
 
   // Protocol like "local" is supported in Spark for Jar loading, but not supported in Java.

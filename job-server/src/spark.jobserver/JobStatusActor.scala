@@ -1,23 +1,26 @@
 package spark.jobserver
 
-import akka.actor.ActorRef
+import akka.actor.{ActorRef, Props}
 import com.yammer.metrics.core.Meter
 import ooyala.common.akka.InstrumentedActor
 import ooyala.common.akka.metrics.YammerMetrics
+import org.joda.time.DateTime
 import scala.collection.mutable
 import scala.util.Try
-import spark.jobserver.io.{ JobInfo, JobDAO }
+import spark.jobserver.io.{JobDAOActor, JobInfo, JobDAO}
 
 object JobStatusActor {
   case class JobInit(jobInfo: JobInfo)
   case class GetRunningJobStatus()
+
+  def props(jobDao: ActorRef): Props = Props(classOf[JobStatusActor], jobDao)
 }
 
 /**
  * It is an actor to manage job status updates
  *
  */
-class JobStatusActor(jobDao: JobDAO) extends InstrumentedActor with YammerMetrics {
+class JobStatusActor(jobDao: ActorRef) extends InstrumentedActor with YammerMetrics {
   import CommonMessages._
   import JobStatusActor._
   import spark.jobserver.util.DateUtils.dateTimeToScalaWrapper
@@ -31,6 +34,14 @@ class JobStatusActor(jobDao: JobDAO) extends InstrumentedActor with YammerMetric
   val metricNumSubscriptions = gauge("num-subscriptions", subscribers.size)
   val metricNumJobInfos = gauge("num-running-jobs", infos.size)
   val metricStatusRates = mutable.HashMap.empty[String, Meter]
+
+  override def postStop(): Unit = {
+    val stopTime = DateTime.now()
+    val stoppedInfos = infos.values.map { info =>
+      info.copy(endTime = Some(stopTime),
+                error = Some(new Exception(s"Context (${info.contextName}) for this job was terminated"))) }
+    stoppedInfos.foreach({info => jobDao ! JobDAOActor.SaveJobInfo(info)})
+  }
 
   override def wrappedReceive: Receive = {
     case GetRunningJobStatus =>
@@ -98,7 +109,7 @@ class JobStatusActor(jobDao: JobDAO) extends InstrumentedActor with YammerMetric
     if (infos.contains(msg.jobId)) {
       infos(msg.jobId) = infoModifier(infos(msg.jobId), msg)
       logger.info("Job {} {}", msg.jobId: Any, logMessage)
-      jobDao.saveJobInfo(infos(msg.jobId))
+      jobDao ! JobDAOActor.SaveJobInfo(infos(msg.jobId))
       publishMessage(msg.jobId, msg)
       updateMessageRate(msg)
       if (remove) infos.remove(msg.jobId)

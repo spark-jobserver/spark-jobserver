@@ -8,7 +8,8 @@ import org.apache.spark._
  */
 object NoOpJob extends SparkJob {
   def main(args: Array[String]) {
-    val sc = new SparkContext("local[4]", "NoOpJob")
+    val conf = new SparkConf().setMaster("local[4]").setAppName("NoOpJob")
+    val sc = new SparkContext(conf)
     val config = ConfigFactory.parseString("")
     val results = runJob(sc, config)
     println("Result is " + results)

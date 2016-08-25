@@ -31,8 +31,6 @@ elif [ -z "$ENV" ]; then
     exit 1
 fi
 
-SPARK_VERSION=1.4.1.1 #Last digit is DSE Specific 
-
 DEPLOY_HOSTS="localhost"
 
 INSTALL_DIR="$DSE_COMPONENTS_ROOT/spark/spark-jobserver"
@@ -41,5 +39,3 @@ LOG_DIR=/var/log/spark/job-server
 PIDFILE=spark-jobserver.pid
 
 SPARK_CONF_DIR=${SPARK_CONF_DIR:-"$SPARK_HOME/conf"}
-
-SCALA_VERSION=2.10.5 # or 2.11.6

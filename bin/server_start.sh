@@ -18,6 +18,8 @@ get_abs_script_path() {
 
 get_abs_script_path
 
+. $appdir/setenv.sh
+
 GC_OPTS="-XX:+UseConcMarkSweepGC
          -verbose:gc -XX:+PrintGCTimeStamps -Xloggc:$appdir/gc.out
          -XX:MaxPermSize=512m
@@ -26,7 +28,7 @@ GC_OPTS="-XX:+UseConcMarkSweepGC
 # To truly enable JMX in AWS and other containerized environments, also need to set
 # -Djava.rmi.server.hostname equal to the hostname in that environment.  This is specific
 # depending on AWS vs GCE etc.
-JAVA_OPTS="-XX:MaxDirectMemorySize=512M \
+JAVA_OPTS="-XX:MaxDirectMemorySize=$MAX_DIRECT_MEMORY \
            -XX:+HeapDumpOnOutOfMemoryError -Djava.net.preferIPv4Stack=true \
            -Dcom.sun.management.jmxremote.port=9999 \
            -Dcom.sun.management.jmxremote.rmi.port=9999 \
@@ -35,89 +37,20 @@ JAVA_OPTS="-XX:MaxDirectMemorySize=512M \
 
 MAIN="spark.jobserver.JobServer"
 
-if [ -f "$JOBSERVER_CONFIG" ]; then
-  conffile="$JOBSERVER_CONFIG"
-else
-  conffile=$(ls -1 $appdir/*.conf | head -1)
-  if [ -z "$conffile" ]; then
-    echo "No configuration file found"
-    exit 1
-  fi
-fi
-
-if [ -f "$appdir/settings.sh" ]; then
-  . "$appdir/settings.sh"
-else
-  echo "Missing $appdir/settings.sh, exiting"
-  exit 1
-fi
-
-if [ -z "$SPARK_HOME" ]; then
-  echo "Please set SPARK_HOME or put it in $appdir/settings.sh first"
-  exit 1
-fi
-
-pidFilePath=$appdir/$PIDFILE
-
-if [ -f "$pidFilePath" ] && kill -0 "$(cat "$pidFilePath")"; then
+PIDFILE=$appdir/spark-jobserver.pid
+if [ -f "$PIDFILE" ] && kill -0 $(cat "$PIDFILE"); then
    echo 'Job server is already running'
    exit 1
 fi
 
-if [ -z "$LOG_DIR" ]; then
-  LOG_DIR=/tmp/job-server
-  echo "LOG_DIR empty; logging will go to $LOG_DIR"
-fi
-mkdir -p $LOG_DIR
-
-LOGGING_OPTS="-DLOG_DIR=$LOG_DIR"
-
-export SPARK_SUBMIT_LOGBACK_CONF_FILE="$appdir/logback-server.xml"
-
-# For Mesos
-CONFIG_OVERRIDES=""
-if [ -n "$SPARK_EXECUTOR_URI" ]; then
-  CONFIG_OVERRIDES="-Dspark.executor.uri=$SPARK_EXECUTOR_URI "
-fi
-# For Mesos/Marathon, use the passed-in port
-if [ "$PORT" != "" ]; then
-  CONFIG_OVERRIDES+="-Dspark.jobserver.port=$PORT "
-fi
-
-if [ -z "$JOBSERVER_MEMORY" ]; then
-	JOBSERVER_MEMORY=1G
-fi
-
-# This needs to be exported for standalone mode so drivers can connect to the Spark cluster
-export SPARK_HOME
-export YARN_CONF_DIR
-export HADOOP_CONF_DIR
-
-# Identify location of dse command
-DSE="/usr/bin/dse"
-if [ -z "$DSE_HOME" ]; then
-    if [ -e "$DSE" ]; then
-        export DSE_HOME=/usr/share/dse
-    fi
-fi
-if [ ! -e "$DSE" ]; then
-    if [ -e "$DSE_HOME"/bin/dse ]; then
-        DSE="$DSE_HOME"/bin/dse
-    else
-      echo "Cannot determine DSE_HOME, please set it manually to your DSE install directory"
-      exit 1
-    fi
-fi
-
-# Submit the job server
-cmd='$DSE spark-submit --class $MAIN --driver-memory $JOBSERVER_MEMORY
+cmd='$SPARK_HOME/bin/spark-submit --class $MAIN --driver-memory $JOBSERVER_MEMORY
   --conf "spark.executor.extraJavaOptions=$LOGGING_OPTS"
   --driver-java-options "$GC_OPTS $JAVA_OPTS $LOGGING_OPTS $CONFIG_OVERRIDES"
   $@ $appdir/spark-job-server.jar $conffile'
 
 if [ -z "$JOBSERVER_FG" ]; then
-  eval $cmd 2>&1 &
-  echo $! > $pidFilePath
+  eval $cmd > /dev/null 2>&1 < /dev/null &
+  echo $! > $PIDFILE
 else
   eval $cmd
 fi

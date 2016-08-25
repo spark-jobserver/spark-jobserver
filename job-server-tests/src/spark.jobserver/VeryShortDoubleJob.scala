@@ -11,7 +11,8 @@ object VeryShortDoubleJob extends SparkJob {
   private val data = Array(1, 2, 3)
 
   def main(args: Array[String]) {
-    val sc = new SparkContext("local[4]", "VeryShortDoubleJob")
+    val conf = new SparkConf().setMaster("local[4]").setAppName("VeryShortDoubleJob")
+    val sc = new SparkContext(conf)
     val config = ConfigFactory.parseString("")
     val results = runJob(sc, config)
     println("Result is " + results)

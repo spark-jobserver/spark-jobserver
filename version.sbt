@@ -1,1 +1,3 @@
-version in ThisBuild := "0.6.0.100"
+def currentVersion: String = ("git describe --tags --match v*" !!).trim.substring(1)
+
+version in ThisBuild := currentVersion
