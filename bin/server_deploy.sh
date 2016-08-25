@@ -41,7 +41,9 @@ fi
 FILES="job-server-extras/target/scala-$majorVersion/spark-job-server.jar
        bin/server_start.sh
        bin/server_stop.sh
+       bin/kill-process-tree.sh
        $CONFIG_DIR/$ENV.conf
+	   config/shiro.ini
        config/log4j-server.properties"
 
 ssh_key_to_use=""

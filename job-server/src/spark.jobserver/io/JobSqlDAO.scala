@@ -3,11 +3,13 @@ package spark.jobserver.io
 import com.typesafe.config.{ConfigRenderOptions, Config, ConfigFactory}
 import java.io.{FileOutputStream, BufferedOutputStream, File}
 import java.sql.Timestamp
+import javax.sql.DataSource
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import scala.slick.driver.JdbcProfile
 import scala.slick.jdbc.meta.MTable
 import scala.reflect.runtime.universe
+import org.apache.commons.dbcp.BasicDataSource
 
 class JobSqlDAO(config: Config) extends JobDAO {
   val slickDriverClass = config.getString("spark.jobserver.sqldao.slick-driver")
@@ -62,7 +64,23 @@ class JobSqlDAO(config: Config) extends JobDAO {
 
   // DB initialization
   val jdbcUrl = config.getString("spark.jobserver.sqldao.jdbc.url")
-  val db = Database.forURL(jdbcUrl, driver = jdbcDriverClass)
+  val jdbcUser = config.getString("spark.jobserver.sqldao.jdbc.user")
+  val jdbcPassword = config.getString("spark.jobserver.sqldao.jdbc.password")
+  val dbcpMaxActive = config.getInt("spark.jobserver.sqldao.dbcp.maxactive")
+  val dbcpMaxIdle = config.getInt("spark.jobserver.sqldao.dbcp.maxidle")
+  val dbcpInitialSize = config.getInt("spark.jobserver.sqldao.dbcp.initialsize")
+  val dataSource: DataSource = {
+    val ds = new BasicDataSource
+    ds.setDriverClassName(jdbcDriverClass)
+    ds.setUsername(jdbcUser)
+    ds.setPassword(jdbcPassword)
+    ds.setMaxActive(dbcpMaxActive)
+    ds.setMaxIdle(dbcpMaxIdle)
+    ds.setInitialSize(dbcpInitialSize)
+    ds.setUrl(jdbcUrl)
+    ds
+  }
+  val db = Database.forDataSource(dataSource)
 
   // Server initialization
   init()
@@ -260,7 +278,7 @@ class JobSqlDAO(config: Config) extends JobDAO {
     }
   }
 
-  override def getJobInfos: Map[String, JobInfo] = {
+  override def getJobInfos(limit: Int): Seq[JobInfo] = {
     db withSession {
       implicit sessions =>
 
@@ -270,17 +288,42 @@ class JobSqlDAO(config: Config) extends JobDAO {
           j <- jobs if j.jarId === jar.jarId
         } yield
           (j.jobId, j.contextName, jar.appName, jar.uploadTime, j.classPath, j.startTime, j.endTime, j.error)
-
+        val sortQuery = joinQuery.sortBy(_._6.desc)
+        val limitQuery = sortQuery.take(limit)
         // Transform the each row of the table into a map of JobInfo values
+        limitQuery.list.map {
+          case (id, context, app, upload, classpath, start, end, err) =>
+            JobInfo(id,
+              context,
+              JarInfo(app, convertDateSqlToJoda(upload)),
+              classpath,
+              convertDateSqlToJoda(start),
+              end.map(convertDateSqlToJoda(_)),
+              err.map(new Throwable(_)))
+        }.toSeq
+    }
+  }
+
+  override def getJobInfo(jobId: String): Option[JobInfo] = {
+    db withSession {
+      implicit sessions =>
+
+        // Join the JARS and JOBS tables without unnecessary columns
+        val joinQuery = for {
+          jar <- jars
+          j <- jobs if j.jarId === jar.jarId && j.jobId === jobId
+        } yield
+          (j.jobId, j.contextName, jar.appName, jar.uploadTime, j.classPath, j.startTime,
+            j.endTime, j.error)
         joinQuery.list.map { case (id, context, app, upload, classpath, start, end, err) =>
-          id -> JobInfo(id,
+          JobInfo(id,
             context,
             JarInfo(app, convertDateSqlToJoda(upload)),
             classpath,
             convertDateSqlToJoda(start),
             end.map(convertDateSqlToJoda(_)),
             err.map(new Throwable(_)))
-        }.toMap
+        }.headOption
     }
   }
 }
