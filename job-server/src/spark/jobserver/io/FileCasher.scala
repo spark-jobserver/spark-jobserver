@@ -1,7 +1,6 @@
 package spark.jobserver.io
 
 import java.io.{BufferedOutputStream, File, FileOutputStream}
-
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 

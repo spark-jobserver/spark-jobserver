@@ -20,6 +20,7 @@ import scala.concurrent.Future
 import spark.jobserver.cassandra.Cassandra.Resultset.toFuture
 
 import scala.util.Try
+import spark.jobserver.io.FileCasher
 
 object Metadata {
   val BinariesTable = "binaries"
