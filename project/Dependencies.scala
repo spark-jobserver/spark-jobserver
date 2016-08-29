@@ -1,6 +1,7 @@
 import sbt._
 import Versions._
 import ExclusionRules._
+
 object Dependencies {
 
   lazy val typeSafeConfigDeps = "com.typesafe" % "config" % typeSafeConfig
@@ -26,7 +27,7 @@ object Dependencies {
     yammerDeps
   )
 
-  val javaVersion = sys.env.getOrElse("JAVA_VERSION", "7-jdk")
+  val javaVersion = sys.env.getOrElse("JAVA_VERSION", "8-jdk")
 
   val mesosVersion = sys.env.getOrElse("MESOS_VERSION", mesos)
 
