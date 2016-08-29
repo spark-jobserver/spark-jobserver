@@ -26,3 +26,11 @@ ec2Cluster/
 
 # don't ignore the ec2 config and sh files
 !job-server/config/ec2.sh
+
+# ignore Eclipse specific files
+.cache-main
+.cache-tests
+.classpath
+.project
+bin/
+.settings/
