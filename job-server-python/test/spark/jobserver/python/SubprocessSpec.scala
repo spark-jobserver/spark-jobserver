@@ -32,10 +32,10 @@ object SubprocessSpec {
   lazy val jobServerPath = getPythonDir("src/python")
 
   lazy val pysparkPath = sys.env.get("SPARK_HOME").map(d => s"$d/python/lib/pyspark.zip")
-  lazy val py4jPath  = sys.env.get("SPARK_HOME").map(d => s"$d/python/lib/py4j-0.9-src.zip")
+  lazy val py4jPath  = sys.env.get("SPARK_HOME").map(d => s"$d/python/lib/py4j-0.10.1-src.zip")
   lazy val sparkPaths = sys.env.get("SPARK_HOME").map{sh =>
     val pysparkPath = s"$sh/python/lib/pyspark.zip"
-    val py4jPath  = s"$sh/python/lib/py4j-0.9-src.zip"
+    val py4jPath  = s"$sh/python/lib/py4j-0.10.1-src.zip"
     Seq(pysparkPath, py4jPath)
   }.getOrElse(Seq())
   lazy val originalPythonPath  = sys.env.get("PYTHONPATH")

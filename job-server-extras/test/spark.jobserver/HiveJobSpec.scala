@@ -1,13 +1,13 @@
 package spark.jobserver
 
-import scala.util.{ Try, Success, Failure }
+import scala.util.{Failure, Success, Try}
 import com.typesafe.config.ConfigFactory
 import org.apache.spark.sql.Row
-import org.apache.spark.{SparkContext, SparkConf}
-
+import org.apache.spark.sql.hive.HiveContext
+import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.sql.hive.test.TestHiveContext
-import spark.jobserver.context.{HiveContextLike, HiveContextFactory}
-import spark.jobserver.io.{JobDAO, JobDAOActor}
+import spark.jobserver.context.{HiveContextFactory, HiveContextLike}
+import spark.jobserver.io.JobDAOActor
 
 class TestHiveContextFactory extends HiveContextFactory {
   override protected def contextFactory(conf: SparkConf): C = {
