@@ -12,6 +12,7 @@
 * Add Scala version to Docker image (@mariussoutier)
 * Integrate converage into CI using codecov.io service (@hntd187)
 * Improve Chinese document (@stanzhai)
+* Return error if data file can't be deleted (@CalebFenton)
 * Make dbcp optional, default: disabled (@noorul)
 * Fix for logging issue in dev mode, #475 (@noorul)
 * Fix flaky tests (@TimMaltGermany)
