@@ -75,7 +75,7 @@ class DataFileDAO(config: Config) {
     val name = outFile.getAbsolutePath
     val bos = new BufferedOutputStream(new FileOutputStream(outFile))
     try {
-      logger.debug("Writing {} bytes to file {}", aBytes.size, outFile.getPath)
+      logger.debug("Writing {} bytes to file {}", aBytes.length, outFile.getPath)
       bos.write(aBytes)
       bos.flush()
     } finally {
@@ -95,13 +95,15 @@ class DataFileDAO(config: Config) {
     out.writeLong(aInfo.uploadTime.getMillis)
   }
 
-  def deleteFile(aName: String) {
+  def deleteFile(aName: String): Boolean = {
     if (aName.startsWith(rootDir) && files.contains(aName)) {
       // only delete the file if it is known to this class,
       // otherwise this could be abused
-      new File(aName).delete
-      files -= aName
+      val deleteResult = new File(aName).delete
+      if (deleteResult) files -= aName
+      return deleteResult
     }
+    false
   }
 
   private def readFileInfo(in: DataInputStream) = DataFileInfo(in.readUTF, new DateTime(in.readLong))

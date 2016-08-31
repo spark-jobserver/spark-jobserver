@@ -25,13 +25,11 @@ class DataManagerActor(fileDao: DataFileDAO) extends InstrumentedActor {
   override def wrappedReceive: Receive = {
     case ListData => sender ! fileDao.listFiles
 
-    case DeleteData(fileName) => {
-      fileDao.deleteFile(fileName)
-      sender ! Deleted
-    }
+    case DeleteData(fileName) =>
+      sender ! { if (fileDao.deleteFile(fileName)) Deleted else Error }
 
     case StoreData(aName, aBytes) =>
-      logger.info("Storing data in file prefix {}, {} bytes", aName, aBytes.size)
+      logger.info("Storing data in file prefix {}, {} bytes", aName, aBytes.length)
       val uploadTime = DateTime.now()
       val fName = fileDao.saveFile(aName, uploadTime, aBytes)
       sender ! Stored(fName)

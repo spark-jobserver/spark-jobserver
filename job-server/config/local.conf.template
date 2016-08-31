@@ -21,7 +21,13 @@ spark {
     jobdao = spark.jobserver.io.JobSqlDAO
 
     filedao {
-      rootdir = /tmp/spark-job-server/filedao/data
+      rootdir = /tmp/spark-jobserver/filedao/data
+    }
+
+    datadao {
+      # storage directory for files that are uploaded to the server
+      # via POST/data commands
+      rootdir = /tmp/spark-jobserver/upload
     }
 
     sqldao {
