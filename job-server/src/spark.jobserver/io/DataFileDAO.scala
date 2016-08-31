@@ -99,8 +99,9 @@ class DataFileDAO(config: Config) {
     if (aName.startsWith(rootDir) && files.contains(aName)) {
       // only delete the file if it is known to this class,
       // otherwise this could be abused
-      files -= aName
-      return new File(aName).delete
+      val deleteResult = new File(aName).delete
+      if (deleteResult) files -= aName
+      return deleteResult
     }
     false
   }

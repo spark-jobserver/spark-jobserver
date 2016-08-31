@@ -26,7 +26,7 @@ class DataManagerActor(fileDao: DataFileDAO) extends InstrumentedActor {
     case ListData => sender ! fileDao.listFiles
 
     case DeleteData(fileName) =>
-      if (fileDao.deleteFile(fileName)) sender ! Deleted else sender ! Error
+      sender ! { if (fileDao.deleteFile(fileName)) Deleted else Error }
 
     case StoreData(aName, aBytes) =>
       logger.info("Storing data in file prefix {}, {} bytes", aName, aBytes.length)
