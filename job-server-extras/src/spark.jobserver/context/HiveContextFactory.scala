@@ -7,7 +7,7 @@ import org.apache.spark.sql.hive.test.TestHiveContext
 import spark.jobserver.{ContextLike, SparkHiveJob, api}
 
 class HiveContextFactory extends ScalaContextFactory {
-  type C = TestHiveContext with ContextLike
+  type C = HiveContext with ContextLike
 
   def isValidJob(job: api.SparkJobBase): Boolean = job.isInstanceOf[SparkHiveJob]
 
@@ -16,7 +16,7 @@ class HiveContextFactory extends ScalaContextFactory {
   }
 
   protected def contextFactory(conf: SparkConf): C = {
-    new TestHiveContext(new SparkContext(conf)) with HiveContextLike
+    new HiveContext(new SparkContext(conf)) with HiveContextLike
   }
 }
 

@@ -12,7 +12,7 @@ import spark.jobserver.io.JobDAOActor
 class TestHiveContextFactory extends HiveContextFactory {
   override protected def contextFactory(conf: SparkConf): C = {
     val sc = new SparkContext(conf)
-    Try(new TestHiveContext(sc) with HiveContextLike) match {
+    Try(new HiveContext(sc) with HiveContextLike) match {
       case Success(hc) => hc
       case Failure(e) =>
         sc.stop
