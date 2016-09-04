@@ -9,9 +9,8 @@ import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, FunSpec, Matchers}
 import spark.jobserver._
 import spark.jobserver.api.JobEnvironment
-
-import scala.collection.convert.Wrappers.JMapWrapper
 import scala.concurrent.duration.FiniteDuration
+import scala.collection.JavaConverters._
 
 case class DummyJobEnvironment(jobId: String, contextConfig: Config) extends JobEnvironment {
 
@@ -162,7 +161,7 @@ class PythonSparkContextFactorySpec extends FunSpec with Matchers with BeforeAnd
       val jobData = jobDataOrProblem.get
       val result = job.runJob(context, jobEnv, jobData)
       result should matchPattern {
-        case m: java.util.Map[_, _] if JMapWrapper(m).toMap == Map("a" -> 2, "b" -> 3, "c" -> 1) =>
+        case m: java.util.Map[_, _] if m.asScala.toMap == Map("a" -> 2, "b" -> 3, "c" -> 1) =>
       }
     }
 
