@@ -38,11 +38,11 @@ class JobWithNamedRddsSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
     it("get() should return Some(RDD) when it exists") {
       val rdd = sc.parallelize(Seq(1, 2, 3))
       namedTestRdds.update("rdd1", rdd)
-      namedTestRdds.get[Int]("rdd1")(8) should equal(Some(rdd))
+      namedTestRdds.get[Int]("rdd1")(FiniteDuration(8, MILLISECONDS)) should equal(Some(rdd))
     }
 
     it("get() should ignore timeout when rdd is not known") {
-      namedTestRdds.get[Int]("rddXXX")(0) should equal(None)
+      namedTestRdds.get[Int]("rddXXX")(Duration.Zero) should equal(None)
     }
 
     it("get() should respect timeout when rdd is known, but not yet available") {
@@ -68,7 +68,7 @@ class JobWithNamedRddsSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
       val err = intercept[TimeoutException] { namedTestRdds.get[Int]("rdd-sleep")(1.milliseconds) }
       err.getClass should equal(classOf[TimeoutException])
       //now wait
-      namedTestRdds.get[Int]("rdd-sleep")(5000) should equal(Some(rdd.get))
+      namedTestRdds.get[Int]("rdd-sleep")(FiniteDuration(5, SECONDS)) should equal(Some(rdd.get))
       //clean-up
       namedTestRdds.destroy("rdd-sleep")
     }

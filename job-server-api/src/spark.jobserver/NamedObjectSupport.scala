@@ -1,9 +1,6 @@
 package spark.jobserver
 
-import akka.util.Timeout
-import java.util.concurrent.atomic.AtomicReference
-import scala.concurrent.duration.Duration
-
+import scala.concurrent.duration.FiniteDuration
 trait NamedObject
 
 /**
@@ -21,13 +18,13 @@ abstract class NamedObjectPersister[O <: NamedObject] {
 
   /**
    * update reference to named object so that it does not get GCed
-   * @param namedObj - reference to this object is to be refreshed
+   * @param namedObject - reference to this object is to be refreshed
    */
   def refresh(namedObject: O): O
 
   /**
    * unpersist the given object
-   * @param namedObj - object to be unpersisted
+   * @param namedObject - object to be unpersisted
    */
   def unpersist(namedObject: O): Unit
 }
@@ -45,7 +42,7 @@ abstract class NamedObjectPersister[O <: NamedObject] {
  */
 trait NamedObjects {
 
-  def defaultTimeout : Timeout
+  def defaultTimeout : FiniteDuration
 
   /**
    * Gets a named object (NObj) with the given name, or creates it if one doesn't already exist.
@@ -68,7 +65,7 @@ trait NamedObjects {
    * @throws java.lang.RuntimeException wrapping any error that occurs within the generator function.
    */
   def getOrElseCreate[O <: NamedObject](name: String, objGen: => O)
-                                        (implicit timeout: Timeout = defaultTimeout,
+                                        (implicit timeout: FiniteDuration = defaultTimeout,
                                         persister: NamedObjectPersister[O]): O
 
   /**
@@ -83,7 +80,7 @@ trait NamedObjects {
    * @return the NObj with the given name.
    * @throws java.util.concurrent.TimeoutException if the request to the RddManager times out.
    */
-  def get[O <: NamedObject](name: String)(implicit timeout: Timeout = defaultTimeout): Option[O]
+  def get[O <: NamedObject](name: String)(implicit timeout: FiniteDuration = defaultTimeout): Option[O]
 
   /**
    * Replaces an existing named object (NObj) with a given name with a new object.
@@ -104,7 +101,7 @@ trait NamedObjects {
    * @return the object with the given name.
    */
   def update[O <: NamedObject](name: String, objGen: => O)
-                               (implicit timeout: Timeout = defaultTimeout,
+                               (implicit timeout: FiniteDuration = defaultTimeout,
                                persister: NamedObjectPersister[O]): O
 
   /**

@@ -2,7 +2,6 @@ package ooyala.common.akka
 
 import java.util.concurrent.TimeUnit
 
-import akka.actor.Actor
 import com.yammer.metrics.Metrics
 
 /**

@@ -1,6 +1,5 @@
 package spark.jobserver
 
-import akka.util.Timeout
 import scala.concurrent.duration._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
@@ -66,7 +65,7 @@ trait NamedRddSupport extends NamedObjectSupport { self: SparkJob =>
    */
   trait _NamedRdds {
 
-    def defaultTimeout : Timeout
+    def defaultTimeout : FiniteDuration
 
     // Default level to cache RDDs at.
     val defaultStorageLevel = StorageLevel.MEMORY_ONLY
@@ -97,7 +96,7 @@ trait NamedRddSupport extends NamedObjectSupport { self: SparkJob =>
                            rddGen: => RDD[T],
                            forceComputation: Boolean = true,
                            storageLevel: StorageLevel = defaultStorageLevel)
-                           (implicit timeout: Timeout = defaultTimeout): RDD[T]
+                           (implicit timeout: FiniteDuration = defaultTimeout): RDD[T]
 
     /**
      * Gets an RDD with the given name if it already exists and is cached by the RddManager.
@@ -112,7 +111,7 @@ trait NamedRddSupport extends NamedObjectSupport { self: SparkJob =>
      * @return the RDD with the given name.
      * @throws java.util.concurrent.TimeoutException if the request to the RddManager times out.
      */
-    def get[T](name: String)(implicit timeout: Timeout = defaultTimeout): Option[RDD[T]]
+    def get[T](name: String)(implicit timeout: FiniteDuration = defaultTimeout): Option[RDD[T]]
 
     /**
      * Replaces an existing RDD with a given name with a new RDD. If an old RDD for the given name existed,
@@ -136,7 +135,7 @@ trait NamedRddSupport extends NamedObjectSupport { self: SparkJob =>
                   rddGen: => RDD[T],
                   forceComputation: Boolean = true,
                   storageLevel: StorageLevel = defaultStorageLevel)
-                  (implicit timeout: Timeout = defaultTimeout): RDD[T]
+                  (implicit timeout: FiniteDuration = defaultTimeout): RDD[T]
 
     /**
      * Destroys an RDD with the given name, if one existed. Has no effect if no RDD with this name exists.
@@ -164,14 +163,14 @@ trait NamedRddSupport extends NamedObjectSupport { self: SparkJob =>
                                     rddGen: => RDD[T],
                                     forceComputation: Boolean = true,
                                     storageLevel: StorageLevel = defaultStorageLevel)
-                                    (implicit timeout: Timeout = defaultTimeout): RDD[T] = {
+                                    (implicit timeout: FiniteDuration = defaultTimeout): RDD[T] = {
       namedObjects.getOrElseCreate(name, NamedRDD(rddGen, forceComputation, storageLevel))(timeout,
         new RDDPersister) match {
           case NamedRDD(namedRdd: RDD[T], _, _) => namedRdd
         }
     }
 
-    override def get[T](name: String)(implicit timeout: Timeout = defaultTimeout): Option[RDD[T]] = {
+    override def get[T](name: String)(implicit timeout: FiniteDuration = defaultTimeout): Option[RDD[T]] = {
       val namedObj: Option[NamedRDD[T]] = namedObjects.get(name)(timeout)
       namedObj match {
         case Some(NamedRDD(namedRdd: RDD[T], _, _)) => Some(namedRdd)
@@ -183,7 +182,7 @@ trait NamedRddSupport extends NamedObjectSupport { self: SparkJob =>
                            rddGen: => RDD[T],
                            forceComputation: Boolean = true,
                            storageLevel: StorageLevel = defaultStorageLevel)
-                           (implicit timeout: Timeout = defaultTimeout): RDD[T] = {
+                           (implicit timeout: FiniteDuration = defaultTimeout): RDD[T] = {
       namedObjects.update(name, NamedRDD(rddGen, forceComputation, storageLevel))(
         timeout, new RDDPersister) match {
           case NamedRDD(namedRdd: RDD[T], _, _) => namedRdd
@@ -201,7 +200,7 @@ trait NamedRddSupport extends NamedObjectSupport { self: SparkJob =>
     }
 
     override def getNames(): Iterable[String] = {
-      namedObjects.getNames
+      namedObjects.getNames()
     }
   }
 }
