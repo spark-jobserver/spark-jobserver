@@ -25,6 +25,8 @@ object JobManagerActor {
   case class StartJob(appName: String, classPath: String, config: Config,
                       subscribedEvents: Set[Class[_]])
   case class KillJob(jobId: String)
+  case class JobKilledException(jobId: String) extends Exception(s"Job $jobId killed")
+
   case object GetContextConfig
   case object SparkContextStatus
 

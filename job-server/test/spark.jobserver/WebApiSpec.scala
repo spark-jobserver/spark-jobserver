@@ -4,6 +4,7 @@ import akka.actor.{Actor, ActorSystem, Props}
 import com.typesafe.config.ConfigFactory
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
+import spark.jobserver.JobManagerActor.JobKilledException
 import spark.jobserver.io._
 import spray.routing.HttpService
 import spray.testkit.ScalatestRouteTest
@@ -49,6 +50,7 @@ with ScalatestRouteTest with HttpService {
     JobInfo("foo-1", "context", BinaryInfo("demo", BinaryType.Jar, dt), "com.abc.meme", dt, None, None)
   val finishedJobInfo = baseJobInfo.copy(endTime = Some(dt.plusMinutes(5)))
   val errorJobInfo = finishedJobInfo.copy(error =  Some(new Throwable("test-error")))
+  val killedJobInfo = finishedJobInfo.copy(error =  Some(JobKilledException(finishedJobInfo.jobId)))
   val StatusKey = "status"
   val ResultKey = "result"
   class DummyActor extends Actor {
@@ -90,6 +92,7 @@ with ScalatestRouteTest with HttpService {
       case GetJobStatuses(limitOpt, statusOpt) => {
         statusOpt match {
           case Some(JobStatus.Error) => sender ! Seq(errorJobInfo)
+          case Some(JobStatus.Killed) => sender ! Seq(killedJobInfo)
           case Some(JobStatus.Finished) => sender ! Seq(finishedJobInfo)
           case Some(JobStatus.Running) => sender ! Seq(baseJobInfo)
           case _ => sender ! Seq(baseJobInfo, finishedJobInfo)
