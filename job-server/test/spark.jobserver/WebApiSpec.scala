@@ -51,6 +51,7 @@ with ScalatestRouteTest with HttpService {
   val finishedJobInfo = baseJobInfo.copy(endTime = Some(dt.plusMinutes(5)))
   val errorJobInfo = finishedJobInfo.copy(error =  Some(new Throwable("test-error")))
   val killedJobInfo = finishedJobInfo.copy(error =  Some(JobKilledException(finishedJobInfo.jobId)))
+  val JobId = "jobId"
   val StatusKey = "status"
   val ResultKey = "result"
   class DummyActor extends Actor {

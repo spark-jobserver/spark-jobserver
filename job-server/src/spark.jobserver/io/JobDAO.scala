@@ -49,9 +49,9 @@ case class JobInfo(jobId: String, contextName: String,
                    binaryInfo: BinaryInfo, classPath: String,
                    startTime: DateTime, endTime: Option[DateTime],
                    error: Option[Throwable]) {
-  def jobLengthMillis: Option[Long] = endTime.map { end => new Duration(startTime, end).getMillis() }
+  def jobLengthMillis: Option[Long] = endTime.map { end => new Duration(startTime, end).getMillis }
 
-  def isRunning: Boolean = !endTime.isDefined
+  def isRunning: Boolean = endTime.isEmpty
   def isErroredOut: Boolean = endTime.isDefined && error.isDefined
 }
 
@@ -123,7 +123,7 @@ trait JobDAO {
 
   /**
    * Return all job ids to their job configuration.
-   *
+   * @todo remove. used only in test
    * @return
    */
   def getJobConfigs: Future[Map[String, Config]]
