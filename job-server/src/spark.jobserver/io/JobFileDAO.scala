@@ -222,4 +222,19 @@ class JobFileDAO(config: Config) extends JobDAO {
     in.readUTF,
     ConfigFactory.parseString(in.readUTF)
   )
+
+  /**
+    * Delete a jar.
+    *
+    * @param appName
+    */
+  override def deleteBinary(appName: String): Unit = {
+    val dir = new File(rootDir)
+    val binaries = dir.listFiles(new FilenameFilter {
+      override def accept(dir: File, name: String): Boolean = name.startsWith(appName)
+    })
+    if (binaries != null) {
+      binaries.foreach(f => f.delete())
+    }
+  }
 }

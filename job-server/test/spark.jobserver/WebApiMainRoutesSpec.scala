@@ -98,6 +98,12 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         status should be (InternalServerError)
       }
     }
+
+    it("should respond with OK if deleted successfully") {
+      Delete("/binaries/foobar") ~> sealRoute(routes) ~> check {
+        status should be (OK)
+      }
+    }
   }
 
   describe("list jobs") {
