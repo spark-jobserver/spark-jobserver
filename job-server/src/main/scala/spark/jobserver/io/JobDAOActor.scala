@@ -1,7 +1,5 @@
 package spark.jobserver.io
 
-import scala.concurrent.Await
-
 import akka.actor.Props
 import com.typesafe.config.Config
 import org.joda.time.DateTime
@@ -19,6 +17,9 @@ object JobDAOActor {
                         uploadTime: DateTime,
                         jarBytes: Array[Byte]) extends JobDAORequest
   case class SaveBinaryResult(outcome: Try[Unit])
+
+  case class DeleteBinary(appName: String) extends JobDAORequest
+  case class DeleteBinaryResult(outcome: Try[Unit])
 
   case class GetApps(typeFilter: Option[BinaryType]) extends JobDAORequest
   case class GetBinaryPath(appName: String,
@@ -57,6 +58,9 @@ class JobDAOActor(dao:JobDAO) extends InstrumentedActor {
   def wrappedReceive: Receive = {
     case SaveBinary(appName, binaryType, uploadTime, jarBytes) =>
       sender ! SaveBinaryResult(Try(dao.saveBinary(appName, binaryType, uploadTime, jarBytes)))
+
+    case DeleteBinary(appName) =>
+      sender ! DeleteBinaryResult(Try(dao.deleteBinary(appName)))
 
     case GetApps(typeFilter) =>
       dao.getApps.map(apps => Apps(typeFilter.map(t => apps.filter(_._2._1 == t)).getOrElse(apps))).
