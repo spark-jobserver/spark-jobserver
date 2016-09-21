@@ -1,6 +1,6 @@
 function showJobs(filter,$tableBody) {
     $.getJSON(
-        '/jobs',
+        'jobs',
         filter,
         function(jobs) {
             $tableBody.html("");
@@ -29,7 +29,7 @@ function getJobs() {
 
 function getContexts() {
     $.getJSON(
-        '/contexts',
+        'contexts',
         '',
         function(contexts) {
             $('#contextsTable tbody').empty();
@@ -44,7 +44,7 @@ function getContexts() {
 
 function getJars() {
     $.getJSON(
-        '/jars',
+        'jars',
         '',
         function(jars) {
             $('#jarsTable tbody').empty();
