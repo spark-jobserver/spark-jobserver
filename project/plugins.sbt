@@ -19,3 +19,5 @@ addSbtPlugin("me.lessis" % "ls-sbt" % "0.1.3")
 addSbtPlugin("com.github.gseitz" % "sbt-release" % "1.0.3")
 
 addSbtPlugin("se.marcuslonnberg" % "sbt-docker" % "1.4.0")
+
+addSbtPlugin("com.typesafe.sbteclipse" % "sbteclipse-plugin" % "4.0.0")

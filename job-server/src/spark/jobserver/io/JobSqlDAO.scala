@@ -15,6 +15,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
 import scala.reflect.runtime.universe
+import spark.jobserver.io.FileCasher
 
 class JobSqlDAO(config: Config) extends JobDAO with FileCasher {
   val slickDriverClass = config.getString("spark.jobserver.sqldao.slick-driver")
