@@ -235,6 +235,7 @@ object JobServerBuild extends Build {
     crossPaths   := true,
     crossScalaVersions := Seq("2.10.6","2.11.8"),
     scalaVersion := sys.env.getOrElse("SCALA_VERSION", "2.10.6"),
+    dependencyOverrides += "org.scala-lang" % "scala-compiler" % scalaVersion.value,
     publishTo    := Some(Resolver.file("Unused repo", file("target/unusedrepo"))),
     // scalastyleFailOnError := true,
     runScalaStyle := {
