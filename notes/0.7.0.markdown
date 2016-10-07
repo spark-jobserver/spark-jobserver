@@ -19,6 +19,7 @@
 * Fix flaky tests (@TimMaltGermany)
 * Update build plugins (@hntd187)
 * README fix (@Vincibean)
+* Ensure Scala compiler dependency has correct version (@@aganim-chariot)
 * Docs for YARN queue config option (@ash211)
 * Make JMX port configurable (@casey-green)
 * Update test description, PR #481 (@oranda)
