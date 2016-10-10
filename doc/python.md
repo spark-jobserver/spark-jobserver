@@ -131,7 +131,7 @@ In the most basic setup, a job ready for packaging would be structured as:
 
 - **setup.py** Contains the configuration for packaging the job
 - **my_job_package** A directory, the name of which is the name of the module containing your job(s)
-- **__init__.py** A file inside the module directory, which contains the python implementation of one or more job classes.
+- **\_\_init\_\_.py** A file inside the module directory, which contains the python implementation of one or more job classes.
 
 `setup.py` would contain something like:
 
