@@ -252,7 +252,20 @@ class WebApi(system: ActorSystem,
             }
           }
         }
-      }
+      } ~
+      // DELETE /binaries/<appName>
+      delete {
+        path(Segment) { appName =>
+          val future = binaryManager ? DeleteBinary(appName)
+          respondWithMediaType(MediaTypes.`application/json`) { ctx =>
+            future.map {
+              case BinaryDeleted => ctx.complete(StatusCodes.OK)
+            }.recover {
+              case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+            }
+          }
+        }
+        }
     }
   }
 

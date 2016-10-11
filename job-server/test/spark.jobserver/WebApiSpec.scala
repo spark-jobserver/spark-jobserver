@@ -115,6 +115,8 @@ with ScalatestRouteTest with HttpService {
       case StoreBinary("daofail", _, _) => sender ! BinaryStorageFailure(new Exception("DAO failed to store"))
       case StoreBinary(_, _, _)         => sender ! BinaryStored
 
+      case DeleteBinary(_) => sender ! BinaryDeleted
+
       case DataManagerActor.StoreData("errorfileToRemove", _) => sender ! DataManagerActor.Error
       case DataManagerActor.StoreData(filename, _) => {
         sender ! DataManagerActor.Stored(filename + "-time-stamp")

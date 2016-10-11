@@ -9,13 +9,12 @@ import scala.collection.mutable
 import spark.jobserver.io.{JobStatus, BinaryType, JobDAO, JobInfo}
 
 import scala.concurrent._
-import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 /**
  * In-memory DAO for easy unit testing
  */
 class InMemoryDAO extends JobDAO {
-  val binaries = mutable.HashMap.empty[(String, BinaryType, DateTime), (Array[Byte])]
+  var binaries = mutable.HashMap.empty[(String, BinaryType, DateTime), (Array[Byte])]
 
   override def saveBinary(appName: String,
                           binaryType: BinaryType,
@@ -76,5 +75,9 @@ class InMemoryDAO extends JobDAO {
 
   override def getJobConfigs: Future[Map[String, Config]] = Future {
     jobConfigs.toMap
+  }
+
+  override def deleteBinary(appName: String): Unit = {
+    binaries = binaries.filter { case ((name, _, _), _) => appName != name }
   }
 }
