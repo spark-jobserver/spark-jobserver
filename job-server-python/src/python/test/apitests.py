@@ -5,6 +5,7 @@ from pyspark.sql import SQLContext, HiveContext
 from sparkjobserver.api import SparkJob, build_problems, ValidationProblem
 from py4j.java_gateway import java_import
 
+
 class WordCountSparkJob(SparkJob):
     """
     Simple example of a SparkContext job for use in tests
@@ -42,8 +43,7 @@ class SQLJob(SparkJob):
 
     def run_job(self, context, runtime, data):
         rdd = context._sc.parallelize(data)
-        #df = context.createDataFrame(data, ['name', 'age', 'salary'])
-        df = rdd.toDF(['name', 'age', 'salary'])
+        df = context.createDataFrame(data, ['name', 'age', 'salary'])
         df.registerTempTable('people')
         query = context.sql("""
             SELECT age, AVG(salary)
