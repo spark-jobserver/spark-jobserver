@@ -41,12 +41,14 @@ object Dependencies {
     "org.apache.spark" %% "spark-mllib" % sparkVersion % Provided excludeAll(excludeNettyIo, excludeQQ),
     "org.apache.spark" %% "spark-sql" % sparkVersion % Provided excludeAll(excludeNettyIo, excludeQQ),
     "org.apache.spark" %% "spark-streaming" % sparkVersion % Provided excludeAll(excludeNettyIo, excludeQQ),
-    "org.apache.spark" %% "spark-hive" % sparkVersion % Provided excludeAll(excludeNettyIo, excludeQQ, excludeScalaTest)
+    "org.apache.spark" %% "spark-hive" % sparkVersion % Provided excludeAll(
+      excludeNettyIo, excludeQQ, excludeScalaTest
+    )
   )
 
   lazy val sparkPythonDeps = Seq(
-    "net.sf.py4j" % "py4j" % "0.9",
-    "io.spray" %% "spray-json" % sprayJson % "test"
+    "net.sf.py4j" % "py4j" % py4j,
+    "io.spray" %% "spray-json" % sprayJson % Test
   ) ++ sparkExtraDeps
 
   lazy val slickDeps = Seq(
@@ -66,13 +68,13 @@ object Dependencies {
     "ch.qos.logback" % "logback-classic" % logback
   )
 
-  lazy val scalaTestDep = "org.scalatest" %% "scalatest" % scalaTest % "test"
+  lazy val scalaTestDep = "org.scalatest" %% "scalatest" % scalaTest % Test
 
   lazy val coreTestDeps = Seq(
     scalaTestDep,
-    "com.typesafe.akka" %% "akka-testkit" % akka % "test",
-    "io.spray" %% "spray-testkit" % spray % "test",
-    "org.cassandraunit" % "cassandra-unit" % "2.2.2.1" % "test"
+    "com.typesafe.akka" %% "akka-testkit" % akka % Test,
+    "io.spray" %% "spray-testkit" % spray % Test,
+    "org.cassandraunit" % "cassandra-unit" % cassandraUnit % Test
   )
 
   lazy val securityDeps = Seq(

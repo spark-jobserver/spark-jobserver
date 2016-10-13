@@ -62,14 +62,14 @@ case class TestEndpoint(context: Any,
     validationProblems = Some(problems.asScala.toSeq)
   }
 
-  var jobData: Any = null
+  var jobData: Any = _
   def setJobData(data: Any): Unit = {
     jobData = data
   }
 
   def getJobData: Any = jobData
 
-  var result: Any = null
+  var result: Any = _
   def setResult(res: Any): Unit = {
     result = res
   }
@@ -89,7 +89,8 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
 
     val pathList = Seq(jobServerPath) ++ sparkPaths ++ originalPythonPath.toSeq
     val p = pathList.mkString(":")
-    println(p)
+    // Scarman 10-13-2016
+    //println(p)
     p
   }
 

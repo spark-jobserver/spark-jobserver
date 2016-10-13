@@ -11,7 +11,7 @@ object PythonTasks {
     val cwd = workingDirectory(baseDirectory)
     val exitCode = Process(cwd.getAbsolutePath + "/run-tests.sh", cwd).!
     if(exitCode != 0) {
-      sys.error(s"Running python tests received non-zero exit code ${exitCode}")
+      sys.error(s"Running python tests received non-zero exit code $exitCode")
     }
   }
 
@@ -19,7 +19,7 @@ object PythonTasks {
     val cwd = workingDirectory(baseDirectory)
     val exitCode = Process(Seq(cwd.getAbsolutePath + "/build.sh", version, "setup.py"), cwd).!
     if(exitCode != 0) {
-      sys.error(s"Building python API received non-zero exit code ${exitCode}")
+      sys.error(s"Building python API received non-zero exit code $exitCode")
     }
   }
 
@@ -27,7 +27,7 @@ object PythonTasks {
     val cwd = workingDirectory(baseDirectory)
     val exitCode = Process(Seq(cwd.getAbsolutePath + "/build.sh", version,  "setup-examples.py"), cwd).!
     if(exitCode != 0) {
-      sys.error(s"Building python examples received non-zero exit code ${exitCode}")
+      sys.error(s"Building python examples received non-zero exit code $exitCode")
     }
   }
 }
