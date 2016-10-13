@@ -1,6 +1,7 @@
 #Scala #akka @ApacheSpark
 
-* Python job support!   (@mattinbits)
+* Python job support!   (mostly @mattinbits, some @CalebFenton)
+    - Some settings like job-jar-paths renamed to job-bin-paths (@nikkiSproutling)
 * New Scala API!   The expanded API includes passing in a `JobEnvironment` which provides access to job ID, context information; it also offers more type safety in job return type, validation etc. (@velvia, others)
 
 * Deprecate JobFileDAO.  H2 is now the default.  Furthermore, H2 and JobFileDAO cannot be used with context-per-jvm. (@noorul)
@@ -28,5 +29,6 @@
 * Fix UI not showing running jobs if completed jobs fills the limit, #547 (@TianLangStudio)
 * Fix Jar name issue on Windows (@TianLangStudio)
 * Forked JVM processes must have their own JobDAO, #353, First step towards HA (@noorul)
+* Change cluster status of removed contexts to down (@derSascha)
 * Include Python exception stacktrace on failure (@CalebFenton)
 * UI - Use relative paths so it works if running in a context-path (@sjoerdmulder)
