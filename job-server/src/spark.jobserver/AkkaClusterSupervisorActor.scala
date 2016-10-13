@@ -149,7 +149,9 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
     case StopContext(name) =>
       if (contexts contains name) {
         logger.info("Shutting down context {}", name)
-        contexts(name)._1 ! PoisonPill
+        val contextActorRef = contexts(name)._1
+        cluster.down(contextActorRef.path.address)
+        contextActorRef ! PoisonPill
         sender ! ContextStopped
       } else {
         sender ! NoSuchContext
