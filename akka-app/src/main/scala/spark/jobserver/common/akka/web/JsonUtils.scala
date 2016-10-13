@@ -1,4 +1,4 @@
-package ooyala.common.akka.web
+package spark.jobserver.common.akka.web
 
 import spray.json._
 import spray.json.DefaultJsonProtocol._

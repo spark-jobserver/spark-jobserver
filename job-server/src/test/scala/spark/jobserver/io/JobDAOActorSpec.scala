@@ -4,13 +4,14 @@ import akka.actor.ActorSystem
 import akka.testkit.{ImplicitSender, TestKit}
 import com.typesafe.config.Config
 import org.joda.time.DateTime
-import org.scalatest.{BeforeAndAfterAll, BeforeAndAfter, Matchers, FunSpecLike}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 import spark.jobserver.{BinaryStorageFailure, BinaryStored}
 import spark.jobserver.io.JobDAOActor._
-
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
+
+import spark.jobserver.common.akka.AkkaTestUtils
 
 object JobDAOActorSpec {
   val system = ActorSystem("dao-test")
@@ -57,7 +58,7 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
   val daoActor = system.actorOf(JobDAOActor.props(DummyDao))
 
   override def afterAll() {
-    ooyala.common.akka.AkkaTestUtils.shutdownAndWait(system)
+    AkkaTestUtils.shutdownAndWait(system)
   }
 
   describe("JobDAOActor") {

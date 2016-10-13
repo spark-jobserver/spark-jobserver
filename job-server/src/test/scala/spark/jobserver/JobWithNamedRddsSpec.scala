@@ -3,10 +3,12 @@ package spark.jobserver
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.storage.StorageLevel
 import java.util.concurrent.TimeoutException
-import scala.concurrent.duration._
-import org.apache.spark.rdd.RDD
 
+import scala.concurrent.duration._
+
+import org.apache.spark.rdd.RDD
 import com.typesafe.config.Config
+import spark.jobserver.common.akka.AkkaTestUtils
 
 class JobWithNamedRddsSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
 
@@ -26,7 +28,7 @@ class JobWithNamedRddsSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
 
   override def afterAll() {
     sc.stop()
-    ooyala.common.akka.AkkaTestUtils.shutdownAndWait(system)
+    AkkaTestUtils.shutdownAndWait(system)
   }
 
   describe("NamedRdds") {

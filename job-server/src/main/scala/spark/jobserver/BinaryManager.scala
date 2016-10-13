@@ -2,16 +2,16 @@ package spark.jobserver
 
 import akka.actor.ActorRef
 import akka.util.Timeout
-import ooyala.common.akka.InstrumentedActor
 import spark.jobserver.io.JobDAOActor.SaveBinaryResult
-import spark.jobserver.io.{BinaryType, JobDAOActor, JobDAO}
+import spark.jobserver.io.{BinaryType, JobDAO, JobDAOActor}
 import spark.jobserver.util.JarUtils
 import org.joda.time.DateTime
-
 import java.nio.file.{Files, Paths}
 
 import scala.concurrent.{Await, Future}
-import scala.util.{Success, Failure, Try}
+import scala.util.{Failure, Success, Try}
+
+import spark.jobserver.common.akka.InstrumentedActor
 
 // Messages to JarManager actor
 

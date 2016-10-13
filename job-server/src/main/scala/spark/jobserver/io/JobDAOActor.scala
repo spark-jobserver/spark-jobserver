@@ -4,10 +4,11 @@ import scala.concurrent.Await
 
 import akka.actor.Props
 import com.typesafe.config.Config
-import ooyala.common.akka.InstrumentedActor
 import org.joda.time.DateTime
 import scala.concurrent.duration._
 import scala.util.Try
+
+import spark.jobserver.common.akka.InstrumentedActor
 
 object JobDAOActor {
 

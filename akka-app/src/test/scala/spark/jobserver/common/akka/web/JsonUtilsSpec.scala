@@ -1,4 +1,4 @@
-package ooyala.common.akka.web
+package spark.jobserver.common.akka.web
 
 import org.joda.time.DateTime
 import org.scalatest.{Matchers, FunSpec}

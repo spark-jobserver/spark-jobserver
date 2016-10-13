@@ -6,7 +6,6 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor.{ActorRef, PoisonPill, Props}
 import com.typesafe.config.Config
-import ooyala.common.akka.InstrumentedActor
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.{SparkConf, SparkEnv}
 import org.joda.time.DateTime
@@ -15,9 +14,10 @@ import spark.jobserver.api.JobEnvironment
 import spark.jobserver.context.{JobContainer, SparkContextFactory}
 import spark.jobserver.io.{BinaryInfo, JobDAOActor, JobInfo}
 import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
-
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
+
+import spark.jobserver.common.akka.InstrumentedActor
 
 object JobManagerActor {
   // Messages

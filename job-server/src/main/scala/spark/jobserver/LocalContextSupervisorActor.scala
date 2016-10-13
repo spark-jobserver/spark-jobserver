@@ -1,19 +1,20 @@
 package spark.jobserver
 
-import akka.actor.{Terminated, Props, ActorRef, PoisonPill}
+import akka.actor.{ActorRef, PoisonPill, Props, Terminated}
 import akka.pattern.ask
 import akka.util.Timeout
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
-import ooyala.common.akka.InstrumentedActor
-import spark.jobserver.JobManagerActor.{SparkContextDead, SparkContextAlive, SparkContextStatus}
+import spark.jobserver.JobManagerActor.{SparkContextAlive, SparkContextDead, SparkContextStatus}
 import spark.jobserver.io.JobDAO
 import spark.jobserver.util.SparkJobUtils
 import scala.collection.mutable
 import scala.concurrent.Await
 import scala.util.{Failure, Success, Try}
+
 import org.joda.time.DateTime
 import org.joda.time.format.DateTimeFormat
+import spark.jobserver.common.akka.InstrumentedActor
 
 /** Messages common to all ContextSupervisors */
 object ContextSupervisor {

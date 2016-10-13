@@ -1,5 +1,4 @@
-package ooyala.common.akka.actor
-
+package spark.jobserver.common.akka.actor
 
 import akka.actor.{ActorSystem, Props, ActorRef}
 import akka.testkit.{TestKit, ImplicitSender, TestProbe}

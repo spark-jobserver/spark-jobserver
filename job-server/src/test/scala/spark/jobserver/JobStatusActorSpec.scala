@@ -1,11 +1,13 @@
 package spark.jobserver
 
-import akka.actor.{Props, ActorRef, ActorSystem}
-import akka.testkit.{TestKit, ImplicitSender}
+import akka.actor.{ActorRef, ActorSystem, Props}
+import akka.testkit.{ImplicitSender, TestKit}
 import spark.jobserver.io._
 import org.joda.time.DateTime
 import org.scalatest.Matchers
-import org.scalatest.{FunSpecLike, BeforeAndAfter, BeforeAndAfterAll}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike}
+import spark.jobserver.common.akka
+import spark.jobserver.common.akka.AkkaTestUtils
 
 object JobStatusActorSpec {
   val system = ActorSystem("test")
@@ -25,7 +27,7 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
   private val jobInfo = JobInfo(jobId, contextName, jarInfo, classPath, DateTime.now, None, None)
 
   override def afterAll() {
-    ooyala.common.akka.AkkaTestUtils.shutdownAndWait(JobStatusActorSpec.system)
+    akka.AkkaTestUtils.shutdownAndWait(JobStatusActorSpec.system)
   }
 
   var actor: ActorRef = _
@@ -41,7 +43,7 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
   }
 
   after {
-    ooyala.common.akka.AkkaTestUtils.shutdownAndWait(actor)
+    AkkaTestUtils.shutdownAndWait(actor)
   }
 
   describe("JobStatusActor") {
