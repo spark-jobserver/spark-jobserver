@@ -237,8 +237,6 @@ lazy val commonSettings = Defaults.coreDefaultSettings ++ dirSettings ++ implici
       <exclude module="jmxri"/>
     </dependencies>
 ) ++ scoverageSettings
-// scarman June 14th 2016, disabled scalariform so as to not reformat the entire codebase
-//++ scalariformPrefs
 
 lazy val scoverageSettings = {
   // Semicolon-separated list of regexs matching classes to exclude
@@ -250,17 +248,6 @@ lazy val publishSettings = Seq(
   bintrayOrganization := Some("spark-jobserver")
 )
 
-// change to scalariformSettings for auto format on compile; defaultScalariformSettings to disable
-// See https://github.com/mdr/scalariform for formatting options
-//lazy val scalariformPrefs = defaultScalariformSettings
-/*
-++ Seq(
-  ScalariformKeys.preferences := FormattingPreferences()
-    .setPreference(AlignParameters, true)
-    .setPreference(AlignSingleLineCaseStatements, true)
-    .setPreference(DoubleIndentClassDeclaration, true)
-)
-*/
 // This is here so we can easily switch back to Logback when Spark fixes its log4j dependency.
 lazy val jobServerLogbackLogging = "-Dlogback.configurationFile=config/logback-local.xml"
 lazy val jobServerLogging = "-Dlog4j.configuration=file:config/log4j-local.properties"
