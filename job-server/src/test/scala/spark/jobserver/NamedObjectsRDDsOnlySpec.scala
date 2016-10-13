@@ -1,11 +1,11 @@
 package spark.jobserver
 
 import akka.actor.ActorSystem
-import akka.testkit.{ ImplicitSender, TestKit }
-import org.apache.spark.{ SparkContext, SparkConf }
-
+import akka.testkit.{ImplicitSender, TestKit}
+import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.storage.StorageLevel
-import org.scalatest.{ Matchers, FunSpecLike, BeforeAndAfterAll, BeforeAndAfter }
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
+import spark.jobserver.common.akka.AkkaTestUtils
 
 /**
  * please note that this test only uses RDDs as named objects, there exists another test class
@@ -26,7 +26,7 @@ class NamedObjectsRDDsOnlySpec extends TestKit(ActorSystem("NamedObjectsSpec")) 
   override def afterAll() {
     //ooyala.common.akka.AkkaTestUtils.shutdownAndWait(namedObjManager)
     sc.stop()
-    ooyala.common.akka.AkkaTestUtils.shutdownAndWait(system)
+    AkkaTestUtils.shutdownAndWait(system)
   }
 
   describe("NamedObjects") {

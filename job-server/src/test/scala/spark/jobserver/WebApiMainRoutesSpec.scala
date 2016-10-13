@@ -11,7 +11,7 @@ import spark.jobserver.util.SparkJobUtils
 // Does NOT test underlying Supervisor / JarManager functionality
 // HttpService trait is needed for the sealRoute() which wraps exception handling
 class WebApiMainRoutesSpec extends WebApiSpec {
-  import ooyala.common.akka.web.JsonUtils._
+  import spark.jobserver.common.akka.web.JsonUtils._
   import spray.httpx.SprayJsonSupport._
   import spray.json.DefaultJsonProtocol._
 

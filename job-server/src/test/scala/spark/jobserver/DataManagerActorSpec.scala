@@ -1,10 +1,12 @@
 package spark.jobserver
 
-import akka.actor.{ Props, ActorRef, ActorSystem }
-import akka.testkit.{ TestKit, ImplicitSender }
-import org.scalatest.{ FunSpecLike, BeforeAndAfter, BeforeAndAfterAll, Matchers }
+import akka.actor.{ActorRef, ActorSystem, Props}
+import akka.testkit.{ImplicitSender, TestKit}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 import java.nio.file.Files
 
+import spark.jobserver.common.akka
+import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.io.DataFileDAO
 
 object DataManagerActorSpec {
@@ -24,8 +26,8 @@ class DataManagerActorSpec extends TestKit(DataManagerActorSpec.system) with Imp
 
   override def afterAll() {
     dao.shutdown()
-    ooyala.common.akka.AkkaTestUtils.shutdownAndWait(actor)
-    ooyala.common.akka.AkkaTestUtils.shutdownAndWait(DataManagerActorSpec.system)
+    AkkaTestUtils.shutdownAndWait(actor)
+    akka.AkkaTestUtils.shutdownAndWait(DataManagerActorSpec.system)
     Files.delete(tmpDir.resolve(DataFileDAO.META_DATA_FILE_NAME))
     Files.delete(tmpDir)
   }

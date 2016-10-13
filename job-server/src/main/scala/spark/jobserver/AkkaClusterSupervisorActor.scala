@@ -7,14 +7,15 @@ import java.util.concurrent.TimeUnit
 
 import akka.actor._
 import akka.cluster.Cluster
-import akka.cluster.ClusterEvent.{MemberUp, MemberEvent, InitialStateAsEvents}
+import akka.cluster.ClusterEvent.{InitialStateAsEvents, MemberEvent, MemberUp}
 import akka.util.Timeout
 import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
-import ooyala.common.akka.InstrumentedActor
 import spark.jobserver.util.SparkJobUtils
 import scala.collection.mutable
-import scala.util.{Try, Success, Failure}
+import scala.util.{Failure, Success, Try}
 import scala.sys.process._
+
+import spark.jobserver.common.akka.InstrumentedActor
 
 /**
  * The AkkaClusterSupervisorActor launches Spark Contexts as external processes

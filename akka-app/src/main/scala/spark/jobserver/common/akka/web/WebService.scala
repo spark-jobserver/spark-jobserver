@@ -1,4 +1,4 @@
-package ooyala.common.akka.web
+package spark.jobserver.common.akka.web
 
 import akka.actor.ActorSystem
 import spray.routing.{Route, SimpleRoutingApp}

@@ -1,13 +1,14 @@
 package spark.jobserver
 
-import akka.actor.{ActorRef, Props}
-import com.yammer.metrics.core.Meter
-import ooyala.common.akka.InstrumentedActor
-import ooyala.common.akka.metrics.YammerMetrics
-import org.joda.time.DateTime
-import spark.jobserver.JobManagerActor.JobKilledException
 import scala.collection.mutable
 import scala.util.Try
+
+import akka.actor.{ActorRef, Props}
+import com.yammer.metrics.core.Meter
+import org.joda.time.DateTime
+import spark.jobserver.JobManagerActor.JobKilledException
+import spark.jobserver.common.akka.InstrumentedActor
+import spark.jobserver.common.akka.metrics.YammerMetrics
 import spark.jobserver.io.{JobDAOActor, JobInfo}
 
 object JobStatusActor {
@@ -76,31 +77,31 @@ class JobStatusActor(jobDao: ActorRef) extends InstrumentedActor with YammerMetr
 
     case msg: JobStarted =>
       processStatus(msg, "started") {
-        case (info, msg) =>
+        case (info, msg: JobStarted) =>
           info.copy(startTime = msg.jobInfo.startTime)
       }
 
     case msg: JobFinished =>
       processStatus(msg, "finished OK", remove = true) {
-        case (info, msg) =>
+        case (info, msg: JobFinished) =>
           info.copy(endTime = Some(msg.endTime))
       }
 
     case msg: JobValidationFailed =>
       processStatus(msg, "validation failed", remove = true) {
-        case (info, msg) =>
+        case (info, msg: JobValidationFailed) =>
           info.copy(endTime = Some(msg.endTime), error = Some(msg.err))
       }
 
     case msg: JobErroredOut =>
       processStatus(msg, "finished with an error", remove = true) {
-        case (info, msg) =>
+        case (info, msg: JobErroredOut) =>
           info.copy(endTime = Some(msg.endTime), error = Some(msg.err))
       }
 
     case msg: JobKilled =>
       processStatus(msg, "killed", remove = true) {
-        case (info, msg) =>
+        case (info, msg: JobKilled) =>
           info.copy(endTime = Some(msg.endTime), error = Some(JobKilledException(info.jobId)))
       }
   }

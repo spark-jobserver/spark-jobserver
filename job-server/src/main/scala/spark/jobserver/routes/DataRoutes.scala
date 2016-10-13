@@ -26,7 +26,7 @@ trait DataRoutes extends HttpService {
 
   def dataRoutes(dataManager: ActorRef)(implicit ec: ExecutionContext, ShortTimeout: Timeout): Route = {
     // Get spray-json type classes for serializing Map[String, Any]
-    import ooyala.common.akka.web.JsonUtils._
+    import spark.jobserver.common.akka.web.JsonUtils._
 
     // GET /data route returns a JSON map of the stored files and their upload time
     get { ctx =>

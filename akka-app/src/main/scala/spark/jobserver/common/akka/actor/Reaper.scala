@@ -1,8 +1,9 @@
-package ooyala.common.akka.actor
+package spark.jobserver.common.akka.actor
 
 import akka.actor.{ActorRef, Terminated}
 import scala.collection.mutable.ArrayBuffer
-import ooyala.common.akka.InstrumentedActor
+
+import spark.jobserver.common.akka.InstrumentedActor
 
 // Taken from http://letitcrash.com/post/30165507578/shutdown-patterns-in-akka-2
 

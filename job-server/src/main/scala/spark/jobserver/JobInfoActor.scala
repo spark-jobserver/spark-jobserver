@@ -6,7 +6,7 @@ import akka.actor.ActorRef
 import akka.pattern.ask
 import akka.util.Timeout
 import com.typesafe.config.Config
-import ooyala.common.akka.InstrumentedActor
+import spark.jobserver.common.akka.InstrumentedActor
 import spark.jobserver.io.{JobDAO, JobInfo}
 
 object JobInfoActor {

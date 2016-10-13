@@ -1,4 +1,4 @@
-package ooyala.common.akka.web
+package spark.jobserver.common.akka.web
 
 import spray.routing.HttpService
 import com.yammer.metrics.core._

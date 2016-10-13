@@ -36,7 +36,7 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
   import scala.collection.JavaConverters._
   import spray.httpx.SprayJsonSupport._
   import spray.json.DefaultJsonProtocol._
-  import ooyala.common.akka.web.JsonUtils._
+  import spark.jobserver.common.akka.web.JsonUtils._
 
   def actorRefFactory = system
 

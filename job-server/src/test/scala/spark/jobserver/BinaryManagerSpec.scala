@@ -1,14 +1,14 @@
 package spark.jobserver
 
-import akka.actor.{Props, ActorSystem}
-import akka.testkit.{ImplicitSender, TestKit}
-import ooyala.common.akka.InstrumentedActor
-import org.joda.time.DateTime
-import org.scalatest.{BeforeAndAfterAll, Matchers, FunSpecLike}
-import spark.jobserver.io.BinaryType
-
-import scala.util.{Success, Failure}
 import scala.concurrent.duration._
+import scala.util.{Failure, Success}
+
+import akka.actor.{ActorSystem, Props}
+import akka.testkit.{ImplicitSender, TestKit}
+import org.joda.time.DateTime
+import org.scalatest.{BeforeAndAfterAll, FunSpecLike, Matchers}
+import spark.jobserver.common.akka.{AkkaTestUtils, InstrumentedActor}
+import spark.jobserver.io.BinaryType
 
 object BinaryManagerSpec {
   val system = ActorSystem("binary-manager-test")
@@ -36,7 +36,7 @@ class BinaryManagerSpec extends TestKit(BinaryManagerSpec.system) with ImplicitS
   import spark.jobserver.BinaryManagerSpec._
 
   override def afterAll() {
-    ooyala.common.akka.AkkaTestUtils.shutdownAndWait(system)
+    AkkaTestUtils.shutdownAndWait(system)
   }
 
   val daoActor = system.actorOf(Props[DummyDAOActor])

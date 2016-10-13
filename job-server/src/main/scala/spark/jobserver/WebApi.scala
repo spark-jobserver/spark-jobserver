@@ -8,15 +8,15 @@ import akka.actor.{ActorRef, ActorSystem}
 import akka.pattern.ask
 import akka.util.Timeout
 import com.typesafe.config.{Config, ConfigException, ConfigFactory, ConfigRenderOptions, ConfigValueFactory}
-import ooyala.common.akka.web.JsonUtils.AnyJsonFormat
-import ooyala.common.akka.web.{CommonRoutes, WebService}
+import spark.jobserver.common.akka.web.JsonUtils.AnyJsonFormat
+import spark.jobserver.common.akka.web.{CommonRoutes, WebService}
 import org.apache.shiro.SecurityUtils
 import org.apache.shiro.config.IniSecurityManagerFactory
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import spark.jobserver.JobManagerActor.JobKilledException
 import spark.jobserver.auth._
-import spark.jobserver.io.{JobStatus, BinaryType, JobInfo}
+import spark.jobserver.io.{BinaryType, JobInfo, JobStatus}
 import spark.jobserver.routes.DataRoutes
 import spark.jobserver.util.{SSLContextFactory, SparkJobUtils}
 import spray.http.HttpHeaders.`Content-Type`
@@ -26,9 +26,10 @@ import spray.io.ServerSSLEngineProvider
 import spray.json.DefaultJsonProtocol._
 import spray.routing.directives.AuthMagnet
 import spray.routing.{HttpService, RequestContext, Route}
-
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.Try
+
+import spark.jobserver.common.akka.web.{CommonRoutes, WebService}
 
 
 object WebApi {
@@ -122,7 +123,7 @@ class WebApi(system: ActorSystem,
   import WebApi._
 
   // Get spray-json type classes for serializing Map[String, Any]
-  import ooyala.common.akka.web.JsonUtils._
+  import spark.jobserver.common.akka.web.JsonUtils._
 
   override def actorRefFactory: ActorSystem = system
   implicit val ec: ExecutionContext = system.dispatcher

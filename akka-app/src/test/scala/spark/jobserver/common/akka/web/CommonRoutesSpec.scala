@@ -1,4 +1,4 @@
-package ooyala.common.akka.web
+package spark.jobserver.common.akka.web
 
 import java.util.concurrent.TimeUnit
 
@@ -56,14 +56,14 @@ class CommonRoutesSpec extends FunSpec with Matchers with ScalatestRouteTest wit
       val flattenedMap = MetricsSerializer.asFlatMap()
 
       List("test-meter", "test-counter", "test-timer", "test-gauge", "test-hist") foreach { metricName =>
-        flattenedMap.keys should contain("ooyala.common.akka.web.CommonRoutesSpec." + metricName)
+        flattenedMap.keys should contain("spark.jobserver.common.akka.web.CommonRoutesSpec." + metricName)
       }
 
-      flattenedMap("ooyala.common.akka.web.CommonRoutesSpec.test-meter") should equal(meterMap)
-      flattenedMap("ooyala.common.akka.web.CommonRoutesSpec.test-counter") should equal(counterMap)
-      flattenedMap("ooyala.common.akka.web.CommonRoutesSpec.test-hist") should equal(histMap)
-      flattenedMap("ooyala.common.akka.web.CommonRoutesSpec.test-timer") should equal(timerMap)
-      flattenedMap("ooyala.common.akka.web.CommonRoutesSpec.test-gauge") should equal(gaugeMap)
+      flattenedMap("spark.jobserver.common.akka.web.CommonRoutesSpec.test-meter") should equal(meterMap)
+      flattenedMap("spark.jobserver.common.akka.web.CommonRoutesSpec.test-counter") should equal(counterMap)
+      flattenedMap("spark.jobserver.common.akka.web.CommonRoutesSpec.test-hist") should equal(histMap)
+      flattenedMap("spark.jobserver.common.akka.web.CommonRoutesSpec.test-timer") should equal(timerMap)
+      flattenedMap("spark.jobserver.common.akka.web.CommonRoutesSpec.test-gauge") should equal(gaugeMap)
     }
   }
 }

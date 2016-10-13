@@ -1,4 +1,4 @@
-package ooyala.common.akka.metrics
+package spark.jobserver.common.akka.metrics
 
 import com.yammer.metrics.core._
 import com.yammer.metrics.Metrics

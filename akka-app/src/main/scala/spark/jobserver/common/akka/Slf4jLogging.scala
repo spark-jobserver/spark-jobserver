@@ -1,4 +1,4 @@
-package ooyala.common.akka
+package spark.jobserver.common.akka
 
 import org.slf4j.LoggerFactory
 

@@ -1,11 +1,12 @@
 package spark.jobserver
 
-import akka.actor.{ActorSystem, ActorRef}
+import akka.actor.{ActorRef, ActorSystem}
 import akka.testkit.ImplicitSender
 import akka.testkit.TestKit
 import com.typesafe.config.{Config, ConfigFactory}
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
+import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.context.DefaultSparkContextFactory
 import spark.jobserver.io.{BinaryType, JobDAO}
 
@@ -67,7 +68,7 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
   def extrasJar: java.io.File
 
   override def afterAll() {
-    ooyala.common.akka.AkkaTestUtils.shutdownAndWait(manager)
+    AkkaTestUtils.shutdownAndWait(manager)
     TestKit.shutdownActorSystem(system)
   }
 

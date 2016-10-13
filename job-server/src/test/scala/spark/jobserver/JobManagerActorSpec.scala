@@ -1,6 +1,7 @@
 package spark.jobserver
 
 import spark.jobserver.CommonMessages.{JobErroredOut, JobResult}
+import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.io.JobDAOActor
 
 class JobManagerActorSpec extends JobManagerSpec {
@@ -15,7 +16,7 @@ class JobManagerActorSpec extends JobManagerSpec {
   }
 
   after {
-    ooyala.common.akka.AkkaTestUtils.shutdownAndWait(manager)
+    AkkaTestUtils.shutdownAndWait(manager)
   }
   
   describe("starting jobs") {
