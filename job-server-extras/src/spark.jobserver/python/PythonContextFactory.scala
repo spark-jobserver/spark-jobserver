@@ -109,7 +109,10 @@ object PythonContextFactory {
       "org.apache.spark.api.java.*",
       "org.apache.spark.api.python.*",
       "scala.Tuple2",
-      "org.apache.spark.mllib.api.python.*"
+      "org.apache.spark.mllib.api.python.*",
+      "org.apache.spark.sql.SQLContext",
+      "org.apache.spark.sql.UDFRegistration",
+      "org.apache.spark.sql.hive.HiveContext"
     )
 
   val sqlContextImports = sparkContextImports ++ Seq(
@@ -154,13 +157,11 @@ class PythonSparkContextFactory extends PythonContextFactory {
   override def doMakeContext(sc: SparkContext,
                            contextConfig: Config,
                            contextName: String): JavaSparkContext with PythonContextLike = {
-    //val sc = new SparkContext(sparkConf)
     val jsc = new JavaSparkContext(sc) with PythonContextLike with DefaultContextLikeImplementations {
       override val config = contextConfig
       override val sparkContext: SparkContext = sc
       override val contextType = classOf[JavaSparkContext].getCanonicalName
     }
-    //jsc.setupTasks()
     jsc
   }
 
@@ -177,13 +178,11 @@ class PythonSQLContextFactory extends PythonContextFactory {
   override def doMakeContext(sc: SparkContext,
                            contextConfig: Config,
                            contextName: String): SQLContext with PythonContextLike = {
-    //val sc = new SparkContext(sparkConf)
     val jSqlContext = new SQLContext(sc) with PythonContextLike with DefaultContextLikeImplementations {
       override val config = contextConfig
       override val contextType: String = classOf[SQLContext].getCanonicalName
       override def stop(): Unit = sc.stop()
     }
-    //jSqlContext.setupTasks()
     jSqlContext
   }
 }
@@ -198,13 +197,11 @@ class PythonHiveContextFactory extends PythonContextFactory {
   override def doMakeContext(sc: SparkContext,
                            contextConfig: Config,
                            contextName: String): HiveContext with PythonContextLike = {
-    //val sc = new SparkContext(sparkConf)
     val jHiveContext = new HiveContext(sc) with PythonContextLike with DefaultContextLikeImplementations {
       override val contextType: String = classOf[HiveContext].getCanonicalName
       override def config: Config = contextConfig
       override def stop(): Unit = sc.stop()
     }
-    //jHiveContext.setupTasks()
     jHiveContext
   }
 }
