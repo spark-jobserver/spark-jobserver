@@ -1,13 +1,16 @@
 package spark.jobserver
 
 import com.typesafe.config.Config
+import org.apache.spark.sql.Row
 import org.apache.spark.sql.hive.HiveContext
+import org.scalactic._
+import spark.jobserver.api.{JobEnvironment, ValidationProblem}
 
 /**
- * A test job that accepts a HiveContext, as opposed to the regular SparkContext.
- * Initializes some dummy data into a table, reads it back out, and returns a count
- * (Will create Hive metastore at job-server/metastore_db if Hive isn't configured)
- */
+  * A test job that accepts a HiveContext as opposed to the regular SparkContext.
+  * Initializes some dummy data into a table, reads it back out, and returns a count.
+  * Will create Hive metastore at job-server/metastore_db if Hive isn't configured.
+  */
 object HiveLoaderJob extends SparkHiveJob {
   // The following data is stored at ./hive_test_job_addresses.txt
   // val addresses = Seq(
@@ -16,19 +19,23 @@ object HiveLoaderJob extends SparkHiveJob {
   //   Address("Randy", "Charles", "101 A St.", "San Jose")
   // )
 
+  type JobData = Config
+  type JobOutput = Long
+
   val tableCreate = "CREATE TABLE `default`.`test_addresses`"
   val tableArgs = "(`firstName` String, `lastName` String, `address` String, `city` String)"
-  val tableRowFormat = "ROW FORMAT DELIMITED FIELDS TERMINATED BY '|'"
+  val tableRowFormat = "ROW FORMAT DELIMITED FIELDS TERMINATED BY '\001'"
   val tableColFormat = "COLLECTION ITEMS TERMINATED BY '\002'"
   val tableMapFormat = "MAP KEYS TERMINATED BY '\003' STORED"
   val tableAs = "AS TextFile"
 
-  //Will fail with a 'SemanticException : Invalid path' if this file is not there
-  val loadPath = s"'src/main/resources/hive_test_job_addresses.txt'"
+  // Will fail with a 'SemanticException : Invalid path' if this file doesn't exist.
+  val loadPath = "'test/spark.jobserver/hive_test_job_addresses.txt'"
 
-  def validate(hive: HiveContext, config: Config): SparkJobValidation = SparkJobValid
+  def validate(hive: HiveContext, runtime: JobEnvironment, config: Config):
+  JobData Or Every[ValidationProblem] = Good(config)
 
-  def runJob(hive: HiveContext, config: Config): Any = {
+  def runJob(hive: HiveContext, runtime: JobEnvironment, config: JobData): JobOutput = {
     hive.sql("DROP TABLE if exists `default`.`test_addresses`")
     hive.sql(s"$tableCreate $tableArgs $tableRowFormat $tableColFormat $tableMapFormat $tableAs")
 
@@ -39,12 +46,16 @@ object HiveLoaderJob extends SparkHiveJob {
 }
 
 /**
- * This job simply runs the Hive SQL in the config.
- */
+  * This job simply runs the Hive SQL in the config.
+  */
 object HiveTestJob extends SparkHiveJob {
-  def validate(hive: HiveContext, config: Config): SparkJobValidation = SparkJobValid
+  type JobData = Config
+  type JobOutput = Array[Row]
 
-  def runJob(hive: HiveContext, config: Config): Any = {
+  def validate(hive: HiveContext, runtime: JobEnvironment, config: Config):
+  JobData Or Every[ValidationProblem] = Good(config)
+
+  def runJob(hive: HiveContext, runtime: JobEnvironment, config: JobData): JobOutput = {
     hive.sql(config.getString("sql")).collect()
   }
 }
