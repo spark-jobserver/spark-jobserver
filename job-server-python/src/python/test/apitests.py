@@ -43,7 +43,7 @@ class SQLJob(SparkJob):
 
     def run_job(self, context, runtime, data):
         rdd = context._sc.parallelize(data)
-        df = context.createDataFrame(rdd, ['name', 'age', 'salary'])
+        df = context.createDataFrame(data, ['name', 'age', 'salary'])
         df.registerTempTable('people')
         query = context.sql("""
             SELECT age, AVG(salary)
@@ -57,6 +57,8 @@ class TestSJSApi(unittest.TestCase):
     def setUp(self):
         conf = SparkConf().setAppName('test').setMaster('local[*]')
         self.sc = SparkContext(conf=conf)
+        self.jvm = self.sc._gateway.jvm
+        java_import(self.jvm, "org.apache.spark.sql.*")
 
     def tearDown(self):
         self.sc.stop()

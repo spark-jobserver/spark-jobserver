@@ -29,7 +29,6 @@ object HiveLoaderJob extends SparkHiveJob {
   val tableMapFormat = "MAP KEYS TERMINATED BY '\003' STORED"
   val tableAs = "AS TextFile"
 
-  // Will fail with a 'SemanticException : Invalid path' if this file doesn't exist.
   val loadPath = s"'src/main/resources/hive_test_job_addresses.txt'"
 
   def validate(hive: HiveContext, runtime: JobEnvironment, config: Config):
