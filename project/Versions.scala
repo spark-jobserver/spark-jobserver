@@ -20,4 +20,6 @@ object Versions {
   lazy val scalaTest = "2.2.6"
   lazy val scalatic = "2.2.6"
   lazy val shiro = "1.2.4"
+  lazy val cassandraUnit = "2.2.2.1"
+  lazy val py4j = "0.9"
 }
