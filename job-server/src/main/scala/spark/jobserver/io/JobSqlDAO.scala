@@ -1,6 +1,7 @@
 package spark.jobserver.io
 
 import java.io.File
+import java.nio.file.{Files, Paths}
 import java.sql.Timestamp
 import javax.sql.DataSource
 
@@ -9,8 +10,8 @@ import org.apache.commons.dbcp.BasicDataSource
 import org.flywaydb.core.Flyway
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
-import slick.driver.JdbcProfile
 
+import slick.driver.JdbcProfile
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
@@ -100,6 +101,7 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCasher {
   }
   // TODO: migrateLocations should be removed when tests have a running configuration
   val migrateLocations = config.getString("flyway.locations")
+  val initOnMigrate = config.getBoolean("flyway.initOnMigrate")
 
   // Server initialization
   init()
@@ -113,6 +115,7 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCasher {
     flyway.setDataSource(jdbcUrl, jdbcUser, jdbcPassword)
     // TODO: flyway.setLocations(migrateLocations) should be removed when tests have a running configuration
     flyway.setLocations(migrateLocations)
+    flyway.setBaselineOnMigrate(initOnMigrate)
     flyway.migrate()
   }
 
@@ -285,6 +288,25 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCasher {
           err.map(new Throwable(_)))
       }.headOption
 
+    }
+  }
+
+  /**
+    * Fetch submited jar or egg content for remote driver and JobManagerActor to cache in local
+    *
+    * @param appName
+    * @param uploadTime
+    * @return
+    */
+  override def getBinaryContent(appName: String, binaryType: BinaryType,
+                                uploadTime: DateTime): Array[Byte] = {
+    val jarFile = new File(rootDir, createBinaryName(appName, binaryType, uploadTime))
+    if (!jarFile.exists()) {
+      val binBytes = Await.result(fetchBinary(appName, binaryType, uploadTime), 60.seconds)
+      cacheBinary(appName, binaryType, uploadTime, binBytes)
+      binBytes
+    } else {
+      Files.readAllBytes(Paths.get(jarFile.getAbsolutePath))
     }
   }
 }
