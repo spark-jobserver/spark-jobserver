@@ -16,8 +16,13 @@ object Dependencies {
   lazy val akkaDeps = Seq(
     // Akka is provided because Spark already includes it, and Spark's version is shaded so it's not safe
     // to use this one
-    "com.typesafe.akka" %% "akka-slf4j" % akka % "provided",
-    "com.typesafe.akka" %% "akka-cluster" % akka exclude("com.typesafe.akka", "akka-remote"),
+    "com.typesafe.akka" %% "akka-slf4j" % akka,
+    "com.typesafe.akka" %% "akka-cluster" % akka,
+    "com.typesafe.akka" %% "akka-actor" % akka,
+    "com.typesafe.akka" %% "akka-remote" % akka,
+    "com.typesafe.akka" %% "akka-testkit" % akka,
+    "com.typesafe.akka" %% "akka-zeromq" % akka exclude("com.typesafe.akka", "akka-actor"),
+
     "io.spray" %% "spray-json" % sprayJson,
     "io.spray" %% "spray-can" % spray,
     "io.spray" %% "spray-caching" % spray,
@@ -82,7 +87,7 @@ object Dependencies {
   )
 
   lazy val serverDeps = apiDeps
-  lazy val apiDeps = sparkDeps ++ miscDeps :+ typeSafeConfigDeps :+ scalaTestDep
+  lazy val apiDeps = sparkDeps ++ miscDeps ++ akkaDeps :+ typeSafeConfigDeps :+ scalaTestDep
 
   val repos = Seq(
     "Typesafe Repo" at "http://repo.typesafe.com/typesafe/releases/",
