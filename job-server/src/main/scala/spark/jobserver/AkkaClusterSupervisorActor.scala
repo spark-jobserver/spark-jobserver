@@ -204,7 +204,11 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
     logger.info("Ready to create working directory {} for context {}", workDir: Any, name)
 
     //extract spark.proxy.user from contextConfig, if available and pass it to $managerStartCommand
-    var cmdString = s"$managerStartCommand $driverMode $workDir '$contextContent' ${selfAddress.toString}"
+    var cmdString = if (driverMode == "mesos-cluster") {
+      s"$managerStartCommand $driverMode $workDir '$contextContent' ${selfAddress.toString}"
+    } else {
+      s"$managerStartCommand $driverMode $workDir $contextContent ${selfAddress.toString}"
+    }
 
     if (contextConfig.hasPath(SparkJobUtils.SPARK_PROXY_USER_PARAM)) {
       cmdString = cmdString + s" ${contextConfig.getString(SparkJobUtils.SPARK_PROXY_USER_PARAM)}"
