@@ -31,8 +31,8 @@ object JobManager {
     val workDir = Paths.get(args(0))
     try {
       if (!Files.exists(workDir)) {
-        System.err.println(s"WorkDir $workDir does not exist, exit.")
-        sys.exit(1)
+        System.err.println(s"WorkDir $workDir does not exist, creating.")
+        Files.createDirectories(workDir)
       }
 
       //Create context.conf in the work dir with the config string
