@@ -4,7 +4,7 @@ dist: trusty
 env:
   global:
     - _JAVA_OPTIONS="-Xmx1500m -XX:MaxPermSize=512m -Dakka.test.timefactor=3"
-    - SPARK_HOME=/tmp/spark-2.0.0-bin-hadoop2.7
+    - SPARK_HOME=/tmp/spark-2.0.1-bin-hadoop2.7
 scala:
    - 2.11.8
 jdk:
