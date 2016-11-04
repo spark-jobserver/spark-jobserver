@@ -250,7 +250,7 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCasher {
       (j.jobId, j.contextName, bin.appName, bin.binaryType,
         bin.uploadTime, j.classPath, j.startTime, j.endTime, j.error)
     }
-    val sortQuery = joinQuery.sortBy(_._6.desc)
+    val sortQuery = joinQuery.sortBy(_._7.desc)
     val limitQuery = sortQuery.take(limit)
     // Transform the each row of the table into a map of JobInfo values
     for (r <- db.run(limitQuery.result)) yield {
