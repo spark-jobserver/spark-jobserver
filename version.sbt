@@ -1,3 +1,3 @@
-def currentVersion: String = ("git describe --tags --match v*" !!).trim.substring(1)
+def currentVersion: String = ("git describe --tags" !!).trim
 
 version in ThisBuild := currentVersion
