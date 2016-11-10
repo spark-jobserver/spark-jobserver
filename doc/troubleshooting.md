@@ -68,6 +68,15 @@ If you are running CDH 5.3 or older, you may have an incompatible version of Akk
 
 (Older instructions) Try modifying the version of Akka included with spark-jobserver to match the one in CDH (2.2.4, I think), or upgrade to CDH 5.4.   If you are on CDH 5.4, check that `sparkVersion` in `Dependencies.scala` matches CDH.  Or see [isse #154](https://github.com/spark-jobserver/spark-jobserver/issues/154).
 
+## java.lang.NoSuchMethodError: org.joda.time.DateTime.now()
+
+This time the problem is caused by incompatible class versions of the joda.time package in Hive and the Spark Job Server on Cloudera (java.lang.NoSuchMethodError: org.joda.time.DateTime.now()Lorg/joda/time/DateTime exception in the spark job server log). To solve the problem execute the following two commands on the machine the Job Server is installed:
+
+    sed -i -e 's#--driver-class-path.*SPARK_HOME/../hive/lib/.*##' /opt/spark-job-server/manager_start.sh
+    sed -i -e 's#--driver-class-path.*SPARK_HOME/../hive/lib/.*##' /opt/spark-job-server/server_start.sh  
+
+This removes the problematic driver class path entries from the two spark job server scripts.  (from @koetter)
+
 ## I am running CDH 5.3 and Job Server doesn't work
 
 See above.
