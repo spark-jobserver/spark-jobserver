@@ -87,15 +87,23 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
         sender ! JobResult("_seq", Seq(1, 2, Map("3" -> "three")))
       case GetJobResult("_stream") =>
         sender ! JobResult("_stream", "\"1, 2, 3, 4, 5, 6, 7\"".getBytes().toStream)
-      case GetJobStatus("_num") =>
-        sender ! finishedJobInfo
       case GetJobStatus("_stream") =>
+        sender ! finishedJobInfo
+      case GetJobStatus("_num") =>
         sender ! finishedJobInfo
       case GetJobResult("_num") =>
         sender ! JobResult("_num", 5000)
       case GetJobStatus("_unk") =>
         sender ! finishedJobInfo
       case GetJobResult("_unk") => sender ! JobResult("_case", Seq(1, math.BigInt(101)))
+      case GetJobStatus("_running") =>
+        sender ! baseJobInfo
+      case GetJobResult("_running") =>
+        sender ! baseJobInfo
+      case GetJobStatus("_finished") =>
+        sender ! finishedJobInfo
+      case GetJobStatus("_no_status") =>
+        sender ! NoSuchJobId
       case GetJobStatus("job_to_kill") => sender ! baseJobInfo
       case GetJobStatus(id) => sender ! baseJobInfo
       case GetJobResult(id) => sender ! JobResult(id, id + "!!!")
