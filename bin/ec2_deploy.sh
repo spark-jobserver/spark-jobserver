@@ -8,7 +8,7 @@ bin=`cd "$bin"; pwd`
 SPARK_DIR=ec2Cluster
 if [ ! -d "$bin"/../$SPARK_DIR ]; then
     mkdir "$bin"/../$SPARK_DIR
-    mkdir "$bin"/../$SPARK_DIR/deploy.generic/root/spark-ec2
+    mkdir -p "$bin"/../$SPARK_DIR/deploy.generic/root/spark-ec2
     wget -P "$bin"/../$SPARK_DIR/deploy.generic/root/spark-ec2 https://raw.githubusercontent.com/amplab/spark-ec2/branch-1.6/deploy.generic/root/spark-ec2/ec2-variables.sh
     wget -P "$bin"/../$SPARK_DIR https://raw.githubusercontent.com/amplab/spark-ec2/branch-1.6/spark_ec2.py
     wget -P "$bin"/../$SPARK_DIR https://raw.githubusercontent.com/amplab/spark-ec2/branch-1.6/spark-ec2
