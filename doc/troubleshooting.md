@@ -35,6 +35,14 @@ If your job returns a large job result, it may exceed Akka's maximum network mes
 
     akka.remote.netty.tcp.maximum-frame-size = 100 MiB
 
+## Job with status finished has no result
+
+On jobs with large results or many concurrent jobs, the REST API at `/job/abc..` might return status `FINISHED` but does not contains any result. This might happen in two cases:
+
+1. the job finished right now and results are in transfer.
+2. the job finished some time ago and results are remove from results cache already. See `spark.jobserver.job-result-cache-size` to increase the cache.
+
+
 ## AskTimeout when starting job server or contexts
 
 If you are loading large jars or dependent jars, either at startup or when creating a large context, the database such as H2 may take a really long time to write those bytes to disk.  You need to adjust the context timeout setting:
