@@ -15,10 +15,10 @@ fi
 
 #run spark-ec2 to start ec2 cluster
 EC2DEPLOY="$SPARK_DIR"/spark-ec2
-"$EC2DEPLOY" --copy-aws-credentials --key-pair=$KEY_PAIR --hadoop-major-version=yarn --identity-file=$SSH_KEY --region=us-east-1 --zone=$ZONE --spark-version=$SPARK_VERSION --instance-type=$INSTANCE_TYPE --slaves $NUM_SLAVES launch $CLUSTER_NAME
+"$EC2DEPLOY" --copy-aws-credentials --key-pair=$KEY_PAIR --hadoop-major-version=yarn --identity-file=$SSH_KEY --region=us-east-1 --zone=$ZONE --spark-version=$SPARK_VERSION --instance-type=$INSTANCE_TYPE --slaves $NUM_SLAVES $SPARK_EC2_OPTIONS launch $CLUSTER_NAME
 #There is only 1 deploy host. However, the variable is plural as that is how Spark Job Server named it.
 #To minimize changes, I left the variable name alone.
-export DEPLOY_HOSTS=$("$EC2DEPLOY" get-master $CLUSTER_NAME | tail -n1)
+export DEPLOY_HOSTS=$("$EC2DEPLOY" $SPARK_EC2_OPTIONS get-master $CLUSTER_NAME | tail -n1)
 
 #This line is a hack to edit the ec2.conf file so that the master option is correct. Since we are allowing Amazon to
 #dynamically allocate a url for the master node, we must update the configuration file in between cluster startup

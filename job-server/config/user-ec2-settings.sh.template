@@ -9,3 +9,5 @@ NUM_SLAVES=19
 SPARK_VERSION=1.6.0
 HADOOP_VERSION=2.6
 SPARK_EC2_BRANCH=branch-1.6
+# Additional options to pass to spark-ec2
+SPARK_EC2_OPTIONS=
