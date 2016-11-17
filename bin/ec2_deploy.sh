@@ -7,8 +7,6 @@ bin=`cd "$bin"; pwd`
 #get spark deployment scripts if they haven't been downloaded and extracted yet
 SPARK_DIR="$bin"/../ec2Cluster
 if [ ! -d "$SPARK_DIR" ]; then
-    mkdir "$SPARK_DIR"
-    mkdir -p "$SPARK_DIR"/deploy.generic/root/spark-ec2
     wget -P "$SPARK_DIR"/deploy.generic/root/spark-ec2 https://raw.githubusercontent.com/amplab/spark-ec2/$SPARK_EC2_BRANCH/deploy.generic/root/spark-ec2/ec2-variables.sh
     wget -P "$SPARK_DIR" https://raw.githubusercontent.com/amplab/spark-ec2/$SPARK_EC2_BRANCH/spark_ec2.py
     wget -P "$SPARK_DIR" https://raw.githubusercontent.com/amplab/spark-ec2/$SPARK_EC2_BRANCH/spark-ec2
