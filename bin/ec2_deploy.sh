@@ -1,23 +1,21 @@
-#!/bin/bash
+#!/bin/bash -eu
 bin=`dirname "${BASH_SOURCE-$0}"`
 bin=`cd "$bin"; pwd`
 
 . "$bin"/../config/user-ec2-settings.sh
 
 #get spark deployment scripts if they haven't been downloaded and extracted yet
-SPARK_DIR=ec2Cluster
-if [ ! -d "$bin"/../$SPARK_DIR ]; then
-    mkdir "$bin"/../$SPARK_DIR
-    mkdir "$bin"/../$SPARK_DIR/deploy.generic/root/spark-ec2
-    wget -P "$bin"/../$SPARK_DIR/deploy.generic/root/spark-ec2 https://raw.githubusercontent.com/amplab/spark-ec2/branch-1.6/deploy.generic/root/spark-ec2/ec2-variables.sh
-    wget -P "$bin"/../$SPARK_DIR https://raw.githubusercontent.com/amplab/spark-ec2/branch-1.6/spark_ec2.py
-    wget -P "$bin"/../$SPARK_DIR https://raw.githubusercontent.com/amplab/spark-ec2/branch-1.6/spark-ec2
-    chmod u+x "$bin"/../$SPARK_DIR/*
+SPARK_DIR="$bin"/../ec2Cluster
+if [ ! -d "$SPARK_DIR" ]; then
+    wget -P "$SPARK_DIR"/deploy.generic/root/spark-ec2 https://raw.githubusercontent.com/amplab/spark-ec2/$SPARK_EC2_BRANCH/deploy.generic/root/spark-ec2/ec2-variables.sh
+    wget -P "$SPARK_DIR" https://raw.githubusercontent.com/amplab/spark-ec2/$SPARK_EC2_BRANCH/spark_ec2.py
+    wget -P "$SPARK_DIR" https://raw.githubusercontent.com/amplab/spark-ec2/$SPARK_EC2_BRANCH/spark-ec2
+    chmod u+x "$SPARK_DIR"/*
 fi
 
 #run spark-ec2 to start ec2 cluster
-EC2DEPLOY="$bin"/../$SPARK_DIR/spark-ec2
-"$EC2DEPLOY" --copy-aws-credentials --key-pair=$KEY_PAIR --hadoop-major-version=yarn --identity-file=$SSH_KEY --region=us-east-1 --zone=us-east-1a --spark-version=$SPARK_VERSION --instance-type=$INSTANCE_TYPE --slaves $NUM_SLAVES launch $CLUSTER_NAME
+EC2DEPLOY="$SPARK_DIR"/spark-ec2
+"$EC2DEPLOY" --copy-aws-credentials --key-pair=$KEY_PAIR --hadoop-major-version=yarn --identity-file=$SSH_KEY --region=us-east-1 --zone=$ZONE --spark-version=$SPARK_VERSION --instance-type=$INSTANCE_TYPE --slaves $NUM_SLAVES launch $CLUSTER_NAME
 #There is only 1 deploy host. However, the variable is plural as that is how Spark Job Server named it.
 #To minimize changes, I left the variable name alone.
 export DEPLOY_HOSTS=$("$EC2DEPLOY" get-master $CLUSTER_NAME | tail -n1)
