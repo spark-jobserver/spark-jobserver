@@ -15,7 +15,10 @@ fi
 
 #run spark-ec2 to start ec2 cluster
 EC2DEPLOY="$SPARK_DIR"/spark-ec2
-"$EC2DEPLOY" --copy-aws-credentials --key-pair=$KEY_PAIR --hadoop-major-version=yarn --identity-file=$SSH_KEY --region=us-east-1 --zone=$ZONE --spark-version=$SPARK_VERSION --instance-type=$INSTANCE_TYPE --slaves $NUM_SLAVES $SPARK_EC2_OPTIONS launch $CLUSTER_NAME
+if [ -n "$VPC_ID" ]; then
+   VPC_OPTION="--vpc-id $VPC_ID"
+fi
+"$EC2DEPLOY" --copy-aws-credentials --key-pair=$KEY_PAIR --hadoop-major-version=yarn --identity-file=$SSH_KEY --region=us-east-1 --zone=$ZONE --spark-version=$SPARK_VERSION --instance-type=$INSTANCE_TYPE --slaves $NUM_SLAVES $VPC_OPTION $SPARK_EC2_OPTIONS launch $CLUSTER_NAME
 #There is only 1 deploy host. However, the variable is plural as that is how Spark Job Server named it.
 #To minimize changes, I left the variable name alone.
 export DEPLOY_HOSTS=$("$EC2DEPLOY" $SPARK_EC2_OPTIONS get-master $CLUSTER_NAME | tail -n1)
@@ -31,7 +34,14 @@ cp "$bin"/ec2_example.sh.template "$bin"/ec2_example.sh
 sed -i -E "s/DEPLOY_HOSTS=.*/DEPLOY_HOSTS=\"$DEPLOY_HOSTS:8090\"/g" "$bin"/ec2_example.sh
 
 #open all ports so the master for Spark Job Server to work and you can see the results of your jobs
-aws ec2 authorize-security-group-ingress --group-name $CLUSTER_NAME-master --protocol tcp --port 0-65535 --cidr 0.0.0.0/0
+#if the security group is in a VPC it needs to be identified by group ID
+if [ -n "$VPC_ID" ]; then
+   GROUP_ID=$(aws ec2 describe-security-groups | jq -r ".SecurityGroups[] | select(.GroupName == \"$CLUSTER_NAME-master\" and .VpcId == \"$VPC_ID\") | .GroupId")
+   GROUP_SELECTOR="--group-id $GROUP_ID"
+else
+   GROUP_SELECTOR="--group-name $CLUSTER_NAME-master"
+fi
+aws ec2 authorize-security-group-ingress $GROUP_SELECTOR --protocol tcp --port 0-65535 --cidr 0.0.0.0/0
 
 cd "$bin"/..
 bin/server_deploy.sh ec2
