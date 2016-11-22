@@ -5,7 +5,7 @@ import java.util.concurrent.Executors._
 import java.util.concurrent.atomic.AtomicInteger
 
 import akka.actor.{ActorRef, PoisonPill, Props}
-import com.typesafe.config.Config
+import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.{SparkConf, SparkEnv}
 import org.joda.time.DateTime
@@ -14,15 +14,15 @@ import spark.jobserver.api.JobEnvironment
 import spark.jobserver.context.{JobContainer, SparkContextFactory}
 import spark.jobserver.io.{BinaryInfo, JobDAOActor, JobInfo}
 import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
+
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
-
 import spark.jobserver.common.akka.InstrumentedActor
 
 object JobManagerActor {
   // Messages
   case class Initialize(resultActorOpt: Option[ActorRef])
-  case class StartJob(appName: String, classPath: String, config: Config,
+  case class StartJob(appName: String, classPath: String, configString: String,
                       subscribedEvents: Set[Class[_]])
   case class KillJob(jobId: String)
   case class JobKilledException(jobId: String) extends Exception(s"Job $jobId killed")
@@ -144,7 +144,8 @@ class JobManagerActor(contextConfig: Config, daoActor: ActorRef) extends Instrum
           self ! PoisonPill
       }
 
-    case StartJob(appName, classPath, jobConfig, events) => {
+    case StartJob(appName, classPath, configString, events) => {
+      val jobConfig = ConfigFactory.parseString(configString)
       val loadedJars = jarLoader.getURLs
       getSideJars(jobConfig).foreach { jarUri =>
         val jarToLoad = new URL(convertJarUriSparkToJava(jarUri))
