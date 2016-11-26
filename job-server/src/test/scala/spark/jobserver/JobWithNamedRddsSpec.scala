@@ -26,6 +26,10 @@ class JobWithNamedRddsSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
   job.namedObjects = new JobServerNamedObjects(system)
   val namedTestRdds = job.namedRdds
 
+  before {
+    namedTestRdds.getNames().foreach { namedTestRdds.destroy }
+  }
+
   override def afterAll() {
     sc.stop()
     AkkaTestUtils.shutdownAndWait(system)

@@ -85,6 +85,18 @@ abstract class JobManagerSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
       expectNoMsg()
     }
 
+    it("should start job and return result before job finish event") {
+      manager ! JobManagerActor.Initialize(None)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+
+      uploadTestJar()
+      manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, allEvents)
+      expectMsgClass(startJobWait, classOf[JobStarted])
+      expectMsgClass(classOf[JobResult])
+      expectMsgClass(classOf[JobFinished])
+      expectNoMsg()
+    }
+
     it("should start job more than one time and return result successfully (all events)") {
       manager ! JobManagerActor.Initialize(None)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
