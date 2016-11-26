@@ -3,9 +3,13 @@
 SSH_KEY=PATH_TO_SSH_KEY
 KEY_PAIR=EC2_KEY_PAIR
 ZONE=us-east-1a
+# Leave VPC_ID blank if no VPC
+VPC_ID=
 CLUSTER_NAME=large19Slaves
 INSTANCE_TYPE=r3.large
 NUM_SLAVES=19
 SPARK_VERSION=1.6.0
 HADOOP_VERSION=2.6
 SPARK_EC2_BRANCH=branch-1.6
+# Additional options to pass to spark-ec2
+SPARK_EC2_OPTIONS=
