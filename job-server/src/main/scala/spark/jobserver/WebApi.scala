@@ -585,7 +585,7 @@ class WebApi(system: ActorSystem,
                     val events = if (async) asyncEvents else syncEvents
                     val timeout = timeoutOpt.map(t => Timeout(t.seconds)).getOrElse(DefaultSyncTimeout)
                     val future = jobManager.get.ask(
-                      JobManagerActor.StartJob(appName, classPath, jobConfig.root.render, events))(timeout)
+                      JobManagerActor.StartJob(appName, classPath, jobConfig, events))(timeout)
                     respondWithMediaType(MediaTypes.`application/json`) { ctx =>
                       future.map {
                         case JobResult(jobId, res) =>
