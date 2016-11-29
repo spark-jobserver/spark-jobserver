@@ -7,7 +7,7 @@ object Versions {
   lazy val akka = "2.4.9"
   lazy val spray = "1.3.3"
   lazy val sprayJson = "1.3.2"
-  lazy val spark = "2.0.0"
+  lazy val spark = "2.0.1"
   lazy val mesos = "1.0.0-2.0.89.ubuntu1404"
   lazy val netty =  "4.0.29.Final"
   lazy val slick = "3.1.1"
