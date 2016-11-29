@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-PYTHONPATH=.:$SPARK_HOME/python/lib/pyspark.zip:$SPARK_HOME/python/lib/py4j-0.10.1-src.zip:$PYTHONPATH python test/apitests.py
+PYTHONPATH=.:$SPARK_HOME/python/lib/pyspark.zip:$SPARK_HOME/python/lib/py4j-0.10.3-src.zip:$PYTHONPATH python test/apitests.py
 exitCode=$?
 #This sleep is here so that all of Spark's shutdown stdout if written before we exit,
 #so that we return cleanly to the command prompt.
