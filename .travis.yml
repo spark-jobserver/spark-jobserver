@@ -26,7 +26,7 @@ install:
       docker load -i docker/latest_cache.tar.gz;
     fi
   - echo "docker/" >> .dockerignore
-  - docker build -t $DOCKER_IMAGE .
+  - docker build -f Dockerfile.test -t $DOCKER_IMAGE .
   - docker save $DOCKER_IMAGE | gzip > docker/latest_image.tar.gz
   - sudo `which buildcache` save -o docker/latest_cache.tar.gz $DOCKER_IMAGE
   - sudo chown $USER docker/latest_cache.tar.gz
