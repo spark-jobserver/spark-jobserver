@@ -2,7 +2,6 @@ package spark.jobserver.python
 
 import com.typesafe.config.{ConfigRenderOptions, Config}
 import org.apache.spark.SparkConf
-import spark.jobserver.api.JobEnvironment
 import scala.collection.JavaConverters._
 
 /**
@@ -15,14 +14,15 @@ import scala.collection.JavaConverters._
   * The Spark Job Server python subprocess assumes the endpoint to be an implementation of this Trait,
   * and attempts to access fields and methods accordingly.
   */
-case class JobEndpoint[C <: PythonContextLike](context: C,
-                                               sparkConf: SparkConf,
-                                               contextConfig: Config,
-                                               jobId: String,
-                                               jobConfig: Config,
-                                               jobClass: String,
-                                               py4JImports: Seq[String]
-                                              ){
+case class JobEndpoint[C <: PythonContextLike](
+  context: C,
+  sparkConf: SparkConf,
+  contextConfig: Config,
+  jobId: String,
+  jobConfig: Config,
+  jobClass: String,
+  py4JImports: Seq[String]
+  ){
 
   /**
     * @return The contextConfig, which is a Typesafe Config object, serialized to HOCON,

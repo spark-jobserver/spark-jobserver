@@ -28,7 +28,7 @@ class Job1(SparkJob):
         context.createDataFrame(rdd, ['name', 'age', 'salary']).\
             write.save("/tmp/people.parquet", mode='overwrite')
         context.read.load('/tmp/people.parquet').\
-            registerTempTable('people_table')
+            createOrReplaceTempView('people_table')
         return "done"
 
 

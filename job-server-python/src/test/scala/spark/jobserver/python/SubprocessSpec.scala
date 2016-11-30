@@ -1,8 +1,10 @@
 package spark.jobserver.python
 
 import java.io.File
+import java.nio.file.Files
 
 import com.typesafe.config.{ConfigRenderOptions, Config, ConfigFactory}
+import org.apache.spark.SparkContext
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.hive.HiveContext
@@ -54,7 +56,7 @@ case class TestEndpoint(context: Any,
 
   val jobConfigAsHocon: String = jobConfig.root().render(ConfigRenderOptions.concise())
   val contextConfigAsHocon = jobConfigAsHocon
-  val jobId= "ABC"
+  val jobId = "ABC"
 
   var validationProblems: Option[Seq[String]] = None
 
@@ -94,6 +96,12 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
     p
   }
 
+  // creates a stub warehouse dir for derby/hive metastore
+  def makeWarehouseDir(): File = {
+    val warehouseDir = Files.createTempDirectory("warehouse").toFile()
+    warehouseDir.delete()
+    warehouseDir
+  }
   def buildGateway(endpoint: TestEndpoint): GatewayServer = {
     val server = new GatewayServer(endpoint, 0)
     //Server runs asynchronously on a dedicated thread. See Py4J source for more detail
@@ -108,7 +116,8 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
   lazy val conf = new SparkConf().
     setMaster("local[*]").
     setAppName("SubprocessSpec").
-    set("spark.sql.shuffle.partitions", "5")
+    set("spark.sql.shuffle.partitions", "5").
+    set("spark.sql.warehouse.dir", makeWarehouseDir().toURI.getPath)
   lazy val sc = new SparkContext(conf)
   lazy val jsc = new JavaSparkContext(sc) with IdentifiedContext{
     def contextType = classOf[JavaSparkContext].getCanonicalName
@@ -206,6 +215,7 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
       stopGateway(gw)
     }
 
+
     it("should successfully run a HiveContext based job") {
       val jobConfig = ConfigFactory.parseString(
         """
@@ -262,6 +272,7 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
       pythonExitCode should be (0)
       endpoint.result should be ("done")
       stopGateway(gw)
+      Thread.sleep(5000)
 
       val jobConfig2 = ConfigFactory.parseString("")
       val endpoint2 =
@@ -281,7 +292,7 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
       }
       stopGateway(gw2)
     }
-
+    
     it("should have non-zero exit code if passed something as a context which is not a context") {
 
       val jobConfig = ConfigFactory.parseString("""input.strings = ["a", "a", "b"]""")
