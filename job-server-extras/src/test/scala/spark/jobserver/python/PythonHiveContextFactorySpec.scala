@@ -1,11 +1,12 @@
 package spark.jobserver.python
 
-import com.typesafe.config.{ConfigFactory, Config}
+import java.io.File
+
+import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.spark.sql.hive.HiveContext
 import org.joda.time.DateTime
-import org.scalatest.{BeforeAndAfter, Matchers, FunSpec}
+import org.scalatest.{BeforeAndAfter, FunSpec, Matchers}
 
-import scala.reflect.io.File
 import scala.collection.JavaConverters._
 
 
@@ -21,8 +22,8 @@ object PythonHiveContextFactorySpec {
     * This approach wouldn't be suitable in a production scenario, but ok for tests.
     */
   private def resetDerby(): Unit = {
-    File("/tmp/metastore_db/dbex.lck").deleteIfExists()
-    File("/tmp/metastore_db/db.lck").deleteIfExists()
+    new File("/tmp/metastore_db/dbex.lck").delete()
+    new File("/tmp/metastore_db/db.lck").delete()
   }
 }
 
