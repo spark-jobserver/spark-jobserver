@@ -3,6 +3,7 @@
 * Python job support!   (mostly @mattinbits, some @CalebFenton)
     - Some settings like job-jar-paths renamed to job-bin-paths (@nikkiSproutling)
 * New Scala API!   The expanded API includes passing in a `JobEnvironment` which provides access to job ID, context information; it also offers more type safety in job return type, validation etc. (@velvia, others)
+* Spark 2.0 support (see spark-2.0-preview branch) (@f1yegor, @addisonj)
 
 * Changed minor HTTP responses to be all JSON  (@roarking)
 * Deprecate JobFileDAO.  H2 is now the default.  Furthermore, H2 and JobFileDAO cannot be used with context-per-jvm. (@noorul)
