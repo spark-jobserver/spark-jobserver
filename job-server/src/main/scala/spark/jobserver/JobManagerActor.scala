@@ -159,7 +159,9 @@ class JobManagerActor(contextConfig: Config, daoActor: ActorRef) extends Instrum
 
     case KillJob(jobId: String) => {
       jobContext.sparkContext.cancelJobGroup(jobId)
-      statusActor ! JobKilled(jobId, DateTime.now())
+      val resp = JobKilled(jobId, DateTime.now())
+      statusActor ! resp
+      sender ! resp
     }
 
     case SparkContextStatus => {

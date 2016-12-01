@@ -514,8 +514,12 @@ class WebApi(system: ActorSystem,
                 notFound(ctx, "No such job ID " + jobId)
               case JobInfo(_, contextName, _, classPath, _, None, _) =>
                 val jobManager = getJobManagerForContext(Some(contextName), config, classPath)
-                jobManager.get ! KillJob(jobId)
-                ctx.complete(Map(StatusKey -> JobStatus.Killed))
+                val future = jobManager.get ? KillJob(jobId)
+                future.map {
+                  case JobKilled(_, _) => ctx.complete(Map(StatusKey -> JobStatus.Killed))
+                }.recover {
+                  case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+                }
               case JobInfo(_, _, _, _, _, _, Some(ex)) =>
                 ctx.complete(Map(StatusKey -> JobStatus.Error, "ERROR" -> formatException(ex)))
               case JobInfo(_, _, _, _, _, Some(e), None) =>
@@ -598,8 +602,12 @@ class WebApi(system: ActorSystem,
                           Map[String, String]("jobId" -> jobId) ++ errMap(ex, "ERROR")
                         )
                         case JobStarted(_, jobInfo) =>
-                          jobInfoActor ! StoreJobConfig(jobInfo.jobId, postedJobConfig)
-                          ctx.complete(202, getJobReport(jobInfo, true))
+                          val future = jobInfoActor ? StoreJobConfig(jobInfo.jobId, postedJobConfig)
+                          future.map {
+                            case JobConfigStored => ctx.complete(202, getJobReport(jobInfo, true))
+                          }.recover {
+                            case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+                          }
                         case JobValidationFailed(_, _, ex) =>
                           ctx.complete(400, errMap(ex, "VALIDATION FAILED"))
                         case NoSuchApplication => notFound(ctx, "appName " + appName + " not found")
