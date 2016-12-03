@@ -110,7 +110,7 @@ class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.syst
       expectMsg(ContextInitialized)
       supervisor ! GetContext("c1")
       expectMsgPF(5 seconds, "I can't find that context :'-(") {
-        case (contextActor: ActorRef, resultActor: ActorRef) =>
+        case (actorName: String, Some(contextActor: ActorRef), Some(resultActor: ActorRef)) =>
           contextActor ! GetContextConfig
           val cc = expectMsgClass(classOf[ContextConfig])
           cc.contextName shouldBe "c1"
