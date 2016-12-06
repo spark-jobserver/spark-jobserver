@@ -243,15 +243,16 @@ abstract class JobManagerSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
       expectMsgPF(5.seconds.dilated, "Did not get JobResult") {
         case JobStarted(id, _) =>
           manager ! KillJob(id)
+          // we need this twice as we send both to sender and manager, in unit tests they are the same
+          // in usage they may be different
           expectMsgClass(classOf[JobKilled])
-
+          expectMsgClass(classOf[JobKilled])
       }
     }
 
     it("should fail a job that requires job jar dependencies but doesn't provide the jar"){
       manager ! JobManagerActor.Initialize(None)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
-
 
       uploadTestJar()
       val jobJarDepsConfigs = ConfigFactory.parseString(

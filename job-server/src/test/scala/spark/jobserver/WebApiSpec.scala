@@ -183,8 +183,12 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
         if (events.contains(classOf[JobResult])) sender ! JobResult("foo.stream", result)
         statusActor ! Unsubscribe("foo.stream", sender)
 
+
       case GetJobConfig("badjobid") => sender ! NoSuchJobId
       case GetJobConfig(_)          => sender ! config
+
+      case StoreJobConfig(_, _) => sender ! JobConfigStored
+      case KillJob(jobId) => sender ! JobKilled(jobId, DateTime.now())
     }
   }
 
@@ -239,4 +243,3 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
     }
   }
 }
-
