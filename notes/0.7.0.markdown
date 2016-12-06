@@ -21,6 +21,7 @@
 * Make dbcp optional, default: disabled (@noorul)
 * Fix for logging issue in dev mode, #475 (@noorul)
 * Fix flaky tests (@TimMaltGermany)
+* Increase size of config/input that can be submitted via custom Akka serializer (@rmettu-rms)
 * Update build plugins (@hntd187)
 * README fix (@Vincibean)
 * Ensure Scala compiler dependency has correct version (@@aganim-chariot)
