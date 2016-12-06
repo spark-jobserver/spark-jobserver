@@ -16,6 +16,7 @@
 * Add Scala version to Docker image (@mariussoutier)
 * Integrate converage into CI using codecov.io service (@hntd187)
 * Remove akka dependency from api module (@f1yegor)
+* Eliminate POST and DEL /job race conditions (@addisonj)
 * Improve Chinese document (@stanzhai)
 * Return error if data file can't be deleted (@CalebFenton)
 * Make dbcp optional, default: disabled (@noorul)
