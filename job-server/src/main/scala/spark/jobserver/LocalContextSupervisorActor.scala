@@ -5,6 +5,7 @@ import akka.pattern.ask
 import akka.util.Timeout
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
+import spark.jobserver.JobManagerActor.{GetSparkWebUIUrl, NoSparkWebUI, SparkWebUIUrl}
 import spark.jobserver.JobManagerActor.{SparkContextAlive, SparkContextDead, SparkContextStatus}
 import spark.jobserver.util.SparkJobUtils
 import scala.collection.mutable
@@ -24,6 +25,7 @@ object ContextSupervisor {
   case class GetContext(name: String) // returns JobManager, JobResultActor
   case class GetResultActor(name: String)  // returns JobResultActor
   case class StopContext(name: String)
+  case class GetSparkWebUI(name: String)
 
   // Errors/Responses
   case object ContextInitialized
@@ -32,6 +34,7 @@ object ContextSupervisor {
   case object ContextAlreadyExists
   case object NoSuchContext
   case object ContextStopped
+  case class WebUIForContext(name: String, url: Option[String])
 }
 
 /**
@@ -90,6 +93,21 @@ class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
 
     case ListContexts =>
       sender ! contexts.keys.toSeq
+
+    case GetSparkWebUI(name) =>
+      contexts.get(name) match {
+        case Some((actor, _)) =>
+          val future = (actor ? GetSparkWebUIUrl)(contextTimeout.seconds)
+          val originator = sender
+          future.collect {
+            case SparkWebUIUrl(webUi) => originator ! WebUIForContext(name, Some(webUi))
+            case NoSparkWebUI => originator ! WebUIForContext(name, None)
+            case SparkContextDead =>
+              logger.info("SparkContext {} is dead", name)
+              originator ! NoSuchContext
+          }
+        case _ => sender ! NoSuchContext
+      }
 
     case AddContext(name, contextConfig) =>
       val originator = sender // Sender is a mutable reference, must capture in immutable val

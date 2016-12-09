@@ -379,7 +379,7 @@ Let's try running our sample job with an invalid configuration:
 
 ### NEW SparkJob API with Spark v2.1
 
-Deploying Spark JobServer with Spark v2.x cluster, you can create a SparkSession context which enables Spark-SQL and Hive support 
+Deploying Spark JobServer with Spark v2.x cluster, you can create a SparkSession context which enables Spark-SQL and Hive support
 ```scala
 curl -i -d "" 'http://localhost:8090/contexts/sql-context-1?num-cpu-cores=2&memory-per-node=512M&context-factory=spark.jobserver.context.SessionContextFactory'
 ```
@@ -777,6 +777,7 @@ These routes are kept for legacy purposes but are deprecated in favour of the /b
 ### Contexts
 
     GET /contexts               - lists all current contexts
+    GET /contexts/<name>        - gets info about a context, such as the spark UI url
     POST /contexts/<name>       - creates a new context
     DELETE /contexts/<name>     - stops a context and all jobs running in it
     PUT /contexts?reset=reboot  - shuts down all contexts and re-loads only the contexts from config. Use ?sync=false to execute asynchronously.
@@ -928,17 +929,17 @@ If we encounter a data type that is not supported, then the entire result will b
 
 ### HTTP Override
 
-Spark Job Server offers HTTP override functionality. 
+Spark Job Server offers HTTP override functionality.
 Often reverse proxies and firewall implement access limitations to, for example, DELETE and PUT requests.
 HTTP override allows overcoming these limitations by wrapping, for example, a DELETE request into a POST request.
 
-Requesting the destruction of a context can be accomplished through HTTP override using the following syntax: 
-    
+Requesting the destruction of a context can be accomplished through HTTP override using the following syntax:
+
     $ curl -X POST "localhost:8090/contexts/test_context?_method=DELETE"
 
 Here, a DELETE request is passed to Spark Job Server "through" a POST request.
-    
-    
+
+
 ## Clients
 
 Spark Jobserver project has a
