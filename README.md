@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/spark-jobserver/spark-jobserver.svg?branch=master)](https://travis-ci.org/spark-jobserver/spark-jobserver)
+[![Build Status](https://travis-ci.org/spark-jobserver/spark-jobserver.svg?branch=master)](https://travis-ci.org/spark-jobserver/spark-jobserver) [![Coverage](https://img.shields.io/codecov/c/github/spark-jobserver/spark-jobserver/master.svg)](https://codecov.io/gh/spark-jobserver/spark-jobserver/branch/master)
 
 [![Join the chat at https://gitter.im/spark-jobserver/spark-jobserver](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/spark-jobserver/spark-jobserver?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
@@ -24,6 +24,7 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
     - [Ad-hoc Mode - Single, Unrelated Jobs (Transient Context)](#ad-hoc-mode---single-unrelated-jobs-transient-context)
     - [Persistent Context Mode - Faster & Required for Related Jobs](#persistent-context-mode---faster-&-required-for-related-jobs)
 - [Create a Job Server Project](#create-a-job-server-project)
+  - [NEW SparkJob API](#new-sparkjob-api)
   - [Dependency jars](#dependency-jars)
   - [Named Objects](#named-objects)
     - [Using Named RDDs](#using-named-rdds)
@@ -41,6 +42,7 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
   - [Contexts](#contexts)
   - [Jobs](#jobs)
   - [Data](#data)
+    - [Data API Example](#data-api-example)
   - [Context configuration](#context-configuration)
   - [Other configuration settings](#other-configuration-settings)
   - [Job Result Serialization](#job-result-serialization)
@@ -74,11 +76,15 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 - [Instaclustr](http://www.instaclustr.com)
 - [SnappyData](http://www.snappydata.io)
 - [Linkfluence](http://www.linkfluence.com)
+- [Smartsct](http://www.smartsct.com)
+- [Datadog] (https://www.datadoghq.com/)
+- [Planalytics](http://www.planalytics.com)
 
 ## Features
 
 - *"Spark as a Service"*: Simple REST interface (including HTTPS) for all aspects of job, context management
 - Support for Spark SQL, Hive, Streaming Contexts/jobs and custom job contexts!  See [Contexts](doc/contexts.md).
+- [Python](doc/python.md), Scala, and preliminary Java (see `JavaSparkJob`) support
 - LDAP Auth support via Apache Shiro integration
 - Separate JVM per SparkContext for isolation (EXPERIMENTAL)
 - Supports sub-second low-latency jobs via long-running job contexts
@@ -86,7 +92,6 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 - Kill running jobs via stop context and delete job
 - Separate jar uploading step for faster job startup
 - Asynchronous and synchronous job API.  Synchronous API is great for low latency jobs!
-- Preliminary support for Java (see `JavaSparkJob`)
 - Works with Standalone Spark as well as Mesos and yarn-client
 - Job and jar info is persisted via a pluggable DAO interface
 - Named Objects (such as RDDs or DataFrames) to cache and retrieve RDDs or DataFrames by name, improving object sharing and reuse among jobs.
@@ -104,7 +109,8 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 | 0.5.2       | 1.3.1         |
 | 0.6.0       | 1.4.1         |
 | 0.6.1       | 1.5.2         |
-| master      | 1.6.0         |
+| 0.6.2       | 1.6.1         |
+| master      | 1.6.2         |
 
 For release notes, look in the `notes/` directory.  They should also be up on [notes.implicit.ly](http://notes.implicit.ly/search/spark-jobserver).
 
@@ -137,7 +143,7 @@ From SBT shell, simply type "reStart".  This uses a default configuration file. 
 path to an alternative config file.  You can also specify JVM parameters after "---".  Including all the
 options looks like this:
 
-    reStart /path/to/my.conf --- -Xmx8g
+    job-server/reStart /path/to/my.conf --- -Xmx8g
 
 Note that reStart (SBT Revolver) forks the job server in a separate process.  If you make a code change, simply
 type reStart again at the SBT shell prompt, it will compile your changes and restart the jobserver.  It enables
@@ -167,11 +173,12 @@ server will create its own SparkContext, and return a job ID for subsequent quer
 
     curl -d "input.string = a b c a b see" 'localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample'
     {
+      "duration": "Job not done yet",
+      "classPath": "spark.jobserver.WordCountExample",
+      "startTime": "2016-06-19T16:27:12.196+05:30",
+      "context": "b7ea0eb5-spark.jobserver.WordCountExample",
       "status": "STARTED",
-      "result": {
-        "jobId": "5453779a-f004-45fc-a11d-a39dae0f9bf4",
-        "context": "b7ea0eb5-spark.jobserver.WordCountExample"
-      }
+      "jobId": "5453779a-f004-45fc-a11d-a39dae0f9bf4"
     }⏎
 
 NOTE: If you want to feed in a text file config and POST using curl, you want the `--data-binary` option, otherwise
@@ -234,28 +241,51 @@ In your `build.sbt`, add this to use the job server jar:
 
         resolvers += "Job Server Bintray" at "https://dl.bintray.com/spark-jobserver/maven"
 
-        libraryDependencies += "spark.jobserver" %% "job-server-api" % "0.6.1" % "provided"
+        libraryDependencies += "spark.jobserver" %% "job-server-api" % "0.6.2" % "provided"
 
 If a SQL or Hive job/context is desired, you also want to pull in `job-server-extras`:
 
-    libraryDependencies += "spark.jobserver" %% "job-server-extras" % "0.6.1" % "provided"
+    libraryDependencies += "spark.jobserver" %% "job-server-extras" % "0.6.2" % "provided"
 
 For most use cases it's better to have the dependencies be "provided" because you don't want SBT assembly to include the whole job server jar.
 
-To create a job that can be submitted through the job server, the job must implement the `SparkJob` trait. 
+To create a job that can be submitted through the job server, the job must implement the `SparkJob` trait.
 Your job will look like:
 ```scala
-object SampleJob  extends SparkJob {
-    override def runJob(sc:SparkContext, jobConfig: Config): Any = ???
-    override def validate(sc:SparkContext, config: Config): SparkJobValidation = ???
+object SampleJob extends SparkJob {
+    override def runJob(sc: SparkContext, jobConfig: Config): Any = ???
+    override def validate(sc: SparkContext, config: Config): SparkJobValidation = ???
 }
 ```
 
 - `runJob` contains the implementation of the Job. The SparkContext is managed by the JobServer and will be provided to the job through this method.
   This relieves the developer from the boiler-plate configuration management that comes with the creation of a Spark job and allows the Job Server to
 manage and re-use contexts.
-- `validate` allows for an initial validation of the context and any provided configuration. If the context and configuration are OK to run the job, returning `spark.jobserver.SparkJobValid` will let the job execute, otherwise returning `spark.jobserver.SparkJobInvalid(reason)` prevents the job from running and provides means to convey the reason of failure. In this case, the call immediately returns an `HTTP/1.1 400 Bad Request` status code.  
-`validate` helps you preventing running jobs that will eventually fail due to missing or wrong configuration and save both time and resources.  
+- `validate` allows for an initial validation of the context and any provided configuration. If the context and configuration are OK to run the job, returning `spark.jobserver.SparkJobValid` will let the job execute, otherwise returning `spark.jobserver.SparkJobInvalid(reason)` prevents the job from running and provides means to convey the reason of failure. In this case, the call immediately returns an `HTTP/1.1 400 Bad Request` status code.
+`validate` helps you preventing running jobs that will eventually fail due to missing or wrong configuration and save both time and resources.
+
+### NEW SparkJob API
+
+Note: As of version 0.7.0, a new SparkJob API that is significantly better than the old SparkJob API will take over.  Existing jobs should continue to compile against the old `spark.jobserver.SparkJob` API, but this will be deprecated in the future.  Note that jobs before 0.7.0 will need to be recompiled, older jobs may not work with the current SJS example.  The new API looks like this:
+
+```scala
+object WordCountExampleNewApi extends NewSparkJob {
+  type JobData = Seq[String]
+  type JobOutput = collection.Map[String, Long]
+
+  def runJob(sc: SparkContext, runtime: JobEnvironment, data: JobData): JobOutput =
+    sc.parallelize(data).countByValue
+
+  def validate(sc: SparkContext, runtime: JobEnvironment, config: Config):
+    JobData Or Every[ValidationProblem] = {
+    Try(config.getString("input.string").split(" ").toSeq)
+      .map(words => Good(words))
+      .getOrElse(Bad(One(SingleProblem("No input.string param"))))
+  }
+}
+```
+
+It is much more type safe, separates context configuration, job ID, named objects, and other environment variables into a separate JobEnvironment input, and allows the validation method to return specific data for the runJob method.  See the [WordCountExample](job-server-tests/src/spark.jobserver/WordCountExample.scala) and [LongPiJob](job-server-tests/src/spark.jobserver/LongPiJob.scala) for examples.
 
 Let's try running our sample job with an invalid configuration:
 
@@ -272,14 +302,14 @@ Let's try running our sample job with an invalid configuration:
       "result": {
         "message": "No input.string config param",
         "errorClass": "java.lang.Throwable",
-        "stack": ["spark.jobserver.JobManagerActor$$anonfun$spark$jobserver$JobManagerActor$$getJobFuture$4.apply(JobManagerActor.scala:212)", 
-        "scala.concurrent.impl.Future$PromiseCompletingRunnable.liftedTree1$1(Future.scala:24)", 
-        "scala.concurrent.impl.Future$PromiseCompletingRunnable.run(Future.scala:24)", 
+        "stack": ["spark.jobserver.JobManagerActor$$anonfun$spark$jobserver$JobManagerActor$$getJobFuture$4.apply(JobManagerActor.scala:212)",
+        "scala.concurrent.impl.Future$PromiseCompletingRunnable.liftedTree1$1(Future.scala:24)",
+        "scala.concurrent.impl.Future$PromiseCompletingRunnable.run(Future.scala:24)",
         "akka.dispatch.TaskInvocation.run(AbstractDispatcher.scala:42)",
-        "akka.dispatch.ForkJoinExecutorConfigurator$AkkaForkJoinTask.exec(AbstractDispatcher.scala:386)", 
-        "scala.concurrent.forkjoin.ForkJoinTask.doExec(ForkJoinTask.java:260)", 
-        "scala.concurrent.forkjoin.ForkJoinPool$WorkQueue.runTask(ForkJoinPool.java:1339)", 
-        "scala.concurrent.forkjoin.ForkJoinPool.runWorker(ForkJoinPool.java:1979)", 
+        "akka.dispatch.ForkJoinExecutorConfigurator$AkkaForkJoinTask.exec(AbstractDispatcher.scala:386)",
+        "scala.concurrent.forkjoin.ForkJoinTask.doExec(ForkJoinTask.java:260)",
+        "scala.concurrent.forkjoin.ForkJoinPool$WorkQueue.runTask(ForkJoinPool.java:1339)",
+        "scala.concurrent.forkjoin.ForkJoinPool.runWorker(ForkJoinPool.java:1979)",
         "scala.concurrent.forkjoin.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:107)"]
       }
     }
@@ -295,18 +325,18 @@ You have a couple options to package and upload dependency jars.
         ````
         curl -d "" 'localhost:8090/contexts/test-context?num-cpu-cores=4&memory-per-node=512m'
         OK⏎
-        ````      
+        ````
         ````
         curl 'localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample&context=test-context&sync=true' -d '{
             dependent-jar-uris = ["file:///myjars/deps01.jar", "file:///myjars/deps02.jar"],
             input.string = "a b c a b see"
         }'
         ````
-        The jars /myjars/deps01.jar & /myjars/deps02.jar (present only on the SJS node) will be loaded and made available for the Spark driver & executors. 
+        The jars /myjars/deps01.jar & /myjars/deps02.jar (present only on the SJS node) will be loaded and made available for the Spark driver & executors.
     - Use the `--package` option with Maven coordinates with `server_start.sh`.
     - Put the extra jars in the SPARK_CLASSPATH
 
-### Named Objects 
+### Named Objects
 #### Using Named RDDs
 Initially, the job server only supported Named RDDs. For backwards compatibility and convenience, the following is still supported even though it is now possible to use the more generic Named Object support described in the next section.
 
@@ -325,12 +355,12 @@ this.namedRdds.update("french_dictionary", frenchDictionaryRDD)
 ```
 Other job running in the same context can retrieve and use this RDD later on:
 ```scala
-val rdd = this.namedRdds.get[(String, String)]("french_dictionary").get 
+val rdd = this.namedRdds.get[(String, String)]("french_dictionary").get
 ```
 (note the explicit type provided to get. This will allow to cast the retrieved RDD that otherwise is of type RDD[_])
 
 For jobs that depends on a named RDDs it's a good practice to check for the existence of the NamedRDD in the `validate` method as explained earlier:
-```scala   
+```scala
 def validate(sc:SparkContext, config: Config): SparkJobValidation = {
   ...
   val rdd = this.namedRdds.get[(Long, scala.Seq[String])]("dictionary")
@@ -342,10 +372,10 @@ Named Objects are a way to easily share RDDs, DataFrames or other objects among 
 To use this feature, the SparkJob needs to mixin `NamedObjectSupport`. It is also necessary to define implicit persisters for each desired type of named objects. For convencience, we have provided implementations for RDD persistence and for DataFrame persistence (defined in `job-server-extras`):
 ```scala
 object SampleNamedObjectJob  extends SparkJob with NamedObjectSupport {
-  
+
   implicit def rddPersister[T] : NamedObjectPersister[NamedRDD[T]] = new RDDPersister[T]
   implicit val dataFramePersister = new DataFramePersister
-  
+
     override def runJob(sc:SparkContext, jobConfig: Config): Any = ???
     override def validate(sc:SparkContext, config: Config): SparkJobValidation = ???
 }
@@ -359,7 +389,7 @@ DataFrames can be stored like so:
 ```scala
 this.namedObjects.update("df:some df", NamedDataFrame(frenchDictionaryDF, forceComputation = false, storageLevel = StorageLevel.NONE))
 ```
-It is advisable to use different name prefixes for different types of objects to avoid confusion. 
+It is advisable to use different name prefixes for different types of objects to avoid confusion.
 
 Another job running in the same context can retrieve and use these objects later on:
 ```scala
@@ -371,7 +401,7 @@ val NamedDataFrame(frenchDictionaryDF, _, _) = namedObjects.get[NamedDataFrame](
 (Note the explicit type provided to get. This will allow to cast the retrieved RDD/DataFrame object to the proper result type.)
 
 For jobs that depends on a named objects it's a good practice to check for the existence of the NamedObject in the `validate` method as explained earlier:
-```scala   
+```scala
 def validate(sc:SparkContext, config: Config): SparkJobValidation = {
   ...
   val obj = this.namedObjects.get("dictionary")
@@ -392,22 +422,22 @@ You will need a keystore that contains the server certificate. The bare minimum 
 ```
  keytool -genkey -keyalg RSA -alias jobserver -keystore ~/sjs.jks -storepass changeit -validity 360 -keysize 2048
 ```
-You may place the keystore anywhere.    
+You may place the keystore anywhere.
 Here is an example of a simple curl command that utilizes ssl:
 ```
 curl -k https://localhost:8090/contexts
 ```
-The ```-k``` flag tells curl to "Allow connections to SSL sites without certs". Export your server certificate and import it into the client's truststore to fully utilize ssl security. 
+The ```-k``` flag tells curl to "Allow connections to SSL sites without certs". Export your server certificate and import it into the client's truststore to fully utilize ssl security.
 
 ### Authentication
 
-Authentication uses the [Apache Shiro](http://shiro.apache.org/index.html) framework. Authentication is activated by setting this flag (Section 'shiro'): 
+Authentication uses the [Apache Shiro](http://shiro.apache.org/index.html) framework. Authentication is activated by setting this flag (Section 'shiro'):
 ```
 authentication = on
 # absolute path to shiro config file, including file name
 config.path = "/some/path/shiro.ini"
 ```
-Shiro-specific configuration options should be placed into a file named 'shiro.ini' in the directory as specified by the config option 'config.path'. 
+Shiro-specific configuration options should be placed into a file named 'shiro.ini' in the directory as specified by the config option 'config.path'.
 Here is an example that configures LDAP with user group verification:
 ```
 # use this for basic ldap authorization, without group checking
@@ -429,7 +459,7 @@ securityManager.cacheManager = $cacheManager
 
 Make sure to edit the url, credentials, userDnTemplate, ldap.allowedGroups and ldap.searchBase settings in accordance with your local setup.
 
-Here is an example of a simple curl command that authenticates a user and uses ssl (you may want to use -H to hide the 
+Here is an example of a simple curl command that authenticates a user and uses ssl (you may want to use -H to hide the
 credentials, this is just a simple example to get you started):
 ```
 curl -k --basic --user 'user:pw' https://localhost:8090/contexts
@@ -475,7 +505,7 @@ database created with necessary rights granted to user.
 
     sqldao {
       # Slick database driver, full classpath
-      slick-driver = scala.slick.driver.PostgresDriver
+      slick-driver = slick.driver.PostgresDriver
 
       # JDBC driver, full classpath
       jdbc-driver = org.postgresql.Driver
@@ -495,6 +525,10 @@ database created with necessary rights granted to user.
         initialsize = 10
       }
     }
+
+Also add the following line at the root level.
+
+    flyway.locations="db/postgresql/migration"
 
 It is also important that any dependent jars are to be added to Job Server class path.
 
@@ -551,19 +585,39 @@ For details on the Typesafe config format used for input (JSON also works), see 
 It is sometime necessary to programmatically upload files to the server. Use these paths to manage such files:
 
     GET /data                - Lists previously uploaded files that were not yet deleted
-    POST /data/<prefix>      - Uploads a new file, the full path of the file on the server is returned, the 
-                               prefix is the prefix of the actual filename used on the server (a timestamp is 
-                               added to ensure uniqueness)                                                         
+    POST /data/<prefix>      - Uploads a new file, the full path of the file on the server is returned, the
+                               prefix is the prefix of the actual filename used on the server (a timestamp is
+                               added to ensure uniqueness)
     DELETE /data/<filename>  - Deletes the specified file (only if under control of the JobServer)
 
-These files are uploaded to the server and are stored in a local temporary 
-directory on the server where the JobServer runs. The POST command returns the full 
-pathname and filename of the uploaded file so that later jobs can work with this 
-just the same as with any other server-local file. A job could therefore add this file to HDFS or distribute 
-it to worker nodes via the SparkContext.addFile command.        
-For files that are larger than a few hundred MB, it is recommended to manually upload these files to the server or 
+These files are uploaded to the server and are stored in a local temporary
+directory where the JobServer runs. The POST command returns the full
+pathname and filename of the uploaded file so that later jobs can work with this
+just the same as with any other server-local file. A job could therefore add this file to HDFS or distribute
+it to worker nodes via the SparkContext.addFile command.
+For files that are larger than a few hundred MB, it is recommended to manually upload these files to the server or
 to directly add them to your HDFS.
-        
+
+#### Data API Example
+
+    $ curl -d "Test data file api" http://localhost:8090/data/test_data_file_upload.txt
+    {
+      "result": {
+        "filename": "/tmp/spark-jobserver/upload/test_data_file_upload.txt-2016-07-04T09_09_57.928+05_30.dat"
+      }
+    }
+
+    $ curl http://localhost:8090/data
+    ["/tmp/spark-jobserver/upload/test_data_file_upload.txt-2016-07-04T09_09_57.928+05_30.dat"]
+
+    $ curl -X DELETE http://localhost:8090/data/%2Ftmp%2Fspark-jobserver%2Fupload%2Ftest_data_file_upload.txt-2016-07-04T09_09_57.928%2B05_30.dat
+    OK
+
+    $ curl http://localhost:8090/data
+    []
+
+Note: Both POST and DELETE requests takes URI encoded file names.
+
 ### Context configuration
 
 A number of context-specific settings can be controlled when creating a context (POST /contexts) or running an
@@ -582,7 +636,7 @@ spark.context-settings.  For example,
 
 would override the default spark.context-settings.num-cpu-cores setting.
 
-When starting a job, and the context= query param is not specified, then an ad-hoc context is created.  Any
+When starting a job, and the `context=` query param is not specified, then an ad-hoc context is created.  Any
 settings specified in spark.context-settings will override the defaults in the job server config when it is
 started up.
 
@@ -601,8 +655,12 @@ or in the job config when using POST /jobs,
     }
 
 User impersonation for an already Kerberos authenticated user is supported via `spark.proxy.user` query param:
-  
+
   POST /contexts/my-new-context?spark.proxy.user=<user-to-impersonate>
+
+However, whenever the flag `shiro.use-as-proxy-user` is set to `on` (and authentication is `on`) then this parameter
+is ignored and the name of the authenticated user is *always* used as the value of the `spark.proxy.user`
+parameter when creating contexts.
 
 To pass settings directly to the sparkConf that do not use the "spark." prefix "as-is", use the "passthrough" section.
 
@@ -640,11 +698,13 @@ serialized properly:
 - Scala Seq's
 - Array's
 - Anything that implements Product (Option, case classes) -- they will be serialized as lists
-- Maps and Seqs may contain nested values of any of the above
+- Subclasses of java.util.List
+- Subclasses of java.util.Map with string key values (non-string keys may be converted to strings)
+- Maps, Seqs, Java Maps and Java Lists may contain nested values of any of the above
 - If a job result is of scala's Stream[Byte] type it will be serialised directly as a chunk encoded stream.
   This is useful if your job result payload is large and may cause a timeout serialising as objects. Beware, this
   will not currently work as desired with context-per-jvm=true configuration, since it would require serialising
-  Stream[_] blob between processes. For now use Stream[_] job results in context-per-jvm=false configuration, pending
+  Stream[\_] blob between processes. For now use Stream[\_] job results in context-per-jvm=false configuration, pending
   potential future enhancements to support this in context-per-jvm=true mode.
 
 If we encounter a data type that is not supported, then the entire result will be serialized to a string.
@@ -660,7 +720,7 @@ Spark Jobserver programmatically.
 Contributions via Github Pull Request are welcome.  See the TODO for some ideas.
 
 - If you need to build with a specific scala version use ++x.xx.x followed by the regular command,
-for instance: `sbt ++2.11.6 job-server/compile` 
+for instance: `sbt ++2.11.6 job-server/compile`
 - From the "master" project, please run "test" to ensure nothing is broken.
    - You may need to set `SPARK_LOCAL_IP` to `localhost` to ensure Akka port can bind successfully
 - Logging for tests goes to "job-server-test.log"
@@ -696,7 +756,7 @@ Apache 2.0, see LICENSE.md
 ## TODO
 
 - More debugging for classpath issues
-- Update .g8 template, consider creating Activator template for sample job      
+- Update .g8 template, consider creating Activator template for sample job
 - Add Swagger support.  See the spray-swagger project.
 - Implement an interactive SQL window.  See: [spark-admin](https://github.com/adatao/spark-admin)
 
