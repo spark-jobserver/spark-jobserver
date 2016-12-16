@@ -1,6 +1,8 @@
 
 import Dependencies._
 import JobServerRelease._
+import sbtassembly.AssemblyPlugin.autoImport.assemblyMergeStrategy
+import sbtassembly.MergeStrategy
 
 transitiveClassifiers in Global := Seq()
 lazy val dirSettings = Seq()
@@ -184,7 +186,13 @@ lazy val rootSettings = Seq(
     // limit to 1 concurrent test task, even across sub-projects
     // Note: some components of tests seem to have the "Untagged" tag rather than "Test" tag.
     // So, we limit the sum of "Test", "Untagged" tags to 1 concurrent
-    Tags.limitSum(1, Tags.Test, Tags.Untagged))
+    Tags.limitSum(1, Tags.Test, Tags.Untagged)),
+  assemblyMergeStrategy in assembly := {
+    case PathList("META-INF", "io.netty.versions.properties") => MergeStrategy.discard
+    case x =>
+      val oldStrategy = (assemblyMergeStrategy in assembly).value
+      oldStrategy(x)
+  }
 )
 
 lazy val revolverSettings = Seq(
