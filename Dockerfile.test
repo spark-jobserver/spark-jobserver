@@ -24,7 +24,7 @@ RUN sbt update
 # add the rest of the code
 COPY . .
 
-ENV SPARK_HOME /tmp/spark-2.0.1-bin-hadoop2.7
+ENV SPARK_HOME /tmp/spark-2.0.2-bin-hadoop2.7
 ENV JAVA_OPTIONS "-Xmx1500m -XX:MaxPermSize=512m -Dakka.test.timefactor=3"
 
 CMD ["/usr/src/app/run_tests.sh"]
