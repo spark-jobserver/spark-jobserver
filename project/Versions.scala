@@ -4,7 +4,7 @@ object Versions {
   lazy val metrics = "2.2.0"
   lazy val jodaTime = "2.9.3"
   lazy val jodaConvert = "1.8.1"
-  lazy val akka = "2.4.9"
+  lazy val akka = "2.3.15"
   lazy val spray = "1.3.3"
   lazy val sprayJson = "1.3.2"
   lazy val spark = "2.0.2"
