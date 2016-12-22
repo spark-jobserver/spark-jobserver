@@ -79,7 +79,7 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 - [Smartsct](http://www.smartsct.com)
 - [Datadog] (https://www.datadoghq.com/)
 - [Planalytics](http://www.planalytics.com)
-
+- [Target](http://www.target.com/)
 ## Features
 
 - *"Spark as a Service"*: Simple REST interface (including HTTPS) for all aspects of job, context management
