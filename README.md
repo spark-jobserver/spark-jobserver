@@ -116,6 +116,8 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 
 For release notes, look in the `notes/` directory.  They should also be up on [notes.implicit.ly](http://notes.implicit.ly/search/spark-jobserver).
 
+If you need non-released jars, please visit [Jitpack](https://jitpack.io) - they provide non-release jar builds for any Git repo.  :)
+
 ## Getting Started with Spark Job Server
 
 The easiest way to get started is to try the [Docker container](doc/docker.md) which prepackages a Spark distribution with the job server and lets you start and deploy it.
