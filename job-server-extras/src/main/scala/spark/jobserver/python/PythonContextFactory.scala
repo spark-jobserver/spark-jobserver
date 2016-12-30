@@ -3,19 +3,18 @@ package spark.jobserver.python
 import java.io.File
 
 import com.typesafe.config.Config
+import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.hive.HiveContext
-import org.apache.spark.{SparkContext, SparkConf}
-import org.apache.spark.api.java.JavaSparkContext
+import org.apache.spark.{SparkConf, SparkContext}
 import org.joda.time.DateTime
-import org.scalactic.{Good, Bad, Or}
+import org.scalactic.{Bad, Good, Or}
 import org.slf4j.LoggerFactory
-import spark.jobserver.JobManagerActor.ContextConfig
-import spark.jobserver.util.SparkJobUtils
 import spark.jobserver._
 import spark.jobserver.context.{JobLoadError, LoadingError, SparkContextFactory}
-import scala.collection.JavaConverters._
+import spark.jobserver.util.SparkJobUtils
 
+import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
 
 trait PythonContextLike extends ContextLike {

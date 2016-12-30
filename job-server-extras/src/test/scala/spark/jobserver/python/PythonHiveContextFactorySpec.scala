@@ -5,7 +5,8 @@ import org.apache.spark.sql.hive.HiveContext
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, Matchers, FunSpec}
 
-import scala.reflect.io.File
+import java.nio.file.Files
+import java.nio.file.Paths
 import scala.collection.JavaConverters._
 
 
@@ -21,8 +22,8 @@ object PythonHiveContextFactorySpec {
     * This approach wouldn't be suitable in a production scenario, but ok for tests.
     */
   private def resetDerby(): Unit = {
-    File("/tmp/metastore_db/dbex.lck").deleteIfExists()
-    File("/tmp/metastore_db/db.lck").deleteIfExists()
+    Files.deleteIfExists(Paths.get("/tmp/metastore_db/dbex.lck"))
+    Files.deleteIfExists(Paths.get("/tmp/metastore_db/db.lck"))
   }
 }
 

@@ -1,20 +1,19 @@
 package spark.jobserver
 
-import akka.actor.Props
-import akka.testkit.{TestProbe, TestActorRef}
-import com.typesafe.config.{ConfigValueFactory, ConfigFactory}
+import akka.testkit.TestProbe
+import com.typesafe.config.ConfigFactory
 import org.apache.spark.sql.Row
+import spark.jobserver.CommonMessages._
 import spark.jobserver.context.SQLContextFactory
-import spark.jobserver.io.{JobDAOActor, JobDAO}
+import spark.jobserver.io.JobDAOActor
+import scala.concurrent.duration._
 
 object SqlJobSpec extends JobSpecConfig {
   override val contextFactory = classOf[SQLContextFactory].getName
 }
 
 class SqlJobSpec extends ExtrasJobSpecBase(SqlJobSpec.getNewSystem) {
-  import scala.concurrent.duration._
-  import CommonMessages._
-  import JobManagerSpec.MaxJobsPerContext
+
 
   val classPrefix = "spark.jobserver."
   private val sqlLoaderClass = classPrefix + "SqlLoaderJob"
@@ -48,10 +47,11 @@ class SqlJobSpec extends ExtrasJobSpecBase(SqlJobSpec.getNewSystem) {
       manager ! JobManagerActor.StartJob("demo", sqlQueryClass, queryConfig, syncEvents ++ errorEvents)
       expectMsgPF(6 seconds, "Did not get JobResult") {
         case JobResult(_, result: Array[Row]) =>
-          result should have length (2)
+          result should have length 2
           result(0)(0) should equal ("Bob")
       }
       expectNoMsg()
+
     }
   }
 }

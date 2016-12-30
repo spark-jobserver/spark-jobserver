@@ -1,6 +1,9 @@
 package spark.jobserver
 
 import org.joda.time.DateTime
+import spark.jobserver.japi.{BaseJavaJob, JSparkJob}
+
+import scala.language.existentials
 
 trait BinaryJobInfo
 
@@ -11,6 +14,8 @@ case class JobJarInfo(constructor: () => api.SparkJobBase,
 //For python jobs, there is no class loading or constructor required.
 case class PythonJobInfo(eggPath: String) extends BinaryJobInfo
 
+case class JavaJarInfo(job: BaseJavaJob[_, _], className: String, jarFilePath: String) extends BinaryJobInfo
+
 trait JobCache {
   /**
    * Retrieves the given SparkJob class from the cache if it's there, otherwise use the DAO to retrieve it.
@@ -20,6 +25,7 @@ trait JobCache {
    */
   def getSparkJob(appName: String, uploadTime: DateTime, classPath: String): JobJarInfo
 
+  def getJavaJob(appName: String, uploadTime: DateTime, classPath: String): JavaJarInfo
   /**
     * Retrieves a Python job egg location from the cache if it's there, otherwise use the DAO to retrieve it.
     * @param appName the appName under which the binary was uploaded
