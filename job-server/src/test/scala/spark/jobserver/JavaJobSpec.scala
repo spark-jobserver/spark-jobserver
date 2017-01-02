@@ -69,7 +69,9 @@ class JavaJobSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
       uploadTestJar()
       manager ! JobManagerActor.StartJob("demo", failedJob, config, errorEvents)
-      expectMsgType[JobErroredOut]
+      expectMsgPF(6 seconds, "Gets correct exception"){
+        case JobErroredOut(_, _, ex) => ex.getMessage should equal("java.lang.RuntimeException: fail")
+      }
     }
   }
 }

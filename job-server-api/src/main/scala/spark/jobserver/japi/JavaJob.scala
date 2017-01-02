@@ -9,6 +9,9 @@ import scala.reflect.ClassTag
 case class JavaValidationException(reason: String) extends Exception with ValidationProblem
 
 case class JavaJob[R: ClassTag, CX: ClassTag](job: BaseJavaJob[R, CX]) extends SparkJobBase {
+
+  import spark.jobserver.japi.{JavaValidationException => JVE}
+
   override type C = CX
   override type JobData = Config
   override type JobOutput = R
@@ -19,9 +22,9 @@ case class JavaJob[R: ClassTag, CX: ClassTag](job: BaseJavaJob[R, CX]) extends S
 
   def validate(sc: CX, runtime: JobEnvironment, config: Config): Config Or Every[ValidationProblem] = {
     job.verify(sc, runtime, config) match {
-      case c: Config => Good(c)
-      case e: Exception => Bad(One(JavaValidationException(e.getMessage)))
-      case _ => Bad(One(JavaValidationException(":-(")))
+      case j : JVE => Bad(One(j))
+      case t : Throwable => Bad(One(JVE(t.getMessage)))
+      case c : Config => Good(c)
     }
   }
 }

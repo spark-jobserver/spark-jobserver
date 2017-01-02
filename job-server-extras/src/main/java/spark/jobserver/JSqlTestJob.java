@@ -5,6 +5,7 @@ import com.typesafe.config.ConfigFactory;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import spark.jobserver.api.JobEnvironment;
+import spark.jobserver.japi.JSqlJob;
 
 public class JSqlTestJob implements JSqlJob<Integer> {
     @Override

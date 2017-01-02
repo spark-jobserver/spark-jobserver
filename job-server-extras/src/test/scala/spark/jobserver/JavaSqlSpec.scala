@@ -10,16 +10,16 @@ import spark.jobserver.io.JobDAOActor
 
 import scala.concurrent.duration._
 
-object JavaExtrasSpec extends JobSpecConfig {
+object JavaSqlSpec extends JobSpecConfig {
   override val contextFactory = classOf[JavaSqlContextFactory].getName
 }
 
-class JavaExtrasSpec extends ExtrasJobSpecBase(JavaExtrasSpec.getNewSystem) {
+class JavaSqlSpec extends ExtrasJobSpecBase(JavaSqlSpec.getNewSystem) {
 
   private val emptyConfig = ConfigFactory.empty()
   private val classPrefix = "spark.jobserver."
   private val javaSqlClass = classPrefix + "JSqlTestJob"
-  private def cfg = JavaExtrasSpec.getContextConfig(false, JavaExtrasSpec.contextConfig)
+  private def cfg = JavaSqlSpec.getContextConfig(false, JavaSqlSpec.contextConfig)
 
   before {
     dao = new InMemoryDAO
@@ -37,7 +37,6 @@ class JavaExtrasSpec extends ExtrasJobSpecBase(JavaExtrasSpec.getNewSystem) {
       manager ! JobManagerActor.StartJob("demo", javaSqlClass, emptyConfig, syncEvents ++ errorEvents)
       expectMsgPF(2 seconds, "No?") {
         case JobResult(_, j: Int) =>
-          println(s"The result is $j")
           j should equal(2)
       }
       expectNoMsg()

@@ -13,6 +13,6 @@ public class FailingJavaJob implements JSparkJob<Integer> {
 
     @Override
     public Config verify(JavaSparkContext sc, JobEnvironment runtime, Config config) {
-        throw new RuntimeException("This failed :(");
+        throw new RuntimeException("fail");
     }
 }

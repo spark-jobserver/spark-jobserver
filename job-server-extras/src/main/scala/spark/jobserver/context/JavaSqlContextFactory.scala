@@ -1,13 +1,16 @@
 package spark.jobserver.context
 
 import com.typesafe.config.Config
+import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.hive.HiveContext
+import org.apache.spark.streaming.{Milliseconds, StreamingContext}
+import org.apache.spark.streaming.api.java.JavaStreamingContext
 import org.apache.spark.{SparkConf, SparkContext}
 import org.joda.time.DateTime
-import org.scalactic.{Bad, Good, Or}
-import spark.jobserver.japi.JavaJob
-import spark.jobserver.{ContextLike, JHiveJob, JSqlJob, JobCache}
+import org.scalactic._
+import spark.jobserver.japi._
+import spark.jobserver.{ContextLike, JobCache}
 
 class JavaSqlContextFactory extends SparkContextFactory {
   type C = SQLContext with ContextLike
@@ -62,17 +65,17 @@ class JavaHiveContextFactory extends SparkContextFactory {
   }
 
   def makeContext(sparkConf: SparkConf, config: Config, contextName: String): C = {
-    val sc = SparkContext.getOrCreate(sparkConf)
-    val hiveCtx = new HiveContext(sc) with ContextLike {
-      override def stop() = this.stop()
-    }
-    hiveCtx
+    contextFactory(sparkConf)
+  }
+
+  protected def contextFactory(conf: SparkConf): C = {
+    new HiveContext(new SparkContext(conf)) with HiveContextLike
   }
 }
 
-/*
+
 class JavaStreamingContextFactory extends SparkContextFactory {
-  type C = JavaStreamingContext with ContextLike
+  type C = StreamingContext with ContextLike
   type J = ScalaJobContainer
 
   def loadAndValidateJob(appName: String,
@@ -86,7 +89,7 @@ class JavaStreamingContextFactory extends SparkContextFactory {
       case _: ClassNotFoundException => return Bad(JobClassNotFound)
       case err: Exception => return Bad(JobLoadError(err))
     }
-    if (j.job.isInstanceOf[JSparkJob[_]]) {
+    if (j.job.isInstanceOf[JStreamingJob[_]]) {
       Good(ScalaJobContainer(JavaJob(j.job)))
     } else {
       Bad(JobWrongType)
@@ -97,8 +100,10 @@ class JavaStreamingContextFactory extends SparkContextFactory {
     val interval = config.getInt("streaming.batch_interval")
     val stopGracefully = config.getBoolean("streaming.stopGracefully")
     val stopSparkContext = config.getBoolean("streaming.stopSparkContext")
-    val jCtxt = new JavaStreamingContext(sparkConf, Milliseconds(interval)) with ContextLike
-    jCtxt
+    new StreamingContext(sparkConf, Milliseconds(interval)) with ContextLike {
+      def stop() {
+        stop(stopSparkContext, stopGracefully)
+      }
+    }
   }
 }
-*/
