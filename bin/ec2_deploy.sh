@@ -2,7 +2,7 @@
 bin=`dirname "${BASH_SOURCE-$0}"`
 bin=`cd "$bin"; pwd`
 
-. "$bin"/../config/user-ec2-settings.sh
+[ -f "$bin"/../config/user-ec2-settings.sh ] && . "$bin"/../config/user-ec2-settings.sh
 
 #get spark deployment scripts if they haven't been downloaded and extracted yet
 SPARK_DIR="$bin"/../ec2Cluster
@@ -33,15 +33,22 @@ sed -i -E "s/master = .*/master = \"spark:\/\/$DEPLOY_HOSTS:7077\"/g" "$bin"/../
 cp "$bin"/ec2_example.sh.template "$bin"/ec2_example.sh
 sed -i -E "s/DEPLOY_HOSTS=.*/DEPLOY_HOSTS=\"$DEPLOY_HOSTS:8090\"/g" "$bin"/ec2_example.sh
 
-#open all ports so the master for Spark Job Server to work and you can see the results of your jobs
+#open all ports so the master for Spark Job Server will work and you can see the results of your jobs
 #if the security group is in a VPC it needs to be identified by group ID
 if [ -n "$VPC_ID" ]; then
-   GROUP_ID=$(aws ec2 describe-security-groups | jq -r ".SecurityGroups[] | select(.GroupName == \"$CLUSTER_NAME-master\" and .VpcId == \"$VPC_ID\") | .GroupId")
+   GROUP_ID=$(aws ec2 describe-security-groups --filters Name=vpc-id,Values=$VPC_ID Name=group-name,Values=$CLUSTER_NAME-master | jq -r ".SecurityGroups[0].GroupId")
    GROUP_SELECTOR="--group-id $GROUP_ID"
 else
    GROUP_SELECTOR="--group-name $CLUSTER_NAME-master"
 fi
-aws ec2 authorize-security-group-ingress $GROUP_SELECTOR --protocol tcp --port 0-65535 --cidr 0.0.0.0/0
+if ! ERROR=$(aws ec2 authorize-security-group-ingress $GROUP_SELECTOR --protocol tcp --port 0-65535 --cidr 0.0.0.0/0 2>&1); then
+   #aws ec2 fails with "InvalidPermission.Duplicate" if the ports are already open
+   if ! grep -Fq InvalidPermission.Duplicate <<< "$ERROR"; then
+      #report any other error and fail
+      >&2 echo "$ERROR"
+      exit 1
+   fi
+fi
 
 cd "$bin"/..
 bin/server_deploy.sh ec2
