@@ -1,6 +1,7 @@
 import sbt._
 import Versions._
 import ExclusionRules._
+
 object Dependencies {
 
   lazy val typeSafeConfigDeps = "com.typesafe" % "config" % typeSafeConfig
@@ -16,7 +17,7 @@ object Dependencies {
   lazy val akkaDeps = Seq(
     // Akka is provided because Spark already includes it, and Spark's version is shaded so it's not safe
     // to use this one
-    "com.typesafe.akka" %% "akka-slf4j" % akka % "provided",
+    "com.typesafe.akka" %% "akka-slf4j" % akka,
     "com.typesafe.akka" %% "akka-cluster" % akka exclude("com.typesafe.akka", "akka-remote"),
     "io.spray" %% "spray-json" % sprayJson,
     "io.spray" %% "spray-can" % spray,
@@ -26,7 +27,7 @@ object Dependencies {
     yammerDeps
   )
 
-  val javaVersion = sys.env.getOrElse("JAVA_VERSION", "7-jdk")
+  val javaVersion = sys.env.getOrElse("JAVA_VERSION", "8-jdk")
 
   val mesosVersion = sys.env.getOrElse("MESOS_VERSION", mesos)
 
