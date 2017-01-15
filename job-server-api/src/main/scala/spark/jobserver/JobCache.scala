@@ -15,6 +15,7 @@ case class JavaJarInfo(job: BaseJavaJob[_, _],
                        className: String,
                        jarFilePath: String) extends BinaryJobInfo
 
+// For python jobs, there is no class loading or constructor required.
 case class PythonJobInfo(eggPath: String) extends BinaryJobInfo
 
 trait JobCache {

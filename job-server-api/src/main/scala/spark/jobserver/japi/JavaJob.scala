@@ -6,7 +6,7 @@ import spark.jobserver.api._
 
 import scala.reflect.ClassTag
 
-case class JavaValidationException(reason: String) extends Exception with ValidationProblem
+case class JavaValidationException(reason: String, t: Throwable) extends Exception with ValidationProblem
 
 case class JavaJob[R: ClassTag, CX: ClassTag](job: BaseJavaJob[R, CX]) extends SparkJobBase {
 
@@ -23,7 +23,7 @@ case class JavaJob[R: ClassTag, CX: ClassTag](job: BaseJavaJob[R, CX]) extends S
   def validate(sc: CX, runtime: JobEnvironment, config: Config): Config Or Every[ValidationProblem] = {
     job.verify(sc, runtime, config) match {
       case j : JVE => Bad(One(j))
-      case t : Throwable => Bad(One(JVE(t.getMessage)))
+      case t : Throwable => Bad(One(JVE(t.getMessage, t)))
       case c : Config => Good(c)
     }
   }

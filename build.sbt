@@ -170,8 +170,8 @@ lazy val dockerSettings = Seq(
   },
   imageNames in docker := Seq(
     sbtdocker.ImageName(namespace = Some("velvia"),
-      repository = "spark-jobserver",
-      tag = Some(s"${version.value}.mesos-${mesosVersion.split('-')(0)}.spark-$sparkVersion.scala-${scalaBinaryVersion.value}"))
+                        repository = "spark-jobserver",
+                        tag = Some(s"${version.value}.mesos-${mesosVersion.split('-')(0)}.spark-$sparkVersion.scala-${scalaBinaryVersion.value}"))
   )
 )
 
