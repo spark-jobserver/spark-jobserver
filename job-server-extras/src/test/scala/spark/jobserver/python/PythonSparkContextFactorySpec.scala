@@ -171,7 +171,7 @@ class PythonSparkContextFactorySpec extends FunSpec with Matchers with BeforeAnd
       runTest(factory, context, config)
     }
 
-    it("should successfully run jobs using python3") {
+    ignore("should successfully run jobs using python3") {
       val factory = new PythonSparkContextFactory()
       val p3Config = ConfigFactory.parseString(
         """

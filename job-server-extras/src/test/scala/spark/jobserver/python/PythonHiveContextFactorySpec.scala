@@ -101,7 +101,7 @@ class PythonHiveContextFactorySpec extends FunSpec with Matchers with BeforeAndA
       runHiveTest(factory, context, config)
     }
 
-    it("should successfully run jobs using python3") {
+    ignore("should successfully run jobs using python3") {
       val factory = new PythonHiveContextFactory()
       val p3Config = ConfigFactory.parseString(
         """

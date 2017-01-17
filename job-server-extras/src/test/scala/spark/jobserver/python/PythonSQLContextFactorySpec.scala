@@ -75,7 +75,7 @@ class PythonSQLContextFactorySpec extends FunSpec with Matchers with BeforeAndAf
       runSqlTest(factory, context, config)
     }
 
-    it("should successfully run jobs using python3") {
+    ignore("should successfully run jobs using python3") {
       val factory = new PythonSQLContextFactory()
       val p3Config = ConfigFactory.parseString(
         """
