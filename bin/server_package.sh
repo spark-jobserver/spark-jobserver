@@ -2,13 +2,13 @@
 # Script for packaging all the job server files to .tar.gz for Mesos or other single-image deploys
 WORK_DIR=/tmp/job-server
 
-ENV="${1}"
-if [ -z "${ENV}" ]; then
+if [ "$#" -ne 1 ]; then
   echo "Syntax: ${0} <Environment>"
   echo "   for a list of environments, ls config/*.sh"
   exit 0
 fi
 
+ENV="${1}"
 bin=$(dirname "${BASH_SOURCE-$0}")
 bin=$(cd "${bin}"; pwd)
 
