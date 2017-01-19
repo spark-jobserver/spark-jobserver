@@ -82,6 +82,8 @@ object PythonSparkContextFactorySpec {
     override def getSparkJob(appName: String, uploadTime: DateTime, classPath: String): JobJarInfo =
       sys.error("Not Implemented")
 
+    override def getJavaJob(appName: String, uploadTime: DateTime, classPath: String): JavaJarInfo =
+      sys.error("No Implemented :(")
 
     override def getPythonJob(appName: String, uploadTime: DateTime, classPath: String): PythonJobInfo = {
       val path =

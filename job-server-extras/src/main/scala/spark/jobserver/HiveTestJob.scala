@@ -1,7 +1,7 @@
 package spark.jobserver
 
 import com.typesafe.config.Config
-import org.apache.spark.sql.Row
+import org.apache.spark.sql.{DataFrame, Row}
 import org.apache.spark.sql.hive.HiveContext
 import org.scalactic._
 import spark.jobserver.api.{JobEnvironment, ValidationProblem}
@@ -39,7 +39,7 @@ object HiveLoaderJob extends SparkHiveJob {
     hive.sql(s"$tableCreate $tableArgs $tableRowFormat $tableColFormat $tableMapFormat $tableAs")
 
     hive.sql(s"LOAD DATA LOCAL INPATH $loadPath OVERWRITE INTO TABLE `default`.`test_addresses`")
-    val addrRdd = hive.sql("SELECT * FROM `default`.`test_addresses`")
+    val addrRdd: DataFrame = hive.sql("SELECT * FROM `default`.`test_addresses`")
     addrRdd.count()
   }
 }

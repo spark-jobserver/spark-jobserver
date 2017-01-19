@@ -4,6 +4,7 @@ import java.util.concurrent.TimeUnit
 
 import com.typesafe.config.Config
 import org.apache.spark.SparkConf
+
 import scala.util.Try
 
 /**
