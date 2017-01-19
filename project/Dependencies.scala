@@ -34,33 +34,47 @@ object Dependencies {
   lazy val sparkDeps = Seq(
     "org.apache.spark" %% "spark-core" % sparkVersion % "provided" excludeAll(excludeNettyIo, excludeQQ),
     // Force netty version.  This avoids some Spark netty dependency problem.
-    "io.netty" % "netty-all" % "4.0.29.Final"
+    "io.netty" % "netty-all" % "4.0.37.Final"
   )
 
   lazy val sparkExtraDeps = Seq(
-    "org.apache.spark" %% "spark-mllib" % sparkVersion % "provided" excludeAll(excludeNettyIo, excludeQQ),
-    "org.apache.spark" %% "spark-sql" % sparkVersion % "provided" excludeAll(excludeNettyIo, excludeQQ),
-    "org.apache.spark" %% "spark-streaming" % sparkVersion % "provided" excludeAll(excludeNettyIo, excludeQQ),
-    "org.apache.spark" %% "spark-hive" % sparkVersion % "provided" excludeAll(excludeNettyIo, excludeQQ, excludeScalaTest)
+    "org.apache.spark" %% "spark-mllib" % sparkVersion % Provided excludeAll(excludeNettyIo, excludeQQ),
+    "org.apache.spark" %% "spark-sql" % sparkVersion % Provided excludeAll(excludeNettyIo, excludeQQ),
+    "org.apache.spark" %% "spark-streaming" % sparkVersion % Provided excludeAll(excludeNettyIo, excludeQQ),
+    "org.apache.spark" %% "spark-hive" % sparkVersion % Provided excludeAll(
+      excludeNettyIo, excludeQQ, excludeScalaTest
+    )
   )
+
+  lazy val sparkPythonDeps = Seq(
+    "net.sf.py4j" % "py4j" % py4j,
+    "io.spray" %% "spray-json" % sprayJson % Test
+  ) ++ sparkExtraDeps
 
   lazy val slickDeps = Seq(
     "com.typesafe.slick" %% "slick" % slick,
     "com.h2database" % "h2" % h2,
+    "org.postgresql" % "postgresql" % postgres,
     "commons-dbcp" % "commons-dbcp" % commons,
     "org.flywaydb" % "flyway-core" % flyway
+  )
+
+  lazy val cassandraDeps = Seq(
+    "com.datastax.cassandra" % "cassandra-driver-core" % cassandra,
+    "com.datastax.cassandra" % "cassandra-driver-mapping" % cassandra
   )
 
   lazy val logbackDeps = Seq(
     "ch.qos.logback" % "logback-classic" % logback
   )
 
-  lazy val scalaTestDep = "org.scalatest" %% "scalatest" % scalaTest % "test"
+  lazy val scalaTestDep = "org.scalatest" %% "scalatest" % scalaTest % Test
 
   lazy val coreTestDeps = Seq(
     scalaTestDep,
-    "com.typesafe.akka" %% "akka-testkit" % akka % "test",
-    "io.spray" %% "spray-testkit" % spray % "test"
+    "com.typesafe.akka" %% "akka-testkit" % akka % Test,
+    "io.spray" %% "spray-testkit" % spray % Test,
+    "org.cassandraunit" % "cassandra-unit" % cassandraUnit % Test
   )
 
   lazy val securityDeps = Seq(
