@@ -1,10 +1,35 @@
-language: scala
+sudo: required
+
 env:
   global:
-    _JAVA_OPTIONS="-Xmx1500m -XX:MaxPermSize=512m -Dakka.test.timefactor=3"
-scala:
-   - 2.10.6
-   - 2.11.8
-jdk:
-   - oraclejdk8
-   - oraclejdk7
+    - DOCKER_IMAGE="spark-jobserver:ci"
+
+language: go
+go:
+  - 1.7
+
+services:
+  - docker
+
+cache:
+  directories:
+    - docker
+
+before_install:
+  - go get github.com/tonistiigi/buildcache/cmd/buildcache
+
+install:
+  - if [ -e docker/latest_image.tar.gz ]; then
+      docker load -i docker/latest_image.tar.gz;
+    fi
+  - if [ -e docker/latest_cache.tar.gz ]; then
+      docker load -i docker/latest_cache.tar.gz;
+    fi
+  - echo "docker/" >> .dockerignore
+  - docker build -f Dockerfile.test -t $DOCKER_IMAGE .
+  - docker save $DOCKER_IMAGE | gzip > docker/latest_image.tar.gz
+  - sudo `which buildcache` save -o docker/latest_cache.tar.gz $DOCKER_IMAGE
+  - sudo chown $USER docker/latest_cache.tar.gz
+
+script:
+  - docker run --rm -t -i $DOCKER_IMAGE

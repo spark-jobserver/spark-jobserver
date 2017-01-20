@@ -9,9 +9,9 @@ SPARK_DIR=ec2Cluster
 if [ ! -d "$bin"/../$SPARK_DIR ]; then
     mkdir "$bin"/../$SPARK_DIR
     mkdir "$bin"/../$SPARK_DIR/deploy.generic/root/spark-ec2
-    wget -P "$bin"/../$SPARK_DIR/deploy.generic/root/spark-ec2 https://raw.githubusercontent.com/apache/spark/master/ec2/deploy.generic/root/spark-ec2/ec2-variables.sh
-    wget -P "$bin"/../$SPARK_DIR https://raw.githubusercontent.com/apache/spark/master/ec2/spark_ec2.py
-    wget -P "$bin"/../$SPARK_DIR https://raw.githubusercontent.com/apache/spark/master/ec2/spark-ec2
+    wget -P "$bin"/../$SPARK_DIR/deploy.generic/root/spark-ec2 https://raw.githubusercontent.com/amplab/spark-ec2/branch-1.6/deploy.generic/root/spark-ec2/ec2-variables.sh
+    wget -P "$bin"/../$SPARK_DIR https://raw.githubusercontent.com/amplab/spark-ec2/branch-1.6/spark_ec2.py
+    wget -P "$bin"/../$SPARK_DIR https://raw.githubusercontent.com/amplab/spark-ec2/branch-1.6/spark-ec2
     chmod u+x "$bin"/../$SPARK_DIR/*
 fi
 

@@ -48,8 +48,7 @@ FILES="job-server-extras/target/scala-$majorVersion/spark-job-server.jar
        bin/manager_start.sh
        bin/setenv.sh
        $CONFIG_DIR/$ENV.conf
-       config/logback-server.xml
-       config/shiro.ini"
+       config/logback-server.xml"
 
 rm -rf $WORK_DIR
 mkdir -p $WORK_DIR
