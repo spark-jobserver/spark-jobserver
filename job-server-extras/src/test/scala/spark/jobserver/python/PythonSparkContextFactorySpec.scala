@@ -182,5 +182,38 @@ class PythonSparkContextFactorySpec extends FunSpec with Matchers with BeforeAnd
       context = factory.makeContext(sparkConf, p3Config, "test-create")
       runTest(factory, context, p3Config)
     }
+
+    def runFailingTest(factory: PythonSparkContextFactory,
+                       context: JavaSparkContext with PythonContextLike,
+                       c:Config): Unit = {
+      val loadResult = factory.loadAndValidateJob(
+        "word-count",
+        DateTime.now(),
+        "example_jobs.word_count.FailingSparkJob",
+        DummyJobCache)
+      loadResult.isGood should be (true)
+      val jobContainer = loadResult.get
+      val job = jobContainer.getSparkJob
+      val jobConfig = ConfigFactory.parseString(
+        """
+          |input.strings = ["a", "b", "b", "c", "a", "b"]
+        """.stripMargin)
+      val jobEnv = DummyJobEnvironment("1234", c)
+      val jobDataOrProblem = job.validate(context, jobEnv, jobConfig)
+      jobDataOrProblem.isGood should be (true)
+      val jobData = jobDataOrProblem.get
+      try {
+        job.runJob(context, jobEnv, jobData)
+        assert(false)
+      } catch {
+        case err: Exception => err.getMessage.contains("Deliberate failure") should be (true)
+      }
+    }
+
+    it("should return job error messages") {
+      val factory = new PythonSparkContextFactory()
+      context = factory.makeContext(sparkConf, config, "test-create")
+      runFailingTest(factory, context, config)
+    }
   }
 }
