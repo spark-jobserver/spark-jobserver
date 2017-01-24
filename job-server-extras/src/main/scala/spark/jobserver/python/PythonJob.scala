@@ -68,8 +68,11 @@ case class PythonJob[X <: PythonContextLike](eggPath: String,
           None,
           "PYTHONPATH" -> pythonPath,
           "PYSPARK_PYTHON" -> sc.pythonExecutable)
+      val err = new StringBuffer
       val procLogger =
-        ProcessLogger(o => logger.info(s"From Python: $o"), e => logger.error(s"From Python: $e"))
+        ProcessLogger(
+          o => logger.info(s"From Python: $o"),
+          e => {logger.error(s"From Python: $e"); err.append(e)})
       val pythonExitCode = process.!(procLogger)
       (pythonExitCode, ep.result) match {
 
@@ -82,7 +85,7 @@ case class PythonJob[X <: PythonContextLike](eggPath: String,
 
         case (errorCode, _) =>
           logger.error(s"Python job failed with error code $errorCode")
-          throw new Exception(s"Python job failed with error code $errorCode")
+          throw new Exception(s"Python job failed with error code $errorCode and standard err [$err]")
       }
     }
     server.shutdown()
