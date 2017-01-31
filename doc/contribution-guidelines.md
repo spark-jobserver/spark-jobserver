@@ -9,11 +9,8 @@ Pull requests are the only means by which you can contribute to this project, pl
 1. Create your pull request. (PR name must match [commit name](#commit))
 2. Fill the pull request template with all of the required elements
 3. CI tests kick in and report back any issues, you should fix these issues before continuing. No broken PR will be reviewed.
-4. Once the quality checks are OK, and you need your PR to be reviewed you must use the label **Need review**.
-5. The reviewers will receive an automatic mail notification.
-6. Once the reviewer(s) starts the review, he/she should set the label **Reviewing**.
-7. The reviewer(s) uses Github review system so you will know if the reviewer requested any changes, approved the Pull Request or simply added comments.
-8. If any changes are requested please fix them and then once you are ready ask for a new review
+4. The reviewer(s) uses Github review system so you will know if the reviewer requested any changes, approved the Pull Request or simply added comments.
+5. If any changes are requested please fix them and then once you are ready ask for a new review
 
 ## <a name="commit"></a> Git Commit Guidelines 
 
