@@ -1,21 +1,23 @@
 package spark.jobserver
 
 import java.io.IOException
-import java.nio.file.{Files, Paths}
 import java.nio.charset.Charset
+import java.nio.file.{Files, Paths}
 import java.util.concurrent.TimeUnit
 
 import akka.actor._
 import akka.cluster.Cluster
 import akka.cluster.ClusterEvent.{InitialStateAsEvents, MemberEvent, MemberUp}
+import akka.pattern.gracefulStop
 import akka.util.Timeout
 import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
-import spark.jobserver.util.SparkJobUtils
-import scala.collection.mutable
-import scala.util.{Failure, Success, Try}
-import scala.sys.process._
-
 import spark.jobserver.common.akka.InstrumentedActor
+import spark.jobserver.util.SparkJobUtils
+
+import scala.collection.mutable
+import scala.concurrent.{Await, Future}
+import scala.sys.process._
+import scala.util.{Failure, Success, Try}
 
 /**
  * The AkkaClusterSupervisorActor launches Spark Contexts as external processes
@@ -37,6 +39,7 @@ import spark.jobserver.common.akka.InstrumentedActor
  */
 class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
   import ContextSupervisor._
+
   import scala.collection.JavaConverters._
   import scala.concurrent.duration._
 
@@ -152,8 +155,14 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
         logger.info("Shutting down context {}", name)
         val contextActorRef = contexts(name)._1
         cluster.down(contextActorRef.path.address)
-        contextActorRef ! PoisonPill
-        sender ! ContextStopped
+        try {
+          val stoppedCtx = gracefulStop(contexts(name)._1, 2 seconds)
+          Await.result(stoppedCtx, 3 seconds)
+          sender ! ContextStopped
+        }
+        catch {
+          case err :Exception => sender ! ContextStopError(err)
+        }
       } else {
         sender ! NoSuchContext
       }

@@ -7,15 +7,15 @@ import javax.net.ssl.SSLContext
 import akka.actor.{ActorRef, ActorSystem}
 import akka.pattern.ask
 import akka.util.Timeout
-import com.typesafe.config.{Config, ConfigException, ConfigFactory, ConfigRenderOptions, ConfigValueFactory}
-import spark.jobserver.common.akka.web.JsonUtils.AnyJsonFormat
-import spark.jobserver.common.akka.web.{CommonRoutes, WebService}
+import com.typesafe.config._
 import org.apache.shiro.SecurityUtils
 import org.apache.shiro.config.IniSecurityManagerFactory
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import spark.jobserver.JobManagerActor.JobKilledException
 import spark.jobserver.auth._
+import spark.jobserver.common.akka.web.JsonUtils.AnyJsonFormat
+import spark.jobserver.common.akka.web.{CommonRoutes, WebService}
 import spark.jobserver.io.{BinaryType, JobInfo, JobStatus}
 import spark.jobserver.routes.DataRoutes
 import spark.jobserver.util.{SSLContextFactory, SparkJobUtils}
@@ -26,10 +26,9 @@ import spray.io.ServerSSLEngineProvider
 import spray.json.DefaultJsonProtocol._
 import spray.routing.directives.AuthMagnet
 import spray.routing.{HttpService, RequestContext, Route}
+
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.Try
-
-import spark.jobserver.common.akka.web.{CommonRoutes, WebService}
 
 
 object WebApi {
@@ -121,8 +120,9 @@ class WebApi(system: ActorSystem,
                         with ChunkEncodedStreamingSupport {
   import CommonMessages._
   import ContextSupervisor._
-  import scala.concurrent.duration._
   import WebApi._
+
+  import scala.concurrent.duration._
 
   // Get spray-json type classes for serializing Map[String, Any]
   import spark.jobserver.common.akka.web.JsonUtils._
@@ -382,6 +382,7 @@ class WebApi(system: ActorSystem,
               future.map {
                 case ContextStopped => ctx.complete(StatusCodes.OK, successMap("Context stopped"))
                 case NoSuchContext  => notFound(ctx, "context " + contextName + " not found")
+                case ContextStopError(e) => ctx.complete(500, errMap(e, "CONTEXT DELETE ERROR"))
               }
             }
           }
@@ -391,9 +392,9 @@ class WebApi(system: ActorSystem,
             respondWithMediaType(MediaTypes.`application/json`) { ctx =>
               reset match {
                 case "reboot" => {
-                  import ContextSupervisor._
-                  import collection.JavaConverters._
                   import java.util.concurrent.TimeUnit
+
+                  import ContextSupervisor._
 
                   logger.warn("refreshing contexts")
                   val future = (supervisor ? ListContexts).mapTo[Seq[String]]

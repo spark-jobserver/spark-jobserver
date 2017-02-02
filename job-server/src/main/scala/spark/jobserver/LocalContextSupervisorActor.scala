@@ -1,20 +1,16 @@
 package spark.jobserver
 
 import akka.actor.{ActorRef, PoisonPill, Props, Terminated}
-import akka.pattern.ask
+import akka.pattern.{ask, gracefulStop}
 import akka.util.Timeout
-import com.typesafe.config.Config
-import com.typesafe.config.ConfigFactory
+import com.typesafe.config.{Config, ConfigFactory}
 import spark.jobserver.JobManagerActor.{SparkContextAlive, SparkContextDead, SparkContextStatus}
-import spark.jobserver.io.JobDAO
+import spark.jobserver.common.akka.InstrumentedActor
 import spark.jobserver.util.SparkJobUtils
+
 import scala.collection.mutable
 import scala.concurrent.Await
 import scala.util.{Failure, Success, Try}
-
-import org.joda.time.DateTime
-import org.joda.time.format.DateTimeFormat
-import spark.jobserver.common.akka.InstrumentedActor
 
 /** Messages common to all ContextSupervisors */
 object ContextSupervisor {
@@ -30,9 +26,11 @@ object ContextSupervisor {
   // Errors/Responses
   case object ContextInitialized
   case class ContextInitError(t: Throwable)
+  case class ContextStopError(t: Throwable)
   case object ContextAlreadyExists
   case object NoSuchContext
   case object ContextStopped
+
 }
 
 /**
@@ -70,6 +68,7 @@ object ContextSupervisor {
  */
 class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
   import ContextSupervisor._
+
   import scala.collection.JavaConverters._
   import scala.concurrent.duration._
 
@@ -144,8 +143,14 @@ class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
     case StopContext(name) =>
       if (contexts contains name) {
         logger.info("Shutting down context {}", name)
-        contexts(name)._1 ! PoisonPill
-        sender ! ContextStopped
+        try {
+          val stoppedCtx = gracefulStop(contexts(name)._1, 2 seconds)
+          Await.result(stoppedCtx, 3 seconds)
+          sender ! ContextStopped
+        }
+        catch {
+          case err :Exception => sender ! ContextStopError(err)
+        }
       } else {
         sender ! NoSuchContext
       }
