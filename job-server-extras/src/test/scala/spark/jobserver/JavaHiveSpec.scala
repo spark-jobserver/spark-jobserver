@@ -5,13 +5,13 @@ import org.apache.spark.sql.Row
 import org.apache.spark.sql.hive.test.TestHiveContext
 import org.apache.spark.{SparkConf, SparkContext}
 import spark.jobserver.CommonMessages.JobResult
-import spark.jobserver.context.{HiveContextFactory, HiveContextLike}
+import spark.jobserver.context.{HiveContextLike, JavaHiveContextFactory}
 import spark.jobserver.io.JobDAOActor
 
 import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 
-class TestHiveContextFactory extends HiveContextFactory {
+class JavaTestHiveContextFactory extends JavaHiveContextFactory {
   override protected def contextFactory(conf: SparkConf): C = {
     val sc = SparkContext.getOrCreate(conf)
     Try(new TestHiveContext(sc) with HiveContextLike) match {
@@ -23,15 +23,15 @@ class TestHiveContextFactory extends HiveContextFactory {
   }
 }
 
-object HiveJobSpec extends JobSpecConfig {
-  override val contextFactory = classOf[TestHiveContextFactory].getName
+object JavaHiveSpec extends JobSpecConfig {
+  override val contextFactory = classOf[JavaTestHiveContextFactory].getName
 }
 
-class HiveJobSpec extends ExtrasJobSpecBase(HiveJobSpec.getNewSystem) {
+class JavaHiveSpec extends ExtrasJobSpecBase(HiveJobSpec.getNewSystem) {
 
   val classPrefix = "spark.jobserver."
-  private val hiveLoaderClass = classPrefix + "HiveLoaderJob"
-  private val hiveQueryClass = classPrefix + "HiveTestJob"
+  private val hiveLoaderClass = classPrefix + "JHiveTestLoaderJob"
+  private val hiveQueryClass = classPrefix + "JHiveTestJob"
 
   val emptyConfig = ConfigFactory.parseString("spark.master = bar")
   val queryConfig = ConfigFactory.parseString(
@@ -42,11 +42,11 @@ class HiveJobSpec extends ExtrasJobSpecBase(HiveJobSpec.getNewSystem) {
     dao = new InMemoryDAO
     daoActor = system.actorOf(JobDAOActor.props(dao))
     manager = system.actorOf(JobManagerActor.props(
-      HiveJobSpec.getContextConfig(false, HiveJobSpec.contextConfig),
+      JavaHiveSpec.getContextConfig(false, JavaHiveSpec.contextConfig),
       daoActor))
   }
 
-  describe("Spark Hive Jobs") {
+  describe("Java Hive Jobs") {
     it("should be able to create a Hive table, then query it using separate Hive-SQL jobs") {
       manager ! JobManagerActor.Initialize(None)
       expectMsgClass(30 seconds, classOf[JobManagerActor.Initialized])

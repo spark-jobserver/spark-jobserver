@@ -37,3 +37,6 @@
 * Change cluster status of removed contexts to down (@derSascha)
 * Include Python exception stacktrace on failure (@CalebFenton)
 * UI - Use relative paths so it works if running in a context-path (@sjoerdmulder)
+* Bash style fixes (@sks)
+* EC2 deployment script fixes (@mcnels1)
+* Python Job API - Format standard output from process (@windelinckx)

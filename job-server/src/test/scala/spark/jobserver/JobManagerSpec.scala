@@ -19,6 +19,7 @@ abstract class JobManagerSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
   val classPrefix = "spark.jobserver."
   private val wordCountClass = classPrefix + "WordCountExample"
   private val newWordCountClass = classPrefix + "WordCountExampleNewApi"
+  private val javaJob = classPrefix + "JavaHelloWorldJob"
   val sentence = "The lazy dog jumped over the fish"
   val counts = sentence.split(" ").groupBy(x => x).mapValues(_.length)
   protected val stringConfig = ConfigFactory.parseString(s"input.string = $sentence")

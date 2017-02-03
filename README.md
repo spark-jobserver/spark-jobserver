@@ -79,12 +79,13 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 - [Smartsct](http://www.smartsct.com)
 - [Datadog] (https://www.datadoghq.com/)
 - [Planalytics](http://www.planalytics.com)
+- [Target](http://www.target.com/)
 
 ## Features
 
 - *"Spark as a Service"*: Simple REST interface (including HTTPS) for all aspects of job, context management
 - Support for Spark SQL, Hive, Streaming Contexts/jobs and custom job contexts!  See [Contexts](doc/contexts.md).
-- [Python](doc/python.md), Scala, and preliminary Java (see `JavaSparkJob`) support
+- [Python](doc/python.md), Scala, and Java (see [TestJob.java](https://github.com/spark-jobserver/spark-jobserver/blob/master/job-server-api/src/main/java/spark/jobserver/api/TestJob.java)) support
 - LDAP Auth support via Apache Shiro integration
 - Separate JVM per SparkContext for isolation (EXPERIMENTAL)
 - Supports sub-second low-latency jobs via long-running job contexts
@@ -114,6 +115,8 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 | spark-2.0-preview | 2.0     |
 
 For release notes, look in the `notes/` directory.  They should also be up on [notes.implicit.ly](http://notes.implicit.ly/search/spark-jobserver).
+
+If you need non-released jars, please visit [Jitpack](https://jitpack.io) - they provide non-release jar builds for any Git repo.  :)
 
 ## Getting Started with Spark Job Server
 
