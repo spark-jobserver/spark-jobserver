@@ -20,6 +20,8 @@ object JobDAOActorSpec {
 
   object DummyDao extends JobDAO{
 
+    val jarContent = Array.empty[Byte]
+
     override def saveBinary(appName: String, binaryType: BinaryType,
                             uploadTime: DateTime, binaryBytes: Array[Byte]): Unit = {
       appName match {
@@ -33,6 +35,14 @@ object JobDAOActorSpec {
         "app1" -> (BinaryType.Jar, dt),
         "app2" -> (BinaryType.Egg, dtplus1)
       ))
+
+    override def getBinaryContent(appName: String, binaryType: BinaryType,
+                                  uploadTime: DateTime): Array[Byte] = {
+      appName match {
+        case "failOnThis" => throw new Exception("get binary content failure")
+        case _ => jarContent
+      }
+    }
 
     override def retrieveBinaryFile(appName: String,
                                     binaryType: BinaryType, uploadTime: DateTime): String = ???
@@ -86,6 +96,11 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
     it("should get JobInfos") {
       daoActor ! GetJobInfos(1)
       expectMsg(JobInfos(Seq()))
+    }
+
+    it("should get binary content") {
+      daoActor ! GetBinaryContent("succeed", BinaryType.Jar, DateTime.now)
+      expectMsg(BinaryContent(DummyDao.jarContent))
     }
   }
 

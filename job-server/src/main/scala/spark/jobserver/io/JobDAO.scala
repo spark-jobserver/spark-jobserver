@@ -143,5 +143,5 @@ trait JobDAO {
     */
   def getBinaryContent(appName: String,
                        binaryType: BinaryType,
-                       uploadTime: DateTime): Array[Byte] = Array.empty[Byte]
+                       uploadTime: DateTime): Array[Byte]
 }

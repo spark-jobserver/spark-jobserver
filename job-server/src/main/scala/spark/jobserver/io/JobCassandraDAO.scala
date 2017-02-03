@@ -3,6 +3,7 @@ package spark.jobserver.io
 import java.io.File
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
+import java.nio.file.{Files, Paths}
 import java.util.UUID
 
 import com.datastax.driver.core.querybuilder.{QueryBuilder => QB}
@@ -353,5 +354,17 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCasher {
 
     session.execute(jobsChronologicalView)
 
+  }
+
+  override def getBinaryContent(appName: String, binaryType: BinaryType,
+                                uploadTime: DateTime): Array[Byte] = {
+    val jarFile = new File(rootDir, createBinaryName(appName, binaryType, uploadTime))
+    if (!jarFile.exists()) {
+      val binBytes = fetchBinary(appName, binaryType, uploadTime)
+      cacheBinary(appName, binaryType, uploadTime, binBytes)
+      binBytes
+    } else {
+      Files.readAllBytes(Paths.get(jarFile.getAbsolutePath))
+    }
   }
 }
