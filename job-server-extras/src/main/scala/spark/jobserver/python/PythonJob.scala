@@ -57,7 +57,8 @@ case class PythonJob[X <: PythonContextLike](eggPath: String,
     logger.info(s"Running $modulePath from $eggPath")
     val ep = endpoint(sc, runtime.contextConfig, runtime.jobId, data)
     val server = new GatewayServer(ep, 0)
-    val pythonPath = (eggPath +: sc.pythonPath).mkString(":")
+    val pythonPathDelimiter : String = if(System.getProperty("os.name").indexOf("Win") >= 0) ";" else ":"
+    val pythonPath = (eggPath +: sc.pythonPath).mkString(pythonPathDelimiter)
     logger.info(s"Using Python path of ${pythonPath}")
     val subProcessOutcome = Try {
       //Server runs asynchronously on a dedicated thread. See Py4J source for more detail

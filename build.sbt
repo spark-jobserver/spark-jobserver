@@ -23,6 +23,10 @@ lazy val jobServer = Project(id = "job-server", base = file("job-server"))
       .dependsOn(clean in Compile in jobServerTestJar)
       .dependsOn(buildPython in jobServerPython)
       .dependsOn(clean in Compile in jobServerPython),
+    testOnly in Test <<= (testOnly in Test).dependsOn(packageBin in Compile in jobServerTestJar)
+      .dependsOn(clean in Compile in jobServerTestJar)
+      .dependsOn(buildPython in jobServerPython)
+      .dependsOn(clean in Compile in jobServerPython),
     console in Compile <<= Defaults.consoleTask(fullClasspath in Compile, console in Compile),
     fullClasspath in Compile <<= (fullClasspath in Compile).map { classpath =>
       extraJarPaths ++ classpath
@@ -50,6 +54,12 @@ lazy val jobServerExtras = Project(id = "job-server-extras", base = file("job-se
   .settings(jobServerExtrasSettings)
   .settings(
     test in Test <<= (test in Test)
+      .dependsOn(packageBin in Compile in jobServerTestJar)
+      .dependsOn(clean in Compile in jobServerTestJar)
+      .dependsOn(buildPython in jobServerPython)
+      .dependsOn(buildPyExamples in jobServerPython)
+      .dependsOn(clean in Compile in jobServerPython),
+    testOnly in Test <<= (testOnly in Test)
       .dependsOn(packageBin in Compile in jobServerTestJar)
       .dependsOn(clean in Compile in jobServerTestJar)
       .dependsOn(buildPython in jobServerPython)
