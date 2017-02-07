@@ -122,7 +122,7 @@ lazy val dockerSettings = Seq(
     }
 
     new sbtdocker.mutable.Dockerfile {
-      from(s"java:$javaVersion")
+      from(s"openjdk:$javaVersion")
       // Dockerfile best practices: https://docs.docker.com/articles/dockerfile_best-practices/
       expose(8090)
       expose(9999)    // for JMX
