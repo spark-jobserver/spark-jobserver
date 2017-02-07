@@ -107,7 +107,8 @@ object PythonSparkContextFactorySpec {
       |]
       |
       |python.executable = "python"
-    """.stripMargin)
+    """.replace("\\","\\\\") // Windows-compatibility
+      .stripMargin)
 
   lazy val sparkConf = new SparkConf().setMaster("local[*]").setAppName("PythonSparkContextFactorySpec")
 }
@@ -173,7 +174,7 @@ class PythonSparkContextFactorySpec extends FunSpec with Matchers with BeforeAnd
       runTest(factory, context, config)
     }
 
-    it("should successfully run jobs using python3") {
+    it("should successfully run jobs using python3", WindowsIgnore) {
       val factory = new PythonSparkContextFactory()
       val p3Config = ConfigFactory.parseString(
         """
