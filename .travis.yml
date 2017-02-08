@@ -33,4 +33,4 @@ install:
   - sudo chown $USER docker/latest_cache.tar.gz
 
 script:
-  - docker run --rm -t -i $DOCKER_IMAGE
+  - docker run `/bin/bash <(curl -s https://codecov.io/env)` --rm -t -i $DOCKER_IMAGE
