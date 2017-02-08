@@ -3,6 +3,7 @@ sudo: required
 env:
   global:
     - DOCKER_IMAGE="spark-jobserver:ci"
+    - DOCKER_API_VERSION="1.24"
 
 language: go
 go:
