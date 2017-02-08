@@ -22,7 +22,7 @@ object Dependencies {
     "io.spray" %% "spray-json" % sprayJson,
     "io.spray" %% "spray-can" % spray,
     "io.spray" %% "spray-caching" % spray,
-    "io.spray" %% "spray-routing" % spray,
+    "io.spray" %% "spray-routing-shapeless23" % "1.3.3",
     "io.spray" %% "spray-client" % spray,
     yammerDeps
   )
