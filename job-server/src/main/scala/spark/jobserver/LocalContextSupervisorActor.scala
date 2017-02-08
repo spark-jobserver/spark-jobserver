@@ -1,16 +1,21 @@
 package spark.jobserver
 
 import akka.actor.{ActorRef, PoisonPill, Props, Terminated}
-import akka.pattern.{ask, gracefulStop}
+import akka.pattern.ask
 import akka.util.Timeout
-import com.typesafe.config.{Config, ConfigFactory}
+import com.typesafe.config.Config
+import com.typesafe.config.ConfigFactory
 import spark.jobserver.JobManagerActor.{SparkContextAlive, SparkContextDead, SparkContextStatus}
-import spark.jobserver.common.akka.InstrumentedActor
+import spark.jobserver.io.JobDAO
 import spark.jobserver.util.SparkJobUtils
-
 import scala.collection.mutable
 import scala.concurrent.Await
 import scala.util.{Failure, Success, Try}
+
+import org.joda.time.DateTime
+import org.joda.time.format.DateTimeFormat
+import spark.jobserver.common.akka.InstrumentedActor
+import akka.pattern.gracefulStop
 
 /** Messages common to all ContextSupervisors */
 object ContextSupervisor {
@@ -68,7 +73,6 @@ object ContextSupervisor {
  */
 class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
   import ContextSupervisor._
-
   import scala.collection.JavaConverters._
   import scala.concurrent.duration._
 
@@ -149,7 +153,7 @@ class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
           sender ! ContextStopped
         }
         catch {
-          case err :Exception => sender ! ContextStopError(err)
+          case err: Exception => sender ! ContextStopError(err)
         }
       } else {
         sender ! NoSuchContext

@@ -8,16 +8,16 @@ import java.util.concurrent.TimeUnit
 import akka.actor._
 import akka.cluster.Cluster
 import akka.cluster.ClusterEvent.{InitialStateAsEvents, MemberEvent, MemberUp}
-import akka.pattern.gracefulStop
 import akka.util.Timeout
 import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
-import spark.jobserver.common.akka.InstrumentedActor
 import spark.jobserver.util.SparkJobUtils
-
 import scala.collection.mutable
-import scala.concurrent.{Await, Future}
-import scala.sys.process._
 import scala.util.{Failure, Success, Try}
+import scala.sys.process._
+
+import spark.jobserver.common.akka.InstrumentedActor
+import scala.concurrent.Await
+import akka.pattern.gracefulStop
 
 /**
  * The AkkaClusterSupervisorActor launches Spark Contexts as external processes
@@ -39,7 +39,6 @@ import scala.util.{Failure, Success, Try}
  */
 class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
   import ContextSupervisor._
-
   import scala.collection.JavaConverters._
   import scala.concurrent.duration._
 
@@ -161,7 +160,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
           sender ! ContextStopped
         }
         catch {
-          case err :Exception => sender ! ContextStopError(err)
+          case err: Exception => sender ! ContextStopError(err)
         }
       } else {
         sender ! NoSuchContext
