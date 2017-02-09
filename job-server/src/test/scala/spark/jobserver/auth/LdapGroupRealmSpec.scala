@@ -13,6 +13,10 @@ import javax.naming.ldap.LdapContext
 import javax.naming._
 import javax.naming.directory._
 
+object LdapGroupRealmSpec {
+  val memberAttributeName = "memberUid"
+}
+
 class LdapGroupRealmSpec extends FunSpecLike with Matchers {
   import collection.JavaConverters._
 
@@ -21,9 +25,11 @@ class LdapGroupRealmSpec extends FunSpecLike with Matchers {
 # activeDirectoryRealm = org.apache.shiro.realm.ldap.JndiLdapRealm
 # use this for checking group membership of users based on the 'member' attribute of the groups:
 activeDirectoryRealm = spark.jobserver.auth.LdapGroupRealm
+activeDirectoryRealm.userSearchFilter = testUserSearchFilter
+activeDirectoryRealm.groupSearchFilter = testGroupSearchFilter
 # search base for ldap groups:
 activeDirectoryRealm.contextFactory.environment[ldap.searchBase] = dc=xxx,dc=org
-activeDirectoryRealm.contextFactory.environment[ldap.allowedGroups] = "cn=group1,ou=groups", "", "cn=group2,ou=groups",,,,,
+activeDirectoryRealm.contextFactory.environment[ldap.allowedGroups] = group1, group2
 activeDirectoryRealm.contextFactory.environment[java.naming.security.credentials] = password
 activeDirectoryRealm.contextFactory.url = ldap://xxx.yyy..org:389
 activeDirectoryRealm.userDnTemplate = cn={0},ou=people,dc=xxx,dc=org
@@ -65,60 +71,54 @@ securityManager.cacheManager = $cacheManager
     }
 
     it("should extract allowed groups from ini file") {
-      realm.allowedGroups.get should equal(Array("cn=group1,ou=groups", "cn=group2,ou=groups"))
+      realm.allowedGroups.get should equal(Array("group1", "group2"))
     }
 
-    it("should match groups to allowed groups (all same)") {
-      realm.isInAllowedGroupOrNoCheckOnGroups(Set("cn=group1,ou=groups", "cn=group2,ou=groups")) should equal(true)
+    it("should read userSearchFilter from ini file") {
+      realm.getUserSearchFilter should equal("testUserSearchFilter")
     }
 
-    it("should match groups to allowed groups (intersection)") {
-      realm.isInAllowedGroupOrNoCheckOnGroups(Set("cn=other,ou=xxx", "some other role", "cn=group1,ou=groups")) should equal(true)
+    it("should read groupSearchFilter from ini file") {
+      realm.getGroupSearchFilter should equal("testGroupSearchFilter")
+    }
+
+    it("should match groups to allowed groups (user in group 1 and 2)") {
+      realm.getAllowedGroupsOrNoCheckOnGroups(new TestLdapContext(), "userInGroup1And2", "cn=userInGroup1And2,ou=people") should equal(Some(Set("group1", "group2")))
+    }
+
+    it("should match groups to allowed groups (user in group 2)") {
+      realm.getAllowedGroupsOrNoCheckOnGroups(new TestLdapContext(), "userInGroup2", "cn=userInGroup2,ou=people") should equal(Some(Set("group2")))
     }
 
     it("should match groups to allowed groups (no match)") {
-      realm.isInAllowedGroupOrNoCheckOnGroups(Set("cn=other,ou=xxx", "cn=o,ou=group", "cn=z,ou=group")) should equal(false)
+      realm.getAllowedGroupsOrNoCheckOnGroups(new TestLdapContext(), "userInGroup3", "cn=userInGroup3,ou=people") should equal(None)
     }
 
-    it("should retrieve group names") {
-      realm.retrieveGroups(new TestLdapContext()).keys should equal(Set("cn=group1,ou=groups", "cn=group2,ou=groups", "cn=groupXX,ou=groups"))
+    it("should allow test user in group 1") {
+      realm.checkUser(new TestLdapContext(), "knownUser") should equal(Some("cn=knownUser,ou=people"))
     }
 
-    it("should return role names for test user in group 1") {
-      realm.getRoleNamesForUser(new TestLdapContext(), "userInGroup1") should equal(Set("cn=group1,ou=groups"))
-    }
-
-    it("should return role names for test user in group 2") {
-      realm.getRoleNamesForUser(new TestLdapContext(), "userInGroup2") should equal(Set("cn=group2,ou=groups"))
-    }
-
-    it("should return role names for test user in group XX") {
-      //groupXX is not one of the allowed groups, but still a group
-      realm.getRoleNamesForUser(new TestLdapContext(), "userInGroupXX") should equal(Set("cn=groupXX,ou=groups"))
-    }
-
-    it("should return no role names for unknown test user ") {
-      realm.getRoleNamesForUser(new TestLdapContext(), "userInNoGroup") should equal(Set())
+    it("should not find unknown test user ") {
+      realm.checkUser(new TestLdapContext(), "unknownUser") should equal(None)
     }
 
     it("should allow login of test user in group 1") {
-      realm.queryForAuthorizationInfo(new TestLdapContext(), "userInGroup1").getRoles should equal(new SimpleAuthorizationInfo(Set("cn=group1,ou=groups").asJava).getRoles)
+      realm.queryForAuthorizationInfo(new TestLdapContext(), "userInGroup1And2").getRoles should equal(new SimpleAuthorizationInfo(Set("group1", "group2").asJava).getRoles)
     }
 
     it("should allow login of test user in group 2") {
-      realm.queryForAuthorizationInfo(new TestLdapContext(), "userInGroup2").getRoles should equal(new SimpleAuthorizationInfo(Set("cn=group2,ou=groups").asJava).getRoles)
-    }
-
-    it("should not allow login for test user from wrong group") {
-      val thrown = the[RuntimeException] thrownBy realm.queryForAuthorizationInfo(new TestLdapContext(), "userInGroupXX")
-      thrown.getMessage should equal(LdapGroupRealm.ERROR_MSG_NO_VALID_GROUP)
+      realm.queryForAuthorizationInfo(new TestLdapContext(), "userInGroup2").getRoles should equal(new SimpleAuthorizationInfo(Set("group2").asJava).getRoles)
     }
 
     it("should not allow login for unknown test user ") {
+      val thrown = the[RuntimeException] thrownBy realm.queryForAuthorizationInfo(new TestLdapContext(), "unknownUser")
+      thrown.getMessage should equal(LdapGroupRealm.ERROR_MSG_AUTHORIZATION_FAILED)
+    }
+
+    it("should not allow login for with invalid group") {
       val thrown = the[RuntimeException] thrownBy realm.queryForAuthorizationInfo(new TestLdapContext(), "userInNoGroup")
       thrown.getMessage should equal(LdapGroupRealm.ERROR_MSG_NO_VALID_GROUP)
     }
-
   }
 }
 
@@ -175,12 +175,26 @@ class TestLdapContext extends LdapContext {
   def rebind(x$1: Name, x$2: Any, x$3: directory.Attributes): Unit = ???
 
   def search(searchBase: String, searchFilter: String, searchAtts: Array[Object], searchCtls: SearchControls): NamingEnumeration[SearchResult] = {
-    if (searchFilter == LdapGroupRealm.groupMemberFilter) {
-      new TestNamingEnumeration(List(new SearchResult("cn=group1,ou=groups", null, new BasicAttributes("member", "cn=userInGroup1,ou=people,dc=xxx,dc=org")),
-        new SearchResult("cn=group2,ou=groups", null, new BasicAttributes("member", "cn=userInGroup2,ou=people,dc=xxx,dc=org")),
-        new SearchResult("cn=groupXX,ou=groups", null, new BasicAttributes("member", "cn=userInGroupXX,ou=people,dc=xxx,dc=org"))))
+    if (searchFilter.equals("testUserSearchFilter") && searchAtts.length == 1) {
+      if (searchAtts(0).equals("unknownUser")) {
+        new TestNamingEnumeration(List())
+      } else {
+        new TestNamingEnumeration(List(new SearchResult("cn=%s,ou=people" format searchAtts(0), null, new BasicAttributes())))
+      }
+
+    } else if (searchFilter.equals("testGroupSearchFilter") && searchAtts.length == 3) {
+      if (searchAtts(0).equals("group1") && searchAtts(1).equals("userInGroup1And2") && searchAtts(2).equals("cn=userInGroup1And2,ou=people")) {
+        new TestNamingEnumeration(List(new SearchResult("cn=group1,ou=groups", null, new BasicAttributes())))
+      } else if (searchAtts(0).equals("group2") && searchAtts(1).equals("userInGroup1And2") && searchAtts(2).equals("cn=userInGroup1And2,ou=people")) {
+        new TestNamingEnumeration(List(new SearchResult("cn=group2,ou=groups", null, new BasicAttributes())))
+      } else if (searchAtts(0).equals("group2") && searchAtts(1).equals("userInGroup2") && searchAtts(2).equals("cn=userInGroup2,ou=people")) {
+        new TestNamingEnumeration(List(new SearchResult("cn=group2,ou=groups", null, new BasicAttributes())))
+      } else {
+        new TestNamingEnumeration(List())
+      }
+
     } else {
-      new TestNamingEnumeration(List(new SearchResult("cn=%s,ou=people" format searchAtts(0), null, new BasicAttributes("k", "v"))))
+      throw new AssertionError("Unknown test case, searchFilter: " + searchFilter + ", searchAtts: " + searchAtts.mkString(", "))
     }
   }
 
