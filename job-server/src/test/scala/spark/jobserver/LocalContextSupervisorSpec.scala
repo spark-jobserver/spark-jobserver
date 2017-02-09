@@ -3,12 +3,12 @@ package spark.jobserver
 import akka.actor._
 import akka.testkit.{ImplicitSender, TestKit}
 import com.typesafe.config.ConfigFactory
+import spark.jobserver.io.{JobDAO, JobDAOActor}
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
+import scala.concurrent.duration._
+
 import spark.jobserver.common.akka
 import spark.jobserver.common.akka.AkkaTestUtils
-import spark.jobserver.io.{JobDAO, JobDAOActor}
-
-import scala.concurrent.duration._
 
 
 object LocalContextSupervisorSpec {
@@ -21,6 +21,7 @@ object LocalContextSupervisorSpec {
       }
       jobserver.job-result-cache-size = 100
       jobserver.context-creation-timeout = 5 s
+|     jobserver.context-deletion-timeout = 2 s
       jobserver.yarn-context-creation-timeout = 40 s
       jobserver.named-object-creation-timeout = 60 s
       contexts {

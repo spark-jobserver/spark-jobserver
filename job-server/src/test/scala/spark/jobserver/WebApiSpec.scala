@@ -16,11 +16,9 @@ import spray.routing.HttpService
 import spray.testkit.ScalatestRouteTest
 
 import scala.concurrent.{Await, Future}
-import scala.concurrent.duration.Duration
 import scala.util.{Failure, Success}
 import java.util.concurrent.TimeUnit
-
-
+import scala.concurrent.duration.Duration
 
 // Tests web response codes and formatting
 // Does NOT test underlying Supervisor / JarManager functionality
@@ -147,11 +145,9 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
       case DataManagerActor.DeleteData("errorfileToRemove") => sender ! DataManagerActor.Error
 
       case ListContexts =>  sender ! Seq("context1", "context2")
-
       case StopContext("none") => sender ! NoSuchContext
       case StopContext("timeout-ctx") => sender ! ContextStopError(new Throwable)
       case StopContext(_)      => sender ! ContextStopped
-
       case AddContext("one", _) => sender ! ContextAlreadyExists
       case AddContext("custom-ctx", c) =>
         // see WebApiMainRoutesSpec => "context routes" =>
@@ -162,7 +158,6 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
         sender ! ContextInitialized
       case AddContext("initError-ctx", _) => sender ! ContextInitError(new Throwable)
       case AddContext(_, _)     => sender ! ContextInitialized
-
 
       case GetContext("no-context") => sender ! NoSuchContext
       case GetContext(_)            => sender ! (self, self)
@@ -203,8 +198,7 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
     }
   }
 
-  implicit override val patienceConfig = PatienceConfig(timeout = Span(5, Seconds),
-    interval = Span(1, Seconds))
+  implicit override val patienceConfig = PatienceConfig(timeout = Span(5, Seconds), interval = Span(1, Seconds))
 
   override def beforeAll():Unit = {
     api.start()

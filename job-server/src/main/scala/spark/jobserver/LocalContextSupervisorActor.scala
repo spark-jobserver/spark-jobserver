@@ -35,7 +35,6 @@ object ContextSupervisor {
   case object ContextAlreadyExists
   case object NoSuchContext
   case object ContextStopped
-
 }
 
 /**
@@ -78,7 +77,8 @@ class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
 
   val config = context.system.settings.config
   val defaultContextConfig = config.getConfig("spark.context-settings")
-  val contextTimeout = SparkJobUtils.getContextTimeout(config)
+  val contextTimeout = SparkJobUtils.getContextCreationTimeout(config)
+  val contextDeletionTimeout = SparkJobUtils.getContextDeletionTimeout(config)
   import context.dispatcher   // to get ExecutionContext for futures
 
   private val contexts = mutable.HashMap.empty[String, (ActorRef, ActorRef)]
@@ -148,8 +148,9 @@ class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
       if (contexts contains name) {
         logger.info("Shutting down context {}", name)
         try {
-          val stoppedCtx = gracefulStop(contexts(name)._1, 2 seconds)
-          Await.result(stoppedCtx, 3 seconds)
+          val stoppedCtx = gracefulStop(contexts(name)._1, contextDeletionTimeout seconds)
+          Await.result(stoppedCtx, contextDeletionTimeout + 1 seconds)
+          contexts.remove(name)
           sender ! ContextStopped
         }
         catch {
