@@ -776,7 +776,6 @@ Apache 2.0, see LICENSE.md
 ## TODO
 
 - More debugging for classpath issues
-- Update .g8 template, consider creating Activator template for sample job
 - Add Swagger support.  See the spray-swagger project.
 - Implement an interactive SQL window.  See: [spark-admin](https://github.com/adatao/spark-admin)
 
