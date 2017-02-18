@@ -24,6 +24,8 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
     - [Ad-hoc Mode - Single, Unrelated Jobs (Transient Context)](#ad-hoc-mode---single-unrelated-jobs-transient-context)
     - [Persistent Context Mode - Faster & Required for Related Jobs](#persistent-context-mode---faster-&-required-for-related-jobs)
 - [Create a Job Server Project](#create-a-job-server-project)
+  - [Creating a project from scratch using giter8 template](#creating-a-project-from-scratch-using-giter8-template)
+  - [Creating a project manually assuming that you already have sbt project structure](#creating-a-project-manually-assuming-that-you-already-have-sbt-project-structure)
   - [NEW SparkJob API](#new-sparkjob-api)
   - [Dependency jars](#dependency-jars)
   - [Named Objects](#named-objects)
@@ -241,6 +243,20 @@ Now let's run the job in the context and get the results back right away:
 Note the addition of `context=` and `sync=true`.
 
 ## Create a Job Server Project
+### Creating a project from scratch using giter8 template
+
+There is a giter8 template available at https://github.com/spark-jobserver/spark-jobserver.g8
+
+    $ sbt new spark-jobserver/spark-jobserver.g8
+
+Answer the questions to generate a project structure for you. This contains Word Count example spark job using both old API and new one.
+
+    $ cd /path/to/project/directory
+    $ sbt package
+
+Now you could remove example application and start adding your one.
+
+### Creating a project manually assuming that you already have sbt project structure
 In your `build.sbt`, add this to use the job server jar:
 
         resolvers += "Job Server Bintray" at "https://dl.bintray.com/spark-jobserver/maven"
