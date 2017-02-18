@@ -43,3 +43,4 @@
 * Fix test issues on Windows (@doernemt)
 * Use OpenJDK for Docker base image (@xjodoin)
 * Cleanup LDAP authentication and add filter config. (@derSascha)
+* Giter8 template available at https://github.com/spark-jobserver/spark-jobserver.g8 (@noorul)
