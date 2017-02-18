@@ -42,3 +42,4 @@
 * Python Job API - Format standard output from process (@windelinckx)
 * Fix test issues on Windows (@doernemt)
 * Use OpenJDK for Docker base image (@xjodoin)
+* Cleanup LDAP authentication and add filter config. (@derSascha)
