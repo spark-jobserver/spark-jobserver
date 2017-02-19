@@ -2,21 +2,22 @@ package spark.jobserver
 
 import akka.actor.ActorRef
 import akka.util.Timeout
-import spark.jobserver.io.JobDAOActor.SaveBinaryResult
-import spark.jobserver.io.{BinaryType, JobDAO, JobDAOActor}
+import spark.jobserver.io.JobDAOActor.{DeleteBinaryResult, SaveBinaryResult}
+import spark.jobserver.io.{BinaryType, JobDAOActor}
 import spark.jobserver.util.JarUtils
 import org.joda.time.DateTime
 import java.nio.file.{Files, Paths}
 
-import scala.concurrent.{Await, Future}
+import scala.concurrent.Future
 import scala.util.{Failure, Success, Try}
-
 import spark.jobserver.common.akka.InstrumentedActor
 
 // Messages to JarManager actor
 
 /** Message for storing a JAR for an application given the byte array of the JAR file */
 case class StoreBinary(appName: String, binaryType: BinaryType, binBytes: Array[Byte])
+
+case class DeleteBinary(appName: String)
 
 /** Message requesting a listing of the available JARs */
 case class ListBinaries(typeFilter: Option[BinaryType])
@@ -30,6 +31,7 @@ case class StoreLocalBinaries(localBinaries: Map[String, (BinaryType, String)])
 // Responses
 case object InvalidBinary
 case object BinaryStored
+case object BinaryDeleted
 case class BinaryStorageFailure(ex: Throwable)
 
 /**
@@ -48,6 +50,11 @@ class BinaryManager(jobDao: ActorRef) extends InstrumentedActor {
     val uploadTime = DateTime.now()
     (jobDao ? JobDAOActor.SaveBinary(appName, binaryType, uploadTime, binBytes)).
       mapTo[SaveBinaryResult].map(_.outcome)
+  }
+
+  private def deleteBinary(appName: String): Future[Try[Unit]] = {
+    (jobDao ? JobDAOActor.DeleteBinary(appName)).
+      mapTo[DeleteBinaryResult].map(_.outcome)
   }
 
   override def wrappedReceive: Receive = {
@@ -96,5 +103,9 @@ class BinaryManager(jobDao: ActorRef) extends InstrumentedActor {
           case Failure(ex) => BinaryStorageFailure(ex)
         }.pipeTo(sender)
       }
+
+    case DeleteBinary(appName) =>
+      logger.info(s"Deleting binary $appName")
+      deleteBinary(appName).pipeTo(sender)
   }
 }

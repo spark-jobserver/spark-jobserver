@@ -572,10 +572,20 @@ Flow diagrams are checked in in the doc/ subdirectory.  .diagram files are for w
 
 ## API
 
-### Jars
+### Binaries
 
-    GET /jars            - lists all the jars and the last upload timestamp
-    POST /jars/<appName> - uploads a new jar under <appName>
+    GET /binaries               - lists all current binaries
+    POST /binaries/<appName>    - upload a new binary file
+    DELETE /binaries/<appName>  - delete defined binary
+    
+When POSTing new binaries, the content-type header must be set to one of the types supported by the subclasses of the `BinaryType` trait. e.g. "application/java-archive" or application/python-archive"
+
+### Jars (deprecated)
+
+    GET /jars                   - lists all the jars and the last upload timestamp
+    POST /jars/<appName>        - uploads a new jar under <appName>
+    
+These routes are kept for legacy purposes but are deprecated in favour of the /binaries routes
 
 ### Contexts
 
