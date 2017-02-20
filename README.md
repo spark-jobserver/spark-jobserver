@@ -754,9 +754,11 @@ Contributions via Github Pull Request are welcome.  See the TODO for some ideas.
 for instance: `sbt ++2.11.6 job-server/compile`
 - From the "master" project, please run "test" to ensure nothing is broken.
    - You may need to set `SPARK_LOCAL_IP` to `localhost` to ensure Akka port can bind successfully
+   - Note for Windows users: very few tests fail on Windows. Thus, run `testOnly -- -l WindowsIgnore` from SBT shell to ignore them.
 - Logging for tests goes to "job-server-test.log"
-- Run `scoverage:test` to check the code coverage and improve it
-- Please run scalastyle to ensure your code changes don't break the style guide
+- Run `scoverage:test` to check the code coverage and improve it. 
+  - Windows users: run `; coverage ; testOnly -- -l WindowsIgnore ; coverageReport` from SBT shell. 
+- Please run scalastyle to ensure your code changes don't break the style guide.
 - Do "reStart" from SBT for quick restarts of the job server process
 - Please update the g8 template if you change the SparkJob API
 
