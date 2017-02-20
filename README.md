@@ -509,7 +509,6 @@ Also, the extra processes talk to the master HTTP process via random ports using
 
 Among the known issues:
 - Launched contexts do not shut down by themselves.  You need to manually kill each separate process, or do `-X DELETE /contexts/<context-name>`
-- Custom error messages are not serialized back to HTTP
 
 Log files are separated out for each context (assuming `context-per-jvm` is `true`) in their own subdirs under the `LOG_DIR` configured in `settings.sh` in the deployed directory.
 
@@ -545,6 +544,8 @@ database created with necessary rights granted to user.
         initialsize = 10
       }
     }
+
+If you are using `context-per-jvm = true`, be sure to add [AUTO_MIXED_MODE](http://h2database.com/html/features.html#auto_mixed_mode) to your H2 JDBC URL; this allows multiple processes to share the same H2 database using a lock file.
 
 Also add the following line at the root level.
 
