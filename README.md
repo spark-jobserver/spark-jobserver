@@ -553,6 +553,17 @@ Also add the following line at the root level.
 
 It is also important that any dependent jars are to be added to Job Server class path.
 
+In a yarn-client mode if using H2 the below is advised.
+- Run H2 in server mode (http://www.h2database.com/html/download.html, and follow docs.,)
+Jdbc configuration should be like below:
+```
+jdbc {
+        url = "jdbc:h2:tcp://localhost/db_host/spark_jobserver"
+        user = "secret"
+        password = "secret"
+      }
+```      
+
 ### Chef
 
 There is also a [Chef cookbook](https://github.com/spark-jobserver/chef-spark-jobserver) which can be used to deploy Spark Jobserver.
