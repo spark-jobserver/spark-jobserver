@@ -125,3 +125,12 @@ Before typing `reStart` in sbt, type `project job-server-extras` and only then s
 ```scala
 ConfigFactory.parseReader(paramReader = new InputStreamReader(getClass().getResourceAsStream(s"/$myPassedConfigPath"))
 ```
+## Submitting job on windows cmd
+
+When submitting a job (as below) on windows command prompt use with " (double quotes) instead '(single quote) with curl command near localhost.
+
+Example:
+For:
+curl -d "input.string = a b c a b see" 'localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample'
+Use:
+curl -d "input.string = a b c a b see" "localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample"
