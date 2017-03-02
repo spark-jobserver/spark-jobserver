@@ -138,7 +138,7 @@ class WebApi(system: ActorSystem,
   val ResultChunkSize = Option("spark.jobserver.result-chunk-size").filter(config.hasPath)
       .fold(100 * 1024)(config.getBytes(_).toInt)
 
-  val contextTimeout = SparkJobUtils.getContextTimeout(config)
+  val contextTimeout = SparkJobUtils.getContextCreationTimeout(config)
   val bindAddress = config.getString("spark.jobserver.bind-address")
 
   val logger = LoggerFactory.getLogger(getClass)
@@ -396,6 +396,7 @@ class WebApi(system: ActorSystem,
               future.map {
                 case ContextStopped => ctx.complete(StatusCodes.OK, successMap("Context stopped"))
                 case NoSuchContext  => notFound(ctx, "context " + contextName + " not found")
+                case ContextStopError(e) => ctx.complete(500, errMap(e, "CONTEXT DELETE ERROR"))
               }
             }
           }

@@ -132,11 +132,11 @@ object JobServer {
             s"Python Egg packages (with extension .egg) are supported. Found $other")
       }
 
-      val contextTimeout = util.SparkJobUtils.getContextTimeout(config)
+      val contextCreationTimeout = util.SparkJobUtils.getContextCreationTimeout(config)
       val future =
-        (binaryManager ? StoreLocalBinaries(initialBinariesWithTypes))(contextTimeout.seconds)
+        (binaryManager ? StoreLocalBinaries(initialBinariesWithTypes))(contextCreationTimeout.seconds)
 
-      Await.result(future, contextTimeout.seconds) match {
+      Await.result(future, contextCreationTimeout.seconds) match {
         case InvalidBinary => sys.error("Could not store initial job binaries.")
         case BinaryStorageFailure(ex) =>
           logger.error("Failed to store initial binaries", ex)

@@ -21,6 +21,7 @@ object LocalContextSupervisorSpec {
       }
       jobserver.job-result-cache-size = 100
       jobserver.context-creation-timeout = 5 s
+|     jobserver.context-deletion-timeout = 2 s
       jobserver.yarn-context-creation-timeout = 40 s
       jobserver.named-object-creation-timeout = 60 s
       contexts {
@@ -128,7 +129,6 @@ class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.syst
       supervisor ! StopContext("c1")
       expectMsg(ContextStopped)
 
-      Thread.sleep(2000) // wait for a while since deleting context is an asyc call
       supervisor ! ListContexts
       expectMsg(Seq.empty[String])
     }
