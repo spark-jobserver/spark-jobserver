@@ -350,6 +350,14 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       }
     }
 
+    it("should respond with 404 Not Found if context is not ready") {
+      Post("/jobs?appName=foo&classPath=com.abc.meme&context=not-ready-context", " ") ~> sealRoute(routes) ~> check {
+        status should be (NotFound)
+        val resultMap = responseAs[Map[String, String]]
+        resultMap(StatusKey) should be (JobStatus.Error)
+      }
+    }
+
     it("should respond with 404 Not Found if app or class not found") {
       Post("/jobs?appName=no-app&classPath=com.abc.meme&context=one", " ") ~> sealRoute(routes) ~> check {
         status should be (NotFound)
@@ -461,7 +469,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         status should be(OK)
       }
     }
-    
+
     it("should return OK if stopping known context") {
       Delete("/contexts/one", "") ~> sealRoute(routes) ~> check {
         status should be (OK)
@@ -498,4 +506,3 @@ class WebApiMainRoutesSpec extends WebApiSpec {
     }
   }
 }
-

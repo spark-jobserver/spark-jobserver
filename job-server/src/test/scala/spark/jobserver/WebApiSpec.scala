@@ -143,8 +143,8 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
       case DataManagerActor.DeleteData("errorfileToRemove") => sender ! DataManagerActor.Error
 
       case ListContexts =>  sender ! Seq("context1", "context2")
-      case StopContext("none") => sender ! NoSuchContext
-      case StopContext(_)      => sender ! ContextStopped
+      case StopContext("none", _) => sender ! NoSuchContext
+      case StopContext(_, _)      => sender ! ContextStopped
       case AddContext("one", _) => sender ! ContextAlreadyExists
       case AddContext("custom-ctx", c) =>
         // see WebApiMainRoutesSpec => "context routes" =>
@@ -156,9 +156,10 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
       case AddContext(_, _)     => sender ! ContextInitialized
 
       case GetContext("no-context") => sender ! NoSuchContext
-      case GetContext(_)            => sender ! (self, self)
+      case GetContext("not-ready-context") => sender ! ("not-ready-context", None, None)
+      case GetContext(_)            => sender ! ("test-normal", Some(self), Some(self))
 
-      case StartAdHocContext(_, _) => sender ! (self, self)
+      case StartAdHocContext(_, _) => sender ! ("test-adhoc", Some(self), Some(self))
 
       // These routes are part of JobManagerActor
       case StartJob("no-app", _, _, _)   =>  sender ! NoSuchApplication
