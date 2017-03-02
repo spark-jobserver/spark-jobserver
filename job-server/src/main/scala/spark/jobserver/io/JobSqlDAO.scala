@@ -139,7 +139,9 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
     * @param appName
     */
   override def deleteBinary(appName: String): Unit = {
-    deleteBinaryInfo(appName)
+    if (Await.result(deleteBinaryInfo(appName), 60 seconds) == 0) {
+      throw new SlickException(s"Failed to delete binary: $appName from database")
+    }
     cleanCacheBinaries(appName)
   }
 
