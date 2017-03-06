@@ -42,7 +42,7 @@ class BinaryManager(jobDao: ActorRef) extends InstrumentedActor {
   import scala.concurrent.duration._
   import akka.pattern.{ask, pipe}
   import context.dispatcher
-  implicit val daoAskTimeout = Timeout(3 seconds)
+  implicit val daoAskTimeout = Timeout(60 seconds)
 
   private def saveBinary(appName: String,
                          binaryType: BinaryType,
