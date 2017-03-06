@@ -77,6 +77,11 @@ trait JobDAO {
   def saveBinary(appName: String, binaryType: BinaryType, uploadTime: DateTime, binaryBytes: Array[Byte])
 
   /**
+    * Delete a jar.
+    * @param appName
+    */
+  def deleteBinary(appName: String)
+  /**
    * Return all applications name and their last upload times.
    *
    * @return

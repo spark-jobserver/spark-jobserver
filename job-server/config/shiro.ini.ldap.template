@@ -1,17 +1,37 @@
-# template for LDAP authorization
-#
-# use this for basic ldap authorization, without group checking
+# Template for LDAP authorization
+# To get detailed LDAP messages change log4j.rootLogger level to DEBUG in the log4j-server.properties file
+
+#------------------#
+# General Settings #
+#------------------#
+activeDirectoryRealm.contextFactory.url = ldap://localhost:389
+activeDirectoryRealm.userDnTemplate = cn={0},ou=people,dc=xyz,dc=com
+cacheManager = org.apache.shiro.cache.MemoryConstrainedCacheManager
+securityManager.cacheManager = $cacheManager
+
+
+#-------------------------------------------#
+# LDAP authorization without group checking #
+#-------------------------------------------#
+# activate this for basic ldap authorization, without group checking
 activeDirectoryRealm = org.apache.shiro.realm.ldap.JndiLdapRealm
-# use this for checking group membership of users based on the 'member' attribute of the groups:
+
+
+#---------------------------------------------------#
+# LDAP authorization with group membership checking #
+#---------------------------------------------------#
+# activate this for checking group membership of users based on the specified userSearchFilter and groupSearchFilter variable
 # activeDirectoryRealm = spark.jobserver.auth.LdapGroupRealm
 # search base for ldap groups (only relevant for LdapGroupRealm):
-activeDirectoryRealm.contextFactory.environment[ldap.searchBase] = dc=xxx,dc=org
-# allowed groups (only relevant for LdapGroupRealm):
-activeDirectoryRealm.contextFactory.environment[ldap.allowedGroups] = "cn=group1,ou=groups", "cn=group2,ou=groups"
-activeDirectoryRealm.contextFactory.environment[java.naming.security.credentials] = password
-activeDirectoryRealm.contextFactory.url = ldap://localhost:389
-activeDirectoryRealm.userDnTemplate = cn={0},ou=people,dc=xxx,dc=org
+#activeDirectoryRealm.contextFactory.environment[ldap.searchBase] = dc=xyz,dc=com
 
-cacheManager = org.apache.shiro.cache.MemoryConstrainedCacheManager
+# filter to authenticate users ({0} is replaced by the user name)
+# activeDirectoryRealm.userSearchFilter=(&(objectClass=person)(CN={0}))
 
-securityManager.cacheManager = $cacheManager
+# filter to validate group membership ({0} is replaced by a group from the allowedGroups variable,
+# {1} by the user name and {2} by the full user path in ldap)
+# activeDirectoryRealm.groupSearchFilter=(&(member={2})(objectClass=posixGroup)(CN={0}))
+
+# allowed groups as comma separated list
+#activeDirectoryRealm.contextFactory.environment[ldap.allowedGroups] = group1,group2
+

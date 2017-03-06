@@ -14,9 +14,9 @@ import spark.jobserver.api.JobEnvironment
 import spark.jobserver.context.{JobContainer, SparkContextFactory}
 import spark.jobserver.io.{BinaryInfo, JobDAOActor, JobInfo}
 import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
+
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
-
 import spark.jobserver.common.akka.InstrumentedActor
 
 object JobManagerActor {
@@ -159,7 +159,9 @@ class JobManagerActor(contextConfig: Config, daoActor: ActorRef) extends Instrum
 
     case KillJob(jobId: String) => {
       jobContext.sparkContext.cancelJobGroup(jobId)
-      statusActor ! JobKilled(jobId, DateTime.now())
+      val resp = JobKilled(jobId, DateTime.now())
+      statusActor ! resp
+      sender ! resp
     }
 
     case SparkContextStatus => {
@@ -305,7 +307,6 @@ class JobManagerActor(contextConfig: Config, daoActor: ActorRef) extends Instrum
       }
     }(executionContext).andThen {
       case Success(result: Any) =>
-        statusActor ! JobFinished(jobId, DateTime.now())
         // TODO: If the result is Stream[_] and this is running with context-per-jvm=true configuration
         // serializing a Stream[_] blob across process boundaries is not desirable.
         // In that scenario an enhancement is required here to chunk stream results back.
@@ -316,6 +317,7 @@ class JobManagerActor(contextConfig: Config, daoActor: ActorRef) extends Instrum
         // Either way an enhancement would be required here to make Stream[_] responses work
         // with context-per-jvm=true configuration
         resultActor ! JobResult(jobId, result)
+        statusActor ! JobFinished(jobId, DateTime.now())
       case Failure(error: Throwable) =>
         // Wrapping the error inside a RuntimeException to handle the case of throwing custom exceptions.
         val wrappedError = wrapInRuntimeException(error)

@@ -98,6 +98,12 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         status should be (InternalServerError)
       }
     }
+
+    it("should respond with OK if deleted successfully") {
+      Delete("/binaries/foobar") ~> sealRoute(routes) ~> check {
+        status should be (OK)
+      }
+    }
   }
 
   describe("list jobs") {
@@ -279,8 +285,8 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       }
     }
 
-    it("should be able to query job result from /jobs/<id> route") {
-      Get("/jobs/foobar") ~> sealRoute(routes) ~> check {
+    it("should be able to query a running job from /jobs/<id> route") {
+      Get("/jobs/_running") ~> sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, String]] should be (Map(
           "jobId" -> "foo-1",
@@ -288,9 +294,29 @@ class WebApiMainRoutesSpec extends WebApiSpec {
           "classPath" -> "com.abc.meme",
           "context"  -> "context",
           "duration" -> "Job not done yet",
-          StatusKey -> JobStatus.Running,
-          ResultKey -> "foobar!!!"
+          StatusKey -> JobStatus.Running
         ))
+      }
+    }
+
+    it("should be able to query finished job with result from /jobs/<id> route") {
+      Get("/jobs/_finished") ~> sealRoute(routes) ~> check {
+        status should be (OK)
+        responseAs[Map[String, String]] should be (Map(
+          "jobId" -> "foo-1",
+          "startTime" -> "2013-05-29T00:00:00.000Z",
+          "classPath" -> "com.abc.meme",
+          "context"  -> "context",
+          "duration" -> "300.0 secs",
+          StatusKey -> JobStatus.Finished,
+          ResultKey -> "_finished!!!"
+        ))
+      }
+    }
+
+    it("should respond with 404 Not Found from /jobs/<id> route if status of jobId does not exist") {
+      Get("/jobs/_no_status") ~> sealRoute(routes) ~> check {
+        status should be (NotFound)
       }
     }
 
