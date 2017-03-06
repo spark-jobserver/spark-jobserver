@@ -17,7 +17,7 @@ import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
 import scala.reflect.runtime.universe
 
-class JobSqlDAO(config: Config) extends JobDAO with FileCasher {
+class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
   val slickDriverClass = config.getString("spark.jobserver.sqldao.slick-driver")
   val jdbcDriverClass = config.getString("spark.jobserver.sqldao.jdbc-driver")
 
@@ -135,6 +135,19 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCasher {
     }
   }
 
+
+  /**
+    * Delete a jar.
+    *
+    * @param appName
+    */
+  override def deleteBinary(appName: String): Unit = {
+    if (Await.result(deleteBinaryInfo(appName), 60 seconds) == 0) {
+      throw new SlickException(s"Failed to delete binary: $appName from database")
+    }
+    cleanCacheBinaries(appName)
+  }
+
   override def getApps: Future[Map[String, (BinaryType, DateTime)]] = {
     val query = binaries.groupBy { r =>
       (r.appName, r.binaryType)
@@ -158,6 +171,10 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCasher {
       binInfo.binaryType.name,
       convertDateJodaToSql(binInfo.uploadTime),
       binBytes))
+  }
+
+  private def deleteBinaryInfo(appName: String): Future[Int] = {
+    db.run(binaries.filter(_.appName === appName).delete)
   }
 
   override def retrieveBinaryFile(appName: String, binaryType: BinaryType, uploadTime: DateTime): String = {

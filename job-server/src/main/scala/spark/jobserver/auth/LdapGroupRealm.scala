@@ -40,15 +40,39 @@ class LdapGroupRealm extends JndiLdapRealm {
 
   lazy val allowedGroups: Option[Array[String]] = getContextFactory() match {
     case jni: JndiLdapContextFactory =>
-      val groups = getEnvironmentParam(jni, "ldap.allowedGroups").
-        split("\"").filter(group => group.replaceAll("[, ]", "").length() > 0)
+      val groups = getEnvironmentParam(jni, "ldap.allowedGroups").split(",").map(_.trim)
       if (groups.isEmpty) {
         None
       } else {
+        logger.debug("Found allowedGroups: " + groups.mkString(", "))
         Some(groups)
       }
     case _ =>
       None
+  }
+
+  /** {0} = user name */
+  private var userSearchFilter : String = "(&(objectClass=person)(CN={0}))"
+
+  def setUserSearchFilter(aUserSearchFilter : String) {
+    logger.debug("Setting user search filter to {}", aUserSearchFilter)
+    userSearchFilter = aUserSearchFilter
+  }
+
+  def getUserSearchFilter : String = {
+    userSearchFilter
+  }
+
+  /** {0} = allowed group, {1} = user name, {2} = user path */
+  private var groupSearchFilter : String = "(&(member={2})(objectClass=posixGroup)(CN={0}))"
+
+  def setGroupSearchFilter(aGroupSearchFilter : String) {
+    logger.debug("Setting group search filter to {}", aGroupSearchFilter)
+    groupSearchFilter = aGroupSearchFilter
+  }
+
+  def getGroupSearchFilter : String = {
+    groupSearchFilter
   }
 
   private def getEnvironmentParam(jni: JndiLdapContextFactory, param: String): String = {
@@ -68,6 +92,10 @@ class LdapGroupRealm extends JndiLdapRealm {
 
     val username = getAvailablePrincipal(principals).toString
     val ldapContext = ldapContextFactory.getSystemLdapContext()
+
+    logger.debug("Running queryForAuthorizationInfo with principals: "
+      + principals + ", user name: " + username)
+
     try {
       queryForAuthorizationInfo(ldapContext, username)
     } finally {
@@ -75,68 +103,69 @@ class LdapGroupRealm extends JndiLdapRealm {
     }
   }
 
+
   def queryForAuthorizationInfo(ldapContext: LdapContext, username: String): AuthorizationInfo = {
-    val roleNames = getRoleNamesForUser(ldapContext, username)
-    if (isInAllowedGroupOrNoCheckOnGroups(roleNames)) {
-      new SimpleAuthorizationInfo(roleNames.asJava)
-    } else {
-      throw new AuthorizationException(LdapGroupRealm.ERROR_MSG_NO_VALID_GROUP)
+    checkUser(ldapContext, username) match {
+      case Some(userPath) =>
+        getAllowedGroupsOrNoCheckOnGroups(ldapContext, username, userPath) match {
+          case Some(groups) =>
+            new SimpleAuthorizationInfo(groups.asJava)
+          case None =>
+            throw new AuthorizationException(LdapGroupRealm.ERROR_MSG_NO_VALID_GROUP)
+        }
+      case None =>
+        throw new AuthorizationException(LdapGroupRealm.ERROR_MSG_AUTHORIZATION_FAILED)
     }
   }
 
-  //TODO - can (should?) this information be cached?
-  def retrieveGroups(ldapContext: LdapContext): Map[String, Set[String]] = {
-    logger.trace("Retrieving group memberships.")
-
-    val groupSearchAtts: Array[Object] = Array()
-
-    val groupAnswer = ldapContext.search(searchBase, LdapGroupRealm.groupMemberFilter,
-      groupSearchAtts, searchCtls).asScala
-
-    groupAnswer.map { sr2 =>
-      logger.debug("Checking members of group [%s]", sr2.getName())
-      sr2.getName() -> getMembers(sr2)
-    }.toMap
-  }
-
-  private def getMembers(sr: SearchResult): Set[String] = {
-    val attrs: Attributes = sr.getAttributes()
-
-    if (attrs != null) {
-      LdapUtils.getAllAttributeValues(attrs.get("member")).asScala.toSet
-    } else {
-      Set()
-    }
-  }
-
-  def getRoleNamesForUser(ldapContext: LdapContext, username: String): Set[String] = {
+  /** @returns full user path */
+  def checkUser(ldapContext: LdapContext, username: String): Option[String] = {
     val searchAtts: Array[Object] = Array(username)
 
-    val answer: Iterator[SearchResult] = ldapContext.search(searchBase, LdapGroupRealm.personSearchFilter,
-      searchAtts, searchCtls).asScala
+    logger.debug("checkingUser with search filter: " + userSearchFilter + ", user: " + username
+      + " and search base: " + searchBase)
 
-    val members = retrieveGroups(ldapContext)
-
-    answer.map { userSearchResult =>
-      val fullGroupMemberName = "%s,%s" format (userSearchResult.getName(), searchBase)
-      members.filter(entry => {
-        entry._2.contains(fullGroupMemberName)
-      }).map(e => e._1)
-    }.flatten.toSet
+    val result = ldapContext.search(searchBase, userSearchFilter, searchAtts, searchCtls)
+    if (result.hasMore) {
+      val firstEntry = result.next
+      try {
+        Some(firstEntry.getNameInNamespace)
+      } catch {
+        case e: UnsupportedOperationException => Some(firstEntry.getName)
+      }
+    } else {
+      None
+    }
   }
 
-  def isInAllowedGroupOrNoCheckOnGroups(roles: Set[String]): Boolean = {
+  def getAllowedGroupsOrNoCheckOnGroups(ldapContext: LdapContext,
+                                        username: String, userPath: String): Option[Set[String]] = {
     allowedGroups match {
       case Some(groups) =>
-        roles.exists(r => groups.contains(r))
+        val m = (groups map { group =>
+          logger.debug("checking for group membership with filter: " + getGroupSearchFilter
+            + ", group: " + group + ", user name: " + username + ", user path: " + userPath
+            + " and search base: " + searchBase)
+
+          val searchAtts: Array[Object] = Array(group, username, userPath)
+          if (ldapContext.search(searchBase, groupSearchFilter, searchAtts, searchCtls).hasMore) {
+            Some(group)
+          } else {
+            None
+          }
+        }).filter(_.isDefined).map(_.get)
+        if (m.size > 0) {
+          Some(m.toSet)
+        } else {
+          None
+        }
       case None =>
-        true
+        Some(Set())
     }
   }
 }
 
 object LdapGroupRealm {
-  val groupMemberFilter = "(member=*)"
-  val personSearchFilter = "(&(objectClass=person)(CN={0}))"
   val ERROR_MSG_NO_VALID_GROUP = "no valid group found"
+  val ERROR_MSG_AUTHORIZATION_FAILED = "user authorization failed"
 }

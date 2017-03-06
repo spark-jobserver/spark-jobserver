@@ -4,6 +4,7 @@ src_managed/
 project/boot/
 test-reports/
 *.log*
+*.patch
 .ensime*
 .idea*
 .vagrant

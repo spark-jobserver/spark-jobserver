@@ -26,6 +26,8 @@ object BinaryManagerSpec {
         sender ! SaveBinaryResult(Failure(new Exception("deliberate failure")))
       case SaveBinary(_, _, _, _) =>
         sender ! SaveBinaryResult(Success({}))
+      case DeleteBinary(_) =>
+        sender ! DeleteBinaryResult(Success({}))
     }
   }
 }
@@ -62,6 +64,11 @@ class BinaryManagerSpec extends TestKit(BinaryManagerSpec.system) with ImplicitS
     it("should respond when underlying DAO fails to store") {
       binaryManager ! StoreBinary("failOnThis", BinaryType.Jar, Array[Byte](0x50, 0x4b, 0x03, 0x04, 0x05))
       expectMsgPF(3 seconds){case BinaryStorageFailure(ex) if ex.getMessage == "deliberate failure" => }
+    }
+
+    it("should respond when deleted successfully") {
+      binaryManager ! DeleteBinary("valid")
+      expectMsg(Success({}))
     }
   }
 }

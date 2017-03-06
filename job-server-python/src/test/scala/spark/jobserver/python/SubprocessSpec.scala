@@ -84,11 +84,12 @@ trait IdentifiedContext {
 class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
 
   import SubprocessSpec._
+  val pythonPathDelimiter : String = if(System.getProperty("os.name").indexOf("Win") >= 0) ";" else ":"
 
   lazy val pythonPath = {
 
     val pathList = Seq(jobServerPath) ++ sparkPaths ++ originalPythonPath.toSeq
-    val p = pathList.mkString(":")
+    val p = pathList.mkString(pythonPathDelimiter)
     // Scarman 10-13-2016
     //println(p)
     p

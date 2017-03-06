@@ -16,6 +16,8 @@ import scala.util.{Failure, Success, Try}
 import scala.sys.process._
 
 import spark.jobserver.common.akka.InstrumentedActor
+import scala.concurrent.Await
+import akka.pattern.gracefulStop
 
 /**
  * The AkkaClusterSupervisorActor launches Spark Contexts as external processes
@@ -44,6 +46,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
   val defaultContextConfig = config.getConfig("spark.context-settings")
   val contextInitTimeout = config.getDuration("spark.context-settings.context-init-timeout",
                                                 TimeUnit.SECONDS)
+  val contextDeletionTimeout = SparkJobUtils.getContextDeletionTimeout(config)
   val managerStartCommand = config.getString("deploy.manager-start-cmd")
   import context.dispatcher
 
@@ -152,8 +155,14 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
         logger.info("Shutting down context {}", name)
         val contextActorRef = contexts(name)._1
         cluster.down(contextActorRef.path.address)
-        contextActorRef ! PoisonPill
-        sender ! ContextStopped
+        try {
+          val stoppedCtx = gracefulStop(contexts(name)._1, contextDeletionTimeout seconds)
+          Await.result(stoppedCtx, contextDeletionTimeout + 1 seconds)
+          sender ! ContextStopped
+        }
+        catch {
+          case err: Exception => sender ! ContextStopError(err)
+        }
       } else {
         sender ! NoSuchContext
       }
