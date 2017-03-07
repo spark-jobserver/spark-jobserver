@@ -99,17 +99,30 @@ object SparkJobUtils {
     Try(config.getInt("spark.jobserver.max-jobs-per-context")).getOrElse(cpuCores)
   }
 
-  /**
-   * According "spark.master", returns the timeout of create sparkContext
-   */
-  def getContextTimeout(config: Config): Int = {
+  private def getContextTimeout(config: Config, yarn : String, standalone : String): Int = {
     config.getString("spark.master") match {
       case "yarn-client" =>
-        Try(config.getDuration("spark.jobserver.yarn-context-creation-timeout",
+        Try(config.getDuration(yarn,
               TimeUnit.MILLISECONDS).toInt / 1000).getOrElse(40)
       case _               =>
-        Try(config.getDuration("spark.jobserver.context-creation-timeout",
+        Try(config.getDuration(standalone,
               TimeUnit.MILLISECONDS).toInt / 1000).getOrElse(15)
     }
+  }
+
+  /**
+    * According "spark.master", returns the timeout of create sparkContext
+    */
+  def getContextCreationTimeout(config: Config): Int = {
+    getContextTimeout(config, "spark.jobserver.yarn-context-creation-timeout",
+        "spark.jobserver.context-creation-timeout")
+    }
+
+  /**
+    * According "spark.master", returns the timeout of delete sparkContext
+    */
+  def getContextDeletionTimeout(config: Config): Int = {
+    getContextTimeout(config, "spark.jobserver.yarn-context-deletion-timeout",
+      "spark.jobserver.context-deletion-timeout")
   }
 }
