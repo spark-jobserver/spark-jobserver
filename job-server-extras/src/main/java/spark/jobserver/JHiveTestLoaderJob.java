@@ -1,7 +1,8 @@
 package spark.jobserver;
 
 import com.typesafe.config.Config;
-import org.apache.spark.sql.DataFrame;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
 import org.apache.spark.sql.hive.HiveContext;
 import spark.jobserver.api.JobEnvironment;
 import spark.jobserver.japi.JHiveJob;
@@ -22,8 +23,8 @@ public class JHiveTestLoaderJob implements JHiveJob<Long> {
         sc.sql(String.format("%s %s %s %s %s %s", tableCreate, tableArgs, tableRowFormat, tableColFormat, tableMapFormat, tableAs));
         sc.sql(String.format("LOAD DATA LOCAL INPATH %s OVERWRITE INTO TABLE `default`.`test_addresses`", loadPath));
 
-        final DataFrame addrRdd = sc.sql("SELECT * FROM `default`.`test_addresses`");
-        return addrRdd.count();
+        final Dataset addrDs = sc.sql("SELECT * FROM `default`.`test_addresses`");
+        return addrDs.count();
     }
 
     @Override
