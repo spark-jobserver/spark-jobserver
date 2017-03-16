@@ -34,6 +34,7 @@ import akka.pattern.gracefulStop
  * {{{
  *   deploy {
  *     manager-start-cmd = "./manager_start.sh"
+ *     wait-for-manager-start = true
  *   }
  * }}}
  */
@@ -48,6 +49,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
                                                 TimeUnit.SECONDS)
   val contextDeletionTimeout = SparkJobUtils.getContextDeletionTimeout(config)
   val managerStartCommand = config.getString("deploy.manager-start-cmd")
+  val waitForManagerStart = config.getBoolean("deploy.wait-for-manager-start")
   import context.dispatcher
 
   //actor name -> (context isadhoc, success callback, failure callback)
@@ -231,9 +233,11 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
     logger.info("Starting to execute sub process {}", pb)
     val processStart = Try {
       val process = pb.run(pio)
-      val exitVal = process.exitValue()
-      if (exitVal != 0) {
-        throw new IOException("Failed to launch context process, got exit code " + exitVal)
+      if (waitForManagerStart) {
+        val exitVal = process.exitValue()
+        if (exitVal != 0) {
+          throw new IOException("Failed to launch context process, got exit code " + exitVal)
+        }
       }
     }
 
