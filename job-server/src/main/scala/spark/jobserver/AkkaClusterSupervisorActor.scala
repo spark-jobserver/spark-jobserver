@@ -208,7 +208,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
 
     logger.info("Starting context with actor name {}", contextActorName)
 
-    val driverMode = Option(config.getString("spark.jobserver.driver-mode")).getOrElse("client")
+    val driverMode = Try(config.getString("spark.jobserver.driver-mode")).toOption.getOrElse("client")
     val (workDir, contextContent) = generateContext(name, contextConfig, isAdHoc, contextActorName)
     logger.info("Ready to create working directory {} for context {}", workDir: Any, name)
 
