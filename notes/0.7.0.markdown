@@ -46,3 +46,4 @@
 * Cleanup LDAP authentication and add filter config. (@derSascha)
 * Giter8 template available at https://github.com/spark-jobserver/spark-jobserver.g8 (@noorul)
 * Delete binary API (@f1yegor)
+* Fix start-manager.sh for Docker environments (@fmcgough)
