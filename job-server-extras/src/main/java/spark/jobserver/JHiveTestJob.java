@@ -10,7 +10,7 @@ public class JHiveTestJob implements JHiveJob<Row[]> {
 
     @Override
     public Row[] run(HiveContext sc, JobEnvironment runtime, Config data) {
-        return sc.sql(data.getString("sql")).collect();
+        return (Row[]) sc.sql(data.getString("sql")).collect();
     }
 
     @Override

@@ -10,7 +10,7 @@ import spark.jobserver.japi.JSqlJob;
 public class JSqlTestJob implements JSqlJob<Integer> {
     @Override
     public Integer run(SQLContext sc, JobEnvironment runtime, Config data) {
-        Row row = sc.sql("select 1+1").take(1)[0];
+        Row row = ((Row[]) sc.sql("select 1+1").take(1))[0];
         return row.getInt(0);
     }
 
