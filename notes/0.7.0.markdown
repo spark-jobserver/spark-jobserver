@@ -10,6 +10,7 @@
 * Context creation API (POST /contexts) now takes a config in the POST body!  (@casey-green)
 * Make create job API to return more information (@noorul)
 * Upgrade Slick to 3.1.1 (@hntd187)
+* Spark driver cluster mode for mesos (@LeightonWong)
 * Fix broken links to ec2 scripts, #369 (@noorul)
 * EC2 VPC deploy fixes (@mcnels)
 * Only set spark.executor.uri if env var is set (@addisonj)
@@ -45,3 +46,4 @@
 * Cleanup LDAP authentication and add filter config. (@derSascha)
 * Giter8 template available at https://github.com/spark-jobserver/spark-jobserver.g8 (@noorul)
 * Delete binary API (@f1yegor)
+* Fix start-manager.sh for Docker environments (@fmcgough)

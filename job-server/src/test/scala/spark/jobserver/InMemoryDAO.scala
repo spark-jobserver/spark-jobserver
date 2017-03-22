@@ -77,6 +77,11 @@ class InMemoryDAO extends JobDAO {
     jobConfigs.toMap
   }
 
+  override def getBinaryContent(appName: String, binaryType: BinaryType,
+                                uploadTime: DateTime): Array[Byte] = {
+    binaries((appName, binaryType, uploadTime))
+  }
+
   override def deleteBinary(appName: String): Unit = {
     binaries = binaries.filter { case ((name, _, _), _) => appName != name }
   }
