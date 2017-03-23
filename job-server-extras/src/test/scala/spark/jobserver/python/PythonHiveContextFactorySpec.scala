@@ -1,9 +1,11 @@
 package spark.jobserver.python
 
-import com.typesafe.config.{ConfigFactory, Config}
+import java.io.File
+
+import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.spark.sql.hive.HiveContext
 import org.joda.time.DateTime
-import org.scalatest.{BeforeAndAfter, Matchers, FunSpec}
+import org.scalatest.{BeforeAndAfter, FunSpec, Matchers}
 
 import java.nio.file.Files
 import java.nio.file.Paths

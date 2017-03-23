@@ -1,23 +1,36 @@
-language: scala
 sudo: required
-dist: trusty
+
 env:
   global:
-    - _JAVA_OPTIONS="-Xmx1500m -XX:MaxPermSize=512m -Dakka.test.timefactor=3"
-    - SPARK_HOME=/tmp/spark-1.6.2-bin-hadoop2.6
-scala:
-   - 2.10.6
-   - 2.11.8
-jdk:
-   - oraclejdk8
-   - oraclejdk7
+    - DOCKER_IMAGE="spark-jobserver:ci"
+    - DOCKER_API_VERSION="1.24"
+
+language: go
+go:
+  - 1.7
+
+services:
+  - docker
+
+cache:
+  directories:
+    - docker
+
 before_install:
-  - sudo apt-get -qq update
-  - sudo apt-get -y install python3 python3-pip
-  - ci/install-python-dependencies.sh
-  - ci/install-spark.sh
+  - go get github.com/tonistiigi/buildcache/cmd/buildcache
+
+install:
+  - if [ -e docker/latest_image.tar.gz ]; then
+      docker load -i docker/latest_image.tar.gz;
+    fi
+  - if [ -e docker/latest_cache.tar.gz ]; then
+      docker load -i docker/latest_cache.tar.gz;
+    fi
+  - echo "docker/" >> .dockerignore
+  - docker build -f Dockerfile.test -t $DOCKER_IMAGE .
+  - docker save $DOCKER_IMAGE | gzip > docker/latest_image.tar.gz
+  - sudo `which buildcache` save -o docker/latest_cache.tar.gz $DOCKER_IMAGE
+  - sudo chown $USER docker/latest_cache.tar.gz
+
 script:
-  - sbt clean coverage testPython test coverageReport
-  - find job-server-python/src/python -name *.py -exec pep8 {} +
-after_success:
-  - bash <(curl -s https://codecov.io/bash)
+  - docker run `/bin/bash <(curl -s https://codecov.io/env)` --rm -t -i $DOCKER_IMAGE

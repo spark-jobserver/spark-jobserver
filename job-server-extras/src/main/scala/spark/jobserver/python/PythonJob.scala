@@ -8,7 +8,6 @@ import spark.jobserver.api.{SparkJobBase, ValidationProblem, JobEnvironment}
 
 import scala.sys.process.{ProcessLogger, Process}
 import scala.util.{Failure, Success, Try}
-import scala.collection.JavaConverters._
 
 case class PythonJob[X <: PythonContextLike](eggPath: String,
                                              modulePath:String,
@@ -23,8 +22,6 @@ case class PythonJob[X <: PythonContextLike](eggPath: String,
     val sparkConf = context.sparkContext.getConf
     JobEndpoint(context, sparkConf, contextConfig, jobId, jobConfig, modulePath, py4JImports)
   }
-
-  def gateway(endpoint: JobEndpoint[C]): GatewayServer = new GatewayServer(endpoint, 0)
 
   /**
     *

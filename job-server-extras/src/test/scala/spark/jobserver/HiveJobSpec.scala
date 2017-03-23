@@ -24,7 +24,7 @@ class TestHiveContextFactory extends HiveContextFactory {
 }
 
 object HiveJobSpec extends JobSpecConfig {
-  override val contextFactory = classOf[TestHiveContextFactory].getName
+  override val contextFactory = classOf[HiveContextFactory].getName
 }
 
 class HiveJobSpec extends ExtrasJobSpecBase(HiveJobSpec.getNewSystem) {
