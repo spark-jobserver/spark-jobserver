@@ -27,7 +27,11 @@ public class JStreamingTestJob implements JStreamingJob<Integer> {
 
         counts.print(5);
         jsc.start();
-        jsc.awaitTermination();
+        try {
+          jsc.awaitTermination();
+        } catch (InterruptedException e) {
+          return 0;
+        }
         return 1;
     }
 
