@@ -6,11 +6,13 @@ import org.apache.spark.sql.hive.HiveContext;
 import spark.jobserver.api.JobEnvironment;
 import spark.jobserver.japi.JHiveJob;
 
-public class JHiveTestJob implements JHiveJob<Row[]> {
+import java.util.List;
+
+public class JHiveTestJob implements JHiveJob<List> {
 
     @Override
-    public Row[] run(HiveContext sc, JobEnvironment runtime, Config data) {
-        return sc.sql(data.getString("sql")).collect();
+    public List run(HiveContext sc, JobEnvironment runtime, Config data) {
+        return sc.sql(data.getString("sql")).collectAsList();
     }
 
     @Override
