@@ -124,7 +124,7 @@ lazy val dockerSettings = Seq(
     val artifact = (assemblyOutputPath in assembly in jobServerExtras).value
     val artifactTargetPath = s"/app/${artifact.name}"
 
-    val sparkBuild = s"spark-$sparkVersion"
+    val sparkBuild = s"spark-${Versions.spark}"
     val sparkBuildCmd = scalaBinaryVersion.value match {
       case "2.11" =>
         "./make-distribution.sh -Dscala-2.11 -Phadoop-2.7 -Phive"
@@ -132,11 +132,11 @@ lazy val dockerSettings = Seq(
     }
 
     new sbtdocker.mutable.Dockerfile {
-      from(s"openjdk:$javaVersion")
+      from(s"openjdk:${Versions.java}")
       // Dockerfile best practices: https://docs.docker.com/articles/dockerfile_best-practices/
       expose(8090)
       expose(9999) // for JMX
-      env("MESOS_VERSION", mesosVersion)
+      env("MESOS_VERSION", Versions.mesos)
       runRaw(
         """echo "deb http://repos.mesosphere.io/ubuntu/ trusty main" > /etc/apt/sources.list.d/mesosphere.list && \
                 apt-key adv --keyserver keyserver.ubuntu.com --recv E56151BF && \
@@ -178,10 +178,10 @@ lazy val dockerSettings = Seq(
                         repository = "spark-jobserver",
                         tag = Some(
                           s"${version.value}" +
-                          s".mesos-${mesosVersion.split('-')(0)}" +
-                          s".spark-$sparkVersion" +
+                          s".mesos-${Versions.mesos.split('-')(0)}" +
+                          s".spark-${Versions.spark}" +
                           s".scala-${scalaBinaryVersion.value}" +
-                          s".jdk-$javaVersion")
+                          s".jdk-${Versions.java}")
                         )
   )
 )
