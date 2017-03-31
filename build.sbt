@@ -120,7 +120,8 @@ lazy val jobServerTestJarSettings = Seq(
 
 lazy val noPublishSettings = Seq(
   publishTo := Some(Resolver.file("Unused repo", file("target/unusedrepo"))),
-  publishArtifact := false
+  publishArtifact := false,
+  publish := {}
 )
 
 lazy val dockerSettings = Seq(
