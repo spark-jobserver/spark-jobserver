@@ -41,6 +41,7 @@ lazy val jobServer = Project(id = "job-server", base = file("job-server"))
 lazy val jobServerTestJar = Project(id = "job-server-tests", base = file("job-server-tests"))
   .settings(commonSettings)
   .settings(jobServerTestJarSettings)
+  .settings(noPublishSettings)
   .dependsOn(jobServerApi)
   .disablePlugins(SbtScalariform)
 
@@ -78,6 +79,7 @@ lazy val jobServerPython = Project(id = "job-server-python", base = file("job-se
 lazy val root = Project(id = "root", base = file("."))
   .settings(commonSettings)
   .settings(ourReleaseSettings)
+  .settings(noPublishSettings)
   .settings(rootSettings)
   .settings(dockerSettings)
   .aggregate(jobServer, jobServerApi, jobServerTestJar, akkaApp, jobServerExtras, jobServerPython)
@@ -112,9 +114,13 @@ lazy val jobServerPythonSettings = revolverSettings ++ Assembly.settings ++ publ
 
 lazy val jobServerTestJarSettings = Seq(
   libraryDependencies ++= sparkDeps ++ apiDeps,
-  publishArtifact := false,
   description := "Test jar for Spark Job Server",
   exportJars := true // use the jar instead of target/classes
+)
+
+lazy val noPublishSettings = Seq(
+  publishTo := Some(Resolver.file("Unused repo", file("target/unusedrepo"))),
+  publishArtifact := false
 )
 
 lazy val dockerSettings = Seq(
@@ -222,7 +228,6 @@ lazy val commonSettings = Defaults.coreDefaultSettings ++ dirSettings ++ implici
   crossScalaVersions := Seq("2.10.6", "2.11.8"),
   scalaVersion := sys.env.getOrElse("SCALA_VERSION", "2.10.6"),
   dependencyOverrides += "org.scala-lang" % "scala-compiler" % scalaVersion.value,
-  publishTo := Some(Resolver.file("Unused repo", file("target/unusedrepo"))),
   // scalastyleFailOnError := true,
   runScalaStyle := {
     org.scalastyle.sbt.ScalastylePlugin.scalastyle.in(Compile).toTask("").value
