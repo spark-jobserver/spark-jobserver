@@ -93,5 +93,5 @@ fix(webapi): fix webapi timeout
 ---
 
 ```
-chore(ci): add new CI tests
+misc(ci): add new CI tests
 ```
