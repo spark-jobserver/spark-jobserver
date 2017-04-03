@@ -8,7 +8,7 @@ Pull requests are the only means by which you can contribute to this project, pl
 
 1. Create your pull request. (PR name must match [commit name](#commit))
 2. Fill the pull request template with all of the required elements
-3. CI tests kick in and report back any issues, you should fix these issues before continuing. No broken PR will be reviewed.
+3. CI tests kick in and report back any issues, you should fix these issues before continuing.
 4. The reviewer(s) uses Github review system so you will know if the reviewer requested any changes, approved the Pull Request or simply added comments.
 5. If any changes are requested please fix them and then once you are ready ask for a new review
 
@@ -38,7 +38,7 @@ Must be one of the following:
 * **docs**: Documentation only changes
 * **style**: Style changes (white-space, formatting, missing semi-colons, etc)
 * **test**: Adding missing tests
-* **chore**: Changes to the build process or auxiliary tools and libraries
+* **misc**: Changes to the build process or auxiliary tools and libraries
 
 #### Scope
 The scope sets the scope of the commit, for example `webapi`, `akka-app`, `doa`, etc...
