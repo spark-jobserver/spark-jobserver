@@ -138,6 +138,18 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
       val retrieved = new File(jarFilePath)
       jarFile.length() should equal (retrieved.length())
     }
+
+    it("should retrieve the jar binary content for remote job manager") {
+      // chack the pre-condition
+      jarFile.exists() should equal (false)
+
+      // retrieve the jar content
+      val jarBinaryContent: Array[Byte] = dao.getBinaryContent(jarInfo.appName, jarInfo.binaryType, jarInfo.uploadTime)
+
+      // test
+      jarFile.exists() should equal (true)
+      jarBinaryContent.length should equal (jarBytes.length)
+    }
   }
 
   describe("saveJobConfig() and getJobConfigs() tests") {
@@ -303,7 +315,7 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
       dao.saveJobInfo(errorJob)
 
       //retrieve by status equals RUNNING
-      val retrieved = Await.result(dao.getJobInfos(3, Some(JobStatus.Running)), 60 seconds).head
+      val retrieved = Await.result(dao.getJobInfos(3, Some(JobStatus.Running)), timeout).head
 
       //test
       retrieved.endTime.isDefined should equal (false)
@@ -312,7 +324,7 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
     it("retrieve by status equals finished should be some end and no error") {
 
       //retrieve by status equals FINISHED
-      val retrieved = Await.result(dao.getJobInfos(3, Some(JobStatus.Finished)), 60 seconds).head
+      val retrieved = Await.result(dao.getJobInfos(3, Some(JobStatus.Finished)), timeout).head
 
       //test
       retrieved.endTime.isDefined should equal (true)
@@ -321,10 +333,21 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
 
     it("retrieve by status equals error should be some error") {
       //retrieve by status equals ERROR
-      val retrieved = Await.result(dao.getJobInfos(3, Some(JobStatus.Error)), 60 seconds).head
+      val retrieved = Await.result(dao.getJobInfos(3, Some(JobStatus.Error)), timeout).head
 
       //test
       retrieved.error.isDefined should equal (true)
+    }
+  }
+
+  describe("delete binaries") {
+    it("should be able to delete jar file") {
+      val existing = Await.result(dao.getApps, timeout)
+      existing.keys should contain (jarInfo.appName)
+      dao.deleteBinary(jarInfo.appName)
+
+      val apps = Await.result(dao.getApps, timeout)
+      apps.keys should not contain (jarInfo.appName)
     }
   }
 }

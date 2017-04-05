@@ -2,9 +2,11 @@ package spark.jobserver.io
 
 import com.typesafe.config._
 import java.io._
+import java.nio.file.{Files, Paths}
 
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
+
 import scala.collection.mutable
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -222,4 +224,24 @@ class JobFileDAO(config: Config) extends JobDAO {
     in.readUTF,
     ConfigFactory.parseString(in.readUTF)
   )
+
+  override def getBinaryContent(appName: String, binaryType: BinaryType,
+                                uploadTime: DateTime): Array[Byte] = {
+    Files.readAllBytes(Paths.get(retrieveBinaryFile(appName, binaryType, uploadTime)))
+  }
+
+  /**
+    * Delete a jar.
+    *
+    * @param appName
+    */
+  override def deleteBinary(appName: String): Unit = {
+    val dir = new File(rootDir)
+    val binaries = dir.listFiles(new FilenameFilter {
+      override def accept(dir: File, name: String): Boolean = name.startsWith(appName)
+    })
+    if (binaries != null) {
+      binaries.foreach(f => f.delete())
+    }
+  }
 }

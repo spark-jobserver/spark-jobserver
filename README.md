@@ -24,6 +24,8 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
     - [Ad-hoc Mode - Single, Unrelated Jobs (Transient Context)](#ad-hoc-mode---single-unrelated-jobs-transient-context)
     - [Persistent Context Mode - Faster & Required for Related Jobs](#persistent-context-mode---faster-&-required-for-related-jobs)
 - [Create a Job Server Project](#create-a-job-server-project)
+  - [Creating a project from scratch using giter8 template](#creating-a-project-from-scratch-using-giter8-template)
+  - [Creating a project manually assuming that you already have sbt project structure](#creating-a-project-manually-assuming-that-you-already-have-sbt-project-structure)
   - [NEW SparkJob API](#new-sparkjob-api)
   - [Dependency jars](#dependency-jars)
   - [Named Objects](#named-objects)
@@ -77,7 +79,7 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 - [SnappyData](http://www.snappydata.io)
 - [Linkfluence](http://www.linkfluence.com)
 - [Smartsct](http://www.smartsct.com)
-- [Datadog] (https://www.datadoghq.com/)
+- [Datadog](https://www.datadoghq.com/)
 - [Planalytics](http://www.planalytics.com)
 - [Target](http://www.target.com/)
 
@@ -111,7 +113,7 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 | 0.6.0       | 1.4.1         |
 | 0.6.1       | 1.5.2         |
 | 0.6.2       | 1.6.1         |
-| master      | 1.6.2         |
+| 0.7.0       | 1.6.2         |
 | spark-2.0-preview | 2.0     |
 
 For release notes, look in the `notes/` directory.  They should also be up on [notes.implicit.ly](http://notes.implicit.ly/search/spark-jobserver).
@@ -241,15 +243,29 @@ Now let's run the job in the context and get the results back right away:
 Note the addition of `context=` and `sync=true`.
 
 ## Create a Job Server Project
+### Creating a project from scratch using giter8 template
+
+There is a giter8 template available at https://github.com/spark-jobserver/spark-jobserver.g8
+
+    $ sbt new spark-jobserver/spark-jobserver.g8
+
+Answer the questions to generate a project structure for you. This contains Word Count example spark job using both old API and new one.
+
+    $ cd /path/to/project/directory
+    $ sbt package
+
+Now you could remove example application and start adding your one.
+
+### Creating a project manually assuming that you already have sbt project structure
 In your `build.sbt`, add this to use the job server jar:
 
         resolvers += "Job Server Bintray" at "https://dl.bintray.com/spark-jobserver/maven"
 
-        libraryDependencies += "spark.jobserver" %% "job-server-api" % "0.6.2" % "provided"
+        libraryDependencies += "spark.jobserver" %% "job-server-api" % "0.7.0" % "provided"
 
 If a SQL or Hive job/context is desired, you also want to pull in `job-server-extras`:
 
-    libraryDependencies += "spark.jobserver" %% "job-server-extras" % "0.6.2" % "provided"
+    libraryDependencies += "spark.jobserver" %% "job-server-extras" % "0.7.0" % "provided"
 
 For most use cases it's better to have the dependencies be "provided" because you don't want SBT assembly to include the whole job server jar.
 
@@ -493,7 +509,6 @@ Also, the extra processes talk to the master HTTP process via random ports using
 
 Among the known issues:
 - Launched contexts do not shut down by themselves.  You need to manually kill each separate process, or do `-X DELETE /contexts/<context-name>`
-- Custom error messages are not serialized back to HTTP
 
 Log files are separated out for each context (assuming `context-per-jvm` is `true`) in their own subdirs under the `LOG_DIR` configured in `settings.sh` in the deployed directory.
 
@@ -530,11 +545,24 @@ database created with necessary rights granted to user.
       }
     }
 
+If you are using `context-per-jvm = true`, be sure to add [AUTO_MIXED_MODE](http://h2database.com/html/features.html#auto_mixed_mode) to your H2 JDBC URL; this allows multiple processes to share the same H2 database using a lock file.
+
 Also add the following line at the root level.
 
     flyway.locations="db/postgresql/migration"
 
 It is also important that any dependent jars are to be added to Job Server class path.
+
+In a yarn-client mode if using H2 the below is advised.
+- Run H2 in server mode (http://www.h2database.com/html/download.html, and follow docs.,)
+Jdbc configuration should be like below:
+```
+jdbc {
+        url = "jdbc:h2:tcp://localhost/db_host/spark_jobserver"
+        user = "secret"
+        password = "secret"
+      }
+```      
 
 ### Chef
 
@@ -556,10 +584,20 @@ Flow diagrams are checked in in the doc/ subdirectory.  .diagram files are for w
 
 ## API
 
-### Jars
+### Binaries
 
-    GET /jars            - lists all the jars and the last upload timestamp
-    POST /jars/<appName> - uploads a new jar under <appName>
+    GET /binaries               - lists all current binaries
+    POST /binaries/<appName>    - upload a new binary file
+    DELETE /binaries/<appName>  - delete defined binary
+    
+When POSTing new binaries, the content-type header must be set to one of the types supported by the subclasses of the `BinaryType` trait. e.g. "application/java-archive" or application/python-archive"
+
+### Jars (deprecated)
+
+    GET /jars                   - lists all the jars and the last upload timestamp
+    POST /jars/<appName>        - uploads a new jar under <appName>
+    
+These routes are kept for legacy purposes but are deprecated in favour of the /binaries routes
 
 ### Contexts
 
@@ -727,9 +765,11 @@ Contributions via Github Pull Request are welcome. Please start by taking a look
 for instance: `sbt ++2.11.6 job-server/compile`
 - From the "master" project, please run "test" to ensure nothing is broken.
    - You may need to set `SPARK_LOCAL_IP` to `localhost` to ensure Akka port can bind successfully
+   - Note for Windows users: very few tests fail on Windows. Thus, run `testOnly -- -l WindowsIgnore` from SBT shell to ignore them.
 - Logging for tests goes to "job-server-test.log"
-- Run `scoverage:test` to check the code coverage and improve it
-- Please run scalastyle to ensure your code changes don't break the style guide
+- Run `scoverage:test` to check the code coverage and improve it. 
+  - Windows users: run `; coverage ; testOnly -- -l WindowsIgnore ; coverageReport` from SBT shell. 
+- Please run scalastyle to ensure your code changes don't break the style guide.
 - Do "reStart" from SBT for quick restarts of the job server process
 - Please update the g8 template if you change the SparkJob API
 
@@ -760,7 +800,6 @@ Apache 2.0, see LICENSE.md
 ## TODO
 
 - More debugging for classpath issues
-- Update .g8 template, consider creating Activator template for sample job
 - Add Swagger support.  See the spray-swagger project.
 - Implement an interactive SQL window.  See: [spark-admin](https://github.com/adatao/spark-admin)
 

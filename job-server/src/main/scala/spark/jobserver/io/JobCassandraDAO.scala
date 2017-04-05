@@ -3,6 +3,7 @@ package spark.jobserver.io
 import java.io.File
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
+import java.nio.file.{Files, Paths}
 import java.util.UUID
 
 import com.datastax.driver.core.querybuilder.{QueryBuilder => QB}
@@ -14,9 +15,10 @@ import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 
+import scala.concurrent.duration._
 import scala.collection.convert.WrapAsJava
 import scala.collection.convert.Wrappers.JListWrapper
-import scala.concurrent.Future
+import scala.concurrent.{Await, Future}
 import spark.jobserver.cassandra.Cassandra.Resultset.toFuture
 
 import scala.util.Try
@@ -44,7 +46,7 @@ object Metadata {
 
 }
 
-class JobCassandraDAO(config: Config) extends JobDAO with FileCasher {
+class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
 
   import scala.concurrent.ExecutionContext.Implicits.global
   private val logger = LoggerFactory.getLogger(getClass)
@@ -73,8 +75,32 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCasher {
     }
   }
 
-
   import Metadata._
+
+  /**
+    * Delete a jar.
+    *
+    * @param appName
+    */
+  override def deleteBinary(appName: String): Unit = {
+    Await.result(deleteBinaryInfo(appName), 60 seconds)
+    cleanCacheBinaries(appName)
+  }
+
+  private def deleteBinaryInfo(appName: String): Future[Boolean] = {
+    getApps.map { apps =>
+      for ((name, (btype, upload)) <- apps) {
+        session.execute(QB.delete().from(BinariesTable)
+          .where(QB.eq(AppName, appName)).and(QB.eq(BType, btype.name))
+          .and(QB.eq(UploadTime, upload.getMillis))
+        )
+        session.execute(QB.delete().from(BinariesChronologicalTable)
+          .where(QB.eq(AppName, appName)).and(QB.eq(BType, btype.name))
+        )
+      }
+      true
+    }
+  }
 
   private def insertBinaryInfo(binInfo: BinaryInfo, binBytes: Array[Byte]): Boolean = {
     session.executeAsync(insertInto(BinariesChronologicalTable).
@@ -353,5 +379,17 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCasher {
 
     session.execute(jobsChronologicalView)
 
+  }
+
+  override def getBinaryContent(appName: String, binaryType: BinaryType,
+                                uploadTime: DateTime): Array[Byte] = {
+    val jarFile = new File(rootDir, createBinaryName(appName, binaryType, uploadTime))
+    if (!jarFile.exists()) {
+      val binBytes = fetchBinary(appName, binaryType, uploadTime)
+      cacheBinary(appName, binaryType, uploadTime, binBytes)
+      binBytes
+    } else {
+      Files.readAllBytes(Paths.get(jarFile.getAbsolutePath))
+    }
   }
 }

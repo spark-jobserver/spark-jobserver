@@ -4,9 +4,9 @@ import akka.actor.ActorSystem
 import akka.testkit.{ImplicitSender, TestKit}
 import com.typesafe.config.Config
 import org.joda.time.DateTime
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
-import spark.jobserver.{BinaryStorageFailure, BinaryStored}
+import org.scalatest.{BeforeAndAfterAll, FunSpecLike, Matchers}
 import spark.jobserver.io.JobDAOActor._
+
 import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
@@ -19,6 +19,8 @@ object JobDAOActorSpec {
   val dtplus1 = dt.plusHours(1)
 
   object DummyDao extends JobDAO{
+
+    val jarContent = Array.empty[Byte]
 
     override def saveBinary(appName: String, binaryType: BinaryType,
                             uploadTime: DateTime, binaryBytes: Array[Byte]): Unit = {
@@ -34,6 +36,14 @@ object JobDAOActorSpec {
         "app2" -> (BinaryType.Egg, dtplus1)
       ))
 
+    override def getBinaryContent(appName: String, binaryType: BinaryType,
+                                  uploadTime: DateTime): Array[Byte] = {
+      appName match {
+        case "failOnThis" => throw new Exception("get binary content failure")
+        case _ => jarContent
+      }
+    }
+
     override def retrieveBinaryFile(appName: String,
                                     binaryType: BinaryType, uploadTime: DateTime): String = ???
 
@@ -47,6 +57,13 @@ object JobDAOActorSpec {
     override def saveJobInfo(jobInfo: JobInfo): Unit = ???
 
     override def getJobConfigs: Future[Map[String, Config]] = ???
+
+    override def deleteBinary(appName: String): Unit = {
+      appName match {
+        case "failOnThis" => throw new Exception("deliberate failure")
+        case _ => //Do nothing
+      }
+    }
   }
 }
 
@@ -75,6 +92,18 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       }
     }
 
+    it("should respond when deleting Binary completes successfully") {
+      daoActor ! DeleteBinary("succeed")
+      expectMsg(DeleteBinaryResult(Success({})))
+    }
+
+    it("should respond when deleting Binary fails") {
+      daoActor ! DeleteBinary("failOnThis")
+      expectMsgPF(3 seconds){
+        case DeleteBinaryResult(Failure(ex)) if ex.getMessage == "deliberate failure" =>
+      }
+    }
+
     it("should return apps") {
       daoActor ! GetApps(None)
       expectMsg(Apps(Map(
@@ -86,6 +115,11 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
     it("should get JobInfos") {
       daoActor ! GetJobInfos(1)
       expectMsg(JobInfos(Seq()))
+    }
+
+    it("should get binary content") {
+      daoActor ! GetBinaryContent("succeed", BinaryType.Jar, DateTime.now)
+      expectMsg(BinaryContent(DummyDao.jarContent))
     }
   }
 

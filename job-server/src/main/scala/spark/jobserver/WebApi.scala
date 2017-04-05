@@ -138,7 +138,7 @@ class WebApi(system: ActorSystem,
   val ResultChunkSize = Option("spark.jobserver.result-chunk-size").filter(config.hasPath)
       .fold(100 * 1024)(config.getBytes(_).toInt)
 
-  val contextTimeout = SparkJobUtils.getContextTimeout(config)
+  val contextTimeout = SparkJobUtils.getContextCreationTimeout(config)
   val bindAddress = config.getString("spark.jobserver.bind-address")
 
   val logger = LoggerFactory.getLogger(getClass)
@@ -202,6 +202,7 @@ class WebApi(system: ActorSystem,
     * Routes for listing and uploading binaries
     *    GET /binaries              - lists all current binaries
     *    POST /binaries/<appName>   - upload a new binary file
+    *    DELETE /binaries/<appName> - delete defined binary
     *
     * NB when POSTing new binaries, the content-type header must
     * be set to one of the types supported by the subclasses of the
@@ -252,6 +253,19 @@ class WebApi(system: ActorSystem,
                   }
                 }
               case None => complete(415, s"Content-Type header must be set to indicate binary type")
+            }
+          }
+        }
+      } ~
+      // DELETE /binaries/<appName>
+      delete {
+        path(Segment) { appName =>
+          val future = binaryManager ? DeleteBinary(appName)
+          respondWithMediaType(MediaTypes.`application/json`) { ctx =>
+            future.map {
+              case BinaryDeleted => ctx.complete(StatusCodes.OK)
+            }.recover {
+              case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
             }
           }
         }
@@ -382,6 +396,7 @@ class WebApi(system: ActorSystem,
               future.map {
                 case ContextStopped => ctx.complete(StatusCodes.OK, successMap("Context stopped"))
                 case NoSuchContext  => notFound(ctx, "context " + contextName + " not found")
+                case ContextStopError(e) => ctx.complete(500, errMap(e, "CONTEXT DELETE ERROR"))
               }
             }
           }

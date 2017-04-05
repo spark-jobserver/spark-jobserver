@@ -9,13 +9,12 @@ import scala.collection.mutable
 import spark.jobserver.io.{JobStatus, BinaryType, JobDAO, JobInfo}
 
 import scala.concurrent._
-import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 /**
  * In-memory DAO for easy unit testing
  */
 class InMemoryDAO extends JobDAO {
-  val binaries = mutable.HashMap.empty[(String, BinaryType, DateTime), (Array[Byte])]
+  var binaries = mutable.HashMap.empty[(String, BinaryType, DateTime), (Array[Byte])]
 
   override def saveBinary(appName: String,
                           binaryType: BinaryType,
@@ -55,11 +54,11 @@ class InMemoryDAO extends JobDAO {
     val allJobs = jobInfos.values.toSeq.sortBy(_.startTime.toString())
     val filterJobs = statusOpt match {
       case Some(JobStatus.Running) => {
-        allJobs.filter(jobInfo => !jobInfo.endTime.isDefined && !jobInfo.error.isDefined)
+        allJobs.filter(jobInfo => jobInfo.endTime.isEmpty && jobInfo.error.isEmpty)
       }
       case Some(JobStatus.Error) => allJobs.filter(_.error.isDefined)
       case Some(JobStatus.Finished) => {
-        allJobs.filter(jobInfo => jobInfo.endTime.isDefined && !jobInfo.error.isDefined)
+        allJobs.filter(jobInfo => jobInfo.endTime.isDefined && jobInfo.error.isEmpty)
       }
       case _ => allJobs
     }
@@ -76,5 +75,14 @@ class InMemoryDAO extends JobDAO {
 
   override def getJobConfigs: Future[Map[String, Config]] = Future {
     jobConfigs.toMap
+  }
+
+  override def getBinaryContent(appName: String, binaryType: BinaryType,
+                                uploadTime: DateTime): Array[Byte] = {
+    binaries((appName, binaryType, uploadTime))
+  }
+
+  override def deleteBinary(appName: String): Unit = {
+    binaries = binaries.filter { case ((name, _, _), _) => appName != name }
   }
 }
