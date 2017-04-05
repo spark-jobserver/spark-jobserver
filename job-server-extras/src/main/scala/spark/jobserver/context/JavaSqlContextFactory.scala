@@ -7,32 +7,13 @@ import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.streaming.{Milliseconds, StreamingContext}
 import org.apache.spark.streaming.api.java.JavaStreamingContext
 import org.apache.spark.{SparkConf, SparkContext}
-import org.joda.time.DateTime
-import org.scalactic._
-import spark.jobserver.japi._
-import spark.jobserver.{ContextLike, JobCache}
+import spark.jobserver.ContextLike
+import spark.jobserver.japi.{BaseJavaJob, JHiveJob, JSqlJob, JStreamingJob}
 
-class JavaSqlContextFactory extends SparkContextFactory {
+class JavaSqlContextFactory extends JavaContextFactory {
   type C = SQLContext with ContextLike
-  type J = ScalaJobContainer
 
-  def loadAndValidateJob(appName: String,
-                         uploadTime: DateTime,
-                         classPath: String,
-                         jobCache: JobCache): J Or LoadingError = {
-
-    val j = try {
-      jobCache.getJavaJob(appName, uploadTime, classPath)
-    } catch {
-      case _: ClassNotFoundException => return Bad(JobClassNotFound)
-      case err: Exception => return Bad(JobLoadError(err))
-    }
-    if (j.job.isInstanceOf[JSqlJob[_]]) {
-      Good(ScalaJobContainer(JavaJob(j.job)))
-    } else {
-      Bad(JobWrongType)
-    }
-  }
+  def isValidJob(job: BaseJavaJob[_, _]): Boolean = job.isInstanceOf[JSqlJob[_]]
 
   def makeContext(sparkConf: SparkConf, config: Config, contextName: String): C = {
     val sc = new SparkContext(sparkConf)
@@ -42,27 +23,10 @@ class JavaSqlContextFactory extends SparkContextFactory {
   }
 }
 
-class JavaHiveContextFactory extends SparkContextFactory {
+class JavaHiveContextFactory extends JavaContextFactory {
   type C = HiveContext with ContextLike
-  type J = ScalaJobContainer
 
-  def loadAndValidateJob(appName: String,
-                         uploadTime: DateTime,
-                         classPath: String,
-                         jobCache: JobCache): J Or LoadingError = {
-
-    val j = try {
-      jobCache.getJavaJob(appName, uploadTime, classPath)
-    } catch {
-      case _: ClassNotFoundException => return Bad(JobClassNotFound)
-      case err: Exception => return Bad(JobLoadError(err))
-    }
-    if (j.job.isInstanceOf[JHiveJob[_]]) {
-      Good(ScalaJobContainer(JavaJob(j.job)))
-    } else {
-      Bad(JobWrongType)
-    }
-  }
+  def isValidJob(job: BaseJavaJob[_, _]): Boolean = job.isInstanceOf[JHiveJob[_]]
 
   def makeContext(sparkConf: SparkConf, config: Config, contextName: String): C = {
     contextFactory(sparkConf)
@@ -73,28 +37,10 @@ class JavaHiveContextFactory extends SparkContextFactory {
   }
 }
 
-
-class JavaStreamingContextFactory extends SparkContextFactory {
+class JavaStreamingContextFactory extends JavaContextFactory {
   type C = StreamingContext with ContextLike
-  type J = ScalaJobContainer
 
-  def loadAndValidateJob(appName: String,
-                         uploadTime: DateTime,
-                         classPath: String,
-                         jobCache: JobCache): J Or LoadingError = {
-
-    val j = try {
-      jobCache.getJavaJob(appName, uploadTime, classPath)
-    } catch {
-      case _: ClassNotFoundException => return Bad(JobClassNotFound)
-      case err: Exception => return Bad(JobLoadError(err))
-    }
-    if (j.job.isInstanceOf[JStreamingJob[_]]) {
-      Good(ScalaJobContainer(JavaJob(j.job)))
-    } else {
-      Bad(JobWrongType)
-    }
-  }
+  def isValidJob(job: BaseJavaJob[_, _]): Boolean = job.isInstanceOf[JStreamingJob[_]]
 
   def makeContext(sparkConf: SparkConf, config: Config, contextName: String): C = {
     val interval = config.getInt("streaming.batch_interval")

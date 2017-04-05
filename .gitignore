@@ -1,22 +1,26 @@
-# Standard sbt ignores
-target/
-src_managed/
-project/boot/
-test-reports/
-*.log*
-*.patch
+# Editor related ignores
+*.swp
 .ensime*
 .idea*
-.vagrant
+
+# Standard sbt ignores
+*.log*
+*.patch
 *.pyc
+.vagrant
+job-server-extras/spark-warehouse/
+project/boot/
+src_managed/
+target/
+test-reports/
 
 # ignore deployment configs
 config/*.conf
-config/*.sh
 config/*.ini
+config/*.sh
 job-server/config/*.conf
-job-server/config/*.sh
 job-server/config/*.ini
+job-server/config/*.sh
 metastore_db/
 
 #ignore generated config

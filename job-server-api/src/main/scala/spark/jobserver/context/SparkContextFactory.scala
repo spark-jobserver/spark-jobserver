@@ -5,9 +5,10 @@ import org.apache.spark.{SparkConf, SparkContext}
 import org.joda.time.DateTime
 import org.scalactic._
 import org.slf4j.LoggerFactory
-import spark.jobserver.api
-import spark.jobserver.util.SparkJobUtils
 import spark.jobserver.{ContextLike, JobCache, SparkJob}
+import spark.jobserver.api
+import spark.jobserver.japi._
+import spark.jobserver.util.SparkJobUtils
 
 trait JobContainer {
   def getSparkJob: api.SparkJobBase
@@ -76,22 +77,23 @@ trait ScalaContextFactory extends SparkContextFactory {
 
   val logger = LoggerFactory.getLogger(getClass)
 
-  def loadAndValidateJob(appName: String,
-                         uploadTime: DateTime,
-                         classPath: String,
-                         jobCache: JobCache): J Or LoadingError = {
+  def loadAndValidateJob(
+    appName: String,
+    uploadTime: DateTime,
+    classPath: String,
+    jobCache: JobCache
+  ): J Or LoadingError = {
     logger.info("Loading class {} for app {}", classPath, appName: Any)
-    val jobJarInfo = try {
-      jobCache.getSparkJob(appName, uploadTime, classPath)
-    } catch {
-      case _: ClassNotFoundException => return Bad(JobClassNotFound)
-      case err: Exception            => return Bad(JobLoadError(err))
-    }
+    try {
+      val jobJarInfo = jobCache.getSparkJob(appName, uploadTime, classPath)
+      val job = jobJarInfo.constructor()
 
-    // Validate that job fits the type of context we launched
-    val job = jobJarInfo.constructor()
-    if (isValidJob(job)) { Good(ScalaJobContainer(job)) }
-    else                 { Bad(JobWrongType) }
+      // Validate that job fits the type of context we launched
+      if (isValidJob(job)) Good(ScalaJobContainer(job)) else Bad(JobWrongType)
+    } catch {
+      case _: ClassNotFoundException => Bad(JobClassNotFound)
+      case err: Exception            => Bad(JobLoadError(err))
+    }
   }
 
   /**
@@ -102,6 +104,33 @@ trait ScalaContextFactory extends SparkContextFactory {
    * [[DefaultSparkContextFactory]] checks to see if the job is of type [[SparkJob]].
    */
   def isValidJob(job: api.SparkJobBase): Boolean
+}
+
+trait JavaContextFactory extends SparkContextFactory {
+  type J = ScalaJobContainer
+
+  val logger = LoggerFactory.getLogger(getClass)
+
+  def loadAndValidateJob(
+    appName: String,
+    uploadTime: DateTime,
+    classPath: String,
+    jobCache: JobCache
+  ): J Or LoadingError = {
+    logger.info("Loading class {} for app {}", classPath, appName: Any)
+    try {
+      val jobJarInfo = jobCache.getJavaJob(appName, uploadTime, classPath)
+      val job = jobJarInfo.job
+
+      // Validate that job fits the type of context we launched
+      if (isValidJob(job)) Good(ScalaJobContainer(JavaJob(job))) else Bad(JobWrongType)
+    } catch {
+      case _: ClassNotFoundException => Bad(JobClassNotFound)
+      case err: Exception            => Bad(JobLoadError(err))
+    }
+  }
+
+  def isValidJob(job: BaseJavaJob[_, _]): Boolean
 }
 
 /**
