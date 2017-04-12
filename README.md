@@ -759,7 +759,7 @@ This can be used to quickly develop python applications that can interact with
 Spark Jobserver programmatically.
 
 ## Contribution and Development
-Contributions via Github Pull Request are welcome.  See the TODO for some ideas.
+Contributions via Github Pull Request are welcome. Please start by taking a look at the [contribution guidelines](doc/contribution-guidelines.md) and check the TODO for some contribution ideas.
 
 - If you need to build with a specific scala version use ++x.xx.x followed by the regular command,
 for instance: `sbt ++2.11.6 job-server/compile`
