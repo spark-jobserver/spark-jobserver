@@ -139,7 +139,13 @@ NOTE: Spark Job Server can optionally run `SparkContext`s in their own, forked J
 
 The example walk-through below shows you how to use the job server with an included example job, by running the job server in local development mode in SBT.  This is not an example of usage in production.
 
-You need to have [SBT](http://www.scala-sbt.org/release/docs/Getting-Started/Setup.html) installed.
+First clone the repository and check out the v0.4.1 version by running:
+
+    git clone https://github.com/spark-jobserver/spark-jobserver.git
+    cd spark-jobserver
+    git checkout tags/v0.4.1
+
+You need to have [SBT](http://www.scala-sbt.org/release/docs/Getting-Started/Setup.html) installed. Start the SBT shell by running the `sbt` command from within the `spark-jobserver` directory.
 
 To set the current version, do something like this:
 
