@@ -77,12 +77,10 @@ trait ScalaContextFactory extends SparkContextFactory {
 
   val logger = LoggerFactory.getLogger(getClass)
 
-  def loadAndValidateJob(
-    appName: String,
-    uploadTime: DateTime,
-    classPath: String,
-    jobCache: JobCache
-  ): J Or LoadingError = {
+  def loadAndValidateJob(appName: String,
+                         uploadTime: DateTime,
+                         classPath: String,
+                         jobCache: JobCache): J Or LoadingError = {
     logger.info("Loading class {} for app {}", classPath, appName: Any)
     try {
       val jobJarInfo = jobCache.getSparkJob(appName, uploadTime, classPath)
@@ -111,12 +109,10 @@ trait JavaContextFactory extends SparkContextFactory {
 
   val logger = LoggerFactory.getLogger(getClass)
 
-  def loadAndValidateJob(
-    appName: String,
-    uploadTime: DateTime,
-    classPath: String,
-    jobCache: JobCache
-  ): J Or LoadingError = {
+  def loadAndValidateJob(appName: String,
+                         uploadTime: DateTime,
+                         classPath: String,
+                         jobCache: JobCache): J Or LoadingError = {
     logger.info("Loading class {} for app {}", classPath, appName: Any)
     try {
       val jobJarInfo = jobCache.getJavaJob(appName, uploadTime, classPath)
