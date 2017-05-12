@@ -1,20 +1,28 @@
 package spark.jobserver
 
-import com.typesafe.config.ConfigFactory
+import com.typesafe.config.{Config, ConfigFactory}
+import org.apache.spark.SparkConf
+import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.Row
 import org.apache.spark.sql.hive.test.TestHiveContext
-import org.apache.spark.{SparkConf, SparkContext}
 import spark.jobserver.CommonMessages.JobResult
-import spark.jobserver.context.{HiveContextLike, JavaHiveContextFactory}
+import spark.jobserver.context.{HiveContextLike, JavaContextFactory}
 import spark.jobserver.io.JobDAOActor
+import spark.jobserver.japi.{BaseJavaJob, JTestHiveJob}
 
 import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 
-class JavaTestHiveContextFactory extends JavaHiveContextFactory {
-  override protected def contextFactory(conf: SparkConf): C = {
-    val sc = SparkContext.getOrCreate(conf)
-    Try(new TestHiveContext(sc) with HiveContextLike) match {
+class JavaTestHiveContextFactory extends JavaContextFactory {
+  type C = TestHiveContext with ContextLike
+
+  def isValidJob(job: BaseJavaJob[_, _]): Boolean = job.isInstanceOf[JTestHiveJob[_]]
+
+  def makeContext(sparkConf: SparkConf, config: Config, contextName: String): C = contextFactory(sparkConf)
+
+  protected def contextFactory(conf: SparkConf): C = {
+    val sc = new JavaSparkContext(conf)
+    Try(new TestHiveContext(sc, false) with HiveContextLike) match {
       case Success(hc) => hc
       case Failure(e) =>
         sc.stop
