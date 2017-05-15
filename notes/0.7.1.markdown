@@ -1,3 +1,4 @@
 #Scala #akka @ApacheSpark
 
+* Mark actor as down on context initialization errors. (@derSascha)
 * ENTER CHANGES HERE
