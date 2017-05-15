@@ -21,7 +21,14 @@ class SessionContextFactory extends ScalaContextFactory {
   def isValidJob(job: SparkJobBase): Boolean = job.isInstanceOf[SparkSessionJob]
 
   def makeContext(sparkConf: SparkConf, config: Config,  contextName: String): C = {
-    val spark = SparkSession.builder.config(sparkConf).appName(contextName).enableHiveSupport().getOrCreate()
+    val builder = SparkSession.builder()
+    builder.config(sparkConf).appName(contextName)
+    try {
+      builder.enableHiveSupport()
+    } catch {
+      case e: IllegalArgumentException => logger.warn(s"Hive support not enabled - ${e.getMessage()}")
+    }
+    val spark = builder.getOrCreate()
     for ((k, v) <- SparkJobUtils.getHadoopConfig(config)) spark.sparkContext.hadoopConfiguration.set(k, v)
     SparkSessionContextLikeWrapper(spark)
   }
