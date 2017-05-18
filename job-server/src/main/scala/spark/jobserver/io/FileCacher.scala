@@ -29,18 +29,33 @@ trait FileCacher {
 
   // Cache the jar file into local file system.
   protected def cacheBinary(appName: String,
-                          binaryType: BinaryType,
-                          uploadTime: DateTime,
-                          binBytes: Array[Byte]) {
-    val outFile =
-      new File(rootDir, createBinaryName(appName, binaryType, uploadTime))
-    val bos = new BufferedOutputStream(new FileOutputStream(outFile))
+                            binaryType: BinaryType,
+                            uploadTime: DateTime,
+                            binBytes: Array[Byte]) {
+    val targetFullBinaryName = createBinaryName(appName, binaryType, uploadTime)
+    val tempSuffix = ".tmp"
+    val tempOutFile = File.createTempFile(targetFullBinaryName + "-", tempSuffix, new File(rootDir))
+    val tempOutFileName = tempOutFile.getName
+    val bos = new BufferedOutputStream(new FileOutputStream(tempOutFile))
+
     try {
-      logger.debug("Writing {} bytes to file {}", binBytes.length, outFile.getPath)
+      logger.debug("Writing {} bytes to a temporary file {}", binBytes.length, tempOutFile.getPath)
       bos.write(binBytes)
       bos.flush()
     } finally {
       bos.close()
+    }
+
+    logger.debug("Renaming the temporary file {} to the target full binary name {}",
+      tempOutFileName, targetFullBinaryName: Any)
+
+    val tempFile = new File(rootDir, tempOutFileName)
+    if (!tempFile.renameTo(new File(rootDir, targetFullBinaryName))) {
+      logger.debug("Renaming the temporary file {} failed, another process has probably already updated " +
+        "the target file - deleting the redundant temp file", tempOutFileName)
+      if (!tempFile.delete()) {
+        logger.warn("Could not delete the temporary file {}", tempOutFileName)
+      }
     }
   }
 
@@ -52,8 +67,9 @@ trait FileCacher {
         if (name.startsWith(prefix)) {
           val suffix = name.substring(prefix.length)
           (Pattern findFirstIn suffix).isDefined
+        } else {
+          false
         }
-        false
       }
     })
     if (binaries != null) {

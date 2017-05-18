@@ -13,11 +13,40 @@ import scala.util.Try
 object SparkJobUtils {
   import collection.JavaConverters._
 
+  val NameContextDelimiter = "~"
+
   /**
    * User impersonation for an already Kerberos authenticated user is supported via the
    * `spark.proxy.user` query param
    */
   val SPARK_PROXY_USER_PARAM = "spark.proxy.user"
+
+  private val regRexPart2 = "([^" + SparkJobUtils.NameContextDelimiter + "]+.*)"
+
+  /**
+    * appends the NameContextDelimiter to the user name and,
+    * if the user name contains the delimiter as well, then it doubles it so that we can be sure
+    * that our prefix is unique
+    */
+  def userNamePrefix(userName: String) : String = {
+    userName.replaceAll(NameContextDelimiter,
+      NameContextDelimiter + NameContextDelimiter) +
+      NameContextDelimiter
+  }
+
+  /**
+    * filter the given context names so that the user may only see his/her own contexts
+    */
+  def removeProxyUserPrefix(userName: => String, contextNames: Seq[String], filter: Boolean): Seq[String] = {
+    if (filter) {
+      val RegExPrefix = ("^" + userNamePrefix(userName) + regRexPart2).r
+      contextNames collect {
+        case RegExPrefix(cName) => cName
+      }
+    } else {
+      contextNames
+    }
+  }
 
   /**
    * Creates a SparkConf for initializing a SparkContext based on various configs.
@@ -72,7 +101,7 @@ object SparkJobUtils {
     // This is useful for setting configurations for hadoop connectors such as
     // elasticsearch, cassandra, etc.
     for (e <- Try(contextConfig.getConfig("passthrough"))) {
-         e.entrySet().asScala.map { s=>
+         e.entrySet().asScala.map { s =>
             conf.set(s.getKey, s.getValue.unwrapped.toString)
          }
     }
@@ -104,7 +133,7 @@ object SparkJobUtils {
       case "yarn-client" =>
         Try(config.getDuration(yarn,
               TimeUnit.MILLISECONDS).toInt / 1000).getOrElse(40)
-      case _               =>
+      case _ =>
         Try(config.getDuration(standalone,
               TimeUnit.MILLISECONDS).toInt / 1000).getOrElse(15)
     }

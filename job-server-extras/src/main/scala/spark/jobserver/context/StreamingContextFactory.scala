@@ -11,7 +11,7 @@ class StreamingContextFactory extends ScalaContextFactory {
 
   def isValidJob(job: api.SparkJobBase): Boolean = job.isInstanceOf[SparkStreamingJob]
 
-  def makeContext(sparkConf: SparkConf, config: Config,  contextName: String): C = {
+  def makeContext(sparkConf: SparkConf, config: Config, contextName: String): C = {
     val interval = config.getInt("streaming.batch_interval")
     val stopGracefully = config.getBoolean("streaming.stopGracefully")
     val stopSparkContext = config.getBoolean("streaming.stopSparkContext")

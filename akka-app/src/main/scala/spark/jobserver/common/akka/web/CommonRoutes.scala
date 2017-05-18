@@ -81,8 +81,8 @@ object MetricsSerializer {
 
   private def process(metric: Metric): Map[String, Any] = {
     metric match {
-      case c: Counter =>   Map("type" -> "counter", "count" -> c.count())
-      case m: Meter =>     Map("type" -> "meter") ++ meterToMap(m)
+      case c: Counter => Map("type" -> "counter", "count" -> c.count())
+      case m: Meter => Map("type" -> "meter") ++ meterToMap(m)
       case g: Gauge[_] => Map("type" -> "gauge", "value" -> g.value())
       // For Timers, ignore the min/max/mean values, as they are for all time.  We're just interested
       // in the recent (biased) histogram values.
@@ -97,17 +97,17 @@ object MetricsSerializer {
   private def meterToMap(m: Metered) =
     Map("units" -> m.rateUnit.toString.toLowerCase,
         "count" -> m.count,
-        "mean"  -> m.meanRate,
-        "m1"    -> m.oneMinuteRate,
-        "m5"    -> m.fiveMinuteRate,
-        "m15"   -> m.fifteenMinuteRate)
+        "mean" -> m.meanRate,
+        "m1" -> m.oneMinuteRate,
+        "m5" -> m.fiveMinuteRate,
+        "m15" -> m.fifteenMinuteRate)
 
   /** Extracts the histogram (Median, 75%, 95%, 98%, 99% 99.9%) values to a map */
   private def histogramToMap(h: Sampling) =
     Map("median" -> h.getSnapshot().getMedian(),
-        "p75"    -> h.getSnapshot().get75thPercentile(),
-        "p95"    -> h.getSnapshot().get95thPercentile(),
-        "p98"    -> h.getSnapshot().get98thPercentile(),
-        "p99"    -> h.getSnapshot().get99thPercentile(),
-        "p999"   -> h.getSnapshot().get999thPercentile())
+        "p75" -> h.getSnapshot().get75thPercentile(),
+        "p95" -> h.getSnapshot().get95thPercentile(),
+        "p98" -> h.getSnapshot().get98thPercentile(),
+        "p99" -> h.getSnapshot().get99thPercentile(),
+        "p999" -> h.getSnapshot().get999thPercentile())
 }

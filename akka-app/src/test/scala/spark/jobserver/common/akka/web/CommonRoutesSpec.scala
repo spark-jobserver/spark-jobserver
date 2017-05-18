@@ -2,6 +2,7 @@ package spark.jobserver.common.akka.web
 
 import java.util.concurrent.TimeUnit
 
+import akka.testkit.TestKit
 import org.scalatest.{Matchers, FunSpec}
 import spray.testkit.ScalatestRouteTest
 
@@ -31,6 +32,10 @@ class CommonRoutesSpec extends FunSpec with Matchers with ScalatestRouteTest wit
     "p98" -> 0.0, "p99" -> 0.0, "p999" -> 0.0)
   val timerMap = Map("type" -> "timer", "rate" -> (meterMap - "type"),
     "duration" -> (histMap ++ Map("units" -> "milliseconds") - "type"))
+
+  override def afterAll():Unit = {
+    TestKit.shutdownActorSystem(system)
+  }
 
   describe("/metricz route") {
     it("should report all metrics") {

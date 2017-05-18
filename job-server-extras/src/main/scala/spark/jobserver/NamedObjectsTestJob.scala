@@ -35,8 +35,8 @@ class NamedObjectsTestJob extends SparkJob with NamedObjectSupport {
       namedObjects.update("rdd1", NamedRDD(rows(sc), true, StorageLevel.MEMORY_ONLY))
     }
 
-    if (config.hasPath(CREATE_BROADCAST)){
-      val broadcast = sc.broadcast(Set(1,2,3,4,5))
+    if (config.hasPath(CREATE_BROADCAST)) {
+      val broadcast = sc.broadcast(Set(1, 2, 3, 4, 5))
       namedObjects.update("broadcast1", NamedBroadcast(broadcast))
     }
 

@@ -1,6 +1,7 @@
 package spark.jobserver
 
 import akka.actor.{Actor, ActorSystem, Props}
+import akka.testkit.TestKit
 import com.typesafe.config.ConfigFactory
 import org.joda.time.DateTime
 import org.scalatest.concurrent.ScalaFutures
@@ -198,10 +199,15 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
     }
   }
 
-  implicit override val patienceConfig = PatienceConfig(timeout = Span(5, Seconds), interval = Span(1, Seconds))
+  implicit override val patienceConfig =
+    PatienceConfig(timeout = Span(5, Seconds), interval = Span(1, Seconds))
 
   override def beforeAll():Unit = {
     api.start()
+  }
+
+  override def afterAll():Unit = {
+    TestKit.shutdownActorSystem(system)
   }
 
   describe ("The WebApi") {
