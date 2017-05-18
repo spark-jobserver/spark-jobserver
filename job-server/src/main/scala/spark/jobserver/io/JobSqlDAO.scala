@@ -153,7 +153,7 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
       (r.appName, r.binaryType)
     }.map {
       case ((appName, binaryType), bin) =>
-        (appName, binaryType,  bin.map(_.uploadTime).max.get)
+        (appName, binaryType, bin.map(_.uploadTime).max.get)
     }.result
     for (m <- db.run(query)) yield {
       m.map {
@@ -226,6 +226,13 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
     }
   }
 
+  override def getJobConfig(jobId: String): Future[Option[Config]] = {
+    val query = configs
+      .filter(_.jobId === jobId).map(_.jobConfig).result
+
+    db.run(query.headOption).map(c => c.map(ConfigFactory.parseString(_)))
+  }
+
   override def saveJobConfig(jobId: String, jobConfig: Config): Unit = {
     val configRender = jobConfig.root().render(ConfigRenderOptions.concise())
     if(Await.result(db.run(configs.map(c => c.*) += (jobId, configRender)), 60 seconds) == 0){
@@ -258,7 +265,7 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
                           // !endTime.isDefined
                           case Some(JobStatus.Running) => !j.endTime.isDefined && !j.error.isDefined
                           // endTime.isDefined && error.isDefined
-                          case Some(JobStatus.Error) =>  j.error.isDefined
+                          case Some(JobStatus.Error) => j.error.isDefined
                           // not RUNNING AND NOT ERROR
                           case Some(JobStatus.Finished) => j.endTime.isDefined && !j.error.isDefined
                           case _ => true

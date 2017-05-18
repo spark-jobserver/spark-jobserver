@@ -2,9 +2,10 @@ package spark.jobserver
 
 import akka.actor._
 import akka.testkit.{ImplicitSender, TestKit}
-import com.typesafe.config.ConfigFactory
+import com.typesafe.config.{ConfigValueFactory, ConfigFactory}
 import spark.jobserver.io.{JobDAO, JobDAOActor}
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
+import spark.jobserver.util.SparkJobUtils
 import scala.concurrent.duration._
 
 import spark.jobserver.common.akka
@@ -87,9 +88,29 @@ class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.syst
 
     it("can add contexts from jobConfig") {
       supervisor ! AddContextsFromConfig
-      Thread sleep 4000
+      Thread sleep 10000
       supervisor ! ListContexts
       expectMsg(40 seconds, Seq("olap-demo"))
+    }
+
+    it("should create adhoc context") {
+      supervisor ! StartAdHocContext("spark.jobserver.SleepJob", contextConfig)
+      expectMsgPF(10 seconds, "manager and result actors") {
+        case (manager: ActorRef, resultActor: ActorRef) =>
+          assert(manager.path.name.endsWith("spark.jobserver.SleepJob"))
+      }
+    }
+
+    it("should create adhoc context for proxy-user") {
+      supervisor ! StartAdHocContext("spark.jobserver.SleepJob",
+        contextConfig.withValue(
+          SparkJobUtils.SPARK_PROXY_USER_PARAM,
+          ConfigValueFactory.fromAnyRef("userName")))
+      expectMsgPF(10 seconds, "manager and result actors") {
+        case (manager: ActorRef, resultActor: ActorRef) =>
+          assert(manager.path.name.startsWith("userName" + SparkJobUtils.NameContextDelimiter))
+          assert(manager.path.name.endsWith("spark.jobserver.SleepJob"))
+      }
     }
 
     it("should be able to add multiple new contexts") {

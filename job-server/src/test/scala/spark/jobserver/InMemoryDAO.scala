@@ -77,6 +77,10 @@ class InMemoryDAO extends JobDAO {
     jobConfigs.toMap
   }
 
+  override  def getJobConfig(jobId: String): Future[Option[Config]] = Future {
+    jobConfigs.get(jobId)
+  }
+
   override def getBinaryContent(appName: String, binaryType: BinaryType,
                                 uploadTime: DateTime): Array[Byte] = {
     binaries((appName, binaryType, uploadTime))

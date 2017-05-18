@@ -16,6 +16,8 @@ class FileCacherSpec extends FileCacher with FunSpecLike with Matchers {
   }
 
   it("clean cache binaries") {
-    cleanCacheBinaries("job")
+    val f = File.createTempFile("jobTest-20161010_010000_000.jar", ".jar", new File(rootDir))
+    cleanCacheBinaries("jobTest")
+    f.exists() should be(false)
   }
 }

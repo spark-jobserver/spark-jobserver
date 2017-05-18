@@ -16,7 +16,6 @@ case class DummyJobEnvironment(jobId: String, contextConfig: Config) extends Job
 
   /*
     Do not currently support named objects for Python.
-
     They involve some tricks with Types which are hard
     to pull off via Py4J.
    */
@@ -60,7 +59,7 @@ object PythonSparkContextFactorySpec {
      */
     val pathRelativeToSubProject = "target/python/"
     val dirIfAtRoot = new File("job-server-python")
-    val targetDir = if(dirIfAtRoot.exists) {
+    val targetDir = if (dirIfAtRoot.exists) {
       new File(s"${dirIfAtRoot.getAbsolutePath}/$pathRelativeToSubProject")
     } else {
       new File(s"../${dirIfAtRoot}/" + pathRelativeToSubProject)
@@ -74,8 +73,8 @@ object PythonSparkContextFactorySpec {
   lazy val jobServerAPIExamplePath = jobServerPaths.find(_.getAbsolutePath.contains("examples"))
 
   lazy val pysparkPath = sys.env.get("SPARK_HOME").map(d => s"$d/python/lib/pyspark.zip")
-  lazy val py4jPath  = sys.env.get("SPARK_HOME").map(d => s"$d/python/lib/py4j-0.9-src.zip")
-  lazy val originalPythonPath  = sys.env.get("PYTHONPATH")
+  lazy val py4jPath = sys.env.get("SPARK_HOME").map(d => s"$d/python/lib/py4j-0.10.4-src.zip")
+  lazy val originalPythonPath = sys.env.get("PYTHONPATH")
 
   case object DummyJobCache extends JobCache {
 
@@ -87,27 +86,27 @@ object PythonSparkContextFactorySpec {
 
     override def getPythonJob(appName: String, uploadTime: DateTime, classPath: String): PythonJobInfo = {
       val path =
-        if(appName == "test") {
+        if (appName == "test") {
           "/tmp/test.egg"
         } else {
           jobServerAPIExamplePath.getOrElse(sys.error("job server examples path not found")).getAbsolutePath
         }
-        PythonJobInfo(path)
+      PythonJobInfo(path)
     }
 
   }
 
   lazy val config = ConfigFactory.parseString(
     s"""
-      |python.paths = [
-      |  "${jobServerAPIPath.getOrElse(sys.error("job server egg not found"))}",
-      |  "${pysparkPath.getOrElse("")}",
-      |  "${py4jPath.getOrElse("")}",
-      |  "${originalPythonPath.getOrElse("")}"
-      |]
-      |
+       |python.paths = [
+       |  "${jobServerAPIPath.getOrElse(sys.error("job server egg not found"))}",
+       |  "${pysparkPath.getOrElse("")}",
+       |  "${py4jPath.getOrElse("")}",
+       |  "${originalPythonPath.getOrElse("")}"
+       |]
+       |
       |python.executable = "python"
-    """.replace("\\","\\\\") // Windows-compatibility
+    """.replace("\\", "\\\\") // Windows-compatibility
       .stripMargin)
 
   lazy val sparkConf = new SparkConf().setMaster("local[*]").setAppName("PythonSparkContextFactorySpec")
@@ -120,7 +119,7 @@ class PythonSparkContextFactorySpec extends FunSpec with Matchers with BeforeAnd
   var context: JavaSparkContext with PythonContextLike = null
 
   after {
-    if(context != null) {
+    if (context != null) {
       context.stop()
     }
   }
@@ -145,7 +144,7 @@ class PythonSparkContextFactorySpec extends FunSpec with Matchers with BeforeAnd
 
     def runTest(factory: PythonSparkContextFactory,
                 context: JavaSparkContext with PythonContextLike,
-                c:Config): Unit = {
+                c: Config): Unit = {
       val loadResult = factory.loadAndValidateJob(
         "word-count",
         DateTime.now(),
@@ -186,7 +185,7 @@ class PythonSparkContextFactorySpec extends FunSpec with Matchers with BeforeAnd
 
     def runFailingTest(factory: PythonSparkContextFactory,
                        context: JavaSparkContext with PythonContextLike,
-                       c:Config): Unit = {
+                       c: Config): Unit = {
       val loadResult = factory.loadAndValidateJob(
         "word-count",
         DateTime.now(),

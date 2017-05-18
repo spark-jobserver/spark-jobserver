@@ -8,10 +8,9 @@ import spark.jobserver.api.{SparkJobBase, ValidationProblem, JobEnvironment}
 
 import scala.sys.process.{ProcessLogger, Process}
 import scala.util.{Failure, Success, Try}
-import scala.collection.JavaConverters._
 
 case class PythonJob[X <: PythonContextLike](eggPath: String,
-                                             modulePath:String,
+                                             modulePath: String,
                                              py4JImports: Seq[String]) extends SparkJobBase {
   override type JobData = Config
   override type JobOutput = Any
@@ -19,12 +18,10 @@ case class PythonJob[X <: PythonContextLike](eggPath: String,
 
   val logger = LoggerFactory.getLogger(getClass)
 
-  private def endpoint(context: C, contextConfig:Config, jobId: String, jobConfig:Config) = {
+  private def endpoint(context: C, contextConfig: Config, jobId: String, jobConfig: Config) = {
     val sparkConf = context.sparkContext.getConf
     JobEndpoint(context, sparkConf, contextConfig, jobId, jobConfig, modulePath, py4JImports)
   }
-
-  def gateway(endpoint: JobEndpoint[C]): GatewayServer = new GatewayServer(endpoint, 0)
 
   /**
     *
@@ -57,7 +54,7 @@ case class PythonJob[X <: PythonContextLike](eggPath: String,
     logger.info(s"Running $modulePath from $eggPath")
     val ep = endpoint(sc, runtime.contextConfig, runtime.jobId, data)
     val server = new GatewayServer(ep, 0)
-    val pythonPathDelimiter : String = if(System.getProperty("os.name").indexOf("Win") >= 0) ";" else ":"
+    val pythonPathDelimiter : String = if (System.getProperty("os.name").indexOf("Win") >= 0) ";" else ":"
     val pythonPath = (eggPath +: sc.pythonPath).mkString(pythonPathDelimiter)
     logger.info(s"Using Python path of ${pythonPath}")
     val subProcessOutcome = Try {

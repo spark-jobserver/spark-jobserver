@@ -72,9 +72,13 @@ object JobServer {
           new DataFileDAO(config)), "data-manager")
       val binManager = system.actorOf(Props(classOf[BinaryManager], daoActor), "binary-manager")
       val supervisor =
-        system.actorOf(Props(if (contextPerJvm) { classOf[AkkaClusterSupervisorActor] }
-                             else               { classOf[LocalContextSupervisorActor] }, daoActor),
-                       "context-supervisor")
+        system.actorOf(Props(
+          if (contextPerJvm) {
+            classOf[AkkaClusterSupervisorActor]
+          } else {
+            classOf[LocalContextSupervisorActor]
+          },
+          daoActor), "context-supervisor")
       val jobInfo = system.actorOf(Props(classOf[JobInfoActor], jobDAO, supervisor), "job-info")
 
       // Add initial job JARs, if specified in configuration.

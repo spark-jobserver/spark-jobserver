@@ -6,7 +6,7 @@ spark-jobserver provides a RESTful interface for submitting and managing [Apache
 This repo contains the complete Spark job server project, including unit tests and deploy scripts.
 It was originally started at [Ooyala](http://www.ooyala.com), but this is now the main development repo.
 
-See [Troubleshooting Tips](doc/troubleshooting.md) as well as [Yarn tips](doc/yarn.md).
+Other useful links: [Troubleshooting Tips](doc/troubleshooting.md), [Yarn tips](doc/yarn.md), [Mesos tips](doc/mesos.md).
 
 Also see [Chinese docs / 中文](doc/chinese/job-server.md).
 
@@ -22,7 +22,8 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
   - [WordCountExample walk-through](#wordcountexample-walk-through)
     - [Package Jar - Send to Server](#package-jar---send-to-server)
     - [Ad-hoc Mode - Single, Unrelated Jobs (Transient Context)](#ad-hoc-mode---single-unrelated-jobs-transient-context)
-    - [Persistent Context Mode - Faster & Required for Related Jobs](#persistent-context-mode---faster-&-required-for-related-jobs)
+    - [Persistent Context Mode - Faster & Required for Related Jobs](#persistent-context-mode---faster--required-for-related-jobs)
+  - [Debug mode](#debug-mode)
 - [Create a Job Server Project](#create-a-job-server-project)
   - [Creating a project from scratch using giter8 template](#creating-a-project-from-scratch-using-giter8-template)
   - [Creating a project manually assuming that you already have sbt project structure](#creating-a-project-manually-assuming-that-you-already-have-sbt-project-structure)
@@ -40,7 +41,8 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
   - [Chef](#chef)
 - [Architecture](#architecture)
 - [API](#api)
-  - [Jars](#jars)
+  - [Binaries](#binaries)
+  - [Jars (deprecated)](#jars-deprecated)
   - [Contexts](#contexts)
   - [Jobs](#jobs)
   - [Data](#data)
@@ -87,7 +89,7 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 
 - *"Spark as a Service"*: Simple REST interface (including HTTPS) for all aspects of job, context management
 - Support for Spark SQL, Hive, Streaming Contexts/jobs and custom job contexts!  See [Contexts](doc/contexts.md).
-- [Python](doc/python.md), Scala, and Java (see [TestJob.java](https://github.com/spark-jobserver/spark-jobserver/blob/master/job-server-api/src/main/java/spark/jobserver/api/TestJob.java)) support
+- [Python](doc/python.md), Scala, and [Java](doc/javaapi.md) (see [TestJob.java](https://github.com/spark-jobserver/spark-jobserver/blob/master/job-server-api/src/main/java/spark/jobserver/api/TestJob.java)) support
 - LDAP Auth support via Apache Shiro integration
 - Separate JVM per SparkContext for isolation (EXPERIMENTAL)
 - Supports sub-second low-latency jobs via long-running job contexts
@@ -114,7 +116,7 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 | 0.6.1       | 1.5.2         |
 | 0.6.2       | 1.6.1         |
 | 0.7.0       | 1.6.2         |
-| spark-2.0-preview | 2.0     |
+| 0.8.0-SNAPSHOT | 2.1.0    |
 
 For release notes, look in the `notes/` directory.
 
@@ -149,7 +151,7 @@ From SBT shell, simply type "reStart".  This uses a default configuration file. 
 path to an alternative config file.  You can also specify JVM parameters after "---".  Including all the
 options looks like this:
 
-    job-server/reStart /path/to/my.conf --- -Xmx8g
+    job-server-extras/reStart /path/to/my.conf --- -Xmx8g
 
 Note that reStart (SBT Revolver) forks the job server in a separate process.  If you make a code change, simply
 type reStart again at the SBT shell prompt, it will compile your changes and restart the jobserver.  It enables
@@ -177,7 +179,7 @@ Let's upload the jar:
 The above jar is uploaded as app `test`.  Next, let's start an ad-hoc word count job, meaning that the job
 server will create its own SparkContext, and return a job ID for subsequent querying:
 
-    curl -d "input.string = a b c a b see" 'localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample'
+    curl -d "input.string = a b c a b see" "localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample"
     {
       "duration": "Job not done yet",
       "classPath": "spark.jobserver.WordCountExample",
@@ -190,7 +192,7 @@ server will create its own SparkContext, and return a job ID for subsequent quer
 NOTE: If you want to feed in a text file config and POST using curl, you want the `--data-binary` option, otherwise
 curl will munge your line separator chars.  Like:
 
-    curl --data-binary @my-job-config.json 'localhost:8090/jobs?appNam=...'
+    curl --data-binary @my-job-config.json "localhost:8090/jobs?appNam=..."
 
 NOTE2: If you want to send in UTF-8 chars, make sure you pass in a proper header to CURL for the encoding, otherwise it may assume an encoding which is not what you expect.
 
@@ -220,7 +222,7 @@ You can also append `&timeout=XX` to extend the request timeout for `sync=true` 
 #### Persistent Context Mode - Faster & Required for Related Jobs
 Another way of running this job is in a pre-created context.  Start a new context:
 
-    curl -d "" 'localhost:8090/contexts/test-context?num-cpu-cores=4&memory-per-node=512m'
+    curl -d "" "localhost:8090/contexts/test-context?num-cpu-cores=4&memory-per-node=512m"
     OK⏎
 
 You can verify that the context has been created:
@@ -230,7 +232,7 @@ You can verify that the context has been created:
 
 Now let's run the job in the context and get the results back right away:
 
-    curl -d "input.string = a b c a b see" 'localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample&context=test-context&sync=true'
+    curl -d "input.string = a b c a b see" "localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample&context=test-context&sync=true"
     {
       "result": {
         "a": 2,
@@ -241,6 +243,44 @@ Now let's run the job in the context and get the results back right away:
     }⏎
 
 Note the addition of `context=` and `sync=true`.
+
+### Debug mode
+Spark job server is started using SBT Revolver (which forks a new JVM), so debugging directly in an IDE is not feasible.
+To enable debugging, the Spark job server should be started from the SBT shell with the following Java options :
+```bash
+job-server-extras/reStart /absolute/path/to/your/dev.conf --- -Xdebug -Xrunjdwp:transport=dt_socket,address=15000,server=y,suspend=y
+```
+The above command starts a remote debugging server on port 15000. The Spark job server is not started until a debugging client
+(Intellij, Eclipse, telnet, ...) connects to the exposed port.
+
+In your IDE you just have to start a Remote debugging debug job and use the above defined port. Once the client connects to the debugging server the Spark job server is started and you can start adding breakpoints and debugging requests.
+
+Note that you might need to adjust some server parameters to avoid short Spary/Akka/Spark timeouts, in your `dev.conf` add the following values :
+```bash
+spark {
+  jobserver {
+    # Dev debug timeouts
+    context-creation-timeout = 1000000 s
+    yarn-context-creation-timeout = 1000000 s
+    default-sync-timeout = 1000000 s
+  }
+
+  context-settings {
+    # Dev debug timeout
+    context-init-timeout = 1000000 s
+  }
+}
+spray.can.server {
+      # Debug timeouts
+      idle-timeout = infinite
+      request-timeout = infinite
+}
+```
+
+Additionally, you might have to increase the Akka Timeouts by adding the following query parameter `timeout=1000000` in your HTTP requests :
+```bash
+curl -d "input.string = a b c a b see" "localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample&sync=true&timeout=100000"
+```
 
 ## Create a Job Server Project
 ### Creating a project from scratch using giter8 template
@@ -309,7 +349,7 @@ It is much more type safe, separates context configuration, job ID, named object
 
 Let's try running our sample job with an invalid configuration:
 
-    curl -i -d "bad.input=abc" 'localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample'
+    curl -i -d "bad.input=abc" "localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample"
 
     HTTP/1.1 400 Bad Request
     Server: spray-can/1.2.0
@@ -343,11 +383,11 @@ You have a couple options to package and upload dependency jars.
     - Use the `dependent-jar-uris` context configuration param. Then the jar gets loaded for every job.
     - The `dependent-jar-uris` can also be used in job configuration param when submitting a job. On an ad-hoc context this has the same effect as `dependent-jar-uris` context configuration param. On a persistent context the jars will be loaded for the current job and then for every job that will be executed on the persistent context.
         ````
-        curl -d "" 'localhost:8090/contexts/test-context?num-cpu-cores=4&memory-per-node=512m'
+        curl -d "" "localhost:8090/contexts/test-context?num-cpu-cores=4&memory-per-node=512m"
         OK⏎
         ````
         ````
-        curl 'localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample&context=test-context&sync=true' -d '{
+        curl "localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample&context=test-context&sync=true" -d '{
             dependent-jar-uris = ["file:///myjars/deps01.jar", "file:///myjars/deps02.jar"],
             input.string = "a b c a b see"
         }'
@@ -562,7 +602,7 @@ jdbc {
         user = "secret"
         password = "secret"
       }
-```      
+```
 
 ### Chef
 
@@ -589,14 +629,14 @@ Flow diagrams are checked in in the doc/ subdirectory.  .diagram files are for w
     GET /binaries               - lists all current binaries
     POST /binaries/<appName>    - upload a new binary file
     DELETE /binaries/<appName>  - delete defined binary
-    
+
 When POSTing new binaries, the content-type header must be set to one of the types supported by the subclasses of the `BinaryType` trait. e.g. "application/java-archive" or application/python-archive"
 
 ### Jars (deprecated)
 
     GET /jars                   - lists all the jars and the last upload timestamp
     POST /jars/<appName>        - uploads a new jar under <appName>
-    
+
 These routes are kept for legacy purposes but are deprecated in favour of the /binaries routes
 
 ### Contexts
@@ -767,8 +807,8 @@ for instance: `sbt ++2.11.6 job-server/compile`
    - You may need to set `SPARK_LOCAL_IP` to `localhost` to ensure Akka port can bind successfully
    - Note for Windows users: very few tests fail on Windows. Thus, run `testOnly -- -l WindowsIgnore` from SBT shell to ignore them.
 - Logging for tests goes to "job-server-test.log"
-- Run `scoverage:test` to check the code coverage and improve it. 
-  - Windows users: run `; coverage ; testOnly -- -l WindowsIgnore ; coverageReport` from SBT shell. 
+- Run `scoverage:test` to check the code coverage and improve it.
+  - Windows users: run `; coverage ; testOnly -- -l WindowsIgnore ; coverageReport` from SBT shell.
 - Please run scalastyle to ensure your code changes don't break the style guide.
 - Do "reStart" from SBT for quick restarts of the job server process
 - Please update the g8 template if you change the SparkJob API
