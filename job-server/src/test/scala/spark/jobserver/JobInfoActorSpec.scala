@@ -2,6 +2,7 @@ package spark.jobserver
 
 import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.testkit.{ImplicitSender, TestKit}
+import com.typesafe.config.ConfigFactory
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 import org.joda.time.DateTime
 import scala.concurrent._
@@ -47,9 +48,9 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
   describe("JobInfoActor") {
     it("should store a job configuration") {
       actor ! StoreJobConfig(jobId, jobConfig)
-      expectMsg(JobConfigStored)
-      val jobConfigs = Await.result(dao.getJobConfigs, 60 seconds)
-      jobConfigs.get(jobId) should be (Some(jobConfig))
+      expectMsg(10 second, JobConfigStored)
+      val storedJobConfig = Await.result(dao.getJobConfig(jobId), 60 seconds)
+      storedJobConfig should be (Some(jobConfig))
     }
 
     it("should return a job configuration when the jobId exists") {
