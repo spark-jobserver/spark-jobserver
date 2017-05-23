@@ -2,7 +2,7 @@
 import Dependencies._
 import JobServerRelease._
 
-transitiveClassifiers in Global := Seq()
+transitiveClassifiers in Global := Seq(Artifact.SourceClassifier)
 lazy val dirSettings = Seq()
 
 lazy val akkaApp = Project(id = "akka-app", base = file("akka-app"))

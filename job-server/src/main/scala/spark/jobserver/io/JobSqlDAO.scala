@@ -226,6 +226,13 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
     }
   }
 
+  override def getJobConfig(jobId: String): Future[Option[Config]] = {
+    val query = configs
+      .filter(_.jobId === jobId).map(_.jobConfig).result
+
+    db.run(query.headOption).map(c => c.map(ConfigFactory.parseString(_)))
+  }
+
   override def saveJobConfig(jobId: String, jobConfig: Config): Unit = {
     val configRender = jobConfig.root().render(ConfigRenderOptions.concise())
     if(Await.result(db.run(configs.map(c => c.*) += (jobId, configRender)), 60 seconds) == 0){

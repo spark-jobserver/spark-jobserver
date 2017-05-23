@@ -58,6 +58,8 @@ object JobDAOActorSpec {
 
     override def getJobConfigs: Future[Map[String, Config]] = ???
 
+    override def getJobConfig(jobId: String): Future[Option[Config]] = ???
+
     override def deleteBinary(appName: String): Unit = {
       appName match {
         case "failOnThis" => throw new Exception("deliberate failure")
