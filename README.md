@@ -6,7 +6,7 @@ spark-jobserver provides a RESTful interface for submitting and managing [Apache
 This repo contains the complete Spark job server project, including unit tests and deploy scripts.
 It was originally started at [Ooyala](http://www.ooyala.com), but this is now the main development repo.
 
-See [Troubleshooting Tips](doc/troubleshooting.md) as well as [Yarn tips](doc/yarn.md).
+Other useful links: [Troubleshooting Tips](doc/troubleshooting.md), [Yarn tips](doc/yarn.md), [Mesos tips](doc/mesos.md).
 
 Also see [Chinese docs / 中文](doc/chinese/job-server.md).
 
