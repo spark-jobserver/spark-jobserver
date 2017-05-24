@@ -1,4 +1,5 @@
 #Scala #akka @ApacheSpark
 
 * Mark actor as down on context initialization errors. (@derSascha)
+* Mesos config docs (@vatsalmevada)
 * ENTER CHANGES HERE
