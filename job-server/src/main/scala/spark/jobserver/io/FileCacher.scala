@@ -52,8 +52,10 @@ trait FileCacher {
         if (name.startsWith(prefix)) {
           val suffix = name.substring(prefix.length)
           (Pattern findFirstIn suffix).isDefined
+          true
+        } else {
+          false
         }
-        false
       }
     })
     if (binaries != null) {

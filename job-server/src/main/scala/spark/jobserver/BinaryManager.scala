@@ -33,6 +33,7 @@ case object InvalidBinary
 case object BinaryStored
 case object BinaryDeleted
 case class BinaryStorageFailure(ex: Throwable)
+case class BinaryDeletionFailure(ex: Throwable)
 
 /**
  * An Actor that manages the jars stored by the job server.   It's important that threads do not try to
@@ -106,6 +107,9 @@ class BinaryManager(jobDao: ActorRef) extends InstrumentedActor {
 
     case DeleteBinary(appName) =>
       logger.info(s"Deleting binary $appName")
-      deleteBinary(appName).pipeTo(sender)
+      deleteBinary(appName).map{
+        case Success(_) => BinaryDeleted
+        case Failure(ex) => BinaryDeletionFailure(ex)
+      }.pipeTo(sender)
   }
 }
