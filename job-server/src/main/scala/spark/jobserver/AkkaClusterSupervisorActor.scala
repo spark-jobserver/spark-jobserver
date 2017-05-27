@@ -173,6 +173,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
       val name: String = actorRef.path.name
       logger.info("Actor terminated: {}", name)
       contexts.retain { case (name, (jobMgr, resActor)) => jobMgr != actorRef }
+      cluster.down(actorRef.path.address)
   }
 
   private def initContext(actorName: String, ref: ActorRef, timeoutSecs: Long = 1)
