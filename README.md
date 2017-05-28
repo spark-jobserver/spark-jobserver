@@ -22,7 +22,7 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
   - [WordCountExample walk-through](#wordcountexample-walk-through)
     - [Package Jar - Send to Server](#package-jar---send-to-server)
     - [Ad-hoc Mode - Single, Unrelated Jobs (Transient Context)](#ad-hoc-mode---single-unrelated-jobs-transient-context)
-    - [Persistent Context Mode - Faster & Required for Related Jobs](#persistent-context-mode---faster-&-required-for-related-jobs)
+    - [Persistent Context Mode - Faster & Required for Related Jobs](#persistent-context-mode---faster--required-for-related-jobs)
 - [Create a Job Server Project](#create-a-job-server-project)
   - [Creating a project from scratch using giter8 template](#creating-a-project-from-scratch-using-giter8-template)
   - [Creating a project manually assuming that you already have sbt project structure](#creating-a-project-manually-assuming-that-you-already-have-sbt-project-structure)
@@ -35,12 +35,14 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
   - [Authentication](#authentication)
 - [Deployment](#deployment)
   - [Manual steps](#manual-steps)
+  - [Java 7 vs. Java 8](#java-7-vs-java-8)
   - [Context per JVM](#context-per-jvm)
     - [Configuring Spark Jobserver meta data Database backend](#configuring-spark-jobserver-meta-data-database-backend)
   - [Chef](#chef)
 - [Architecture](#architecture)
 - [API](#api)
-  - [Jars](#jars)
+  - [Binaries](#binaries)
+  - [Jars (deprecated)](#jars-deprecated)
   - [Contexts](#contexts)
   - [Jobs](#jobs)
   - [Data](#data)
@@ -499,6 +501,14 @@ curl -k --basic --user 'user:pw' https://localhost:8090/contexts
 The `server_start.sh` script uses `spark-submit` under the hood and may be passed any of the standard extra arguments from `spark-submit`.
 
 NOTE: by default the assembly jar from `job-server-extras`, which includes support for SQLContext and HiveContext, is used.  If you face issues with all the extra dependencies, consider modifying the install scripts to invoke `sbt job-server/assembly` instead, which doesn't include the extra dependencies.
+
+### Java 7 vs. Java 8
+
+Add `export JAVA_VERSION=7-jdk` to `<environment>.sh` (see manual steps above) to get a java 7 compliant version.
+
+If you are not sure what java version you run on, start `spark-shell` (or `spark2-shell` depending on your distribution) on your cluster and type `System.getProperty("java.version")` into the prompt.
+
+NOTE: We highly recommend to use java 8 if possible. Running on a java 7 jvm requires outdated and unsupported dependencies (for example Akka 2.3.x).
 
 ### Context per JVM
 
