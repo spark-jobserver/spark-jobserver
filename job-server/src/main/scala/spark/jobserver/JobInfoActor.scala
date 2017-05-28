@@ -1,13 +1,11 @@
 package spark.jobserver
 
-import scala.concurrent.Await
-
 import akka.actor.ActorRef
 import akka.pattern.ask
 import akka.util.Timeout
 import com.typesafe.config.Config
 import spark.jobserver.common.akka.InstrumentedActor
-import spark.jobserver.io.{JobDAO, JobInfo}
+import spark.jobserver.io.JobDAO
 
 object JobInfoActor {
   // Requests
@@ -64,8 +62,12 @@ class JobInfoActor(jobDao: JobDAO, contextSupervisor: ActorRef) extends Instrume
       }
 
     case GetJobConfig(jobId) =>
-      val configs = Await.result(jobDao.getJobConfigs, 60 seconds)
-      sender ! configs.getOrElse(jobId, NoSuchJobId)
+      val originator = sender
+
+      (jobDao getJobConfig jobId) onSuccess {
+        case None => originator ! NoSuchJobId
+        case Some(config) => originator ! config
+      }
 
     case StoreJobConfig(jobId, jobConfig) =>
       jobDao.saveJobConfig(jobId, jobConfig)

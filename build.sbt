@@ -2,7 +2,7 @@
 import Dependencies._
 import JobServerRelease._
 
-transitiveClassifiers in Global := Seq()
+transitiveClassifiers in Global := Seq(Artifact.SourceClassifier)
 lazy val dirSettings = Seq()
 
 lazy val akkaApp = Project(id = "akka-app", base = file("akka-app"))
@@ -120,7 +120,8 @@ lazy val jobServerTestJarSettings = Seq(
 
 lazy val noPublishSettings = Seq(
   publishTo := Some(Resolver.file("Unused repo", file("target/unusedrepo"))),
-  publishArtifact := false
+  publishArtifact := false,
+  publish := {}
 )
 
 lazy val dockerSettings = Seq(
@@ -150,6 +151,16 @@ lazy val dockerSettings = Seq(
                 apt-get -y install mesos=${MESOS_VERSION} && \
                 apt-get clean
              """)
+      env("MAVEN_VERSION","3.3.9")
+      runRaw(
+        """mkdir -p /usr/share/maven /usr/share/maven/ref \
+          && curl -fsSL http://apache.osuosl.org/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz \
+          | tar -xzC /usr/share/maven --strip-components=1 \
+          && ln -s /usr/share/maven/bin/mvn /usr/bin/mvn
+        """)
+      env("MAVEN_HOME","/usr/share/maven")
+      env("MAVEN_CONFIG", "/.m2")
+      
       copy(artifact, artifactTargetPath)
       copy(baseDirectory(_ / "bin" / "server_start.sh").value, file("app/server_start.sh"))
       copy(baseDirectory(_ / "bin" / "server_stop.sh").value, file("app/server_stop.sh"))

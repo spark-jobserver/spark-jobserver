@@ -85,7 +85,7 @@ Now that we have a docker.conf that should work we can create our dockerfile to 
 
 dockerfile:
 
-    FROM velvia/spark-jobserver:0.6.1
+    FROM sparkjobserver/spark-jobserver:0.7.0.mesos-0.25.0.spark-1.6.2
     EXPOSE 32456-32472                                    # Expose driver port range (spark.driver.port + 16)
     ADD /path/to/your/docker.conf /app/docker.conf        # Add the docker.conf to the container
     ADD /path/to/your/cluster-config /app/cluster-config  # Add the yarn-site.xml and hfds-site.xml to the container
@@ -99,8 +99,8 @@ Your dockercontainer is now ready to be build:
 Output should look like this:
 
     Sending build context to Docker daemon  21.5 kB
-    Step 0 : FROM velvia/spark-jobserver:0.5.2
-     ---> a41dbd362a7d
+    Step 0 : FROM sparkjobserver/spark-jobserver:0.7.0.mesos-0.25.0.spark-1.6.2
+     ---> 7a188f2d0dff
     Step 1 : EXPOSE 32456-32472
      ---> f1c91bbaa2d8
     Step 2 : ADD ./docker.conf /app/docker.conf

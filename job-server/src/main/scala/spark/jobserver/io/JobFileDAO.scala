@@ -215,6 +215,10 @@ class JobFileDAO(config: Config) extends JobDAO {
 
   override def getJobConfigs: Future[Map[String, Config]] = Future { configs.toMap }
 
+  override def getJobConfig(jobId: String): Future[Option[Config]] = Future {
+    configs.get(jobId)
+  }
+
   private def writeJobConfig(out: DataOutputStream, jobId: String, jobConfig: Config) {
     out.writeUTF(jobId)
     out.writeUTF(jobConfig.root().render(ConfigRenderOptions.concise()))

@@ -116,7 +116,7 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 | 0.7.0       | 1.6.2         |
 | spark-2.0-preview | 2.1.0    |
 
-For release notes, look in the `notes/` directory.  They should also be up on [notes.implicit.ly](http://notes.implicit.ly/search/spark-jobserver).
+For release notes, look in the `notes/` directory.
 
 If you need non-released jars, please visit [Jitpack](https://jitpack.io) - they provide non-release jar builds for any Git repo.  :)
 
@@ -759,7 +759,7 @@ This can be used to quickly develop python applications that can interact with
 Spark Jobserver programmatically.
 
 ## Contribution and Development
-Contributions via Github Pull Request are welcome.  See the TODO for some ideas.
+Contributions via Github Pull Request are welcome. Please start by taking a look at the [contribution guidelines](doc/contribution-guidelines.md) and check the TODO for some contribution ideas.
 
 - If you need to build with a specific scala version use ++x.xx.x followed by the regular command,
 for instance: `sbt ++2.11.6 job-server/compile`

@@ -299,6 +299,15 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
     }
   }
 
+  override def getJobConfig(jobId: String): Future[Option[Config]] = {
+    val query = QB.select(Metadata.JobConfig).from(Metadata.JobsTable)
+      .where(QB.eq(Metadata.JobId, UUID.fromString(jobId)))
+    session.executeAsync(query).map {
+      rs => Option(rs.one()).map(
+        row => ConfigFactory.parseString(row.getString(Metadata.JobConfig)))
+    }
+  }
+
   private def setup(config: Config): Session = {
     val cassandraConfig = config.getConfig("spark.jobserver.cassandra")
     val hosts = JListWrapper(cassandraConfig.getStringList("hosts"))
