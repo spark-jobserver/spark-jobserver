@@ -74,7 +74,7 @@ object JobManagerActor {
  * }}}
  */
 class JobManagerActor(contextConfig: Config, daoActor: ActorRef)
-  extends InstrumentedActor with SparkListener {
+  extends InstrumentedActor {
 
   import CommonMessages._
   import JobManagerActor._
@@ -125,9 +125,13 @@ class JobManagerActor(contextConfig: Config, daoActor: ActorRef)
   }
 
   // Handle external kill events (e.g. killed via YARN)
-  override def onApplicationEnd(event: SparkListenerApplicationEnd) {
-    logger.info("Got Spark Application end event, stopping job manger.")
-    self ! PoisonPill
+  private def sparkListener = {
+    new SparkListener() {
+      override def onApplicationEnd(event: SparkListenerApplicationEnd) {
+        logger.info("Got Spark Application end event, stopping job manager.")
+        self ! PoisonPill
+      }
+    }
   }
 
   def wrappedReceive: Receive = {
@@ -142,7 +146,7 @@ class JobManagerActor(contextConfig: Config, daoActor: ActorRef)
         }
         factory = getContextFactory()
         jobContext = factory.makeContext(config, contextConfig, contextName)
-        jobContext.sparkContext.addSparkListener(this)
+        jobContext.sparkContext.addSparkListener(sparkListener)
         sparkEnv = SparkEnv.get
         jobCache = new JobCacheImpl(jobCacheSize, daoActor, jobContext.sparkContext, jarLoader)
         getSideJars(contextConfig).foreach { jarUri => jobContext.sparkContext.addJar(jarUri) }
