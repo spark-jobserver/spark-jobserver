@@ -13,8 +13,12 @@ services:
   - docker
 
 cache:
+  apt: true
   directories:
     - docker
+    - $HOME/.m2
+    - $HOME/.ivy2/cache
+    - $HOME/.sbt/boot/scala-$TRAVIS_SCALA_VERSION
 
 before_install:
   - go get github.com/tonistiigi/buildcache/cmd/buildcache
