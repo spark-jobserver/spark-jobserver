@@ -50,8 +50,6 @@ trait FileCacher {
       override def accept(dir: File, name: String): Boolean = {
         val prefix = appName + "-"
         if (name.startsWith(prefix)) {
-          val suffix = name.substring(prefix.length)
-          (Pattern findFirstIn suffix).isDefined
           true
         } else {
           false
