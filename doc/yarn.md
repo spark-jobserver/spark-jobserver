@@ -57,6 +57,9 @@ Example docker.conf (important settings are marked with # important):
         spark.driver.port = 32456 # important
         # defines the place where your spark-assembly jar is located in your hdfs
         spark.yarn.jar = "hdfs://hadoopHDFSCluster/spark_jars/spark-assembly-1.6.0-hadoop2.6.0.jar" # important
+        
+        # defines the YARN queue the job is submitted to
+        #spark.yarn.queue = root.myYarnQueue
 
         num-cpu-cores = 2           # Number of cores to allocate.  Required.
         memory-per-node = 512m         # Executor memory per node, -Xmx style eg 512m, #1G, etc.

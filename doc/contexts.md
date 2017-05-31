@@ -40,13 +40,14 @@ NOTE: you will get an error if you run the wrong type of job, such as a regular 
 
 ## Initializing a Hive/SQLContext Automatically
 
-You can skip the steps of context creation and jar upload with the latest job server using some config options.  Add the following to your job server config:
+You can skip the steps of context creation and jar upload with the latest job server using some config options.  
+Add the following to your job server config (the deprecated `job-jar-paths` will also work):
 
 ```apache
 spark {
   jobserver {
     # Automatically load a set of jars at startup time.  Key is the appName, value is the path/URL.
-    job-jar-paths {    # NOTE: you may need an absolute path below
+    job-binary-paths {    # NOTE: you may need an absolute path below
       sql = job-server-extras/target/scala-2.10/job-server-extras_2.10-0.6.2-SNAPSHOT-tests.jar
     }
   }
@@ -67,7 +68,9 @@ NOTE: The above also works on DSE 4.8, which packages Job Server 0.5.2, but you 
 
 ## Extending Job Server for Custom Contexts
 
-This can be done easily by extending the `SparkContextFactory` trait, like `SQLContextFactory` does.  Then, extend the `SparkJobBase` trait in a job with a type matching your factory.
+This can be done easily by extending the `SparkContextFactory` trait, like `SQLContextFactory` does.  Then, extend the `api.SparkJobBase` trait in a job with a type matching your factory.
+
+NOTE: If you have defined custom `ContextFactory`s from before 0.7.0, you will need to modify them as the `isValidJob` signature has changed.
 
 ## Jars
 
@@ -81,3 +84,21 @@ If you wish to use the `SQLContext` or `HiveContext`, be sure to pull down the j
 * `streaming.stopGracefully`: if true, stops gracefully by waiting for the processing of all received data to be completed 
 * `streaming.stopSparkContext`: if true, stops the SparkContext with the StreamingContext. The underlying SparkContext will be stopped regardless of whether the StreamingContext has been started.
 
+### Running Multiple HiveContexts (Thanks cgeorge-rms)
+
+This isn't an issue, but wanted to give everyone heads up if someone is searching on this problem.
+When running `context-per-jvm=true` and running multiple HiveContexts without using a shared mysql database you will get an exception about derby locking.
+I found that if you put a hive-site.xml in spark/conf directory containing:
+
+
+    javax.jdo.option.ConnectionURL
+    jdbc:derby:memory:myDB;create=true
+    JDBC connect string for a JDBC metastore
+
+
+    javax.jdo.option.ConnectionDriverName
+    org.apache.derby.jdbc.EmbeddedDriver
+    Driver class name for a JDBC metastore
+
+It will then create an in memory derby instance for the hive metastore (this is assuming you don't need persistent data stored in actual hive metastore) 
+We are doing this because we want context isolation and are running HiveServer2 from a shared context for jdbc access which works really well for us.

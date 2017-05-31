@@ -80,10 +80,38 @@ InstanceCount=10,BidPrice=2.99,Name=sparkSlave,InstanceGroupType=CORE,InstanceTy
    master = "yarn-client"
    jobserver {
      port = 8090
-     jar-store-rootdir = /mnt/tmp/spark-jobserver/jars
-     jobdao = spark.jobserver.io.JobFileDAO
+     # Note: JobFileDAO is deprecated from v0.7.0 because of issues in
+     # production and will be removed in future, now defaults to H2 file.
+     jobdao = spark.jobserver.io.JobSqlDAO
+
      filedao {
        rootdir = /mnt/tmp/spark-jobserver/filedao/data
+     }
+     sqldao {
+       # Slick database driver, full classpath
+       slick-driver = slick.driver.H2Driver
+
+       # JDBC driver, full classpath
+       jdbc-driver = org.h2.Driver
+
+       # Directory where default H2 driver stores its data. Only needed for H2.
+       rootdir = /tmp/spark-jobserver/sqldao/data
+
+       # Full JDBC URL / init string, along with username and password.  Sorry, needs to match above.
+       # Substitutions may be used to launch job-server, but leave it out here in the default or tests won't pass
+       jdbc {
+         url = "jdbc:h2:file:/tmp/spark-jobserver/sqldao/data/h2-db"
+         user = ""
+         password = ""
+       }
+
+       # DB connection pool settings
+       dbcp {
+         enabled = false
+         maxactive = 20
+         maxidle = 10
+         initialsize = 10
+       }
      }
    }
    # predefined Spark contexts

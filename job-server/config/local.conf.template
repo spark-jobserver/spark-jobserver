@@ -13,21 +13,60 @@ spark {
 
   jobserver {
     port = 8090
-    jar-store-rootdir = /tmp/jobserver/jars
 
     context-per-jvm = false
 
-    jobdao = spark.jobserver.io.JobFileDAO
+    # Default client mode will start up a new JobManager int local machine
+    # You can use mesos-cluster mode with REMOTE_JOBSERVER_DIR and MESOS_SPARK_DISPATCHER
+    # environment value set in xxxx.sh file to launch JobManager in remote node
+    # Mesos will take responsibility to offer resource to the JobManager process
+    driver-mode = client
+
+    # Note: JobFileDAO is deprecated from v0.7.0 because of issues in
+    # production and will be removed in future, now defaults to H2 file.
+    jobdao = spark.jobserver.io.JobSqlDAO
 
     filedao {
-      rootdir = /tmp/spark-job-server/filedao/data
+      rootdir = /tmp/spark-jobserver/filedao/data
     }
 
+    datadao {
+      # storage directory for files that are uploaded to the server
+      # via POST/data commands
+      rootdir = /tmp/spark-jobserver/upload
+    }
+
+    sqldao {
+      # Slick database driver, full classpath
+      slick-driver = slick.driver.H2Driver
+
+      # JDBC driver, full classpath
+      jdbc-driver = org.h2.Driver
+
+      # Directory where default H2 driver stores its data. Only needed for H2.
+      rootdir = /tmp/spark-jobserver/sqldao/data
+
+      # Full JDBC URL / init string, along with username and password.  Sorry, needs to match above.
+      # Substitutions may be used to launch job-server, but leave it out here in the default or tests won't pass
+      jdbc {
+        url = "jdbc:h2:file:/tmp/spark-jobserver/sqldao/data/h2-db"
+        user = ""
+        password = ""
+      }
+
+      # DB connection pool settings
+      dbcp {
+        enabled = false
+        maxactive = 20
+        maxidle = 10
+        initialsize = 10
+      }
+    }
     # When using chunked transfer encoding with scala Stream job results, this is the size of each chunk
     result-chunk-size = 1m
   }
 
-  # predefined Spark contexts
+  # Predefined Spark contexts
   # contexts {
   #   my-low-latency-context {
   #     num-cpu-cores = 1           # Number of cores to allocate.  Required.
@@ -36,19 +75,20 @@ spark {
   #   # define additional contexts here
   # }
 
-  # universal context configuration.  These settings can be overridden, see README.md
+  # Universal context configuration.  These settings can be overridden, see README.md
   context-settings {
     num-cpu-cores = 2           # Number of cores to allocate.  Required.
     memory-per-node = 512m         # Executor memory per node, -Xmx style eg 512m, #1G, etc.
 
-    # in case spark distribution should be accessed from HDFS (as opposed to being installed on every mesos slave)
+    # In case spark distribution should be accessed from HDFS (as opposed to being installed on every Mesos slave)
     # spark.executor.uri = "hdfs://namenode:8020/apps/spark/spark.tgz"
 
-    # uris of jars to be loaded into the classpath for this context. Uris is a string list, or a string separated by commas ','
+    # URIs of Jars to be loaded into the classpath for this context.
+    # Uris is a string list, or a string separated by commas ','
     # dependent-jar-uris = ["file:///some/path/present/in/each/mesos/slave/somepackage.jar"]
 
-    # If you wish to pass any settings directly to the sparkConf as-is, add them here in passthrough,
-    # such as hadoop connection settings that don't use the "spark." prefix
+    # Add settings you wish to pass directly to the sparkConf as-is such as Hadoop connection
+    # settings that don't use the "spark." prefix
     passthrough {
       #es.nodes = "192.1.1.1"
     }
