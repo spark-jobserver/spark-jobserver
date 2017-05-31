@@ -23,7 +23,7 @@ class build(BuildPlugin):
     def importSbt(self):
         # Get SBT tool path
         log.info("TRACE", "entering", "sbt")
-        self._sbthome = os.path.join(self.build_cfg.tools()['SBT']['0.13.15'], "sbt")
+        self._sbthome = os.path.join(self.build_cfg.tools()['SBT']['0.13.12'], "sbt")
         log.info(self._sbthome)
         
         # Set SBT_HOME
