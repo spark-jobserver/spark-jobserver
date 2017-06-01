@@ -37,14 +37,14 @@ class build(BuildPlugin):
 
         # Output SBT version
         self._sbtexecutable = join(self._sbtbin,'sbt')
-        os.system(' '.join([self._sbtexecutable, self._sbtCommonConfig, 'sbtVersion']))
+        #os.system(' '.join([self._sbtexecutable, self._sbtCommonConfig, 'sbtVersion']))
         log.info("TRACE", "exiting", "importSbt")
 
     def buildSJS(self):
         log.info("TRACE", "entering", "buildSJS")
         log.info("INFO: building SJS")
 
-        sbt_args = [self._sbtexecutable, self._sbtCommonConfig, 'job-server/assembly']
+        sbt_args = [self._sbtexecutable, self._sbtCommonConfig, 'job-server/assembly', '--debug']
         command = ' '.join(sbt_args)
         log.info("INFO: executing command", command)
 
