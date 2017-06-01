@@ -44,7 +44,7 @@ class build(BuildPlugin):
         log.info("TRACE", "entering", "buildSJS")
         log.info("INFO: building SJS")
 
-        sbt_args = [self._sbtexecutable, self._sbtCommonConfig, 'job-server/assembly', '--debug']
+        sbt_args = [self._sbtexecutable, self._sbtCommonConfig, 'job-server/assembly']
         command = ' '.join(sbt_args)
         log.info("INFO: executing command", command)
 
