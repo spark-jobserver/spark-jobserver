@@ -12,17 +12,25 @@ class build(BuildPlugin):
     def __init__(self, build_cfg):
         self.build_cfg = build_cfg
 
+        # -Dsbt.repository.config : used to specify the internal nexus repositories.
+        # This configuration overrides the repositories defined by SJS.
+        # These repositories are only used if -Dsbt.override.build.repos is set
+        # to true.
+        # -no-share: forces sbt to store all the dependencies inside the
+        # project/.ivy folder.
         self._sbtCommonConfig = '-Dsbt.repository.config=proxy_repositories -Dsbt.override.build.repos=true -no-share'
 
     # Called when the actual build step is executed.
     def run(self):
         log.info("TRACE", "entering", "run")
+
         self.importSbt()
+
         return self.buildSJS()
 
     def importSbt(self):
-        # Get SBT tool path
         log.info("TRACE", "entering", "sbt")
+        # Get SBT Path
         self._sbthome = os.path.join(self.build_cfg.tools()['SBT']['0.13.12'], "sbt")
         log.info(self._sbthome)
 
@@ -37,7 +45,6 @@ class build(BuildPlugin):
 
         # Output SBT version
         self._sbtexecutable = join(self._sbtbin,'sbt')
-        #os.system(' '.join([self._sbtexecutable, self._sbtCommonConfig, 'sbtVersion']))
         log.info("TRACE", "exiting", "importSbt")
 
     def buildSJS(self):
