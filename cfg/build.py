@@ -12,7 +12,7 @@ class build(BuildPlugin):
     def __init__(self, build_cfg):
         self.build_cfg = build_cfg
 
-        self._sbtCommonConfig = '-Dsbt.repository.config=proxy_repositories -Dsbt.override.build.repos=true -no-share --debug'
+        self._sbtCommonConfig = '-Dsbt.repository.config=proxy_repositories -Dsbt.override.build.repos=true -no-share'
 
     # Called when the actual build step is executed.
     def run(self):
