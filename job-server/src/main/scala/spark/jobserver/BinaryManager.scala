@@ -107,7 +107,7 @@ class BinaryManager(jobDao: ActorRef) extends InstrumentedActor {
 
     case DeleteBinary(appName) =>
       logger.info(s"Deleting binary $appName")
-      deleteBinary(appName).map{
+      deleteBinary(appName).map {
         case Success(_) => BinaryDeleted
         case Failure(ex) => BinaryDeletionFailure(ex)
       }.pipeTo(sender)
