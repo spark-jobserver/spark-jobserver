@@ -9,6 +9,11 @@ language: go
 go:
   - 1.7
 
+scala:
+   - 2.11.8
+jdk:
+   - oraclejdk8
+
 services:
   - docker
 
@@ -38,3 +43,6 @@ install:
 
 script:
   - docker run `/bin/bash <(curl -s https://codecov.io/env)` --rm -t -i $DOCKER_IMAGE
+
+after_success:
+  - sbt docker
