@@ -179,11 +179,6 @@ class PythonSessionContextFactory extends PythonContextFactory {
                            contextName: String): C = {
     val builder = SparkSession.builder().config(sparkConf.set("spark.yarn.isPython", "true"))
     builder.appName(contextName)
-    try {
-      builder.enableHiveSupport()
-    } catch {
-      case e: IllegalArgumentException => println(s"Hive support not enabled - ${e.getMessage()}")
-    }
     val spark = builder.getOrCreate()
     for ((k, v) <- SparkJobUtils.getHadoopConfig(contextConfig))
       spark.sparkContext.hadoopConfiguration.set(k, v)
