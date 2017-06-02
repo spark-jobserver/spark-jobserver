@@ -1,4 +1,4 @@
 [repositories]
   local
-  my-ivy-proxy-releases: http://nexus.wdf.sap.corp:8081/nexus/content/repositories/build.releases/, [organization]/[module]/(scala_[scalaVersion]/)(sbt_[sbtVersion]/)[revision]/[type]s/[artifact](-[classifier]).[ext]
-  my-maven-proxy-releases: http://nexus.wdf.sap.corp:8081/nexus/content/repositories/build.releases/
+  my-ivy-proxy-releases: http://nexus.wdf.sap.corp:8081/nexus/content/groups/build.releases/, [organization]/[module]/(scala_[scalaVersion]/)(sbt_[sbtVersion]/)[revision]/[type]s/[artifact](-[classifier]).[ext]
+  my-maven-proxy-releases: http://nexus.wdf.sap.corp:8081/nexus/content/groups/build.releases/
