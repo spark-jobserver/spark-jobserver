@@ -3,4 +3,5 @@
 * Mark actor as down on context initialization errors. (@derSascha)
 * fix(akka): Stop job manager actor on context stop (@derSascha)
 * Mesos config docs (@vatsalmevada)
+* provide Java7 build compatibility (JAVA_VERSION) (@derSascha)
 * ENTER CHANGES HERE
