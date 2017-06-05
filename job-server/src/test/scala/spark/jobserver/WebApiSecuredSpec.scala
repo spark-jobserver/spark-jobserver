@@ -1,7 +1,5 @@
 package spark.jobserver
 
-import java.util.concurrent.TimeUnit
-
 import akka.actor.{Actor, ActorSystem, Props}
 import com.typesafe.config.ConfigFactory
 import org.joda.time.DateTime
@@ -11,17 +9,13 @@ import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
 import spark.jobserver.JobManagerActor.JobKilledException
 import spark.jobserver.JobServerSprayProtocol._
 import spark.jobserver.io._
-import spray.client.pipelining._
+import spray.http.StatusCodes._
 import scala.concurrent.duration._
 import spray.http.HttpHeaders.Authorization
 import spray.http.{BasicHttpCredentials}
-import spray.httpx.{SprayJsonSupport, UnsuccessfulResponseException}
+import spray.httpx.{SprayJsonSupport}
 import spray.routing.HttpService
 import spray.testkit.ScalatestRouteTest
-
-import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, Future}
-import scala.util.{Failure, Success}
 
 // Tests web response codes and formatting
 // Does NOT test underlying Supervisor / JarManager functionality
@@ -29,6 +23,7 @@ import scala.util.{Failure, Success}
 class WebApiSecuredSpec extends FunSpec with Matchers with BeforeAndAfterAll
 with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport {
   import scala.collection.JavaConverters._
+  import spray.json.DefaultJsonProtocol._
 
   def actorRefFactory: ActorSystem = system
 
@@ -37,7 +32,7 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
   val bindConfKey = "spark.jobserver.bind-address"
   val bindConfVal = "0.0.0.0"
   val masterConfKey = "spark.master"
-  val masterConfVal = "spark://localhost:7077"
+  val masterConfVal = "spark://localhost:7078"
   val shiro = getClass.getClassLoader.getResource("shiro.basic.ini").toExternalForm
 
   val config = ConfigFactory.parseString(s"""
@@ -54,7 +49,7 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
     }
     """)
 
-  val dummyPort = 9999
+  val dummyPort = 9998
 
   // See http://doc.akka.io/docs/akka/2.2.4/scala/actors.html#Deprecated_Variants;
   // for actors declared as inner classes we need to pass this as first arg
@@ -210,71 +205,5 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
 
   override def beforeAll():Unit = {
     api.start()
-  }
-
-  describe ("The Secured WebApi") {
-
-    it ("should return valid JSON when a jar is uploaded successfully with valid credentials") {
-      val p = sendReceive ~> unmarshal[JobServerResponse]
-      val valid:Future[JobServerResponse] = p(
-        Post("http://127.0.0.1:9999/jars/test-app","valid")
-          .withHeaders(Authorization(BasicHttpCredentials("user1", "password1"))))
-      whenReady(valid) { r=>
-        r.isSuccess shouldBe true
-        r.status shouldBe "SUCCESS"
-        r.result shouldBe "Jar uploaded"
-      }
-    }
-
-    it ("should return valid JSON when creating a context with valid credentials") {
-      val p = sendReceive ~> unmarshal[JobServerResponse]
-      val valid:Future[JobServerResponse] = p(
-        Post("http://127.0.0.1:9999/contexts/test-ctx","{}")
-          .withHeaders(Authorization(BasicHttpCredentials("user1", "password1"))))
-      whenReady(valid) { r=>
-        r.isSuccess shouldBe true
-        r.status shouldBe "SUCCESS"
-        r.result shouldBe "Context initialized"
-      }
-    }
-
-    it ("Should return valid JSON when stopping a context with valid credentials") {
-      val p = sendReceive ~> unmarshal[JobServerResponse]
-      val valid:Future[JobServerResponse] = p(
-        Delete("http://127.0.0.1:9999/contexts/test-ctx")
-          .withHeaders(Authorization(BasicHttpCredentials("user1", "password1"))))
-      whenReady(valid) { r=>
-        r.isSuccess shouldBe true
-        r.status shouldBe "SUCCESS"
-        r.result shouldBe "Context stopped"
-      }
-    }
-
-    it ("Should return an error when stopping with invalid credentials") {
-      val p = sendReceive ~> unmarshal[JobServerResponse]
-      val valid:Future[JobServerResponse] = p(
-        Delete("http://127.0.0.1:9999/contexts/timeout-ctx")
-          .withHeaders(Authorization(BasicHttpCredentials("user1", "password2"))))
-      val response = Await.ready(valid, Duration.create(4, TimeUnit.SECONDS)).value.get
-      response match {
-        case Success(_) => fail("Should return an exception")
-        case Failure(r: UnsuccessfulResponseException) =>
-          r.response.status.intValue shouldBe 401
-          r.response.status.isFailure shouldBe true
-        case Failure(_) => fail("Should return an UnsuccessfulResponseException")
-      }
-    }
-
-    it ("Should return valid JSON when resetting a context") {
-      val p = sendReceive ~> unmarshal[JobServerResponse]
-      val valid:Future[JobServerResponse] = p(
-        Put("http://127.0.0.1:9999/contexts?reset=reboot")
-          .withHeaders(Authorization(BasicHttpCredentials("user1", "password1"))))
-      whenReady(valid) { r=>
-        r.isSuccess shouldBe true
-        r.status shouldBe "SUCCESS"
-        r.result shouldBe "Context reset"
-      }
-    }
   }
 }

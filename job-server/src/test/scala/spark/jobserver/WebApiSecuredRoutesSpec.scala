@@ -1,9 +1,7 @@
 package spark.jobserver
 
-import akka.actor.ActorSystem
 import com.typesafe.config.ConfigFactory
 import spark.jobserver.io.{BinaryType, JobStatus}
-import spark.jobserver.util.SparkJobUtils
 import spray.http.HttpHeaders.Authorization
 import spray.http.StatusCodes._
 import spray.http._
@@ -14,8 +12,6 @@ import spray.http._
 class WebApiSecuredRoutesSpec extends WebApiSecuredSpec {
   import spark.jobserver.common.akka.web.JsonUtils._
   import spray.json.DefaultJsonProtocol._
-
-  import scala.concurrent.duration._
 
   val getJobStatusInfoMap = {
     Map(
@@ -214,6 +210,64 @@ class WebApiSecuredRoutesSpec extends WebApiSecuredSpec {
         withHeaders(Authorization(BasicHttpCredentials("user1", "password1"))) ~>
         sealRoute(routes) ~> check {
         status should be (OK)
+      }
+    }
+  }
+
+  describe ("The Secured WebApi") {
+    it ("should return valid JSON when a jar is uploaded successfully with valid credentials") {
+      Post("/jars/test-app", Array[Byte](0, 1, 2)).
+        withHeaders(Authorization(BasicHttpCredentials("user1", "password1"))) ~>
+        sealRoute(routes) ~> check {
+        status should be(OK)
+        responseAs[Map[String, String]] should be (Map(
+          WebApi.StatusKey -> "SUCCESS",
+          WebApi.ResultKey -> "Jar uploaded"
+        ))
+      }
+    }
+
+    it ("should return valid JSON when creating a context with valid credentials") {
+      Post("/contexts/test-ctx", "{}").
+        withHeaders(Authorization(BasicHttpCredentials("user1", "password1"))) ~>
+        sealRoute(routes) ~> check {
+        status should be(OK)
+        responseAs[Map[String, String]] should be (Map(
+          WebApi.StatusKey -> "SUCCESS",
+          WebApi.ResultKey -> "Context initialized"
+        ))
+      }
+    }
+
+    it ("Should return valid JSON when stopping a context with valid credentials") {
+      Delete("/contexts/test-ctx").
+        withHeaders(Authorization(BasicHttpCredentials("user1", "password1"))) ~>
+        sealRoute(routes) ~> check {
+        status should be(OK)
+        responseAs[Map[String, String]] should be (Map(
+          WebApi.StatusKey -> "SUCCESS",
+          WebApi.ResultKey -> "Context stopped"
+        ))
+      }
+    }
+
+    it ("Should return an error when stopping with invalid credentials") {
+      Delete("/contexts/timeout-ctx").
+        withHeaders(Authorization(BasicHttpCredentials("user1", "password2"))) ~>
+        sealRoute(routes) ~> check {
+        status should be(Unauthorized)
+      }
+    }
+
+    it ("Should return valid JSON when resetting a context") {
+      Put("/contexts?reset=reboot").
+        withHeaders(Authorization(BasicHttpCredentials("user1", "password1"))) ~>
+        sealRoute(routes) ~> check {
+        status should be(OK)
+        responseAs[Map[String, String]] should be (Map(
+          WebApi.StatusKey -> "SUCCESS",
+          WebApi.ResultKey -> "Context reset"
+        ))
       }
     }
   }
