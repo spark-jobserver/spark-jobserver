@@ -1,0 +1,6 @@
+/target
+*/target
+**/target
+.git
+.ensime
+.ensime_cache

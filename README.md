@@ -6,7 +6,7 @@ spark-jobserver provides a RESTful interface for submitting and managing [Apache
 This repo contains the complete Spark job server project, including unit tests and deploy scripts.
 It was originally started at [Ooyala](http://www.ooyala.com), but this is now the main development repo.
 
-See [Troubleshooting Tips](doc/troubleshooting.md) as well as [Yarn tips](doc/yarn.md).
+Other useful links: [Troubleshooting Tips](doc/troubleshooting.md), [Yarn tips](doc/yarn.md), [Mesos tips](doc/mesos.md).
 
 Also see [Chinese docs / 中文](doc/chinese/job-server.md).
 
@@ -114,7 +114,7 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 | 0.6.1       | 1.5.2         |
 | 0.6.2       | 1.6.1         |
 | 0.7.0       | 1.6.2         |
-| spark-2.0-preview | 2.0     |
+| 0.8.0-SNAPSHOT | 2.1.0    |
 
 For release notes, look in the `notes/` directory.
 
@@ -149,7 +149,7 @@ From SBT shell, simply type "reStart".  This uses a default configuration file. 
 path to an alternative config file.  You can also specify JVM parameters after "---".  Including all the
 options looks like this:
 
-    job-server/reStart /path/to/my.conf --- -Xmx8g
+    job-server-extras/reStart /path/to/my.conf --- -Xmx8g
 
 Note that reStart (SBT Revolver) forks the job server in a separate process.  If you make a code change, simply
 type reStart again at the SBT shell prompt, it will compile your changes and restart the jobserver.  It enables

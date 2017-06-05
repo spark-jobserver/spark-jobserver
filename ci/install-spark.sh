@@ -1,3 +1,4 @@
 #!/usr/bin/env bash
-curl -o /tmp/spark.tgz http://apache.mirror.anlx.net/spark/spark-1.6.3/spark-1.6.3-bin-hadoop2.6.tgz
+set -e
+curl -L -o /tmp/spark.tgz http://d3kbcqa49mib13.cloudfront.net/spark-2.1.0-bin-hadoop2.7.tgz
 tar -xvzf /tmp/spark.tgz -C /tmp
