@@ -589,13 +589,15 @@ class WebApi(system: ActorSystem,
         post {
           entity(as[String]) { configString =>
             parameters('appName, 'classPath,
-              'context ?, 'sync.as[Boolean] ?, 'timeout.as[Int] ?) {
-                (appName, classPath, contextOpt, syncOpt, timeoutOpt) =>
+              'context ?, 'sync.as[Boolean] ?, 'timeout.as[Int] ?, SparkJobUtils.SPARK_PROXY_USER_PARAM ?) {
+                (appName, classPath, contextOpt, syncOpt, timeoutOpt, sparkProxyUser) =>
                   try {
                     val async = !syncOpt.getOrElse(false)
                     val postedJobConfig = ConfigFactory.parseString(configString)
                     val jobConfig = postedJobConfig.withFallback(config).resolve()
-                    val contextConfig = getContextConfig(jobConfig)
+                    val contextConfig = getContextConfig(jobConfig,
+                      sparkProxyUser.map(user => Map((SparkJobUtils.SPARK_PROXY_USER_PARAM, user)))
+                      .getOrElse(Map.empty))
                     val (cName, cConfig) =
                       determineProxyUser(contextConfig, authInfo, contextOpt.getOrElse(""))
                     val jobManager = getJobManagerForContext(
