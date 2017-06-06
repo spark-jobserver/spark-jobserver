@@ -150,7 +150,7 @@ Then, running `python setup.py bdist_egg` will create a file `dist/my_job_packag
 
 If Spark Job Server is running with Python support, A Python context can be started with, for example:
 
-    curl -X POST 'localhost:8090/contexts/py-context?context-factory=spark.jobserver.python.PythonSparkContextFactory'
+    curl -X POST "localhost:8090/contexts/py-context?context-factory=spark.jobserver.python.PythonSparkContextFactory"
 
 Whereas Java and Scala jobs are packaged as Jar files, Python jobs need to be packaged as `Egg` files. A set of example jobs
 can be build using the `job-server-python/` sbt task `job-server-python/buildPyExamples`. this builds an examples Egg
@@ -162,16 +162,16 @@ in `job-server-python/target/python` so we could push this to the server as a jo
 Then, running a Python job is similar to running other job types:
 
     curl -d 'input.strings = ["a", "b", "a", "b" ]' \
-    'localhost:8090/jobs?appName=my_py_job&classPath=my_job_package.WordCountSparkJob&context=py-context'
+    "localhost:8090/jobs?appName=my_py_job&classPath=my_job_package.WordCountSparkJob&context=py-context"
 
-    curl 'localhost:8090/jobs/<job-id>'
+    curl "localhost:8090/jobs/<job-id>"
 
 ## SQLContext and HiveContext support
 
 Python support is also available for `SQLContext` and `HiveContext`. Simply launch a context using
 `spark.jobserver.python.PythonSQLContextFactory` or `spark.jobserver.python.PythonHiveContextFactory`. For example:
 
-    curl -X POST 'localhost:8090/contexts/pysql-context?context-factory=spark.jobserver.python.PythonSQLContextFactory'
+    curl -X POST "localhost:8090/contexts/pysql-context?context-factory=spark.jobserver.python.PythonSQLContextFactory"
 
 When implementing the Python job, you can simply assume that the `context` argument to `validate` and `run_job`
 is of the appropriate type. Due to dynamic typing in Python, this is not enforced in the method definitions. For example:
@@ -224,9 +224,9 @@ The input to the job can be provided as a conf file, e.g. with the contents:
 Then we can submit the `SQLContext` based job:
 
     curl -d @sqlinput.conf \
-    'localhost:8090/jobs?appName=example_jobs&classPath=example_jobs.sql_average.SQLAverageJob&context=pysql-context'
+    "localhost:8090/jobs?appName=example_jobs&classPath=example_jobs.sql_average.SQLAverageJob&context=pysql-context"
 
-    curl 'localhost:8090/jobs/<job-id>'
+    curl "localhost:8090/jobs/<job-id>"
 
 When complete, we get output such as:
 
