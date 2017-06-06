@@ -6,7 +6,9 @@ import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, Matchers, FunSpec}
 import spark.jobserver.WindowsIgnore
 import scala.collection.JavaConverters._
+import org.scalatest._
 
+@Ignore
 class PythonSQLContextFactorySpec extends FunSpec with Matchers with BeforeAndAfter{
 
   import PythonSparkContextFactorySpec._

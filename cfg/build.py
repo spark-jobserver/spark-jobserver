@@ -23,10 +23,13 @@ class build(BuildPlugin):
     # Called when the actual build step is executed.
     def run(self):
         log.info("TRACE", "entering", "run")
-
         self.importSbt()
-
-        return self.buildSJS()
+        if self.testSJS() == 0:
+            log.info("Testcases successfully executed.")
+            return self.buildSJS()
+        else:
+            log.error("Testcases for SJS failed.")
+            return -1;
 
     def importSbt(self):
         log.info("TRACE", "entering", "sbt")
@@ -47,16 +50,25 @@ class build(BuildPlugin):
         self._sbtexecutable = join(self._sbtbin,'sbt')
         log.info("TRACE", "exiting", "importSbt")
 
+    def testSJS(self):
+        log.info("TRACE", "entering", "testSJS")
+        return self.executeSbtCommand('clean test')
+
     def buildSJS(self):
         log.info("TRACE", "entering", "buildSJS")
         log.info("INFO: building SJS")
 
-        sbt_args = [self._sbtexecutable, self._sbtCommonConfig, 'job-server/assembly']
+        return self.executeSbtCommand('job-server/assembly')
+
+    def executeSbtCommand(self, sbtCommand):
+        log.info("TRACE", "entering", "executeSbtCommand")
+        sbt_args = [self._sbtexecutable, self._sbtCommonConfig]
+        sbt_args.append(sbtCommand)
         command = ' '.join(sbt_args)
         log.info("INFO: executing command", command)
 
         result = os.system(command)
-        log.info("INFO: result of SJS build", result)
+        log.info("INFO: result of sbt command is", result)
 
-        log.info("TRACE", "exiting", "buildSJS")
+        log.info("TRACE", "exiting", "executeSbtCommand")
         return result

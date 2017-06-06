@@ -4,6 +4,7 @@ import com.typesafe.config.ConfigFactory
 import spark.jobserver.CommonMessages.{JobErroredOut, JobResult}
 import spark.jobserver.io.JobDAOActor
 import spark.jobserver._
+import org.scalatest._
 import scala.concurrent.duration._
 import scala.collection.JavaConverters._
 
@@ -11,6 +12,7 @@ object PythonJobManagerSpec extends JobSpecConfig {
   override val contextFactory = classOf[PythonSparkContextFactory].getName
 }
 
+@Ignore
 class PythonJobManagerSpec extends ExtrasJobSpecBase(PythonJobManagerSpec.getNewSystem) {
 
   before {

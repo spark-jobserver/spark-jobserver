@@ -10,6 +10,7 @@ import java.nio.file.Paths
 import spark.jobserver.WindowsIgnore
 import scala.collection.JavaConverters._
 
+import org.scalatest._
 
 object PythonHiveContextFactorySpec {
 
@@ -29,6 +30,7 @@ object PythonHiveContextFactorySpec {
   }
 }
 
+@Ignore
 class PythonHiveContextFactorySpec extends FunSpec with Matchers with BeforeAndAfter {
 
   import PythonSparkContextFactorySpec._

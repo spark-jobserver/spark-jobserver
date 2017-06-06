@@ -8,6 +8,7 @@ import org.apache.spark.SparkConf
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, FunSpec, Matchers}
 import spark.jobserver._
+import org.scalatest._
 import spark.jobserver.api.JobEnvironment
 import scala.concurrent.duration.FiniteDuration
 import scala.collection.JavaConverters._
@@ -113,6 +114,7 @@ object PythonSparkContextFactorySpec {
   lazy val sparkConf = new SparkConf().setMaster("local[*]").setAppName("PythonSparkContextFactorySpec")
 }
 
+@Ignore
 class PythonSparkContextFactorySpec extends FunSpec with Matchers with BeforeAndAfter {
 
   import PythonSparkContextFactorySpec._
