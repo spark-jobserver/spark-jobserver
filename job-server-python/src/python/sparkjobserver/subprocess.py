@@ -20,7 +20,7 @@ from importlib import import_module
 from py4j.java_gateway import JavaGateway, java_import, GatewayClient
 from pyhocon import ConfigFactory
 from pyspark.context import SparkContext, SparkConf
-from pyspark.sql import SQLContext, HiveContext
+from pyspark.sql import SQLContext, HiveContext, SparkSession
 from sparkjobserver.api import ValidationProblem, JobEnvironment
 import traceback
 
@@ -78,7 +78,8 @@ if __name__ == "__main__":
         jsc = gateway.jvm.org.apache.spark.api.java.JavaSparkContext(
                 jcontext.sparkContext())
         sc = SparkContext(gateway=gateway, jsc=jsc, conf=spark_conf)
-        context = SQLContext(sc, jcontext)
+        ss = SparkSession(sc, jcontext.sparkSession())
+        context = SQLContext(sc, ss, jcontext)
     elif context_class == 'org.apache.spark.sql.hive.HiveContext':
         jsc = gateway.jvm.org.apache.spark.api.java.JavaSparkContext(
                 jcontext.sparkContext())

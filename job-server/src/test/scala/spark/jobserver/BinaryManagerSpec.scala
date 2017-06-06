@@ -68,7 +68,7 @@ class BinaryManagerSpec extends TestKit(BinaryManagerSpec.system) with ImplicitS
 
     it("should respond when deleted successfully") {
       binaryManager ! DeleteBinary("valid")
-      expectMsg(Success({}))
+      expectMsg(BinaryDeleted)
     }
   }
 }

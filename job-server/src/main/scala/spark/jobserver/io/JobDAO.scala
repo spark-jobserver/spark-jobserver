@@ -131,7 +131,14 @@ trait JobDAO {
    * @todo remove. used only in test
    * @return
    */
+  @deprecated("Leads to performance problems and OutOfMemory error ultimately", "0.7.1")
   def getJobConfigs: Future[Map[String, Config]]
+
+  /**
+    * Returns a config for a given jobId
+    * @return
+    */
+  def getJobConfig(jobId: String): Future[Option[Config]]
 
   /**
    * Returns the last upload time for a given app name.

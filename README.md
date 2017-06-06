@@ -6,7 +6,7 @@ spark-jobserver provides a RESTful interface for submitting and managing [Apache
 This repo contains the complete Spark job server project, including unit tests and deploy scripts.
 It was originally started at [Ooyala](http://www.ooyala.com), but this is now the main development repo.
 
-See [Troubleshooting Tips](doc/troubleshooting.md) as well as [Yarn tips](doc/yarn.md).
+Other useful links: [Troubleshooting Tips](doc/troubleshooting.md), [Yarn tips](doc/yarn.md), [Mesos tips](doc/mesos.md).
 
 Also see [Chinese docs / 中文](doc/chinese/job-server.md).
 
@@ -114,7 +114,7 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 | 0.6.1       | 1.5.2         |
 | 0.6.2       | 1.6.1         |
 | 0.7.0       | 1.6.2         |
-| spark-2.0-preview | 2.0     |
+| 0.8.0-SNAPSHOT | 2.1.0    |
 
 For release notes, look in the `notes/` directory.
 
@@ -149,7 +149,7 @@ From SBT shell, simply type "reStart".  This uses a default configuration file. 
 path to an alternative config file.  You can also specify JVM parameters after "---".  Including all the
 options looks like this:
 
-    job-server/reStart /path/to/my.conf --- -Xmx8g
+    job-server-extras/reStart /path/to/my.conf --- -Xmx8g
 
 Note that reStart (SBT Revolver) forks the job server in a separate process.  If you make a code change, simply
 type reStart again at the SBT shell prompt, it will compile your changes and restart the jobserver.  It enables
@@ -177,7 +177,7 @@ Let's upload the jar:
 The above jar is uploaded as app `test`.  Next, let's start an ad-hoc word count job, meaning that the job
 server will create its own SparkContext, and return a job ID for subsequent querying:
 
-    curl -d "input.string = a b c a b see" 'localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample'
+    curl -d "input.string = a b c a b see" "localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample"
     {
       "duration": "Job not done yet",
       "classPath": "spark.jobserver.WordCountExample",
@@ -190,7 +190,7 @@ server will create its own SparkContext, and return a job ID for subsequent quer
 NOTE: If you want to feed in a text file config and POST using curl, you want the `--data-binary` option, otherwise
 curl will munge your line separator chars.  Like:
 
-    curl --data-binary @my-job-config.json 'localhost:8090/jobs?appNam=...'
+    curl --data-binary @my-job-config.json "localhost:8090/jobs?appNam=..."
 
 NOTE2: If you want to send in UTF-8 chars, make sure you pass in a proper header to CURL for the encoding, otherwise it may assume an encoding which is not what you expect.
 
@@ -220,7 +220,7 @@ You can also append `&timeout=XX` to extend the request timeout for `sync=true` 
 #### Persistent Context Mode - Faster & Required for Related Jobs
 Another way of running this job is in a pre-created context.  Start a new context:
 
-    curl -d "" 'localhost:8090/contexts/test-context?num-cpu-cores=4&memory-per-node=512m'
+    curl -d "" "localhost:8090/contexts/test-context?num-cpu-cores=4&memory-per-node=512m"
     OK⏎
 
 You can verify that the context has been created:
@@ -230,7 +230,7 @@ You can verify that the context has been created:
 
 Now let's run the job in the context and get the results back right away:
 
-    curl -d "input.string = a b c a b see" 'localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample&context=test-context&sync=true'
+    curl -d "input.string = a b c a b see" "localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample&context=test-context&sync=true"
     {
       "result": {
         "a": 2,
@@ -309,7 +309,7 @@ It is much more type safe, separates context configuration, job ID, named object
 
 Let's try running our sample job with an invalid configuration:
 
-    curl -i -d "bad.input=abc" 'localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample'
+    curl -i -d "bad.input=abc" "localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample"
 
     HTTP/1.1 400 Bad Request
     Server: spray-can/1.2.0
@@ -343,11 +343,11 @@ You have a couple options to package and upload dependency jars.
     - Use the `dependent-jar-uris` context configuration param. Then the jar gets loaded for every job.
     - The `dependent-jar-uris` can also be used in job configuration param when submitting a job. On an ad-hoc context this has the same effect as `dependent-jar-uris` context configuration param. On a persistent context the jars will be loaded for the current job and then for every job that will be executed on the persistent context.
         ````
-        curl -d "" 'localhost:8090/contexts/test-context?num-cpu-cores=4&memory-per-node=512m'
+        curl -d "" "localhost:8090/contexts/test-context?num-cpu-cores=4&memory-per-node=512m"
         OK⏎
         ````
         ````
-        curl 'localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample&context=test-context&sync=true' -d '{
+        curl "localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample&context=test-context&sync=true" -d '{
             dependent-jar-uris = ["file:///myjars/deps01.jar", "file:///myjars/deps02.jar"],
             input.string = "a b c a b see"
         }'

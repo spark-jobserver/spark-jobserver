@@ -33,7 +33,9 @@ object JobDAOActor {
   case class GetJobInfos(limit: Int) extends JobDAORequest
 
   case class SaveJobConfig(jobId:String, jobConfig:Config) extends JobDAORequest
+  @deprecated("Leads to performance problems and OutOfMemory error ultimately", "0.7.1")
   case object GetJobConfigs extends JobDAORequest
+  case class GetJobConfig(jobId: String) extends JobDAORequest
 
   case class GetLastUploadTimeAndType(appName: String) extends JobDAORequest
 
@@ -44,6 +46,7 @@ object JobDAOActor {
   case class BinaryContent(content: Array[Byte]) extends JobDAOResponse
   case class JobInfos(jobInfos: Seq[JobInfo]) extends JobDAOResponse
   case class JobConfigs(jobConfigs: Map[String, Config]) extends JobDAOResponse
+  case class JobConfig(jobConfig: Option[Config]) extends JobDAOResponse
   case class LastUploadTimeAndType(uploadTimeAndType: Option[(DateTime, BinaryType)]) extends JobDAOResponse
 
   case object InvalidJar extends JobDAOResponse
@@ -84,6 +87,9 @@ class JobDAOActor(dao:JobDAO) extends InstrumentedActor {
 
     case GetJobConfigs =>
       dao.getJobConfigs.map(JobConfigs).pipeTo(sender)
+
+    case GetJobConfig(jobId) =>
+      dao.getJobConfig(jobId).map(JobConfig).pipeTo(sender)
 
     case GetLastUploadTimeAndType(appName) =>
       sender() ! LastUploadTimeAndType(dao.getLastUploadTimeAndType(appName))

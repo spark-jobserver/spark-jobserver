@@ -1,6 +1,7 @@
 import sbt._
 import Versions._
 import ExclusionRules._
+
 object Dependencies {
 
   lazy val typeSafeConfigDeps = "com.typesafe" % "config" % typeSafeConfig
@@ -16,32 +17,27 @@ object Dependencies {
   lazy val akkaDeps = Seq(
     // Akka is provided because Spark already includes it, and Spark's version is shaded so it's not safe
     // to use this one
-    "com.typesafe.akka" %% "akka-slf4j" % akka % "provided",
+    "com.typesafe.akka" %% "akka-slf4j" % akka,
     "com.typesafe.akka" %% "akka-cluster" % akka exclude("com.typesafe.akka", "akka-remote"),
     "io.spray" %% "spray-json" % sprayJson,
     "io.spray" %% "spray-can" % spray,
     "io.spray" %% "spray-caching" % spray,
-    "io.spray" %% "spray-routing" % spray,
+    "io.spray" %% "spray-routing-shapeless23" % "1.3.4",
     "io.spray" %% "spray-client" % spray,
     yammerDeps
   )
 
-  val javaVersion = sys.env.getOrElse("JAVA_VERSION", "7-jdk")
-
-  val mesosVersion = sys.env.getOrElse("MESOS_VERSION", mesos)
-
-  val sparkVersion = sys.env.getOrElse("SPARK_VERSION", spark)
   lazy val sparkDeps = Seq(
-    "org.apache.spark" %% "spark-core" % sparkVersion % "provided" excludeAll(excludeNettyIo, excludeQQ),
+    "org.apache.spark" %% "spark-core" % spark % "provided" excludeAll(excludeNettyIo, excludeQQ),
     // Force netty version.  This avoids some Spark netty dependency problem.
-    "io.netty" % "netty-all" % "4.0.37.Final"
+    "io.netty" % "netty-all" % netty
   )
 
   lazy val sparkExtraDeps = Seq(
-    "org.apache.spark" %% "spark-mllib" % sparkVersion % Provided excludeAll(excludeNettyIo, excludeQQ),
-    "org.apache.spark" %% "spark-sql" % sparkVersion % Provided excludeAll(excludeNettyIo, excludeQQ),
-    "org.apache.spark" %% "spark-streaming" % sparkVersion % Provided excludeAll(excludeNettyIo, excludeQQ),
-    "org.apache.spark" %% "spark-hive" % sparkVersion % Provided excludeAll(
+    "org.apache.spark" %% "spark-mllib" % spark % Provided excludeAll(excludeNettyIo, excludeQQ),
+    "org.apache.spark" %% "spark-sql" % spark % Provided excludeAll(excludeNettyIo, excludeQQ),
+    "org.apache.spark" %% "spark-streaming" % spark % Provided excludeAll(excludeNettyIo, excludeQQ),
+    "org.apache.spark" %% "spark-hive" % spark % Provided excludeAll(
       excludeNettyIo, excludeQQ, excludeScalaTest
     )
   )
