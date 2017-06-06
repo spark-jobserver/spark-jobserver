@@ -10,6 +10,7 @@ import spark.jobserver.JobManagerActor.JobKilledException
 import spark.jobserver.JobServerSprayProtocol._
 import spark.jobserver.io._
 import spray.http.StatusCodes._
+import scala.concurrent.Await
 import scala.concurrent.duration._
 import spray.http.HttpHeaders.Authorization
 import spray.http.{BasicHttpCredentials}
@@ -205,5 +206,9 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
 
   override def beforeAll():Unit = {
     api.start()
+  }
+
+  override def afterAll():Unit = {
+    Await.ready(system.terminate(), 10 second)
   }
 }

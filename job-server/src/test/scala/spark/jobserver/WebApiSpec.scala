@@ -198,10 +198,16 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
     }
   }
 
-  implicit override val patienceConfig = PatienceConfig(timeout = Span(5, Seconds), interval = Span(1, Seconds))
+  implicit override val patienceConfig =
+    PatienceConfig(timeout = Span(5, Seconds), interval = Span(1, Seconds))
 
   override def beforeAll():Unit = {
     api.start()
+  }
+
+  override def afterAll():Unit = {
+    system.shutdown()
+    system.awaitTermination()
   }
 
   describe ("The WebApi") {

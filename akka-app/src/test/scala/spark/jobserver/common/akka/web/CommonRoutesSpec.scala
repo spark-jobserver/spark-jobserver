@@ -32,6 +32,11 @@ class CommonRoutesSpec extends FunSpec with Matchers with ScalatestRouteTest wit
   val timerMap = Map("type" -> "timer", "rate" -> (meterMap - "type"),
     "duration" -> (histMap ++ Map("units" -> "milliseconds") - "type"))
 
+  override def afterAll():Unit = {
+    system.shutdown()
+    system.awaitTermination()
+  }
+
   describe("/metricz route") {
     it("should report all metrics") {
       Get("/metricz") ~> commonRoutes ~> check {

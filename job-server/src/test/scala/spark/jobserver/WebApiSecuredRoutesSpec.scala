@@ -213,7 +213,6 @@ class WebApiSecuredRoutesSpec extends WebApiSecuredSpec {
       }
     }
   }
-
   describe ("The Secured WebApi") {
     it ("should return valid JSON when a jar is uploaded successfully with valid credentials") {
       Post("/jars/test-app", Array[Byte](0, 1, 2)).

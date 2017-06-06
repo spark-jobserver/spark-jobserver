@@ -43,7 +43,7 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
   val bindConfKey = "spark.jobserver.bind-address"
   val bindConfVal = "127.0.0.1"
   val masterConfKey = "spark.master"
-  val masterConfVal = "spark://localhost:7077"
+  val masterConfVal = "spark://localhost:7079"
   val config = ConfigFactory.parseString(s"""
     spark {
       master = "${masterConfVal}"
@@ -55,7 +55,12 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
     }
                                  """)
 
-  val dummyPort = 9999
+  val dummyPort = 9997
+
+  override def afterAll():Unit = {
+    system.shutdown()
+    system.awaitTermination()
+  }
 
   // See http://doc.akka.io/docs/akka/2.2.4/scala/actors.html#Deprecated_Variants;
   // for actors declared as inner classes we need to pass this as first arg
