@@ -58,7 +58,7 @@ class build(BuildPlugin):
         log.info("TRACE", "entering", "buildSJS")
         log.info("INFO: building SJS")
 
-        return self.executeSbtCommand('job-server/assembly')
+        return self.executeSbtCommand('job-server-extras/assembly')
 
     def executeSbtCommand(self, sbtCommand):
         log.info("TRACE", "entering", "executeSbtCommand")
