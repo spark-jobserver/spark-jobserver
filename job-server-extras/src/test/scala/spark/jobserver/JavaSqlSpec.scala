@@ -31,7 +31,7 @@ class JavaSqlSpec extends ExtrasJobSpecBase(JavaSqlSpec.getNewSystem) {
   describe("Running Java based SQLContext Jobs") {
     it("Should return Correct results") {
       manager ! JobManagerActor.Initialize(None)
-      expectMsgClass(10 seconds, classOf[JobManagerActor.Initialized])
+      expectMsgClass(classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
       manager ! JobManagerActor.StartJob("demo", javaSqlClass, emptyConfig, syncEvents ++ errorEvents)
