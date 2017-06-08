@@ -10,6 +10,7 @@ import spark.jobserver.io.JobDAOActor
 
 import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
+import org.scalatest._
 
 class TestHiveContextFactory extends HiveContextFactory {
   override protected def contextFactory(conf: SparkConf): C = {
@@ -27,6 +28,7 @@ object HiveJobSpec extends JobSpecConfig {
   override val contextFactory = classOf[TestHiveContextFactory].getName
 }
 
+@Ignore
 class HiveJobSpec extends ExtrasJobSpecBase(HiveJobSpec.getNewSystem) {
 
   val classPrefix = "spark.jobserver."

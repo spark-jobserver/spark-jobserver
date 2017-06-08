@@ -7,11 +7,13 @@ import spark.jobserver.CommonMessages._
 import spark.jobserver.context.SQLContextFactory
 import spark.jobserver.io.JobDAOActor
 import scala.concurrent.duration._
+import org.scalatest._
 
 object SqlJobSpec extends JobSpecConfig {
   override val contextFactory = classOf[SQLContextFactory].getName
 }
 
+@Ignore
 class SqlJobSpec extends ExtrasJobSpecBase(SqlJobSpec.getNewSystem) {
 
 
