@@ -24,12 +24,9 @@ class build(BuildPlugin):
     def run(self):
         log.info("TRACE", "entering", "run")
         self.importSbt()
-        if self.testSJS() == 0:
-            log.info("Testcases successfully executed.")
-            return self.buildSJS()
-        else:
-            log.error("Testcases for SJS failed.")
-            return -1;
+        commandOutput = self.buildSJS()
+        if commandOutput > 0:
+            raise XmakeException("sbt build failed. Command output is {}".format(str(commandOutput)))
 
     def importSbt(self):
         log.info("TRACE", "entering", "sbt")
@@ -50,15 +47,11 @@ class build(BuildPlugin):
         self._sbtexecutable = join(self._sbtbin,'sbt')
         log.info("TRACE", "exiting", "importSbt")
 
-    def testSJS(self):
-        log.info("TRACE", "entering", "testSJS")
-        return self.executeSbtCommand('clean test')
-
     def buildSJS(self):
         log.info("TRACE", "entering", "buildSJS")
         log.info("INFO: building SJS")
 
-        return self.executeSbtCommand('job-server-extras/assembly')
+        return self.executeSbtCommand('clean test job-server-extras/assembly')
 
     def executeSbtCommand(self, sbtCommand):
         log.info("TRACE", "entering", "executeSbtCommand")
