@@ -8,7 +8,7 @@ import scala.concurrent.duration._
 import scala.collection.JavaConverters._
 
 object PythonJobManagerSpec extends JobSpecConfig {
-  override val contextFactory = classOf[PythonSparkContextFactory].getName
+  override val contextFactory = classOf[PythonSessionContextFactory].getName
 }
 
 class PythonJobManagerSpec extends ExtrasJobSpecBase(PythonJobManagerSpec.getNewSystem) {
@@ -22,7 +22,7 @@ class PythonJobManagerSpec extends ExtrasJobSpecBase(PythonJobManagerSpec.getNew
     it("should work with JobManagerActor") {
       val pyContextConfig = ConfigFactory.parseString(
         """
-          |context-factory = "spark.jobserver.python.PythonSparkContextFactory"
+          |context-factory = "spark.jobserver.python.PythonSessionContextFactory"
           |context.name = "python_ctx"
           |context.actorName = "python_ctx"
         """.stripMargin).
@@ -39,12 +39,13 @@ class PythonJobManagerSpec extends ExtrasJobSpecBase(PythonJobManagerSpec.getNew
         "example_jobs.word_count.WordCountSparkJob",
         ConfigFactory.parseString("""input.strings = ["a", "b", "a"]"""),
         errorEvents ++ syncEvents)
-      expectMsgPF(3 seconds, "Expected a JobResult or JobErroredOut message!") {
+      expectMsgPF(15 seconds, "Expected a JobResult or JobErroredOut message!") {
         case JobResult(_, x) => x should matchPattern {
           case m: java.util.Map[_, _] if m.asScala == Map("b" -> 1, "a" -> 2) =>
         }
         case JobErroredOut(_, _, error: Throwable) => throw error
       }
+      expectNoMsg()
     }
   }
 }

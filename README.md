@@ -334,6 +334,38 @@ Let's try running our sample job with an invalid configuration:
       }
     }
 
+### NEW SparkJob API with Spark v2.1
+
+Deploying Spark JobServer with Spark v2.x cluster, you can create a SparkSession context which enables Spark-SQL and Hive support 
+```scala
+curl -i -d "" 'http://localhost:8090/contexts/sql-context-1?num-cpu-cores=2&memory-per-node=512M&context-factory=spark.jobserver.context.SessionContextFactory'
+```
+Spark JobServer application shall extend from the SparkSessionJob to use the spark.jobserver.context.SessionContextFactory, here is an example
+```scala
+import com.typesafe.config.Config
+import org.apache.spark.sql.SparkSession
+import org.scalactic._
+import spark.jobserver.SparkSessionJob
+import spark.jobserver.api.{JobEnvironment, SingleProblem, ValidationProblem}
+
+import scala.util.Try
+
+object WordCountExampleSparkSession extends SparkSessionJob {
+  type JobData = Seq[String]
+  type JobOutput = collection.Map[String, Long]
+
+  override def runJob(sparkSession: SparkSession, runtime: JobEnvironment, data: JobData): JobOutput =
+    sparkSession.sparkContext.parallelize(data).countByValue
+
+  override def validate(sparkSession: SparkSession, runtime: JobEnvironment, config: Config):
+  JobData Or Every[ValidationProblem] = {
+    Try(config.getString("input.string").split(" ").toSeq)
+      .map(words => Good(words))
+      .getOrElse(Bad(One(SingleProblem("No input.string param"))))
+  }
+}
+```
+
 ### Dependency jars
 
 You have a couple options to package and upload dependency jars.

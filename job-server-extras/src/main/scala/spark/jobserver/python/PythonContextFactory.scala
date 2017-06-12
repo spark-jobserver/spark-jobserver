@@ -4,7 +4,7 @@ import java.io.File
 
 import com.typesafe.config.Config
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.{SQLContext, SparkSession}
 import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.{SparkConf, SparkContext}
 import org.joda.time.DateTime
@@ -149,58 +149,45 @@ trait DefaultContextLikeImplementations {
   }
 }
 
-class PythonSparkContextFactory extends PythonContextFactory {
 
-  override type C = JavaSparkContext with PythonContextLike
-
-  override def doMakeContext(sc: SparkContext,
-                           contextConfig: Config,
-                           contextName: String): JavaSparkContext with PythonContextLike = {
-    val jsc = new JavaSparkContext(sc) with PythonContextLike with DefaultContextLikeImplementations {
-      override val config = contextConfig
-      override val sparkContext: SparkContext = sc
-      override val contextType = classOf[JavaSparkContext].getCanonicalName
-    }
-    jsc
-  }
-
-  override def py4JImports: Seq[String] = PythonContextFactory.sparkContextImports
-}
-
-class PythonSQLContextFactory extends PythonContextFactory {
-
-  override type C = SQLContext with PythonContextLike
-
-  override def py4JImports: Seq[String] =
-    PythonContextFactory.sqlContextImports
-
-  override def doMakeContext(sc: SparkContext,
-                           contextConfig: Config,
-                           contextName: String): SQLContext with PythonContextLike = {
-    val jSqlContext = new SQLContext(sc) with PythonContextLike with DefaultContextLikeImplementations {
-      override val config = contextConfig
-      override val contextType: String = classOf[SQLContext].getCanonicalName
-      override def stop(): Unit = sc.stop()
-    }
-    jSqlContext
+case class PythonSessionContextLikeWrapper(spark: SparkSession, contextConfig: Config)
+    extends PythonContextLike with DefaultContextLikeImplementations {
+  override val config = contextConfig
+  override val sparkContext: SparkContext = spark.sparkContext
+  override val contextType = classOf[JavaSparkContext].getCanonicalName
+  override def stop() {
+    spark.stop()
   }
 }
 
-class PythonHiveContextFactory extends PythonContextFactory {
+class PythonSessionContextFactory extends PythonContextFactory {
 
-  override type C = HiveContext with PythonContextLike
+  override type C = PythonSessionContextLikeWrapper
+  var context : PythonSessionContextLikeWrapper = _
 
   override def py4JImports: Seq[String] =
     PythonContextFactory.hiveContextImports
 
   override def doMakeContext(sc: SparkContext,
+                             contextConfig: Config,
+                             contextName: String): C = {
+    context
+  }
+
+  override def makeContext(sparkConf: SparkConf,
                            contextConfig: Config,
-                           contextName: String): HiveContext with PythonContextLike = {
-    val jHiveContext = new HiveContext(sc) with PythonContextLike with DefaultContextLikeImplementations {
-      override val contextType: String = classOf[HiveContext].getCanonicalName
-      override def config: Config = contextConfig
-      override def stop(): Unit = sc.stop()
+                           contextName: String): C = {
+    val builder = SparkSession.builder().config(sparkConf.set("spark.yarn.isPython", "true"))
+    builder.appName(contextName)
+    try {
+      builder.enableHiveSupport()
+    } catch {
+      case e: IllegalArgumentException => println(s"Hive support not enabled - ${e.getMessage()}")
     }
-    jHiveContext
+    val spark = builder.getOrCreate()
+    for ((k, v) <- SparkJobUtils.getHadoopConfig(contextConfig))
+      spark.sparkContext.hadoopConfiguration.set(k, v)
+    context = PythonSessionContextLikeWrapper(spark, contextConfig)
+    context
   }
 }

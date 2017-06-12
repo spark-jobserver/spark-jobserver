@@ -3,14 +3,11 @@ package spark.jobserver.python
 import java.io.File
 
 import com.typesafe.config.{Config, ConfigFactory}
-import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.SparkConf
 import org.joda.time.DateTime
-import org.scalatest.{BeforeAndAfter, FunSpec, Matchers}
 import spark.jobserver._
 import spark.jobserver.api.JobEnvironment
 import scala.concurrent.duration.FiniteDuration
-import scala.collection.JavaConverters._
 
 case class DummyJobEnvironment(jobId: String, contextConfig: Config) extends JobEnvironment {
 
@@ -113,108 +110,3 @@ object PythonSparkContextFactorySpec {
   lazy val sparkConf = new SparkConf().setMaster("local[*]").setAppName("PythonSparkContextFactorySpec")
 }
 
-class PythonSparkContextFactorySpec extends FunSpec with Matchers with BeforeAndAfter {
-
-  import PythonSparkContextFactorySpec._
-
-  var context: JavaSparkContext with PythonContextLike = null
-
-  after {
-    if(context != null) {
-      context.stop()
-    }
-  }
-
-  describe("PythonSparkContextFactory") {
-
-    it("should create PythonSparkContexts") {
-      val factory = new PythonSparkContextFactory()
-      context = factory.makeContext(sparkConf, config, "test-create")
-      context shouldBe a[JavaSparkContext with PythonContextLike]
-    }
-
-    it("should create JobContainers") {
-      val factory = new PythonSparkContextFactory()
-      val result = factory.loadAndValidateJob("test", DateTime.now(), "path.to.Job", DummyJobCache)
-      result.isGood should be (true)
-      val jobContainer = result.get
-      jobContainer shouldBe an[PythonJobContainer[_]]
-      jobContainer.getSparkJob should be (
-        PythonJob("/tmp/test.egg", "path.to.Job", PythonContextFactory.sparkContextImports))
-    }
-
-    def runTest(factory: PythonSparkContextFactory,
-                context: JavaSparkContext with PythonContextLike,
-                c:Config): Unit = {
-      val loadResult = factory.loadAndValidateJob(
-        "word-count",
-        DateTime.now(),
-        "example_jobs.word_count.WordCountSparkJob",
-        DummyJobCache)
-      loadResult.isGood should be (true)
-      val jobContainer = loadResult.get
-      val job = jobContainer.getSparkJob
-      val jobConfig = ConfigFactory.parseString(
-        """
-          |input.strings = ["a", "b", "b", "c", "a", "b"]
-        """.stripMargin)
-      val jobEnv = DummyJobEnvironment("1234", c)
-      val jobDataOrProblem = job.validate(context, jobEnv, jobConfig)
-      jobDataOrProblem.isGood should be (true)
-      val jobData = jobDataOrProblem.get
-      val result = job.runJob(context, jobEnv, jobData)
-      result should matchPattern {
-        case m: java.util.Map[_, _] if m.asScala.toMap == Map("a" -> 2, "b" -> 3, "c" -> 1) =>
-      }
-    }
-
-    it("should return jobs which can be successfully run") {
-      val factory = new PythonSparkContextFactory()
-      context = factory.makeContext(sparkConf, config, "test-create")
-      runTest(factory, context, config)
-    }
-
-    it("should successfully run jobs using python3", WindowsIgnore) {
-      val factory = new PythonSparkContextFactory()
-      val p3Config = ConfigFactory.parseString(
-        """
-          |python.executable = "python3"
-        """.stripMargin).withFallback(config)
-      context = factory.makeContext(sparkConf, p3Config, "test-create")
-      runTest(factory, context, p3Config)
-    }
-
-    def runFailingTest(factory: PythonSparkContextFactory,
-                       context: JavaSparkContext with PythonContextLike,
-                       c:Config): Unit = {
-      val loadResult = factory.loadAndValidateJob(
-        "word-count",
-        DateTime.now(),
-        "example_jobs.word_count.FailingSparkJob",
-        DummyJobCache)
-      loadResult.isGood should be (true)
-      val jobContainer = loadResult.get
-      val job = jobContainer.getSparkJob
-      val jobConfig = ConfigFactory.parseString(
-        """
-          |input.strings = ["a", "b", "b", "c", "a", "b"]
-        """.stripMargin)
-      val jobEnv = DummyJobEnvironment("1234", c)
-      val jobDataOrProblem = job.validate(context, jobEnv, jobConfig)
-      jobDataOrProblem.isGood should be (true)
-      val jobData = jobDataOrProblem.get
-      try {
-        job.runJob(context, jobEnv, jobData)
-        assert(false)
-      } catch {
-        case err: Exception => err.getMessage.contains("Deliberate failure") should be (true)
-      }
-    }
-
-    it("should return job error messages") {
-      val factory = new PythonSparkContextFactory()
-      context = factory.makeContext(sparkConf, config, "test-create")
-      runFailingTest(factory, context, config)
-    }
-  }
-}
