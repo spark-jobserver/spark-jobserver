@@ -22,7 +22,8 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
   - [WordCountExample walk-through](#wordcountexample-walk-through)
     - [Package Jar - Send to Server](#package-jar---send-to-server)
     - [Ad-hoc Mode - Single, Unrelated Jobs (Transient Context)](#ad-hoc-mode---single-unrelated-jobs-transient-context)
-    - [Persistent Context Mode - Faster & Required for Related Jobs](#persistent-context-mode---faster-&-required-for-related-jobs)
+    - [Persistent Context Mode - Faster & Required for Related Jobs](#persistent-context-mode---faster--required-for-related-jobs)
+  - [Debug mode](#debug-mode)
 - [Create a Job Server Project](#create-a-job-server-project)
   - [Creating a project from scratch using giter8 template](#creating-a-project-from-scratch-using-giter8-template)
   - [Creating a project manually assuming that you already have sbt project structure](#creating-a-project-manually-assuming-that-you-already-have-sbt-project-structure)
@@ -40,7 +41,8 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
   - [Chef](#chef)
 - [Architecture](#architecture)
 - [API](#api)
-  - [Jars](#jars)
+  - [Binaries](#binaries)
+  - [Jars (deprecated)](#jars-deprecated)
   - [Contexts](#contexts)
   - [Jobs](#jobs)
   - [Data](#data)
@@ -241,6 +243,44 @@ Now let's run the job in the context and get the results back right away:
     }⏎
 
 Note the addition of `context=` and `sync=true`.
+
+### Debug mode
+Spark job server is started using SBT Revolver (which forks a new JVM), so debugging directly in an IDE is not feasible.
+To enable debugging, the Spark job server should be started from the SBT shell with the following Java options :
+```bash
+job-server-extras/reStart /absolute/path/to/your/dev.conf --- -Xdebug -Xrunjdwp:transport=dt_socket,address=15000,server=y,suspend=y
+```
+The above command starts a remote debugging server on port 15000. The Spark job server is not started until a debugging client
+(Intellij, Eclipse, telnet, ...) connects to the exposed port.
+
+In your IDE you just have to start a Remote debugging debug job and use the above defined port. Once the client connects to the debugging server the Spark job server is started and you can start adding breakpoints and debugging requests.
+
+Note that you might need to adjust some server parameters to avoid short Spary/Akka/Spark timeouts, in your `dev.conf` add the following values :
+```bash
+spark {
+  jobserver {
+    # Dev debug timeouts
+    context-creation-timeout = 1000000 s
+    yarn-context-creation-timeout = 1000000 s
+    default-sync-timeout = 1000000 s
+  }
+
+  context-settings {
+    # Dev debug timeout
+    context-init-timeout = 1000000 s
+  }
+}
+spray.can.server {
+      # Debug timeouts
+      idle-timeout = infinite
+      request-timeout = infinite
+}
+```
+
+Additionally, you might have to increase the Akka Timeouts by adding the following query parameter `timeout=1000000` in your HTTP requests :
+```bash
+curl -d "input.string = a b c a b see" "localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample&sync=true&timeout=100000"
+```
 
 ## Create a Job Server Project
 ### Creating a project from scratch using giter8 template
