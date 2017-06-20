@@ -6,7 +6,10 @@ import org.scalatest.{BeforeAndAfter, FunSpec, Matchers}
 import java.nio.file.Files
 import java.nio.file.Paths
 
+import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.sql.SparkSession
 import spark.jobserver.WindowsIgnore
+import spark.jobserver.util.SparkJobUtils
 
 import scala.collection.JavaConverters._
 
@@ -29,6 +32,48 @@ object PythonSessionContextFactorySpec {
   }
 }
 
+class TestPythonSessionContextFactory extends PythonContextFactory {
+
+  override type C = PythonSessionContextLikeWrapper
+  var context : PythonSessionContextLikeWrapper = _
+
+  override def py4JImports: Seq[String] =
+    PythonContextFactory.hiveContextImports
+
+  override def doMakeContext(sc: SparkContext,
+                             contextConfig: Config,
+                             contextName: String): C = {
+    context
+  }
+
+  override def makeContext(sparkConf: SparkConf,
+                           contextConfig: Config,
+                           contextName: String): C = {
+    initializeContext(sparkConf, contextConfig, contextName)
+  }
+
+  def initializeContext(sparkConf: SparkConf,
+                        contextConfig: Config,
+                        contextName: String): C = {
+    if (! context.isInstanceOf[PythonSessionContextLikeWrapper]) {
+      val builder = SparkSession.builder().config(sparkConf.set("spark.yarn.isPython", "true"))
+      builder.appName(contextName).master("local")
+      builder.config("javax.jdo.option.ConnectionURL", "jdbc:derby:memory:myDB;create=true")
+      builder.config("javax.jdo.option.ConnectionDriverName", "org.apache.derby.jdbc.EmbeddedDriver")
+      try {
+        builder.enableHiveSupport()
+      } catch {
+        case e: IllegalArgumentException => println(s"Hive support not enabled - ${e.getMessage()}")
+      }
+      val spark = builder.getOrCreate()
+      for ((k, v) <- SparkJobUtils.getHadoopConfig(contextConfig))
+        spark.sparkContext.hadoopConfiguration.set(k, v)
+      context = PythonSessionContextLikeWrapper(spark, contextConfig)
+    }
+    context
+  }
+}
+
 class PythonSessionContextFactorySpec extends FunSpec with Matchers with BeforeAndAfter {
   import PythonSparkContextFactorySpec._
 
@@ -47,13 +92,13 @@ class PythonSessionContextFactorySpec extends FunSpec with Matchers with BeforeA
    */
   describe("PythonSessionContextFactorySpec") {
     it("should create PythonSessionContexts", WindowsIgnore) {
-      val factory = new PythonSessionContextFactory()
+      val factory = new TestPythonSessionContextFactory()
       context = factory.makeContext(sparkConf, config, "test-create")
       context shouldBe an[PythonSessionContextLikeWrapper]
     }
 
     it("should create JobContainers", WindowsIgnore) {
-      val factory = new PythonSessionContextFactory()
+      val factory = new TestPythonSessionContextFactory()
       val result = factory.loadAndValidateJob("test", DateTime.now(), "path.to.Job", DummyJobCache)
       result.isGood should be (true)
       val jobContainer = result.get
@@ -63,7 +108,7 @@ class PythonSessionContextFactorySpec extends FunSpec with Matchers with BeforeA
           PythonContextFactory.hiveContextImports))
     }
 
-    def runSessionTest(factory: PythonSessionContextFactory,
+    def runSessionTest(factory: TestPythonSessionContextFactory,
                    context: PythonSessionContextLikeWrapper,
                    c:Config): Unit = {
       val loadResult = factory.loadAndValidateJob(
@@ -100,13 +145,13 @@ class PythonSessionContextFactorySpec extends FunSpec with Matchers with BeforeA
     }
 
     it("should return jobs which can be successfully run", WindowsIgnore) {
-      val factory = new PythonSessionContextFactory()
+      val factory = new TestPythonSessionContextFactory()
       context = factory.makeContext(sparkConf, config, "test-create")
       runSessionTest(factory, context, config)
     }
 
     it("should successfully run jobs using python3", WindowsIgnore) {
-      val factory = new PythonSessionContextFactory()
+      val factory = new TestPythonSessionContextFactory()
       val p3Config = ConfigFactory.parseString(
         """
           |python.executable = "python3"

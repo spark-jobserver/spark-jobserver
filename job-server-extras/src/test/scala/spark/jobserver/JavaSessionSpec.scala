@@ -12,12 +12,6 @@ import spark.jobserver.io.JobDAOActor
 
 import scala.concurrent.duration._
 
-//case class SparkSessionContextLikeWrapper(spark: SparkSession) extends ContextLike {
-//  def sparkContext: SparkContext = spark.sparkContext
-//  def stop() {
-//    spark.stop()
-//  }
-//}
 
 class JavaTestSessionContextFactory extends JavaContextFactory {
   type C = SparkSessionContextLikeWrapper
