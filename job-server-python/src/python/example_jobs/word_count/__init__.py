@@ -28,6 +28,7 @@ class FailingSparkJob(SparkJob):
     def run_job(self, context, runtime, data):
         raise ValueError('Deliberate failure')
 
+
 class WordCountSparkSessionJob(SparkJob):
 
     def validate(self, context, runtime, config):
