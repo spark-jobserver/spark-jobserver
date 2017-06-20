@@ -27,3 +27,14 @@ class FailingSparkJob(SparkJob):
 
     def run_job(self, context, runtime, data):
         raise ValueError('Deliberate failure')
+
+class WordCountSparkSessionJob(SparkJob):
+
+    def validate(self, context, runtime, config):
+        if config.get('input.strings', None):
+            return config.get('input.strings')
+        else:
+            return build_problems(['config input.strings not found'])
+
+    def run_job(self, context, runtime, data):
+        return context.sparkContext.parallelize(data).countByValue()

@@ -63,13 +63,13 @@ class PythonSessionContextFactorySpec extends FunSpec with Matchers with BeforeA
           PythonContextFactory.hiveContextImports))
     }
 
-    def runHiveTest(factory: PythonSessionContextFactory,
+    def runSessionTest(factory: PythonSessionContextFactory,
                    context: PythonSessionContextLikeWrapper,
                    c:Config): Unit = {
       val loadResult = factory.loadAndValidateJob(
         "sql-average",
         DateTime.now(),
-        "example_jobs.hive_window.HiveWindowJob",
+        "example_jobs.session_window.SessionWindowJob",
         DummyJobCache)
       loadResult.isGood should be (true)
       val jobContainer = loadResult.get
@@ -102,7 +102,7 @@ class PythonSessionContextFactorySpec extends FunSpec with Matchers with BeforeA
     it("should return jobs which can be successfully run", WindowsIgnore) {
       val factory = new PythonSessionContextFactory()
       context = factory.makeContext(sparkConf, config, "test-create")
-      runHiveTest(factory, context, config)
+      runSessionTest(factory, context, config)
     }
 
     it("should successfully run jobs using python3", WindowsIgnore) {
@@ -112,7 +112,7 @@ class PythonSessionContextFactorySpec extends FunSpec with Matchers with BeforeA
           |python.executable = "python3"
         """.stripMargin).withFallback(config)
       context = factory.makeContext(sparkConf, p3Config, "test-create")
-      runHiveTest(factory, context, p3Config)
+      runSessionTest(factory, context, p3Config)
     }
   }
 }

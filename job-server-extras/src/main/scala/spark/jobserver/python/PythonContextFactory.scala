@@ -154,7 +154,7 @@ case class PythonSessionContextLikeWrapper(spark: SparkSession, contextConfig: C
     extends PythonContextLike with DefaultContextLikeImplementations {
   override val config = contextConfig
   override val sparkContext: SparkContext = spark.sparkContext
-  override val contextType = classOf[JavaSparkContext].getCanonicalName
+  override val contextType = classOf[SparkSession].getCanonicalName
   override def stop() {
     spark.stop()
   }
