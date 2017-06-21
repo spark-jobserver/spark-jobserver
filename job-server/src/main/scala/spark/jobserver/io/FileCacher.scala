@@ -55,10 +55,13 @@ trait FileCacher {
       bos.close()
     }
 
-    logger.debug("Renaming the temporary file {} to the target full binary name {}", tempBinaryName, targetFullBinaryName:Any)
+    logger.debug("Renaming the temporary file {} to the target full binary name {}",
+      tempBinaryName, targetFullBinaryName: Any)
+
     val tempFile = new File(rootDir, tempBinaryName)
     if( ! tempFile.renameTo(new File(rootDir, targetFullBinaryName))) {
-      logger.debug("Renaming the temporary file {} failed, another process has probably already updated the target file - deleting the redundant temp file")
+      logger.debug("Renaming the temporary file {} failed, another process has probably already updated " +
+        "the target file - deleting the redundant temp file", tempBinaryName)
       if( ! tempFile.delete()) {
         logger.warn("Could not delete the temporary file {}", tempBinaryName)
       }
