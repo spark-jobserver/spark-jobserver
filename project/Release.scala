@@ -2,10 +2,11 @@ import sbt._
 import Keys._
 import sbtrelease.ReleasePlugin.autoImport._
 import ReleaseTransformations._
+import bintray.BintrayPlugin.autoImport.bintrayOrganization
+import ls.Plugin._
 
-object JobServerRelease {
+object Release {
 
-  import ls.Plugin._
   import LsKeys._
 
   lazy val implicitlySettings = {
@@ -20,13 +21,24 @@ object JobServerRelease {
     )
   }
 
-  val syncWithLs = (ref: ProjectRef) => ReleaseStep(
-    check = releaseStepTaskAggregated(LsKeys.writeVersion in lsync in ref),
-    action = releaseStepTaskAggregated(lsync in lsync in ref)
+  val syncWithLs = (ref: ProjectRef) =>
+    ReleaseStep(
+      check = releaseStepTaskAggregated(LsKeys.writeVersion in lsync in ref),
+      action = releaseStepTaskAggregated(lsync in lsync in ref)
+  )
+
+  lazy val publishSettings = Seq(
+    licenses += ("Apache-2.0", url("http://choosealicense.com/licenses/apache/")),
+    bintrayOrganization := Some("spark-jobserver")
+  )
+
+  lazy val noPublishSettings = Seq(
+    publishTo := Some(Resolver.file("Unused repo", file("target/unusedrepo"))),
+    publishArtifact := false,
+    publish := {}
   )
 
   lazy val ourReleaseSettings = Seq(
-
     releaseProcess := Seq(
       checkSnapshotDependencies,
       runClean,

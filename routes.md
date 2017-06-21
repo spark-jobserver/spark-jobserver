@@ -1,0 +1,18 @@
+#### Routes
+- GET /binaries/
+    - POST /binaries/<appname>
+    - DELETE /binaries/<appname>
+- GET /jars
+    - POST /jars/<appname>
+- GET /data/
+    - DELETE /data/<filename>
+    - POST /data/<filename-prefix>
+- GET /contexts/
+    - POST /contexts/<name>
+    - DELETE /contexts/<name>
+- GET /health/
+- GET /jobs/
+- POST /jobs/
+    - GET /jobs/<id>
+    - GET /jobs/<id>/config
+    - DELETE /jobs/<id>
