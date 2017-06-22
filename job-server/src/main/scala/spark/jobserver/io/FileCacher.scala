@@ -27,24 +27,15 @@ trait FileCacher {
     appName + "-" + uploadTime.toString("yyyyMMdd_hhmmss_SSS") + s".${binaryType.extension}"
   }
 
-  // Random temporary filename suffix possible chars
-  val tempFileNamePossibleChars: Seq[Char] = ('a' to 'z') ++ ('0' to '9')
-  // Generate random temporary filename suffix
-  def randomTempFileNameSuffix(length: Int = 8): String = {
-    import scala.util.Random
-    (1 to length).map(_ => tempFileNamePossibleChars(Random.nextInt(tempFileNamePossibleChars.size)))
-      .mkString("_tmp-", "", "")
-  }
-
   // Cache the jar file into local file system.
   protected def cacheBinary(appName: String,
                             binaryType: BinaryType,
                             uploadTime: DateTime,
                             binBytes: Array[Byte]) {
     val targetFullBinaryName = createBinaryName(appName, binaryType, uploadTime)
-    val tempSuffix = randomTempFileNameSuffix()
-    val tempBinaryName = targetFullBinaryName + tempSuffix
-    val tempOutFile = new File(rootDir, tempBinaryName)
+    val tempSuffix = ".tmp"
+    val tempOutFile = File.createTempFile(targetFullBinaryName + "-", tempSuffix, new File(rootDir))
+    val tempOutFileName = tempOutFile.getName
     val bos = new BufferedOutputStream(new FileOutputStream(tempOutFile))
 
     try {
@@ -56,14 +47,14 @@ trait FileCacher {
     }
 
     logger.debug("Renaming the temporary file {} to the target full binary name {}",
-      tempBinaryName, targetFullBinaryName: Any)
+      tempOutFileName, targetFullBinaryName: Any)
 
-    val tempFile = new File(rootDir, tempBinaryName)
+    val tempFile = new File(rootDir, tempOutFileName)
     if( ! tempFile.renameTo(new File(rootDir, targetFullBinaryName))) {
       logger.debug("Renaming the temporary file {} failed, another process has probably already updated " +
-        "the target file - deleting the redundant temp file", tempBinaryName)
+        "the target file - deleting the redundant temp file", tempOutFileName)
       if( ! tempFile.delete()) {
-        logger.warn("Could not delete the temporary file {}", tempBinaryName)
+        logger.warn("Could not delete the temporary file {}", tempOutFileName)
       }
     }
   }
