@@ -38,7 +38,7 @@ class JavaJobSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
   before {
     dao = new InMemoryDAO
     daoActor = system.actorOf(JobDAOActor.props(dao))
-    manager = system.actorOf(JobManagerActor.props(config, daoActor))
+    manager = system.actorOf(JobManagerActor.props(config))
     supervisor = TestProbe().ref
   }
 
@@ -56,7 +56,7 @@ class JavaJobSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
 
   describe("Running Java Jobs") {
     it("Should run a java job") {
-      manager ! JobManagerActor.Initialize(None)
+      manager ! JobManagerActor.Initialize(daoActor, None)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
       uploadTestJar()
       manager ! JobManagerActor.StartJob("demo", javaJob, config, syncEvents ++ errorEvents)
@@ -65,7 +65,7 @@ class JavaJobSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
       }
     }
     it("Should fail running this java job"){
-      manager ! JobManagerActor.Initialize(None)
+      manager ! JobManagerActor.Initialize(daoActor, None)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
       uploadTestJar()
       manager ! JobManagerActor.StartJob("demo", failedJob, config, errorEvents)

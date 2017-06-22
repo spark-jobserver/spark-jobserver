@@ -23,7 +23,7 @@ import spark.jobserver.common.akka.InstrumentedActor
 
 object JobManagerActor {
   // Messages
-  case class Initialize(resultActorOpt: Option[ActorRef])
+  case class Initialize(daoActor: ActorRef,resultActorOpt: Option[ActorRef])
   case class StartJob(appName: String, classPath: String, config: Config,
                       subscribedEvents: Set[Class[_]])
   case class KillJob(jobId: String)
@@ -41,8 +41,8 @@ object JobManagerActor {
   case object SparkContextDead
 
   // Akka 2.2.x style actor props for actor creation
-  def props(contextConfig: Config, daoActor: ActorRef): Props = Props(classOf[JobManagerActor],
-    contextConfig, daoActor)
+  def props(contextConfig: Config): Props = Props(classOf[JobManagerActor],
+    contextConfig)
 }
 
 /**
@@ -73,7 +73,7 @@ object JobManagerActor {
  *   }
  * }}}
  */
-class JobManagerActor(contextConfig: Config, daoActor: ActorRef)
+class JobManagerActor(contextConfig: Config)
   extends InstrumentedActor with SparkListener {
 
   import CommonMessages._
@@ -106,6 +106,7 @@ class JobManagerActor(contextConfig: Config, daoActor: ActorRef)
 
   private var statusActor: ActorRef = _
   protected var resultActor: ActorRef = _
+  private var daoActor: ActorRef = _
   private var factory: SparkContextFactory = _
 
   private val jobServerNamedObjects = new JobServerNamedObjects(context.system)
@@ -131,7 +132,8 @@ class JobManagerActor(contextConfig: Config, daoActor: ActorRef)
   }
 
   def wrappedReceive: Receive = {
-    case Initialize(resOpt) =>
+    case Initialize(dao,resOpt) =>
+      daoActor = dao
       statusActor = context.actorOf(JobStatusActor.props(daoActor))
       resultActor = resOpt.getOrElse(context.actorOf(Props[JobResultActor]))
 

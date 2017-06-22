@@ -24,13 +24,13 @@ class JavaSqlSpec extends ExtrasJobSpecBase(JavaSqlSpec.getNewSystem) {
   before {
     dao = new InMemoryDAO
     daoActor = system.actorOf(JobDAOActor.props(dao))
-    manager = system.actorOf(JobManagerActor.props(cfg, daoActor))
+    manager = system.actorOf(JobManagerActor.props(cfg))
     supervisor = TestProbe().ref
   }
 
   describe("Running Java based SQLContext Jobs") {
     it("Should return Correct results") {
-      manager ! JobManagerActor.Initialize(None)
+      manager ! JobManagerActor.Initialize(daoActor, None)
       expectMsgClass(classOf[JobManagerActor.Initialized])
 
       uploadTestJar()

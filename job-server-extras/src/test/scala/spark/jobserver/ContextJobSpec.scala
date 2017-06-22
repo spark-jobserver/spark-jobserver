@@ -19,13 +19,13 @@ class ContextJobSpec extends JobSpecBase(ContextJobSpec.getNewSystem) {
   before {
     dao = new InMemoryDAO
     daoActor = system.actorOf(JobDAOActor.props(dao))
-    manager = system.actorOf(JobManagerActor.props(ContextJobSpec.getContextConfig(false), daoActor))
+    manager = system.actorOf(JobManagerActor.props(ContextJobSpec.getContextConfig(false)))
   }
 
   describe("error conditions") {
     it("should get WrongJobType if loading SQL job in a plain SparkContext context") {
       uploadTestJar()
-      manager ! JobManagerActor.Initialize(None)
+      manager ! JobManagerActor.Initialize(daoActor, None)
       expectMsgClass(6 seconds, classOf[JobManagerActor.Initialized])
       manager ! JobManagerActor.StartJob("demo", sqlTestClass, emptyConfig, errorEvents)
       expectMsg(CommonMessages.WrongJobType)

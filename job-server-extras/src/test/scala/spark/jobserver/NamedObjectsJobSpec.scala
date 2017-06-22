@@ -11,11 +11,10 @@ class NamedObjectsJobSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
     dao = new InMemoryDAO
     daoActor = system.actorOf(JobDAOActor.props(dao))
     manager = system.actorOf(JobManagerActor.props(
-      JobManagerSpec.getContextConfig(adhoc = false),
-      daoActor))
+      JobManagerSpec.getContextConfig(adhoc = false)))
     supervisor = TestProbe().ref
 
-    manager ! JobManagerActor.Initialize(None)
+    manager ! JobManagerActor.Initialize(daoActor, None)
     
     expectMsgClass(classOf[JobManagerActor.Initialized])
 
