@@ -223,7 +223,7 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
     val tuples = JListWrapper(rows).toIndexedSeq.map { row =>
       (row.getInt(ChunkIndex), row.getBytes(Binary).array())
     }
-    tuples.sortBy(_._1).toMap.values.foldLeft(Array[Byte]()) { _ ++ _ }
+    tuples.map(_._2).foldLeft(Array[Byte]()) { _ ++ _ }
   }
 
   override def getJobInfo(jobId: String): Future[Option[JobInfo]] = {
