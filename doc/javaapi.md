@@ -23,6 +23,7 @@ public class JavaHelloWorldJob implements JSparkJob<String> {
     }
 }
 ```
+[Full File Here](https://github.com/spark-jobserver/spark-jobserver/blob/master/job-server-tests/src/main/java/spark/jobserver/JavaHelloWorldJob.java)
 
 This example does nothing Spark based, but gives an idea of the difference in structure. In order to run a job
 written like this, the user **MUST** use the `JavaSparkContextFactory`. This context is configured the same as
