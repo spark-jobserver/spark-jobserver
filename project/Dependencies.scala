@@ -14,6 +14,14 @@ object Dependencies {
     "joda-time"     % "joda-time"    % jodaTime
   )
 
+  lazy val kamonMetrics = Seq(
+    "org.aspectj" % "aspectjweaver"         % "1.8.10",
+    "io.kamon"    %% "kamon-core"           % "0.6.7",
+    "io.kamon"    %% "kamon-system-metrics" % "0.6.7",
+    "io.kamon"    %% "kamon-log-reporter"   % "0.6.7",
+    "io.kamon"    %% "kamon-akka-http"      % "0.6.7"
+  )
+
   lazy val log4j = Seq(
     "org.apache.logging.log4j" % "log4j-core"       % "2.8.2",
     "org.apache.logging.log4j" % "log4j-api"        % "2.8.2",
@@ -25,7 +33,7 @@ object Dependencies {
     "com.typesafe.akka" %% "akka-http"            % `akka-http`,
     "com.typesafe.akka" %% "akka-http-spray-json" % `akka-http`,
     "com.typesafe.akka" %% "akka-http-testkit"    % `akka-http` % Test
-  ) ++ log4j
+  ) ++ log4j ++ kamonMetrics
 
   lazy val akkaDeps = Seq(
     "com.typesafe.akka" %% "akka-slf4j"                % akka,

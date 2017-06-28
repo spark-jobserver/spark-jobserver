@@ -8,7 +8,7 @@ import org.scalatest._
 import org.scalatest.concurrent.ScalaFutures
 import spray.json._
 
-import spark.jobserver.io.{JobDAOActor, JobInfo}
+import spark.jobserver.io.JobDAOActor
 import spark.jobserver.services.{JobServerServices, JobServiceJson}
 import spark.jobserver.util.DummyActor
 
@@ -36,7 +36,7 @@ class NewWebApiSpec
   val statusActor = system.actorOf(JobStatusActor.props(jobDaoActor))
   val dummyActor  = system.actorOf(Props(classOf[DummyActor], statusActor, config))
 
-  val newapi    = new JobServerServices(config, dummyPort - 1, dummyActor, dummyActor, dummyActor, dummyActor)
+  val newapi    = JobServerServices(config, dummyPort - 1, dummyActor, dummyActor, dummyActor, dummyActor)
   val newroutes = newapi.route
 
   describe("list jobs") {
@@ -64,6 +64,10 @@ class NewWebApiSpec
             )
           ))
        */
+      }
+      Get("/jobs/1/config") ~> newroutes ~> check {
+        status shouldEqual StatusCodes.OK
+        println(responseAs[String])
       }
     }
   }

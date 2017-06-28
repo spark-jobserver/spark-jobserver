@@ -13,26 +13,23 @@ import spark.jobserver.util.SparkJobUtils
 import scala.concurrent.duration._
 
 import spark.jobserver.services.JobServerServices
+import spark.jobserver.util.ConfigValues._
 
 object AkkaHttpJobServer {
   private val logger = LoggerFactory.getLogger(getClass)
 
   def start(args: Array[String], makeSystem: Config => ActorSystem) {
 
-    val config = initialConfig(args)
-    val port   = config.getInt("spark.jobserver.port")
-
     logger.debug("Starting JobServer with config {}", config.getConfig("spark").root.render())
 
     implicit val system = makeSystem(config)
-    val clazz           = Class.forName(config.getString("spark.jobserver.jobdao"))
-    val typesafeClazz   = Class.forName("com.typesafe.config.Config")
+    val clazz           = Class.forName(JOB_DAO)
+    val typesafeClazz   = Class.forName(CFG_CLASS)
     val ctor            = clazz.getDeclaredConstructor(typesafeClazz)
-    try {
-      val contextPerJvm = config.getBoolean("spark.jobserver.context-per-jvm")
-      checkContextPerJvm(config, contextPerJvm, clazz)
 
-      val contextActor = if (contextPerJvm) {
+    try {
+      checkContextPerJvm(config, CONTEXT_PER_JVM, clazz)
+      val contextActor = if (CONTEXT_PER_JVM) {
         classOf[AkkaClusterSupervisorActor]
       } else {
         classOf[LocalContextSupervisorActor]
@@ -50,7 +47,7 @@ object AkkaHttpJobServer {
 
       // Create initial contexts
       supervisor ! ContextSupervisor.AddContextsFromConfig
-      new JobServerServices(config, port, binManager, dataManager, supervisor, jobInfo).start()
+      JobServerServices(config, PORT, binManager, dataManager, supervisor, jobInfo).start()
     } catch {
       case e: Exception =>
         logger.error("Unable to start Spark JobServer: ", e)
@@ -71,32 +68,15 @@ object AkkaHttpJobServer {
     if (enabled) {
       if (clazz.getName == "spark.jobserver.io.JobFileDAO") {
         throw new RuntimeException("JobFileDAO is not supported with context-per-jvm, use JobSqlDAO.")
-      } else if (clazz.getName == "spark.jobserver.io.JobSqlDAO" &&
-                 config
-                   .getString("spark.jobserver.sqldao.jdbc.url")
-                   .startsWith("jdbc:h2:mem")) {
+      } else if (clazz.getName == "spark.jobserver.io.JobSqlDAO" && SQL_DAO_JDBC_URL.startsWith("jdbc:h2:mem")) {
         throw new RuntimeException("H2 mem backend is not support with context-per-jvm.")
       }
     }
   }
 
-  private def initialConfig(args: Array[String]): Config = {
-    val defaultConfig = ConfigFactory.load()
-    if (args.length > 0) {
-      val configFile = new File(args.head)
-      if (!configFile.exists()) {
-        logger.error("Could not find configuration file " + configFile)
-        sys.exit(1)
-      }
-      ConfigFactory.parseFile(configFile).withFallback(defaultConfig).resolve()
-    } else {
-      defaultConfig
-    }
-  }
-
-  private def parseInitialBinaryConfig(key: String, config: Config): Map[String, String] = {
-    if (config.hasPath(key)) {
-      val initialJarsConfig = config.getConfig(key).root
+  private def parseInitialBinaryConfig(cfg: Config): Map[String, String] = {
+    if (!cfg.isEmpty) {
+      val initialJarsConfig = cfg.root
       logger.info("Adding initial job jars: {}", initialJarsConfig.render())
       initialJarsConfig.asScala.map {
         case (k, value) => (k, value.unwrapped.toString)
@@ -107,10 +87,7 @@ object AkkaHttpJobServer {
   }
 
   private def storeInitialBinaries(config: Config, binaryManager: ActorRef): Unit = {
-    val legacyJarPathsKey  = "spark.jobserver.job-jar-paths"
-    val initialBinPathsKey = "spark.jobserver.job-bin-paths"
-    val initialBinaries = parseInitialBinaryConfig(legacyJarPathsKey, config) ++
-      parseInitialBinaryConfig(initialBinPathsKey, config)
+    val initialBinaries = parseInitialBinaryConfig(LEGACY_JAR_PATH) ++ parseInitialBinaryConfig(BIN_PATH)
     if (initialBinaries.nonEmpty) {
       // Ensure that the jars exist
       for (binPath <- initialBinaries.values) {

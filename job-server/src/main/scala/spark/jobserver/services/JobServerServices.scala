@@ -5,26 +5,23 @@ import scala.concurrent.ExecutionContextExecutor
 import akka.actor.{ActorRef, ActorSystem}
 import akka.event.Logging
 import akka.http.scaladsl.Http
+import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.Route
 import akka.stream.{ActorMaterializer, Materializer}
 import com.typesafe.config.Config
 
-class JobServerServices(config: Config,
-                        port: Int,
-                        binaryManager: ActorRef,
-                        dataManager: ActorRef,
-                        supervisor: ActorRef,
-                        val jobActor: ActorRef)(implicit val system: ActorSystem) extends JobService {
+case class JobServerServices(cfg: Config, port: Int, bm: ActorRef, dm: ActorRef, supervisor: ActorRef, jobActor: ActorRef)
+                            (implicit val sys: ActorSystem) extends JobService with HealthService with StaticService {
 
-  override val logger = Logging(system, getClass)
+  override val logger = Logging(sys, getClass)
 
-  implicit val executionContext: ExecutionContextExecutor = system.dispatcher
+  implicit val executionContext: ExecutionContextExecutor = sys.dispatcher
   implicit val materializer: Materializer                 = ActorMaterializer()
 
-  def start() = {
-    println(s"Starting up on port $port")
+  def start(): Unit = {
+    logger.info(s"Starting up on port $port")
     Http().bindAndHandle(route, "0.0.0.0", port)
   }
 
-  override def route: Route = jobRoutes
+  def route: Route = jobRoutes ~ healthRoute ~ staticRoutes
 }

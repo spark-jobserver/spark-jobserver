@@ -1,5 +1,7 @@
 resolvers += Classpaths.sbtPluginReleases
 
+addSbtPlugin("io.kamon" % "aspectj-runner" % "0.1.3")
+
 addSbtPlugin("com.timushev.sbt" % "sbt-updates" % "0.1.10")
 
 addSbtPlugin("io.spray" % "sbt-revolver" % "0.8.0")
