@@ -37,7 +37,9 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
 - [Deployment](#deployment)
   - [Manual steps](#manual-steps)
   - [Context per JVM](#context-per-jvm)
-    - [Configuring Spark Jobserver meta data Database backend](#configuring-spark-jobserver-meta-data-database-backend)
+    - [Configuring Spark Jobserver H2 Database backend](#configuring-spark-jobserver-h2-database-backend)
+    - [Configuring Spark Jobserver PostgreSQL Database backend](#configuring-spark-jobserver-postgresql-database-backend)
+    - [Configuring Spark Jobserver MySQL Database backend](#configuring-spark-jobserver-mysql-database-backend)
   - [Chef](#chef)
 - [Architecture](#architecture)
 - [API](#api)
@@ -588,43 +590,45 @@ Log files are separated out for each context (assuming `context-per-jvm` is `tru
 Note: to test out the deploy to a local staging dir, or package the job server for Mesos,
 use `bin/server_package.sh <environment>`.
 
-#### Configuring Spark Jobserver meta data Database backend
-
+#### Configuring Spark Jobserver H2 Database backend
 By default, H2 database is used for storing Spark Jobserver related meta data.
-But this can be overridden. For example, to use PostgreSQL as backend add the
-following configuration to local.conf. Ensure that you have spark_jobserver
-database created with necessary rights granted to user.
+This can be overridden if you prefer to use PostgreSQL or MySQL.
+It is also important that any dependent jars are to be added to Job Server class path.
 
-    sqldao {
-      # Slick database driver, full classpath
-      slick-driver = slick.driver.PostgresDriver
+To use embedded H2 as backend add the following configuration to local.conf.
 
-      # JDBC driver, full classpath
-      jdbc-driver = org.postgresql.Driver
+    spark {
+      jobserver {
+        ...
+        sqldao {
+          # Slick database driver, full classpath
+          slick-driver = slick.driver.H2Driver
 
-      # Directory where default H2 driver stores its data. Only needed for H2.
-      rootdir = "/var/spark-jobserver/sqldao/data"
+          # JDBC driver, full classpath
+          jdbc-driver = org.h2.Driver
 
-      jdbc {
-        url = "jdbc:postgresql://db_host/spark_jobserver"
-        user = "secret"
-        password = "secret"
-      }
+          # Directory where default H2 driver stores its data. Only needed for H2.
+          rootdir = "/var/spark-jobserver/sqldao/data"
 
-      dbcp {
-        maxactive = 20
-        maxidle = 10
-        initialsize = 10
+          jdbc {
+            url = "jdbc:h2:file:/var/spark-jobserver/sqldao/data/h2-db"
+            user = "secret"
+            password = "secret"
+          }
+
+          dbcp {
+            maxactive = 20
+            maxidle = 10
+            initialsize = 10
+          }
+        }
       }
     }
+    # also add the following line at the root level.
+    flyway.locations="db/h2/migration"
 
-If you are using `context-per-jvm = true`, be sure to add [AUTO_MIXED_MODE](http://h2database.com/html/features.html#auto_mixed_mode) to your H2 JDBC URL; this allows multiple processes to share the same H2 database using a lock file.
-
-Also add the following line at the root level.
-
-    flyway.locations="db/postgresql/migration"
-
-It is also important that any dependent jars are to be added to Job Server class path.
+If you are using `context-per-jvm = true`, be sure to add [AUTO_MIXED_MODE](http://h2database.com/html/features.html#auto_mixed_mode) to your
+H2 JDBC URL; this allows multiple processes to share the same H2 database using a lock file.
 
 In a yarn-client mode if using H2 the below is advised.
 - Run H2 in server mode (http://www.h2database.com/html/download.html, and follow docs.,)
@@ -636,6 +640,104 @@ jdbc {
         password = "secret"
       }
 ```
+
+#### Configuring Spark Jobserver PostgreSQL Database backend
+Ensure that you have spark_jobserver database created with necessary rights
+granted to user.
+
+    # create database user jobserver and database spark_jobserver:
+    $ createuser --username=<superuser> -RDIElPS jobserver
+    $ createdb -Ojobserver -Eutf8 spark_jobserver
+    CTRL-D -> logout from psql
+
+    # logon as superuser and enable the large object extension:
+    $ psql -U <superuser> spark_jobserver
+    spark_jobserver=# CREATE EXTENSION lo;
+    CTRL-D -> logout from psql
+
+    # you can connect to the database using the psql command line client:
+    $ psql -U jobserver spark_jobserver
+
+To use PostgreSQL as backend add the following configuration to local.conf.
+
+    spark {
+      jobserver {
+        ...
+        sqldao {
+          # Slick database driver, full classpath
+          slick-driver = slick.driver.PostgresDriver
+
+          # JDBC driver, full classpath
+          jdbc-driver = org.postgresql.Driver
+
+          # Directory where default H2 driver stores its data. Only needed for H2.
+          rootdir = "/var/spark-jobserver/sqldao/data"
+
+          jdbc {
+            url = "jdbc:postgresql://db_host/spark_jobserver"
+            user = "jobserver"
+            password = "secret"
+          }
+
+          dbcp {
+            maxactive = 20
+            maxidle = 10
+            initialsize = 10
+          }
+        }
+      }
+    }
+    # also add the following line at the root level.
+    flyway.locations="db/postgresql/migration"
+
+#### Configuring Spark Jobserver MySQL Database backend
+Ensure that you have spark_jobserver database created with necessary rights
+granted to user.
+
+    # secure your mysql installation and define password for mysql root user
+    $ mysql_secure_installation
+
+    # logon as database root
+    $ mysql -u root -p
+
+    # create a database user and a database for spark jobserver:
+    mysql> CREATE USER 'jobserver'@'localhost' IDENTIFIED BY 'secret';
+    mysql> CREATE DATABASE spark_jobserver;
+    mysql> GRANT ALL ON spark_jobserver.* TO 'jobserver'@'localhost';
+    mysql> FLUSH PRIVILEGES;
+    CTRL-D -> logout from mysql
+
+    # you can connect to the database using the mysql command line client:
+    $ mysql -u jobserver -p
+
+To use MySQL as backend add the following configuration to local.conf.
+
+    spark {
+      jobserver {
+        ...
+        sqldao {
+          # Slick database driver, full classpath
+          slick-driver = slick.driver.MySQLDriver
+
+          # JDBC driver, full classpath
+          jdbc-driver = com.mysql.jdbc.Driver
+
+          jdbc {
+            url = "jdbc:mysql://db_host/spark_jobserver"
+            user = "jobserver"
+            password = "secret"
+          }
+
+          dbcp {
+            maxactive = 20
+            maxidle = 10
+            initialsize = 10
+          }
+        }
+      }
+    }
+    # also add the following line at the root level.
+    flyway.locations="db/mysql/migration"
 
 ### Chef
 
