@@ -135,10 +135,7 @@ lazy val dockerSettings = Seq(
       case "2.10" =>
         "./make-distribution.sh -Phadoop-2.4 -Phive"
       case "2.11" =>
-        """
-          |./dev/change-scala-version.sh 2.11 && \
-          |./make-distribution.sh -Dscala-2.11 -Phadoop-2.4 -Phive
-        """.stripMargin.trim
+        "./make-distribution.sh -Dscala-2.11 -Phadoop-2.6 -Phive"
       case other => throw new RuntimeException(s"Scala version $other is not supported!")
     }
 
@@ -226,7 +223,7 @@ lazy val commonSettings = Defaults.coreDefaultSettings ++ dirSettings ++ implici
   organization := "spark.jobserver",
   crossPaths := true,
   crossScalaVersions := Seq("2.10.6", "2.11.8"),
-  scalaVersion := sys.env.getOrElse("SCALA_VERSION", "2.10.6"),
+  scalaVersion := sys.env.getOrElse("SCALA_VERSION", "2.11.8"),
   dependencyOverrides += "org.scala-lang" % "scala-compiler" % scalaVersion.value,
   // scalastyleFailOnError := true,
   runScalaStyle := {
