@@ -17,6 +17,7 @@ object Versions {
   lazy val metrics = "2.2.0"
   lazy val netty = "4.0.42.Final"
   lazy val postgres = "9.4.1209"
+  lazy val mysql = "5.1.42"
   lazy val py4j = "0.10.4"
   lazy val scalaTest = "2.2.6"
   lazy val scalatic = "2.2.6"

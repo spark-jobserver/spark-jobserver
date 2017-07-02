@@ -51,6 +51,7 @@ object Dependencies {
     "com.typesafe.slick" %% "slick" % slick,
     "com.h2database" % "h2" % h2,
     "org.postgresql" % "postgresql" % postgres,
+    "mysql" % "mysql-connector-java" % mysql,
     "commons-dbcp" % "commons-dbcp" % commons,
     "org.flywaydb" % "flyway-core" % flyway
   )
