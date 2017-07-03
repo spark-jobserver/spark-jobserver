@@ -5,11 +5,13 @@ import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import com.typesafe.config.Config
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfterAll, FunSpecLike, Matchers}
+import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.io.JobDAOActor._
 
 import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
+
 import spark.jobserver.common.akka.AkkaTestUtils
 
 object JobDAOActorSpec {
@@ -20,7 +22,6 @@ object JobDAOActorSpec {
   val cleanupProbe = TestProbe()(system)
 
   object DummyDao extends JobDAO{
-
     val jarContent = Array.empty[Byte]
 
     override def saveBinary(appName: String, binaryType: BinaryType,
@@ -62,6 +63,8 @@ object JobDAOActorSpec {
     override def getJobConfigs: Future[Map[String, Config]] = ???
 
     override def getJobConfig(jobId: String): Future[Option[Config]] = ???
+
+    override def getLastUploadTimeAndType(appName: String): Option[(DateTime, BinaryType)] = ???
 
     override def deleteBinary(appName: String): Unit = {
       appName match {

@@ -6,22 +6,22 @@ import java.nio.ByteBuffer
 import java.nio.file.{Files, Paths}
 import java.util.UUID
 
-import com.datastax.driver.core.querybuilder.{Insert, QueryBuilder => QB}
-import com.datastax.driver.core.querybuilder.QueryBuilder._
+import scala.collection.convert.WrapAsJava
+import scala.collection.convert.Wrappers.JListWrapper
+import scala.concurrent.{Await, Future}
+import scala.concurrent.duration.DurationInt
+import scala.util.Try
+
 import com.datastax.driver.core._
-import com.datastax.driver.core.schemabuilder.SchemaBuilder.Direction
+import com.datastax.driver.core.querybuilder.{Insert, QueryBuilder => QB }
+import com.datastax.driver.core.querybuilder.QueryBuilder._
 import com.datastax.driver.core.schemabuilder.{Create, SchemaBuilder}
+import com.datastax.driver.core.schemabuilder.SchemaBuilder.Direction
 import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 
-import scala.concurrent.duration._
-import scala.collection.convert.WrapAsJava
-import scala.collection.convert.Wrappers.JListWrapper
-import scala.concurrent.{Await, Future}
 import spark.jobserver.cassandra.Cassandra.Resultset.toFuture
-
-import scala.util.Try
 
 object Metadata {
   val BinariesTable = "binaries"
@@ -158,7 +158,6 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
   }
 
   override def getJobInfos(limit: Int, status: Option[String] = None): Future[Seq[JobInfo]] = {
-    import Metadata._
     val query = QB.select(
       JobId, ContextName, AppName, BType, UploadTime, Classpath, StartTime, EndTime, Error
     ).from(JobsChronologicalTable).where(QB.eq(StartDate, today())).limit(limit)
@@ -178,7 +177,6 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
   }
 
   override def getRunningJobInfosForContextName(contextName: String): Future[Seq[JobInfo]] = {
-    import Metadata._
     val query = QB.select(
       JobId, ContextName, AppName, BType, UploadTime, Classpath, StartTime, EndTime, Error
     ).from(RunningJobsTable).where(QB.eq(ContextName, contextName))
@@ -305,6 +303,11 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
     }
   }
 
+  override def getLastUploadTimeAndType(appName: String): Option[(DateTime, BinaryType)] = {
+    // Copied from the base JobDAO, feel free to optimize this (having in mind this specific storage type)
+    Await.result(getApps, 60 seconds).get(appName).map(t => (t._2, t._1))
+  }
+
   private def setup(config: Config): Session = {
     val cassandraConfig = config.getConfig("spark.jobserver.cassandra")
     val hosts = JListWrapper(cassandraConfig.getStringList("hosts"))
@@ -335,7 +338,6 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
   }
 
   private def setupSchema() = {
-    import Metadata._
 
     val binariesTable: Create = SchemaBuilder.createTable(BinariesTable).ifNotExists.
       addPartitionKey(AppName, DataType.text).

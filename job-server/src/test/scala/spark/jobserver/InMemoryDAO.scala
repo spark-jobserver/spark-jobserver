@@ -1,18 +1,18 @@
 package spark.jobserver
 
-import com.typesafe.config.Config
 import java.io.{BufferedOutputStream, FileOutputStream}
 
+import com.typesafe.config.Config
 import org.joda.time.DateTime
+import spark.jobserver.io.{BinaryType, JobDAO, JobInfo, JobStatus}
 
 import scala.collection.mutable
-import spark.jobserver.io.{JobStatus, BinaryType, JobDAO, JobInfo}
-
-import scala.concurrent._
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent._
+import scala.concurrent.duration._
 /**
- * In-memory DAO for easy unit testing
- */
+  * In-memory DAO for easy unit testing
+  */
 class InMemoryDAO extends JobDAO {
   var binaries = mutable.HashMap.empty[(String, BinaryType, DateTime), (Array[Byte])]
 
@@ -26,10 +26,10 @@ class InMemoryDAO extends JobDAO {
   override def getApps: Future[Map[String, (BinaryType, DateTime)]] = {
     Future {
       binaries.keys
-      .groupBy(_._1)
-      .map { case (appName, appUploadTimeTuples) =>
-        appName -> appUploadTimeTuples.map(t => (t._2, t._3)).toSeq.head
-      }
+        .groupBy(_._1)
+        .map { case (appName, appUploadTimeTuples) =>
+          appName -> appUploadTimeTuples.map(t => (t._2, t._3)).toSeq.head
+        }
     }
   }
 
@@ -83,6 +83,11 @@ class InMemoryDAO extends JobDAO {
 
   override  def getJobConfig(jobId: String): Future[Option[Config]] = Future {
     jobConfigs.get(jobId)
+  }
+
+  override def getLastUploadTimeAndType(appName: String): Option[(DateTime, BinaryType)] = {
+    // Copied from the base JobDAO, feel free to optimize this (having in mind this specific storage type)
+    Await.result(getApps, 60 seconds).get(appName).map(t => (t._2, t._1))
   }
 
   override def getBinaryContent(appName: String, binaryType: BinaryType,

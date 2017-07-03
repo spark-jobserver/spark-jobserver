@@ -26,6 +26,12 @@ import javax.sql.rowset.serial.SerialBlob
 import slick.driver.JdbcProfile
 import slick.lifted.ProvenShape.proveShapeOf
 import spark.jobserver.JobManagerActor.ContextTerminatedException
+import slick.driver.JdbcProfile
+
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration._
+import scala.concurrent.{Await, Future}
+import scala.reflect.runtime.universe
 
 class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
   val slickDriverClass = config.getString("spark.jobserver.sqldao.slick-driver")
@@ -46,16 +52,22 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
 
   // Definition of the tables
   //scalastyle:off
-  class Binaries(tag: Tag) extends Table[(Int, String, String, Timestamp, Blob)](tag, "BINARIES") {
+  class Binaries(tag: Tag) extends Table[(Int, String, String, Timestamp)](tag, "BINARIES") {
     def binId = column[Int]("BIN_ID", O.PrimaryKey, O.AutoInc)
     def appName = column[String]("APP_NAME")
     def binaryType = column[String]("BINARY_TYPE")
     def uploadTime = column[Timestamp]("UPLOAD_TIME")
+    def * = (binId, appName, binaryType, uploadTime)
+  }
+
+  class BinariesContents(tag: Tag) extends Table[(Int, Blob)](tag, "BINARIES_CONTENTS") {
+    def binId = column[Int]("BIN_ID", O.PrimaryKey)
     def binary = column[Blob]("BINARY")
-    def * = (binId, appName, binaryType, uploadTime, binary)
+    def * = (binId, binary)
   }
 
   val binaries = TableQuery[Binaries]
+  val binariesContents = TableQuery[BinariesContents]
 
   // Explicitly avoiding to label 'jarId' as a foreign key to avoid dealing with
   // referential integrity constraint violations.
@@ -173,14 +185,24 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
     }
   }
 
+  override def getLastUploadTimeAndType(appName: String): Option[(DateTime, BinaryType)] = {
+    val query = binaries.filter(_.appName === appName)
+      .sortBy(_.uploadTime.desc)
+      .map(b => (b.uploadTime, b.binaryType)).result
+      .map{_.headOption.map(b => (convertDateSqlToJoda(b._1), BinaryType.fromString(b._2)))}
+
+    // Await.result(...) - same as it was in the base JobDAO version. Feel free to optimize this.
+    Await.result(db.run(query), 60 seconds)
+  }
+
   // Insert JarInfo and its jar into db and return the primary key associated with that row
   private def insertBinaryInfo(binInfo: BinaryInfo, binBytes: Array[Byte]): Future[Int] = {
-    db.run((binaries.map(j => j.*) += (
-      -1,
-      binInfo.appName,
-      binInfo.binaryType.name,
-      convertDateJodaToSql(binInfo.uploadTime),
-      new SerialBlob(binBytes))).transactionally)
+    val dbAction = (for {
+      binId <- binaries.returning(binaries.map(_.binId)) +=
+        (-1, binInfo.appName, binInfo.binaryType.name, convertDateJodaToSql(binInfo.uploadTime))
+      _ <- binariesContents.map(bc => bc.*) += (binId, new SerialBlob(binBytes))
+    } yield binId).transactionally
+    db.run(dbAction)
   }
 
   private def deleteBinaryInfo(appName: String): Future[Int] = {
@@ -206,10 +228,14 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
                           binaryType: BinaryType,
                           uploadTime: DateTime): Future[Array[Byte]] = {
     val dateTime = convertDateJodaToSql(uploadTime)
-    val query = binaries.filter { bin =>
-      bin.appName === appName && bin.uploadTime === dateTime && bin.binaryType === binaryType.name
-    }.map(_.binary).result
-    db.run(query.head.map { b => b.getBytes(1, b.length.toInt) }.transactionally)
+    val query = for {
+      b <- binaries.filter { bin =>
+        bin.appName === appName && bin.uploadTime === dateTime && bin.binaryType === binaryType.name
+      }
+      bc <- binariesContents if b.binId === bc.binId
+    } yield bc.binary
+    val dbAction = query.result
+    db.run(dbAction.head.map { b => b.getBytes(1, b.length.toInt) }.transactionally)
   }
 
   private def queryBinaryId(appName: String, binaryType: BinaryType, uploadTime: DateTime): Future[Int] = {
