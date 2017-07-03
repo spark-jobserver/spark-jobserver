@@ -35,13 +35,13 @@ object JsonUtils {
           JsObject(pairs)
       }
       case a: Array[_] => seqFormat[Any].write(a.toSeq)
-      case true        => JsTrue
-      case false       => JsFalse
-      case p: Product  => seqFormat[Any].write(p.productIterator.toSeq)
-      case null        => JsNull
+      case true => JsTrue
+      case false => JsFalse
+      case p: Product => seqFormat[Any].write(p.productIterator.toSeq)
+      case null => JsNull
       case m: java.util.Map[_, _] => AnyJsonFormat.write(m.asScala.toMap)
       case l: java.util.List[_] => seqFormat[Any].write(l.asScala)
-      case x           => JsString(x.toString)
+      case x => JsString(x.toString)
     }
     def read(value: JsValue): Any = value match {
       case JsNumber(n) => n.intValue()

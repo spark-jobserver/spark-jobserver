@@ -39,7 +39,7 @@ class JobInfoActor(jobDao: JobDAO, contextSupervisor: ActorRef) extends Instrume
 
       jobDao.getJobInfo(jobId).collect {
         case Some(jobInfo) => originator ! jobInfo
-        case None          => originator ! NoSuchJobId
+        case None => originator ! NoSuchJobId
       }
 
     case GetJobResult(jobId) =>

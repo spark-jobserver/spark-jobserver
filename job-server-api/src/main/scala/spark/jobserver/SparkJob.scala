@@ -33,7 +33,7 @@ trait SparkJobBase extends NewSparkJob {
   def validate(sc: C, runtime: JobEnvironment, config: Config): JobData Or Every[ValidationProblem] = {
     namedObjects = runtime.namedObjects
     validate(sc, config) match {
-      case SparkJobValid      => Good(config)
+      case SparkJobValid => Good(config)
       case i: SparkJobInvalid => Bad(One(i))
     }
   }

@@ -11,7 +11,7 @@ class SQLContextFactory extends ScalaContextFactory {
 
   def isValidJob(job: api.SparkJobBase): Boolean = job.isInstanceOf[SparkSqlJob]
 
-  def makeContext(sparkConf: SparkConf, config: Config,  contextName: String): C = {
+  def makeContext(sparkConf: SparkConf, config: Config, contextName: String): C = {
     new SQLContext(new SparkContext(sparkConf)) with ContextLike {
       def stop() { this.sparkContext.stop() }
     }

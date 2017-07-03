@@ -54,16 +54,16 @@ object WebApi {
   def errMap(t: Throwable, status: String) : Map[String, Any] =
     Map(StatusKey -> status, ResultKey -> formatException(t))
 
-  def successMap(msg:String):Map[String,String] = Map(StatusKey -> "SUCCESS", ResultKey -> msg)
+  def successMap(msg: String): Map[String, String] = Map(StatusKey -> "SUCCESS", ResultKey -> msg)
 
   def getJobDurationString(info: JobInfo): String =
     info.jobLengthMillis.map { ms => ms / 1000.0 + " secs" }.getOrElse("Job not done yet")
 
   def resultToMap(result: Any): Map[String, Any] = result match {
     case m: Map[_, _] => m.map { case (k, v) => (k.toString, v) }.toMap
-    case s: Seq[_]    => s.zipWithIndex.map { case (item, idx) => (idx.toString, item) }.toMap
-    case a: Array[_]  => a.toSeq.zipWithIndex.map { case (item, idx) => (idx.toString, item) }.toMap
-    case item         => Map(ResultKey -> item)
+    case s: Seq[_] => s.zipWithIndex.map { case (item, idx) => (idx.toString, item) }.toMap
+    case a: Array[_] => a.toSeq.zipWithIndex.map { case (item, idx) => (idx.toString, item) }.toMap
+    case item => Map(ResultKey -> item)
   }
 
   def resultToTable(result: Any): Map[String, Any] = {
@@ -74,7 +74,7 @@ object WebApi {
     ResultKeyStartBytes.toIterator ++
       (jobReport.map(t => Seq(AnyJsonFormat.write(t._1).toString(),
                 AnyJsonFormat.write(t._2).toString()).mkString(":") ).mkString(",") ++
-        (if(jobReport.nonEmpty) "," else "")).getBytes().toIterator ++
+        (if (jobReport.nonEmpty) "," else "")).getBytes().toIterator ++
       ResultKeyBytes.toIterator ++ result ++ ResultKeyEndBytes.toIterator
   }
 
@@ -303,7 +303,7 @@ class WebApi(system: ActorSystem,
               val future = binaryManager ? StoreBinary(appName, BinaryType.Jar, jarBytes)
               respondWithMediaType(MediaTypes.`application/json`) { ctx =>
                 future.map {
-                  case BinaryStored  => ctx.complete(StatusCodes.OK, successMap("Jar uploaded"))
+                  case BinaryStored => ctx.complete(StatusCodes.OK, successMap("Jar uploaded"))
                   case InvalidBinary => badRequest(ctx, "Jar is not of the right format")
                   case BinaryStorageFailure(ex) => ctx.complete(500, errMap(ex, "Storage Failure"))
                 }.recover {
@@ -374,10 +374,10 @@ class WebApi(system: ActorSystem,
                 val future = (supervisor ? AddContext(cName, config))(contextTimeout.seconds)
                 respondWithMediaType(MediaTypes.`application/json`) { ctx =>
                   future.map {
-                    case ContextInitialized   => ctx.complete(StatusCodes.OK,
+                    case ContextInitialized => ctx.complete(StatusCodes.OK,
                       successMap("Context initialized"))
                     case ContextAlreadyExists => badRequest(ctx, "context " + contextName + " exists")
-                    case ContextInitError(e)  => ctx.complete(500, errMap(e, "CONTEXT INIT ERROR"))
+                    case ContextInitError(e) => ctx.complete(500, errMap(e, "CONTEXT INIT ERROR"))
                   }
                 }
               }
@@ -395,7 +395,7 @@ class WebApi(system: ActorSystem,
             respondWithMediaType(MediaTypes.`application/json`) { ctx =>
               future.map {
                 case ContextStopped => ctx.complete(StatusCodes.OK, successMap("Context stopped"))
-                case NoSuchContext  => notFound(ctx, "context " + contextName + " not found")
+                case NoSuchContext => notFound(ctx, "context " + contextName + " not found")
                 case ContextStopError(e) => ctx.complete(500, errMap(e, "CONTEXT DELETE ERROR"))
               }
             }
@@ -626,7 +626,7 @@ class WebApi(system: ActorSystem,
                         case JobValidationFailed(_, _, ex) =>
                           ctx.complete(400, errMap(ex, "VALIDATION FAILED"))
                         case NoSuchApplication => notFound(ctx, "appName " + appName + " not found")
-                        case NoSuchClass       => notFound(ctx, "classPath " + classPath + " not found")
+                        case NoSuchClass => notFound(ctx, "classPath " + classPath + " not found")
                         case WrongJobType =>
                           ctx.complete(400, errMap("Invalid job type for this context"))
                         case JobLoadingError(err) =>
@@ -715,8 +715,8 @@ class WebApi(system: ActorSystem,
     val future = (supervisor ? msg)(contextTimeout.seconds)
     Await.result(future, contextTimeout.seconds) match {
       case (manager: ActorRef, resultActor: ActorRef) => Some(manager)
-      case NoSuchContext                              => None
-      case ContextInitError(err)                      => throw new RuntimeException(err)
+      case NoSuchContext => None
+      case ContextInitError(err) => throw new RuntimeException(err)
     }
   }
 
