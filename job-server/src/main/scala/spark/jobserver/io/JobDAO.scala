@@ -116,7 +116,7 @@ trait JobDAO {
    *
    * @return
    */
-  def getJobInfos(limit: Int, status:Option[String] = None): Future[Seq[JobInfo]]
+  def getJobInfos(limit: Int, status: Option[String] = None): Future[Seq[JobInfo]]
 
   /**
    * Persist a job configuration along with provided jobId.

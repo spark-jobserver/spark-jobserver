@@ -185,7 +185,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
     val resultActor = if (isAdHoc) globalResultActor else context.actorOf(Props(classOf[JobResultActor]))
     (ref ? JobManagerActor.Initialize(
       Some(resultActor)))(Timeout(timeoutSecs.second)).onComplete {
-      case Failure(e:Exception) =>
+      case Failure(e: Exception) =>
         logger.info("Failed to send initialize message to context " + ref, e)
         cluster.down(ref.path.address)
         ref ! PoisonPill

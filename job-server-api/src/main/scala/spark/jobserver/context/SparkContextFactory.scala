@@ -50,7 +50,7 @@ trait SparkContextFactory {
    * @param contextName the name of the context to start
    * @return the newly created context.
    */
-  def makeContext(sparkConf: SparkConf, config: Config,  contextName: String): C
+  def makeContext(sparkConf: SparkConf, config: Config, contextName: String): C
 
   /**
    * Creates a SparkContext or derived context.
@@ -90,7 +90,7 @@ trait ScalaContextFactory extends SparkContextFactory {
       if (isValidJob(job)) Good(ScalaJobContainer(job)) else Bad(JobWrongType)
     } catch {
       case _: ClassNotFoundException => Bad(JobClassNotFound)
-      case err: Exception            => Bad(JobLoadError(err))
+      case err: Exception => Bad(JobLoadError(err))
     }
   }
 
@@ -122,7 +122,7 @@ trait JavaContextFactory extends SparkContextFactory {
       if (isValidJob(job)) Good(ScalaJobContainer(JavaJob(job))) else Bad(JobWrongType)
     } catch {
       case _: ClassNotFoundException => Bad(JobClassNotFound)
-      case err: Exception            => Bad(JobLoadError(err))
+      case err: Exception => Bad(JobLoadError(err))
     }
   }
 
@@ -140,7 +140,7 @@ class DefaultSparkContextFactory extends ScalaContextFactory {
 
   type C = SparkContext with ContextLike
 
-  def makeContext(sparkConf: SparkConf, config: Config,  contextName: String): C = {
+  def makeContext(sparkConf: SparkConf, config: Config, contextName: String): C = {
     val sc = new SparkContext(sparkConf) with ContextLike {
       def sparkContext: SparkContext = this
     }

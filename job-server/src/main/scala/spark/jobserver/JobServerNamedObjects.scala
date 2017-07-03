@@ -68,7 +68,7 @@ class JobServerNamedObjects(system: ActorSystem) extends NamedObjects {
                                         (implicit timeout : FiniteDuration = defaultTimeout,
                                             persister: NamedObjectPersister[O]): O = {
     get(name) match {
-      case None    => {}
+      case None => {}
       case Some(_) => forget(name)
     }
     //this does not work when the old object is not of the same type as the new one

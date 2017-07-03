@@ -72,7 +72,7 @@ object SparkJobUtils {
     // This is useful for setting configurations for hadoop connectors such as
     // elasticsearch, cassandra, etc.
     for (e <- Try(contextConfig.getConfig("passthrough"))) {
-         e.entrySet().asScala.map { s=>
+         e.entrySet().asScala.map { s =>
             conf.set(s.getKey, s.getValue.unwrapped.toString)
          }
     }
@@ -104,7 +104,7 @@ object SparkJobUtils {
       case "yarn-client" =>
         Try(config.getDuration(yarn,
               TimeUnit.MILLISECONDS).toInt / 1000).getOrElse(40)
-      case _               =>
+      case _ =>
         Try(config.getDuration(standalone,
               TimeUnit.MILLISECONDS).toInt / 1000).getOrElse(15)
     }

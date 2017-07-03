@@ -74,7 +74,7 @@ class JobFileDAO(config: Config) extends JobDAO {
         }
       } catch {
         case eof: EOFException => // do nothing
-        case e: Exception      => throw e
+        case e: Exception => throw e
 
       } finally {
         in.close()
@@ -107,7 +107,7 @@ class JobFileDAO(config: Config) extends JobDAO {
                           binaryType: BinaryType,
                           uploadTime: DateTime,
                           jarBytes: Array[Byte]) {
-    if(binaryType == BinaryType.Jar) {
+    if (binaryType == BinaryType.Jar) {
       // The order is important. Save the jar file first and then log it into jobsFile.
       val outFile = new File(rootDir, createJarName(appName, uploadTime) + s".${binaryType.extension}")
       val bos = new BufferedOutputStream(new FileOutputStream(outFile))
