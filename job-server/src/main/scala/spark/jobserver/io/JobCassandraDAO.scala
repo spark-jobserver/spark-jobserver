@@ -6,21 +6,20 @@ import java.nio.ByteBuffer
 import java.nio.file.{Files, Paths}
 import java.util.UUID
 
-import com.datastax.driver.core.querybuilder.{QueryBuilder => QB}
-import com.datastax.driver.core.querybuilder.QueryBuilder._
 import com.datastax.driver.core._
+import com.datastax.driver.core.querybuilder.QueryBuilder._
+import com.datastax.driver.core.querybuilder.{QueryBuilder => QB}
 import com.datastax.driver.core.schemabuilder.SchemaBuilder.Direction
 import com.datastax.driver.core.schemabuilder.{Create, SchemaBuilder}
 import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
-
-import scala.concurrent.duration._
-import scala.collection.convert.WrapAsJava
-import scala.collection.convert.Wrappers.JListWrapper
-import scala.concurrent.{Await, Future}
 import spark.jobserver.cassandra.Cassandra.Resultset.toFuture
 
+import scala.collection.convert.WrapAsJava
+import scala.collection.convert.Wrappers.JListWrapper
+import scala.concurrent.duration._
+import scala.concurrent.{Await, Future}
 import scala.util.Try
 
 object Metadata {
@@ -306,6 +305,11 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
       rs => Option(rs.one()).map(
         row => ConfigFactory.parseString(row.getString(Metadata.JobConfig)))
     }
+  }
+
+  override def getLastUploadTimeAndType(appName: String): Option[(DateTime, BinaryType)] = {
+    // Copied from the base JobDAO, feel free to optimize this (having in mind this specific storage type)
+    Await.result(getApps, 60 seconds).get(appName).map(t => (t._2, t._1))
   }
 
   private def setup(config: Config): Session = {
