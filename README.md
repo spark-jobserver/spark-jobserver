@@ -791,6 +791,19 @@ serialized properly:
 
 If we encounter a data type that is not supported, then the entire result will be serialized to a string.
 
+### HTTP Override
+
+Spark Job Server offers HTTP override functionality. 
+Often reverse proxies and firewall implement access limitations to, for example, DELETE and PUT requests.
+HTTP override allows overcoming these limitations by wrapping, for example, a DELETE request into a POST request.
+
+Requesting the destruction of a context can be accomplished through HTTP override using the following syntax: 
+    
+    $ curl -X POST "localhost:8090/contexts/test_context?_method=DELETE"
+
+Here, a DELETE request is passed to Spark Job Server "through" a POST request.
+    
+    
 ## Clients
 
 Spark Jobserver project has a
