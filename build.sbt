@@ -150,7 +150,7 @@ lazy val dockerSettings = Seq(
                 apt-get -y update && \
                 apt-get -y install mesos=${MESOS_VERSION} && \
                 apt-get clean
-             """)
+        """)
       env("MAVEN_VERSION","3.3.9")
       runRaw(
         """mkdir -p /usr/share/maven /usr/share/maven/ref \
@@ -160,7 +160,7 @@ lazy val dockerSettings = Seq(
         """)
       env("MAVEN_HOME","/usr/share/maven")
       env("MAVEN_CONFIG", "/.m2")
-      
+
       copy(artifact, artifactTargetPath)
       copy(baseDirectory(_ / "bin" / "server_start.sh").value, file("app/server_start.sh"))
       copy(baseDirectory(_ / "bin" / "server_stop.sh").value, file("app/server_stop.sh"))
@@ -192,14 +192,14 @@ lazy val dockerSettings = Seq(
   },
   imageNames in docker := Seq(
     sbtdocker.ImageName(namespace = Some("velvia"),
-                        repository = "spark-jobserver",
-                        tag = Some(
-                          s"${version.value}" +
-                          s".mesos-${Versions.mesos.split('-')(0)}" +
-                          s".spark-${Versions.spark}" +
-                          s".scala-${scalaBinaryVersion.value}" +
-                          s".jdk-${Versions.java}")
-                        )
+      repository = "spark-jobserver",
+      tag = Some(
+        s"${version.value}" +
+          s".mesos-${Versions.mesos.split('-')(0)}" +
+          s".spark-${Versions.spark}" +
+          s".scala-${scalaBinaryVersion.value}" +
+          s".jdk-${Versions.java}")
+    )
   )
 )
 

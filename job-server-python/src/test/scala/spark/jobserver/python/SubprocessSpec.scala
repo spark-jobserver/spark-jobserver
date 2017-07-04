@@ -34,13 +34,13 @@ object SubprocessSpec {
   lazy val jobServerPath = getPythonDir("src/python")
 
   lazy val pysparkPath = sys.env.get("SPARK_HOME").map(d => s"$d/python/lib/pyspark.zip")
-  lazy val py4jPath  = sys.env.get("SPARK_HOME").map(d => s"$d/python/lib/py4j-0.10.4-src.zip")
+  lazy val py4jPath = sys.env.get("SPARK_HOME").map(d => s"$d/python/lib/py4j-0.10.4-src.zip")
   lazy val sparkPaths = sys.env.get("SPARK_HOME").map{sh =>
     val pysparkPath = s"$sh/python/lib/pyspark.zip"
-    val py4jPath  = s"$sh/python/lib/py4j-0.10.4-src.zip"
+    val py4jPath = s"$sh/python/lib/py4j-0.10.4-src.zip"
     Seq(pysparkPath, py4jPath)
   }.getOrElse(Seq())
-  lazy val originalPythonPath  = sys.env.get("PYTHONPATH")
+  lazy val originalPythonPath = sys.env.get("PYTHONPATH")
 }
 
 /*
@@ -49,10 +49,10 @@ object SubprocessSpec {
   methods for the python sub process to recognise as an endpoint.
  */
 case class TestEndpoint(context: Any,
-                       sparkConf: SparkConf,
-                       jobConfig: Config,
-                       jobClass: String,
-                       py4JImports: Seq[String]){
+                        sparkConf: SparkConf,
+                        jobConfig: Config,
+                        jobClass: String,
+                        py4JImports: Seq[String]){
 
   val jobConfigAsHocon: String = jobConfig.root().render(ConfigRenderOptions.concise())
   val contextConfigAsHocon = jobConfigAsHocon
@@ -86,7 +86,7 @@ trait IdentifiedContext {
 class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
 
   import SubprocessSpec._
-  val pythonPathDelimiter : String = if(System.getProperty("os.name").indexOf("Win") >= 0) ";" else ":"
+  val pythonPathDelimiter : String = if (System.getProperty("os.name").indexOf("Win") >= 0) ";" else ":"
 
   lazy val pythonPath = {
 
@@ -166,7 +166,7 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
       val pythonExitCode = process.!
       pythonExitCode should be (0)
       endpoint.result should matchPattern {
-        case m: java.util.HashMap[_,_]
+        case m: java.util.HashMap[_, _]
           if m.asInstanceOf[java.util.HashMap[String, Int]].asScala.toSeq.sorted == Seq("a" -> 2, "b" -> 1) =>
       }
       stopGateway(gw)

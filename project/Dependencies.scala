@@ -39,7 +39,7 @@ object Dependencies {
     "org.apache.spark" %% "spark-streaming" % spark % Provided excludeAll(excludeNettyIo, excludeQQ),
     "org.apache.spark" %% "spark-hive" % spark % Provided excludeAll(
       excludeNettyIo, excludeQQ, excludeScalaTest
-    )
+      )
   )
 
   lazy val sparkPythonDeps = Seq(
@@ -74,7 +74,7 @@ object Dependencies {
   )
 
   lazy val securityDeps = Seq(
-     "org.apache.shiro" % "shiro-core" % shiro
+    "org.apache.shiro" % "shiro-core" % shiro
   )
 
   lazy val serverDeps = apiDeps

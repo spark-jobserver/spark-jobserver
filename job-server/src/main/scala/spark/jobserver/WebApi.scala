@@ -29,17 +29,12 @@ import spray.routing.{HttpService, RequestContext, Route}
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.Try
 
-import spark.jobserver.common.akka.web.{CommonRoutes, WebService}
-
-
 object WebApi {
   val StatusKey = "status"
   val ResultKey = "result"
   val ResultKeyStartBytes = "{\n".getBytes
   val ResultKeyEndBytes = "}".getBytes
   val ResultKeyBytes = ("\"" + ResultKey + "\":").getBytes
-
-  val NameContextDelimiter = "~"
 
   def badRequest(ctx: RequestContext, msg: String) {
     ctx.complete(StatusCodes.BadRequest, errMap(msg))
@@ -249,7 +244,7 @@ class WebApi(system: ActorSystem,
                       }.recover {
                         case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
                       }
-                    case None => ctx.complete(415, s"Unsupported binary type ${x}")
+                    case None => ctx.complete(415, s"Unsupported binary type $x")
                   }
                 }
               case None => complete(415, s"Content-Type header must be set to indicate binary type")
@@ -345,7 +340,9 @@ class WebApi(system: ActorSystem,
       get { ctx =>
         (supervisor ? ListContexts).mapTo[Seq[String]]
           .map { contexts =>
-            ctx.complete(removeProxyUserPrefix(authInfo, contexts)) }
+            ctx.complete(SparkJobUtils.removeProxyUserPrefix(
+              authInfo.toString, contexts,
+              config.getBoolean("shiro.authentication") && config.getBoolean("shiro.use-as-proxy-user"))) }
       } ~
       post {
         /**
@@ -405,16 +402,15 @@ class WebApi(system: ActorSystem,
           parameter("reset") { reset =>
             respondWithMediaType(MediaTypes.`application/json`) { ctx =>
               reset match {
-                case "reboot" => {
+                case "reboot" =>
                   import ContextSupervisor._
-                  import collection.JavaConverters._
                   import java.util.concurrent.TimeUnit
 
                   logger.warn("refreshing contexts")
                   val future = (supervisor ? ListContexts).mapTo[Seq[String]]
                   val lookupTimeout = Try(config.getDuration("spark.jobserver.context-lookup-timeout",
                     TimeUnit.MILLISECONDS).toInt / 1000).getOrElse(1)
-                  val contexts = Await.result(future, lookupTimeout.seconds).asInstanceOf[Seq[String]]
+                  val contexts = Await.result(future, lookupTimeout.seconds)
 
                   val stopFutures = contexts.map(c => supervisor ? StopContext(c))
                   Await.ready(Future.sequence(stopFutures), contextTimeout.seconds)
@@ -425,7 +421,7 @@ class WebApi(system: ActorSystem,
                     case t => ctx.complete("ERROR")
                   }
                   ctx.complete(StatusCodes.OK, successMap("Context reset"))
-                }
+
                 case _ => ctx.complete("ERROR")
               }
             }
@@ -485,7 +481,7 @@ class WebApi(system: ActorSystem,
         respondWithMediaType(MediaTypes.`application/json`) { ctx =>
           future.map {
             case NoSuchJobId =>
-              notFound(ctx, "No such job ID " + jobId.toString)
+              notFound(ctx, "No such job ID " + jobId)
             case cnf: Config =>
               ctx.complete(cnf.root().render(renderOptions))
           }
@@ -500,7 +496,7 @@ class WebApi(system: ActorSystem,
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
             statusFuture.map {
               case NoSuchJobId =>
-                notFound(ctx, "No such job ID " + jobId.toString)
+                notFound(ctx, "No such job ID " + jobId)
               case info: JobInfo =>
                 val jobReport = getJobReport(info)
                 val resultFuture = jobInfoActor ? GetJobResult(jobId)
@@ -538,7 +534,7 @@ class WebApi(system: ActorSystem,
               case JobInfo(_, _, _, _, _, _, Some(ex)) =>
                 ctx.complete(Map(StatusKey -> JobStatus.Error, "ERROR" -> formatException(ex)))
               case JobInfo(_, _, _, _, _, Some(e), None) =>
-                notFound(ctx, "No running job with ID " + jobId.toString)
+                notFound(ctx, "No running job with ID " + jobId)
             }
           }
         } ~
@@ -593,14 +589,19 @@ class WebApi(system: ActorSystem,
         post {
           entity(as[String]) { configString =>
             parameters('appName, 'classPath,
-              'context ?, 'sync.as[Boolean] ?, 'timeout.as[Int] ?) {
-                (appName, classPath, contextOpt, syncOpt, timeoutOpt) =>
+              'context ?, 'sync.as[Boolean] ?, 'timeout.as[Int] ?, SparkJobUtils.SPARK_PROXY_USER_PARAM ?) {
+                (appName, classPath, contextOpt, syncOpt, timeoutOpt, sparkProxyUser) =>
                   try {
                     val async = !syncOpt.getOrElse(false)
                     val postedJobConfig = ConfigFactory.parseString(configString)
                     val jobConfig = postedJobConfig.withFallback(config).resolve()
-                    val contextConfig = getContextConfig(jobConfig)
-                    val jobManager = getJobManagerForContext(contextOpt, contextConfig, classPath)
+                    val contextConfig = getContextConfig(jobConfig,
+                      sparkProxyUser.map(user => Map((SparkJobUtils.SPARK_PROXY_USER_PARAM, user)))
+                      .getOrElse(Map.empty))
+                    val (cName, cConfig) =
+                      determineProxyUser(contextConfig, authInfo, contextOpt.getOrElse(""))
+                    val jobManager = getJobManagerForContext(
+                      contextOpt.map(_ => cName), cConfig, classPath)
                     val events = if (async) asyncEvents else syncEvents
                     val timeout = timeoutOpt.map(t => Timeout(t.seconds)).getOrElse(DefaultSyncTimeout)
                     val future = jobManager.get.ask(
@@ -619,7 +620,8 @@ class WebApi(system: ActorSystem,
                         case JobStarted(_, jobInfo) =>
                           val future = jobInfoActor ? StoreJobConfig(jobInfo.jobId, postedJobConfig)
                           future.map {
-                            case JobConfigStored => ctx.complete(202, getJobReport(jobInfo, true))
+                            case JobConfigStored =>
+                              ctx.complete(202, getJobReport(jobInfo, jobStarted = true))
                           }.recover {
                             case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
                           }
@@ -658,17 +660,6 @@ class WebApi(system: ActorSystem,
     complete(500, errMap("Request timed out. Try using the /jobs/<jobID>, /jobs APIs to get status/results"))
 
   /**
-   * appends the NameContextDelimiter to the user name and,
-   * if the user name contains the delimiter as well, then it doubles it so that we can be sure
-   * that our prefix is unique
-   */
-  private def userNamePrefix(authInfo: AuthInfo) : String = {
-    authInfo.toString.replaceAll(NameContextDelimiter,
-                                 NameContextDelimiter + NameContextDelimiter) +
-        NameContextDelimiter
-  }
-
-  /**
    * if the shiro user is to be used as the proxy user, then this
    * computes the context name from the user name (and a prefix) and appends the user name
    * as the spark proxy user parameter to the config
@@ -680,25 +671,9 @@ class WebApi(system: ActorSystem,
       //proxy-user-param is ignored and the authenticated user name is used
       val config = aConfig.withValue(SparkJobUtils.SPARK_PROXY_USER_PARAM,
         ConfigValueFactory.fromAnyRef(authInfo.toString))
-      (userNamePrefix(authInfo) + contextName, config)
+      (SparkJobUtils.userNamePrefix(authInfo.toString) + contextName, config)
     } else {
       (contextName, aConfig)
-    }
-  }
-
-  private val regRexPart2 = "([^" + NameContextDelimiter + "]+.*)"
-
-  /**
-   * filter the given context names so that the user may only see his/her own contexts
-   */
-  def removeProxyUserPrefix(authInfo: AuthInfo, contextNames: Seq[String]): Seq[String] = {
-    if (config.getBoolean("shiro.authentication") && config.getBoolean("shiro.use-as-proxy-user")) {
-      val RegExPrefix = ("^" + userNamePrefix(authInfo) + regRexPart2).r
-      contextNames collect {
-        case RegExPrefix(cName) => cName
-      }
-    } else {
-      contextNames
     }
   }
 

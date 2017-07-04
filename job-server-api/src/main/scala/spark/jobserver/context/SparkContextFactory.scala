@@ -20,13 +20,13 @@ case object JobWrongType extends LoadingError
 case class JobLoadError(ex: Exception) extends LoadingError
 
 /**
- * Factory trait for creating a SparkContext or any derived Contexts,
- * such as SQLContext, StreamingContext, HiveContext, etc.
- * My implementing classes can be dynamically loaded using classloaders to ensure that the entire
- * SparkContext has access to certain dynamically loaded classes, for example, job jars.
- * Also, this is capable of loading jobs which don't necessarily implement SparkJobBase, or even
- * Python jobs etc., so long as a wrapping SparkJobBase is returned.
- */
+  * Factory trait for creating a SparkContext or any derived Contexts,
+  * such as SQLContext, StreamingContext, HiveContext, etc.
+  * My implementing classes can be dynamically loaded using classloaders to ensure that the entire
+  * SparkContext has access to certain dynamically loaded classes, for example, job jars.
+  * Also, this is capable of loading jobs which don't necessarily implement SparkJobBase, or even
+  * Python jobs etc., so long as a wrapping SparkJobBase is returned.
+  */
 trait SparkContextFactory {
   import SparkJobUtils._
 
@@ -34,10 +34,10 @@ trait SparkContextFactory {
   type J <: JobContainer
 
   /**
-   * Loads the job of the given appName, version, and class path, and validates that it is
-   * the right type of job given the current context type.  For example, it may load a JAR
-   * and validate the classpath exists and try to invoke its constructor.
-   */
+    * Loads the job of the given appName, version, and class path, and validates that it is
+    * the right type of job given the current context type.  For example, it may load a JAR
+    * and validate the classpath exists and try to invoke its constructor.
+    */
   def loadAndValidateJob(appName: String,
                          uploadTime: DateTime,
                          classPath: String,
@@ -53,12 +53,12 @@ trait SparkContextFactory {
   def makeContext(sparkConf: SparkConf, config: Config, contextName: String): C
 
   /**
-   * Creates a SparkContext or derived context.
-   * @param config the overall system / job server Typesafe Config
-   * @param contextConfig the config specific to this particular context
-   * @param contextName the name of the context to start
-   * @return the newly created context.
-   */
+    * Creates a SparkContext or derived context.
+    * @param config the overall system / job server Typesafe Config
+    * @param contextConfig the config specific to this particular context
+    * @param contextName the name of the context to start
+    * @return the newly created context.
+    */
   def makeContext(config: Config, contextConfig: Config, contextName: String): C = {
     val sparkConf = configToSparkConf(config, contextConfig, contextName)
     makeContext(sparkConf, contextConfig, contextName)
@@ -70,8 +70,8 @@ case class ScalaJobContainer(job: api.SparkJobBase) extends JobContainer {
 }
 
 /**
- * A SparkContextFactory designed for Scala and Java jobs that loads jars
- */
+  * A SparkContextFactory designed for Scala and Java jobs that loads jars
+  */
 trait ScalaContextFactory extends SparkContextFactory {
   type J = ScalaJobContainer
 
@@ -95,12 +95,12 @@ trait ScalaContextFactory extends SparkContextFactory {
   }
 
   /**
-   * Returns true if the job is valid for this context.
-   * At the minimum this should check for if the job can actually take a context of this type;
-   * for example, a SQLContext should only accept jobs that take a SQLContext.
-   * The recommendation is to define a trait for each type of context job;  the standard
-   * [[DefaultSparkContextFactory]] checks to see if the job is of type [[SparkJob]].
-   */
+    * Returns true if the job is valid for this context.
+    * At the minimum this should check for if the job can actually take a context of this type;
+    * for example, a SQLContext should only accept jobs that take a SQLContext.
+    * The recommendation is to define a trait for each type of context job;  the standard
+    * [[DefaultSparkContextFactory]] checks to see if the job is of type [[SparkJob]].
+    */
   def isValidJob(job: api.SparkJobBase): Boolean
 }
 
@@ -130,12 +130,12 @@ trait JavaContextFactory extends SparkContextFactory {
 }
 
 /**
- * The default factory creates a standard SparkContext.
- * In the future if we want to add additional methods, etc. then we can have additional factories.
- * For example a specialized SparkContext to manage RDDs in a user-defined way.
- *
- * If you create your own SparkContextFactory, please make sure it has zero constructor args.
- */
+  * The default factory creates a standard SparkContext.
+  * In the future if we want to add additional methods, etc. then we can have additional factories.
+  * For example a specialized SparkContext to manage RDDs in a user-defined way.
+  *
+  * If you create your own SparkContextFactory, please make sure it has zero constructor args.
+  */
 class DefaultSparkContextFactory extends ScalaContextFactory {
 
   type C = SparkContext with ContextLike

@@ -89,7 +89,7 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 
 - *"Spark as a Service"*: Simple REST interface (including HTTPS) for all aspects of job, context management
 - Support for Spark SQL, Hive, Streaming Contexts/jobs and custom job contexts!  See [Contexts](doc/contexts.md).
-- [Python](doc/python.md), Scala, and Java (see [TestJob.java](https://github.com/spark-jobserver/spark-jobserver/blob/master/job-server-api/src/main/java/spark/jobserver/api/TestJob.java)) support
+- [Python](doc/python.md), Scala, and [Java](doc/javaapi.md) (see [TestJob.java](https://github.com/spark-jobserver/spark-jobserver/blob/master/job-server-api/src/main/java/spark/jobserver/api/TestJob.java)) support
 - LDAP Auth support via Apache Shiro integration
 - Separate JVM per SparkContext for isolation (EXPERIMENTAL)
 - Supports sub-second low-latency jobs via long-running job contexts
@@ -602,7 +602,7 @@ jdbc {
         user = "secret"
         password = "secret"
       }
-```      
+```
 
 ### Chef
 
@@ -629,14 +629,14 @@ Flow diagrams are checked in in the doc/ subdirectory.  .diagram files are for w
     GET /binaries               - lists all current binaries
     POST /binaries/<appName>    - upload a new binary file
     DELETE /binaries/<appName>  - delete defined binary
-    
+
 When POSTing new binaries, the content-type header must be set to one of the types supported by the subclasses of the `BinaryType` trait. e.g. "application/java-archive" or application/python-archive"
 
 ### Jars (deprecated)
 
     GET /jars                   - lists all the jars and the last upload timestamp
     POST /jars/<appName>        - uploads a new jar under <appName>
-    
+
 These routes are kept for legacy purposes but are deprecated in favour of the /binaries routes
 
 ### Contexts
@@ -807,8 +807,8 @@ for instance: `sbt ++2.11.6 job-server/compile`
    - You may need to set `SPARK_LOCAL_IP` to `localhost` to ensure Akka port can bind successfully
    - Note for Windows users: very few tests fail on Windows. Thus, run `testOnly -- -l WindowsIgnore` from SBT shell to ignore them.
 - Logging for tests goes to "job-server-test.log"
-- Run `scoverage:test` to check the code coverage and improve it. 
-  - Windows users: run `; coverage ; testOnly -- -l WindowsIgnore ; coverageReport` from SBT shell. 
+- Run `scoverage:test` to check the code coverage and improve it.
+  - Windows users: run `; coverage ; testOnly -- -l WindowsIgnore ; coverageReport` from SBT shell.
 - Please run scalastyle to ensure your code changes don't break the style guide.
 - Do "reStart" from SBT for quick restarts of the job server process
 - Please update the g8 template if you change the SparkJob API

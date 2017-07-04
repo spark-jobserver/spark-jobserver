@@ -38,7 +38,7 @@ class PythonHiveContextFactorySpec extends FunSpec with Matchers with BeforeAndA
   var context: HiveContext with PythonContextLike = null
 
   after {
-    if(context != null) {
+    if (context != null) {
       context.stop()
     }
     PythonHiveContextFactorySpec.resetDerby()
@@ -47,7 +47,7 @@ class PythonHiveContextFactorySpec extends FunSpec with Matchers with BeforeAndA
   /**
     * resetDerby workaround doesn't work on Windows (file remains locked), so ignore the tests
     * for now
-   */
+    */
   describe("PythonHiveContextFactory") {
     it("should create PythonHiveContexts", WindowsIgnore) {
       val factory = new PythonHiveContextFactory()
@@ -67,8 +67,8 @@ class PythonHiveContextFactorySpec extends FunSpec with Matchers with BeforeAndA
     }
 
     def runHiveTest(factory: PythonHiveContextFactory,
-                   context: HiveContext with PythonContextLike,
-                   c:Config): Unit = {
+                    context: HiveContext with PythonContextLike,
+                    c: Config): Unit = {
       val loadResult = factory.loadAndValidateJob(
         "sql-average",
         DateTime.now(),

@@ -126,12 +126,13 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
       }
 
     case StartAdHocContext(classPath, contextConfig) =>
-      val originator = sender()
+      val originator = sender
       val mergedConfig = contextConfig.withFallback(defaultContextConfig)
-
+      val userNamePrefix = Try(mergedConfig.getString(SparkJobUtils.SPARK_PROXY_USER_PARAM))
+        .map(SparkJobUtils.userNamePrefix(_)).getOrElse("")
       var contextName = ""
       do {
-        contextName = java.util.UUID.randomUUID().toString().take(8) + "-" + classPath
+        contextName = userNamePrefix + java.util.UUID.randomUUID().toString().take(8) + "-" + classPath
       } while (contexts contains contextName)
       // TODO(velvia): Make the check above atomic.  See
       // https://github.com/spark-jobserver/spark-jobserver/issues/349
