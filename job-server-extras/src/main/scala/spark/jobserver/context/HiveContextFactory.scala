@@ -2,11 +2,7 @@ package spark.jobserver.context
 
 import com.typesafe.config.Config
 import org.apache.spark.{SparkConf, SparkContext}
-<<<<<<< HEAD
-import org.apache.spark.sql.hive.test.TestHiveContext
-=======
 import org.apache.spark.sql.hive.HiveContext
->>>>>>> a41782e... Fix python paths, fix hive spec, make tests run in docker
 import spark.jobserver.{ContextLike, SparkHiveJob, api}
 
 class HiveContextFactory extends ScalaContextFactory {
