@@ -144,8 +144,10 @@ class WebApi(system: ActorSystem,
   val logger = LoggerFactory.getLogger(getClass)
 
   val myRoutes = cors {
-    binaryRoutes ~ jarRoutes ~ contextRoutes ~ jobRoutes ~
-      dataRoutes ~ healthzRoutes ~ otherRoutes
+    overrideMethodWithParameter("_method") {
+      binaryRoutes ~ jarRoutes ~ contextRoutes ~ jobRoutes ~
+        dataRoutes ~ healthzRoutes ~ otherRoutes
+    }
   }
 
   lazy val authenticator: AuthMagnet[AuthInfo] = {
