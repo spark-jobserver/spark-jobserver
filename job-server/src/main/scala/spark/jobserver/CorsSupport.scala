@@ -28,7 +28,7 @@ trait CORSSupport {
           x.collect { case rejection: MethodRejection => rejection.supported }
         ctx.complete {
           HttpResponse().withHeaders(
-            `Access-Control-Allow-Methods`(HttpMethods.OPTIONS, allowedMethods :_*) ::
+            `Access-Control-Allow-Methods`(HttpMethods.OPTIONS, allowedMethods: _*) ::
               allowOriginHeader :: optionsCorsHeaders
           )
         }

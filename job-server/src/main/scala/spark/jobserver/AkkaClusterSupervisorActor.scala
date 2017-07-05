@@ -126,12 +126,13 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
       }
 
     case StartAdHocContext(classPath, contextConfig) =>
-      val originator = sender()
+      val originator = sender
       val mergedConfig = contextConfig.withFallback(defaultContextConfig)
-
+      val userNamePrefix = Try(mergedConfig.getString(SparkJobUtils.SPARK_PROXY_USER_PARAM))
+        .map(SparkJobUtils.userNamePrefix(_)).getOrElse("")
       var contextName = ""
       do {
-        contextName = java.util.UUID.randomUUID().toString().take(8) + "-" + classPath
+        contextName = userNamePrefix + java.util.UUID.randomUUID().toString().take(8) + "-" + classPath
       } while (contexts contains contextName)
       // TODO(velvia): Make the check above atomic.  See
       // https://github.com/spark-jobserver/spark-jobserver/issues/349
@@ -185,7 +186,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
     val resultActor = if (isAdHoc) globalResultActor else context.actorOf(Props(classOf[JobResultActor]))
     (ref ? JobManagerActor.Initialize(
       Some(resultActor)))(Timeout(timeoutSecs.second)).onComplete {
-      case Failure(e:Exception) =>
+      case Failure(e: Exception) =>
         logger.info("Failed to send initialize message to context " + ref, e)
         cluster.down(ref.path.address)
         ref ! PoisonPill

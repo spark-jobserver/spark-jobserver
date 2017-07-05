@@ -22,7 +22,7 @@ class PythonJobManagerSpec extends ExtrasJobSpecBase(PythonJobManagerSpec.getNew
     it("should work with JobManagerActor") {
       val pyContextConfig = ConfigFactory.parseString(
         """
-          |context-factory = "spark.jobserver.python.PythonSessionContextFactory"
+          |context-factory = "spark.jobserver.python.TestPythonSessionContextFactory"
           |context.name = "python_ctx"
           |context.actorName = "python_ctx"
         """.stripMargin).

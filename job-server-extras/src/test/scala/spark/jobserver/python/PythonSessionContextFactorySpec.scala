@@ -80,7 +80,7 @@ class PythonSessionContextFactorySpec extends FunSpec with Matchers with BeforeA
   var context: PythonSessionContextLikeWrapper = null
 
   after {
-    if(context != null) {
+    if (context != null) {
       context.stop()
     }
     PythonSessionContextFactorySpec.resetDerby()

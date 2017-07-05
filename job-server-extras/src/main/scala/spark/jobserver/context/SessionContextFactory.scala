@@ -19,7 +19,7 @@ class SessionContextFactory extends ScalaContextFactory {
 
   def isValidJob(job: SparkJobBase): Boolean = job.isInstanceOf[SparkSessionJob]
 
-  def makeContext(sparkConf: SparkConf, config: Config,  contextName: String): C = {
+  def makeContext(sparkConf: SparkConf, config: Config, contextName: String): C = {
     val builder = SparkSession.builder()
     builder.config(sparkConf).appName(contextName)
     try {

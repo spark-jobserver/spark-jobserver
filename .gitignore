@@ -15,7 +15,6 @@ config/*.conf
 config/*.sh
 config/*.ini
 job-server/config/*.conf
-job-server/config/*.sh
 job-server/config/*.ini
 job-server-extras/spark-warehouse/
 metastore_db/

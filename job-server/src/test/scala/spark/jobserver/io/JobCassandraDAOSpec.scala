@@ -138,6 +138,7 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
       jarFilePath should equal (jarFile.getAbsolutePath)
       val retrieved = new File(jarFilePath)
       jarFile.length() should equal (retrieved.length())
+      Files.toByteArray(jarFile) should equal(Files.toByteArray(retrieved))
     }
 
     it("should retrieve the jar binary content for remote job manager") {
@@ -150,6 +151,7 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
       // test
       jarFile.exists() should equal (true)
       jarBinaryContent.length should equal (jarBytes.length)
+      jarBinaryContent should equal(jarBytes)
     }
   }
 

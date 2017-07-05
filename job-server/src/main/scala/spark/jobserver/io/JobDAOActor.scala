@@ -32,7 +32,7 @@ object JobDAOActor {
   case class SaveJobInfo(jobInfo: JobInfo) extends JobDAORequest
   case class GetJobInfos(limit: Int) extends JobDAORequest
 
-  case class SaveJobConfig(jobId:String, jobConfig:Config) extends JobDAORequest
+  case class SaveJobConfig(jobId: String, jobConfig: Config) extends JobDAORequest
   @deprecated("Leads to performance problems and OutOfMemory error ultimately", "0.7.1")
   case object GetJobConfigs extends JobDAORequest
   case class GetJobConfig(jobId: String) extends JobDAORequest
@@ -55,7 +55,7 @@ object JobDAOActor {
   def props(dao: JobDAO): Props = Props(classOf[JobDAOActor], dao)
 }
 
-class JobDAOActor(dao:JobDAO) extends InstrumentedActor {
+class JobDAOActor(dao: JobDAO) extends InstrumentedActor {
   import JobDAOActor._
   import akka.pattern.pipe
   import context.dispatcher
@@ -83,7 +83,7 @@ class JobDAOActor(dao:JobDAO) extends InstrumentedActor {
       dao.getJobInfos(limit).map(JobInfos).pipeTo(sender)
 
     case SaveJobConfig(jobId, jobConfig) =>
-      dao.saveJobConfig(jobId,jobConfig)
+      dao.saveJobConfig(jobId, jobConfig)
 
     case GetJobConfigs =>
       dao.getJobConfigs.map(JobConfigs).pipeTo(sender)

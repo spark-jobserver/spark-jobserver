@@ -22,7 +22,7 @@ class RDDPersister[T] extends NamedObjectPersister[NamedRDD[T]] {
         rdd.setName(name)
         rdd.getStorageLevel match {
           case StorageLevel.NONE => rdd.persist(storageLevel)
-          case currentLevel      => rdd.persist(currentLevel)
+          case currentLevel => rdd.persist(currentLevel)
         }
         // perform some action to force computation of the RDD
         if (forceComputation) rdd.count()
@@ -174,7 +174,7 @@ trait NamedRddSupport extends NamedObjectSupport { self: SparkJob =>
       val namedObj: Option[NamedRDD[T]] = namedObjects.get(name)(timeout)
       namedObj match {
         case Some(NamedRDD(namedRdd: RDD[T], _, _)) => Some(namedRdd)
-        case _                                      => None
+        case _ => None
       }
     }
 

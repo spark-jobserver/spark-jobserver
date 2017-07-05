@@ -3,6 +3,7 @@ package spark.jobserver.common.akka.actor
 import akka.actor.{ActorSystem, Props, ActorRef}
 import akka.testkit.{TestKit, ImplicitSender, TestProbe}
 import org.scalatest.{MustMatchers, FunSpecLike, BeforeAndAfterAll}
+import spark.jobserver.common.akka.AkkaTestUtils
 
 // Our test reaper.  Sends the snooper a message when all
 // the souls have been reaped
@@ -19,7 +20,7 @@ class ReaperSpec extends TestKit(ActorSystem("ReaperSpec")) with ImplicitSender
   import scala.concurrent.duration._
 
   override def afterAll() {
-    system.shutdown()
+    AkkaTestUtils.shutdownAndWait(system)
   }
 
   describe("Reaper") {

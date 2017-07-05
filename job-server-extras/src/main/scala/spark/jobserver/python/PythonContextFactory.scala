@@ -69,7 +69,7 @@ trait PythonContextFactory extends SparkContextFactory {
     }
   }
 
-  def buildJob(eggPath: String, modulePath:String): PythonJob[C] =
+  def buildJob(eggPath: String, modulePath: String): PythonJob[C] =
     PythonJob[C](eggPath, modulePath, py4JImports)
 
   /**
