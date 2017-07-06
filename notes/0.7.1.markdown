@@ -1,5 +1,7 @@
 #Scala #akka @ApacheSpark
 
+* Add support to create a SparkSession context  !! (@rmettu-rms)
+
 * Mark actor as down on context initialization errors. (@derSascha)
 * fix(akka): Stop job manager actor on context stop (@derSascha)
 * Mesos config docs (@vatsalmevada)
