@@ -1,8 +1,7 @@
 package spark.jobserver.common.akka
 
-import org.scalatest.matchers.ShouldMatchers
-import org.scalatest.{Matchers, FunSpec}
-import akka.testkit.TestActorRef
+import org.scalatest.{BeforeAndAfterAll, Matchers, FunSpec}
+import akka.testkit.{TestKit, TestActorRef}
 
 import akka.actor.{Actor, ActorSystem}
 
@@ -23,8 +22,12 @@ trait AddPrefix extends ActorStack {
   }
 }
 
-class ActorStackSpec extends FunSpec with Matchers {
+class ActorStackSpec extends FunSpec with Matchers with BeforeAndAfterAll {
   implicit val system = ActorSystem("test")
+
+  override def afterAll(): Unit = {
+    TestKit.shutdownActorSystem(system)
+  }
 
   describe("stacking traits") {
     it("should be able to stack traits and receive messages") {

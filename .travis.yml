@@ -3,6 +3,7 @@ sudo: required
 env:
   global:
     - DOCKER_IMAGE="spark-jobserver:ci"
+    - DOCKER_API_VERSION="1.24"
 
 language: go
 go:
@@ -12,8 +13,12 @@ services:
   - docker
 
 cache:
+  apt: true
   directories:
     - docker
+    - $HOME/.m2
+    - $HOME/.ivy2/cache
+    - $HOME/.sbt/boot/scala-$TRAVIS_SCALA_VERSION
 
 before_install:
   - go get github.com/tonistiigi/buildcache/cmd/buildcache
@@ -32,4 +37,4 @@ install:
   - sudo chown $USER docker/latest_cache.tar.gz
 
 script:
-  - docker run --rm -t -i $DOCKER_IMAGE
+  - docker run `/bin/bash <(curl -s https://codecov.io/env)` --rm -t -i $DOCKER_IMAGE

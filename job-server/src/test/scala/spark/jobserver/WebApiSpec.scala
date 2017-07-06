@@ -1,6 +1,7 @@
 package spark.jobserver
 
 import akka.actor.{Actor, ActorSystem, Props}
+import akka.testkit.TestKit
 import com.typesafe.config.ConfigFactory
 import org.joda.time.DateTime
 import org.scalatest.concurrent.ScalaFutures
@@ -11,12 +12,14 @@ import spray.client.pipelining._
 import JobServerSprayProtocol._
 import org.scalatest.time.{Seconds, Span}
 import spray.http.{ContentType, HttpHeader, HttpHeaders, MediaTypes}
-import spray.httpx.SprayJsonSupport
+import spray.httpx.{SprayJsonSupport, UnsuccessfulResponseException}
 import spray.routing.HttpService
 import spray.testkit.ScalatestRouteTest
 
 import scala.concurrent.{Await, Future}
-
+import scala.util.{Failure, Success}
+import java.util.concurrent.TimeUnit
+import scala.concurrent.duration.Duration
 
 // Tests web response codes and formatting
 // Does NOT test underlying Supervisor / JarManager functionality
@@ -87,15 +90,23 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
         sender ! JobResult("_seq", Seq(1, 2, Map("3" -> "three")))
       case GetJobResult("_stream") =>
         sender ! JobResult("_stream", "\"1, 2, 3, 4, 5, 6, 7\"".getBytes().toStream)
-      case GetJobStatus("_num") =>
-        sender ! finishedJobInfo
       case GetJobStatus("_stream") =>
+        sender ! finishedJobInfo
+      case GetJobStatus("_num") =>
         sender ! finishedJobInfo
       case GetJobResult("_num") =>
         sender ! JobResult("_num", 5000)
       case GetJobStatus("_unk") =>
         sender ! finishedJobInfo
       case GetJobResult("_unk") => sender ! JobResult("_case", Seq(1, math.BigInt(101)))
+      case GetJobStatus("_running") =>
+        sender ! baseJobInfo
+      case GetJobResult("_running") =>
+        sender ! baseJobInfo
+      case GetJobStatus("_finished") =>
+        sender ! finishedJobInfo
+      case GetJobStatus("_no_status") =>
+        sender ! NoSuchJobId
       case GetJobStatus("job_to_kill") => sender ! baseJobInfo
       case GetJobStatus(id) => sender ! baseJobInfo
       case GetJobResult(id) => sender ! JobResult(id, id + "!!!")
@@ -124,6 +135,8 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
       case StoreBinary("daofail", _, _) => sender ! BinaryStorageFailure(new Exception("DAO failed to store"))
       case StoreBinary(_, _, _)         => sender ! BinaryStored
 
+      case DeleteBinary(_) => sender ! BinaryDeleted
+
       case DataManagerActor.StoreData("errorfileToRemove", _) => sender ! DataManagerActor.Error
       case DataManagerActor.StoreData(filename, _) => {
         sender ! DataManagerActor.Stored(filename + "-time-stamp")
@@ -134,6 +147,7 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
 
       case ListContexts =>  sender ! Seq("context1", "context2")
       case StopContext("none") => sender ! NoSuchContext
+      case StopContext("timeout-ctx") => sender ! ContextStopError(new Throwable)
       case StopContext(_)      => sender ! ContextStopped
       case AddContext("one", _) => sender ! ContextAlreadyExists
       case AddContext("custom-ctx", c) =>
@@ -143,6 +157,7 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
         c.getInt("num-cpu-cores") should be(2)
         c.getInt("override_me") should be(3)
         sender ! ContextInitialized
+      case AddContext("initError-ctx", _) => sender ! ContextInitError(new Throwable)
       case AddContext(_, _)     => sender ! ContextInitialized
 
       case GetContext("no-context") => sender ! NoSuchContext
@@ -175,22 +190,31 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
         if (events.contains(classOf[JobResult])) sender ! JobResult("foo.stream", result)
         statusActor ! Unsubscribe("foo.stream", sender)
 
+
       case GetJobConfig("badjobid") => sender ! NoSuchJobId
       case GetJobConfig(_)          => sender ! config
+
+      case StoreJobConfig(_, _) => sender ! JobConfigStored
+      case KillJob(jobId) => sender ! JobKilled(jobId, DateTime.now())
     }
   }
 
-  implicit override val patienceConfig = PatienceConfig(timeout = Span(5, Seconds), interval = Span(1, Seconds))
+  implicit override val patienceConfig =
+    PatienceConfig(timeout = Span(5, Seconds), interval = Span(1, Seconds))
 
   override def beforeAll():Unit = {
     api.start()
+  }
+
+  override def afterAll():Unit = {
+    TestKit.shutdownActorSystem(system)
   }
 
   describe ("The WebApi") {
 
     val jsonContentType = HttpHeaders.`Content-Type`(ContentType(MediaTypes.`application/json`))
 
-    it ("Should return valid JSON when a jar is uploaded succesfully") {
+    it ("Should return valid JSON when a jar is uploaded successfully") {
       val p = sendReceive ~> unmarshal[JobServerResponse]
       val valid:Future[JobServerResponse] = p(Post("http://127.0.0.1:9999/jars/test-app","valid"))
       whenReady(valid) { r=>
@@ -210,6 +234,18 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
       }
     }
 
+    it ("Should return an error when actor returns ContextInitError") {
+      val p = sendReceive ~> unmarshal[JobServerResponse]
+      val valid:Future[JobServerResponse] = p(Post("http://127.0.0.1:9999/contexts/initError-ctx"))
+      Await.ready(valid, Duration.create(1, TimeUnit.SECONDS)).value.get match {
+        case Success(_) => fail("Should return an exception")
+        case Failure(r: UnsuccessfulResponseException) =>
+          r.response.status.intValue shouldBe 500
+          r.response.status.isFailure shouldBe true
+        case Failure(_) => fail("Should return an UnsuccessfulResponseException")
+      }
+    }
+
     it ("Should return valid JSON when stopping a context") {
       val p = sendReceive ~> unmarshal[JobServerResponse]
       val valid:Future[JobServerResponse] = p(Delete("http://127.0.0.1:9999/contexts/test-ctx"))
@@ -217,6 +253,18 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
         r.isSuccess shouldBe true
         r.status shouldBe "SUCCESS"
         r.result shouldBe "Context stopped"
+      }
+    }
+
+    it ("Should return an error when stopping a context times out") {
+      val p = sendReceive ~> unmarshal[JobServerResponse]
+      val valid:Future[JobServerResponse] = p(Delete("http://127.0.0.1:9999/contexts/timeout-ctx"))
+      Await.ready(valid, Duration.create(1, TimeUnit.SECONDS)).value.get match {
+        case Success(_) => fail("Should return an exception")
+        case Failure(r: UnsuccessfulResponseException) =>
+          r.response.status.intValue shouldBe 500
+          r.response.status.isFailure shouldBe true
+        case Failure(_) => fail("Should return an UnsuccessfulResponseException")
       }
     }
 
@@ -231,4 +279,3 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
     }
   }
 }
-

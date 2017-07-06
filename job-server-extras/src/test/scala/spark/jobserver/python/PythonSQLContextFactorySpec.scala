@@ -4,6 +4,7 @@ import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.spark.sql.SQLContext
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, Matchers, FunSpec}
+import spark.jobserver.WindowsIgnore
 import scala.collection.JavaConverters._
 
 class PythonSQLContextFactorySpec extends FunSpec with Matchers with BeforeAndAfter{

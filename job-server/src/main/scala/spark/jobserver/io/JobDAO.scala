@@ -77,6 +77,11 @@ trait JobDAO {
   def saveBinary(appName: String, binaryType: BinaryType, uploadTime: DateTime, binaryBytes: Array[Byte])
 
   /**
+    * Delete a jar.
+    * @param appName
+    */
+  def deleteBinary(appName: String)
+  /**
    * Return all applications name and their last upload times.
    *
    * @return
@@ -111,7 +116,7 @@ trait JobDAO {
    *
    * @return
    */
-  def getJobInfos(limit: Int, status:Option[String] = None): Future[Seq[JobInfo]]
+  def getJobInfos(limit: Int, status: Option[String] = None): Future[Seq[JobInfo]]
 
   /**
    * Persist a job configuration along with provided jobId.
@@ -126,7 +131,14 @@ trait JobDAO {
    * @todo remove. used only in test
    * @return
    */
+  @deprecated("Leads to performance problems and OutOfMemory error ultimately", "0.7.1")
   def getJobConfigs: Future[Map[String, Config]]
+
+  /**
+    * Returns a config for a given jobId
+    * @return
+    */
+  def getJobConfig(jobId: String): Future[Option[Config]]
 
   /**
    * Returns the last upload time for a given app name.
@@ -134,4 +146,14 @@ trait JobDAO {
    */
   def getLastUploadTimeAndType(appName: String): Option[(DateTime, BinaryType)] =
     Await.result(getApps, 60 seconds).get(appName).map(t => (t._2, t._1))
+
+  /**
+    * Fetch submited jar or egg content for remote driver and JobManagerActor to cache in local
+    * @param appName
+    * @param uploadTime
+    * @return
+    */
+  def getBinaryContent(appName: String,
+                       binaryType: BinaryType,
+                       uploadTime: DateTime): Array[Byte]
 }

@@ -8,15 +8,17 @@ import akka.actor.{ActorRef, PoisonPill, Props}
 import com.typesafe.config.Config
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.{SparkConf, SparkEnv}
+import org.apache.spark.scheduler.SparkListener
+import org.apache.spark.scheduler.SparkListenerApplicationEnd
 import org.joda.time.DateTime
 import org.scalactic._
 import spark.jobserver.api.JobEnvironment
 import spark.jobserver.context.{JobContainer, SparkContextFactory}
 import spark.jobserver.io.{BinaryInfo, JobDAOActor, JobInfo}
 import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
+
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
-
 import spark.jobserver.common.akka.InstrumentedActor
 
 object JobManagerActor {
@@ -71,7 +73,8 @@ object JobManagerActor {
  *   }
  * }}}
  */
-class JobManagerActor(contextConfig: Config, daoActor: ActorRef) extends InstrumentedActor {
+class JobManagerActor(contextConfig: Config, daoActor: ActorRef)
+  extends InstrumentedActor {
 
   import CommonMessages._
   import JobManagerActor._
@@ -121,6 +124,16 @@ class JobManagerActor(contextConfig: Config, daoActor: ActorRef) extends Instrum
     Option(jobContext).foreach(_.stop())
   }
 
+  // Handle external kill events (e.g. killed via YARN)
+  private def sparkListener = {
+    new SparkListener() {
+      override def onApplicationEnd(event: SparkListenerApplicationEnd) {
+        logger.info("Got Spark Application end event, stopping job manager.")
+        self ! PoisonPill
+      }
+    }
+  }
+
   def wrappedReceive: Receive = {
     case Initialize(resOpt) =>
       statusActor = context.actorOf(JobStatusActor.props(daoActor))
@@ -133,6 +146,7 @@ class JobManagerActor(contextConfig: Config, daoActor: ActorRef) extends Instrum
         }
         factory = getContextFactory()
         jobContext = factory.makeContext(config, contextConfig, contextName)
+        jobContext.sparkContext.addSparkListener(sparkListener)
         sparkEnv = SparkEnv.get
         jobCache = new JobCacheImpl(jobCacheSize, daoActor, jobContext.sparkContext, jarLoader)
         getSideJars(contextConfig).foreach { jarUri => jobContext.sparkContext.addJar(jarUri) }
@@ -159,7 +173,9 @@ class JobManagerActor(contextConfig: Config, daoActor: ActorRef) extends Instrum
 
     case KillJob(jobId: String) => {
       jobContext.sparkContext.cancelJobGroup(jobId)
-      statusActor ! JobKilled(jobId, DateTime.now())
+      val resp = JobKilled(jobId, DateTime.now())
+      statusActor ! resp
+      sender ! resp
     }
 
     case SparkContextStatus => {
@@ -228,9 +244,9 @@ class JobManagerActor(contextConfig: Config, daoActor: ActorRef) extends Instrum
     val jobId = java.util.UUID.randomUUID().toString()
     val jobContainer = factory.loadAndValidateJob(appName, lastUploadTime,
                                                   classPath, jobCache) match {
-      case Good(container)       => container
+      case Good(container) => container
       case Bad(JobClassNotFound) => return failed(NoSuchClass)
-      case Bad(JobWrongType)     => return failed(WrongJobType)
+      case Bad(JobWrongType) => return failed(WrongJobType)
       case Bad(JobLoadError(ex)) => return failed(JobLoadingError(ex))
     }
 
@@ -305,7 +321,6 @@ class JobManagerActor(contextConfig: Config, daoActor: ActorRef) extends Instrum
       }
     }(executionContext).andThen {
       case Success(result: Any) =>
-        statusActor ! JobFinished(jobId, DateTime.now())
         // TODO: If the result is Stream[_] and this is running with context-per-jvm=true configuration
         // serializing a Stream[_] blob across process boundaries is not desirable.
         // In that scenario an enhancement is required here to chunk stream results back.
@@ -316,6 +331,7 @@ class JobManagerActor(contextConfig: Config, daoActor: ActorRef) extends Instrum
         // Either way an enhancement would be required here to make Stream[_] responses work
         // with context-per-jvm=true configuration
         resultActor ! JobResult(jobId, result)
+        statusActor ! JobFinished(jobId, DateTime.now())
       case Failure(error: Throwable) =>
         // Wrapping the error inside a RuntimeException to handle the case of throwing custom exceptions.
         val wrappedError = wrapInRuntimeException(error)
@@ -339,7 +355,7 @@ class JobManagerActor(contextConfig: Config, daoActor: ActorRef) extends Instrum
   protected def wrapInRuntimeException(t: Throwable): RuntimeException = {
     val cause : Throwable = getRootCause(t)
     val e : RuntimeException = new RuntimeException("%s: %s"
-      .format(cause.getClass().getName() ,cause.getMessage))
+      .format(cause.getClass().getName(), cause.getMessage))
     e.setStackTrace(cause.getStackTrace())
     return e
   }

@@ -16,7 +16,6 @@ case class DummyJobEnvironment(jobId: String, contextConfig: Config) extends Job
 
   /*
     Do not currently support named objects for Python.
-
     They involve some tricks with Types which are hard
     to pull off via Py4J.
    */
@@ -26,12 +25,12 @@ case class DummyJobEnvironment(jobId: String, contextConfig: Config) extends Job
 
     override def getOrElseCreate[O <: _root_.spark.jobserver.NamedObject]
     (name: _root_.scala.Predef.String, objGen: => O)
-    (implicit timeout: FiniteDuration,
-     persister: _root_.spark.jobserver.NamedObjectPersister[O]): O = throw error
+      (implicit timeout: FiniteDuration,
+        persister: _root_.spark.jobserver.NamedObjectPersister[O]): O = throw error
 
     override def update[O <: NamedObject](name: String, objGen: => O)
-                                         (implicit timeout: FiniteDuration,
-                                          persister: NamedObjectPersister[O]): O = throw error
+      (implicit timeout: FiniteDuration,
+        persister: NamedObjectPersister[O]): O = throw error
 
     override def defaultTimeout: FiniteDuration = throw error
 
@@ -42,8 +41,8 @@ case class DummyJobEnvironment(jobId: String, contextConfig: Config) extends Job
     override def forget(name: String): Unit = throw error
 
     override def destroy[O <: NamedObject](objOfType: O,
-                                           name: String)
-                                          (implicit persister: NamedObjectPersister[O]): Unit = throw error
+      name: String)
+      (implicit persister: NamedObjectPersister[O]): Unit = throw error
 
     override def getNames(): Iterable[String] = throw error
   }
@@ -60,7 +59,7 @@ object PythonSparkContextFactorySpec {
      */
     val pathRelativeToSubProject = "target/python/"
     val dirIfAtRoot = new File("job-server-python")
-    val targetDir = if(dirIfAtRoot.exists) {
+    val targetDir = if (dirIfAtRoot.exists) {
       new File(s"${dirIfAtRoot.getAbsolutePath}/$pathRelativeToSubProject")
     } else {
       new File(s"../${dirIfAtRoot}/" + pathRelativeToSubProject)
@@ -74,38 +73,41 @@ object PythonSparkContextFactorySpec {
   lazy val jobServerAPIExamplePath = jobServerPaths.find(_.getAbsolutePath.contains("examples"))
 
   lazy val pysparkPath = sys.env.get("SPARK_HOME").map(d => s"$d/python/lib/pyspark.zip")
-  lazy val py4jPath  = sys.env.get("SPARK_HOME").map(d => s"$d/python/lib/py4j-0.10.3-src.zip")
-  lazy val originalPythonPath  = sys.env.get("PYTHONPATH")
+  lazy val py4jPath = sys.env.get("SPARK_HOME").map(d => s"$d/python/lib/py4j-0.10.4-src.zip")
+  lazy val originalPythonPath = sys.env.get("PYTHONPATH")
 
   case object DummyJobCache extends JobCache {
 
     override def getSparkJob(appName: String, uploadTime: DateTime, classPath: String): JobJarInfo =
       sys.error("Not Implemented")
 
+    override def getJavaJob(appName: String, uploadTime: DateTime, classPath: String): JavaJarInfo =
+      sys.error("No Implemented :(")
 
     override def getPythonJob(appName: String, uploadTime: DateTime, classPath: String): PythonJobInfo = {
       val path =
-        if(appName == "test") {
+        if (appName == "test") {
           "/tmp/test.egg"
         } else {
           jobServerAPIExamplePath.getOrElse(sys.error("job server examples path not found")).getAbsolutePath
         }
-        PythonJobInfo(path)
+      PythonJobInfo(path)
     }
 
   }
 
   lazy val config = ConfigFactory.parseString(
     s"""
-      |python.paths = [
-      |  "${jobServerAPIPath.getOrElse(sys.error("job server egg not found"))}",
-      |  "${pysparkPath.getOrElse("")}",
-      |  "${py4jPath.getOrElse("")}",
-      |  "${originalPythonPath.getOrElse("")}"
-      |]
-      |
+       |python.paths = [
+       |  "${jobServerAPIPath.getOrElse(sys.error("job server egg not found"))}",
+       |  "${pysparkPath.getOrElse("")}",
+       |  "${py4jPath.getOrElse("")}",
+       |  "${originalPythonPath.getOrElse("")}"
+       |]
+       |
       |python.executable = "python"
-    """.stripMargin)
+    """.replace("\\", "\\\\") // Windows-compatibility
+      .stripMargin)
 
   lazy val sparkConf = new SparkConf().setMaster("local[*]").setAppName("PythonSparkContextFactorySpec")
 }
@@ -117,7 +119,7 @@ class PythonSparkContextFactorySpec extends FunSpec with Matchers with BeforeAnd
   var context: JavaSparkContext with PythonContextLike = null
 
   after {
-    if(context != null) {
+    if (context != null) {
       context.stop()
     }
   }
@@ -141,8 +143,8 @@ class PythonSparkContextFactorySpec extends FunSpec with Matchers with BeforeAnd
     }
 
     def runTest(factory: PythonSparkContextFactory,
-                context: JavaSparkContext with PythonContextLike,
-                c:Config): Unit = {
+      context: JavaSparkContext with PythonContextLike,
+      c: Config): Unit = {
       val loadResult = factory.loadAndValidateJob(
         "word-count",
         DateTime.now(),
@@ -171,7 +173,7 @@ class PythonSparkContextFactorySpec extends FunSpec with Matchers with BeforeAnd
       runTest(factory, context, config)
     }
 
-    ignore("should successfully run jobs using python3") {
+    ignore("should successfully run jobs using python3", WindowsIgnore) {
       val factory = new PythonSparkContextFactory()
       val p3Config = ConfigFactory.parseString(
         """
@@ -179,6 +181,39 @@ class PythonSparkContextFactorySpec extends FunSpec with Matchers with BeforeAnd
         """.stripMargin).withFallback(config)
       context = factory.makeContext(sparkConf, p3Config, "test-create")
       runTest(factory, context, p3Config)
+    }
+
+    def runFailingTest(factory: PythonSparkContextFactory,
+      context: JavaSparkContext with PythonContextLike,
+      c: Config): Unit = {
+      val loadResult = factory.loadAndValidateJob(
+        "word-count",
+        DateTime.now(),
+        "example_jobs.word_count.FailingSparkJob",
+        DummyJobCache)
+      loadResult.isGood should be (true)
+      val jobContainer = loadResult.get
+      val job = jobContainer.getSparkJob
+      val jobConfig = ConfigFactory.parseString(
+        """
+          |input.strings = ["a", "b", "b", "c", "a", "b"]
+        """.stripMargin)
+      val jobEnv = DummyJobEnvironment("1234", c)
+      val jobDataOrProblem = job.validate(context, jobEnv, jobConfig)
+      jobDataOrProblem.isGood should be (true)
+      val jobData = jobDataOrProblem.get
+      try {
+        job.runJob(context, jobEnv, jobData)
+        assert(false)
+      } catch {
+        case err: Exception => err.getMessage.contains("Deliberate failure") should be (true)
+      }
+    }
+
+    it("should return job error messages") {
+      val factory = new PythonSparkContextFactory()
+      context = factory.makeContext(sparkConf, config, "test-create")
+      runFailingTest(factory, context, config)
     }
   }
 }

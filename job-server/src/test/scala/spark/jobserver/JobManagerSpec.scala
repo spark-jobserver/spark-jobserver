@@ -19,6 +19,7 @@ abstract class JobManagerSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
   val classPrefix = "spark.jobserver."
   private val wordCountClass = classPrefix + "WordCountExample"
   private val newWordCountClass = classPrefix + "WordCountExampleNewApi"
+  private val javaJob = classPrefix + "JavaHelloWorldJob"
   val sentence = "The lazy dog jumped over the fish"
   val counts = sentence.split(" ").groupBy(x => x).mapValues(_.length)
   protected val stringConfig = ConfigFactory.parseString(s"input.string = $sentence")
@@ -82,6 +83,18 @@ abstract class JobManagerSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
       manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, allEvents)
       expectMsgClass(startJobWait, classOf[JobStarted])
       expectMsgAllClassOf(classOf[JobFinished], classOf[JobResult])
+      expectNoMsg()
+    }
+
+    it("should start job and return result before job finish event") {
+      manager ! JobManagerActor.Initialize(None)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+
+      uploadTestJar()
+      manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, allEvents)
+      expectMsgClass(startJobWait, classOf[JobStarted])
+      expectMsgClass(classOf[JobResult])
+      expectMsgClass(classOf[JobFinished])
       expectNoMsg()
     }
 
@@ -231,15 +244,16 @@ abstract class JobManagerSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
       expectMsgPF(5.seconds.dilated, "Did not get JobResult") {
         case JobStarted(id, _) =>
           manager ! KillJob(id)
+          // we need this twice as we send both to sender and manager, in unit tests they are the same
+          // in usage they may be different
           expectMsgClass(classOf[JobKilled])
-
+          expectMsgClass(classOf[JobKilled])
       }
     }
 
     it("should fail a job that requires job jar dependencies but doesn't provide the jar"){
       manager ! JobManagerActor.Initialize(None)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
-
 
       uploadTestJar()
       val jobJarDepsConfigs = ConfigFactory.parseString(

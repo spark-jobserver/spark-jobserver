@@ -4,7 +4,7 @@ import JobServerRelease._
 import sbtassembly.AssemblyPlugin.autoImport.assemblyMergeStrategy
 import sbtassembly.MergeStrategy
 
-transitiveClassifiers in Global := Seq()
+transitiveClassifiers in Global := Seq(Artifact.SourceClassifier)
 lazy val dirSettings = Seq()
 
 lazy val akkaApp = Project(id = "akka-app", base = file("akka-app"))
@@ -19,12 +19,16 @@ lazy val jobServer = Project(id = "job-server", base = file("job-server"))
   .settings(revolverSettings)
   .settings(Assembly.settings)
   .settings(
-    description  := "Spark as a Service: a RESTful job server for Apache Spark",
+    description := "Spark as a Service: a RESTful job server for Apache Spark",
     libraryDependencies ++= sparkDeps ++ slickDeps ++ cassandraDeps ++ securityDeps ++ coreTestDeps,
     test in Test <<= (test in Test).dependsOn(packageBin in Compile in jobServerTestJar)
-                                   .dependsOn(clean in Compile in jobServerTestJar)
-                                   .dependsOn(buildPython in jobServerPython)
-                                   .dependsOn(clean in Compile in jobServerPython),
+      .dependsOn(clean in Compile in jobServerTestJar)
+      .dependsOn(buildPython in jobServerPython)
+      .dependsOn(clean in Compile in jobServerPython),
+    testOnly in Test <<= (testOnly in Test).dependsOn(packageBin in Compile in jobServerTestJar)
+      .dependsOn(clean in Compile in jobServerTestJar)
+      .dependsOn(buildPython in jobServerPython)
+      .dependsOn(clean in Compile in jobServerPython),
     console in Compile <<= Defaults.consoleTask(fullClasspath in Compile, console in Compile),
     fullClasspath in Compile <<= (fullClasspath in Compile).map { classpath =>
       extraJarPaths ++ classpath
@@ -39,6 +43,7 @@ lazy val jobServer = Project(id = "job-server", base = file("job-server"))
 lazy val jobServerTestJar = Project(id = "job-server-tests", base = file("job-server-tests"))
   .settings(commonSettings)
   .settings(jobServerTestJarSettings)
+  .settings(noPublishSettings)
   .dependsOn(jobServerApi)
   .disablePlugins(SbtScalariform)
 
@@ -52,6 +57,12 @@ lazy val jobServerExtras = Project(id = "job-server-extras", base = file("job-se
   .settings(jobServerExtrasSettings)
   .settings(
     test in Test <<= (test in Test)
+      .dependsOn(packageBin in Compile in jobServerTestJar)
+      .dependsOn(clean in Compile in jobServerTestJar)
+      .dependsOn(buildPython in jobServerPython)
+      .dependsOn(buildPyExamples in jobServerPython)
+      .dependsOn(clean in Compile in jobServerPython),
+    testOnly in Test <<= (testOnly in Test)
       .dependsOn(packageBin in Compile in jobServerTestJar)
       .dependsOn(clean in Compile in jobServerTestJar)
       .dependsOn(buildPython in jobServerPython)
@@ -70,6 +81,7 @@ lazy val jobServerPython = Project(id = "job-server-python", base = file("job-se
 lazy val root = Project(id = "root", base = file("."))
   .settings(commonSettings)
   .settings(ourReleaseSettings)
+  .settings(noPublishSettings)
   .settings(rootSettings)
   .settings(dockerSettings)
   .aggregate(jobServer, jobServerApi, jobServerTestJar, akkaApp, jobServerExtras, jobServerPython)
@@ -80,7 +92,7 @@ lazy val jobServerExtrasSettings = revolverSettings ++ Assembly.settings ++ publ
   libraryDependencies ++= sparkExtraDeps,
   // Extras packages up its own jar for testing itself
   test in Test <<= (test in Test).dependsOn(packageBin in Compile)
-                                 .dependsOn(clean in Compile),
+    .dependsOn(clean in Compile),
   fork in Test := true,
   // Temporarily disable test for assembly builds so folks can package and get started.  Some tests
   // are flaky in extras esp involving paths.
@@ -104,9 +116,14 @@ lazy val jobServerPythonSettings = revolverSettings ++ Assembly.settings ++ publ
 
 lazy val jobServerTestJarSettings = Seq(
   libraryDependencies ++= sparkDeps ++ apiDeps,
-  publishArtifact := false,
   description := "Test jar for Spark Job Server",
-  exportJars := true        // use the jar instead of target/classes
+  exportJars := true // use the jar instead of target/classes
+)
+
+lazy val noPublishSettings = Seq(
+  publishTo := Some(Resolver.file("Unused repo", file("target/unusedrepo"))),
+  publishArtifact := false,
+  publish := {}
 )
 
 lazy val dockerSettings = Seq(
@@ -116,7 +133,7 @@ lazy val dockerSettings = Seq(
     val artifact = (assemblyOutputPath in assembly in jobServerExtras).value
     val artifactTargetPath = s"/app/${artifact.name}"
 
-    val sparkBuild = s"spark-$sparkVersion"
+    val sparkBuild = s"spark-${Versions.spark}"
     val sparkBuildCmd = scalaBinaryVersion.value match {
       case "2.11" =>
         "./make-distribution.sh -Dscala-2.11 -Phadoop-2.7 -Phive"
@@ -124,17 +141,28 @@ lazy val dockerSettings = Seq(
     }
 
     new sbtdocker.mutable.Dockerfile {
-      from(s"java:$javaVersion")
+      from(s"openjdk:${Versions.java}")
       // Dockerfile best practices: https://docs.docker.com/articles/dockerfile_best-practices/
       expose(8090)
-      expose(9999)    // for JMX
-      env("MESOS_VERSION", mesosVersion)
-      runRaw("""echo "deb http://repos.mesosphere.io/ubuntu/ trusty main" > /etc/apt/sources.list.d/mesosphere.list && \
+      expose(9999) // for JMX
+      env("MESOS_VERSION", Versions.mesos)
+      runRaw(
+        """echo "deb http://repos.mesosphere.io/ubuntu/ trusty main" > /etc/apt/sources.list.d/mesosphere.list && \
                 apt-key adv --keyserver keyserver.ubuntu.com --recv E56151BF && \
                 apt-get -y update && \
                 apt-get -y install mesos=${MESOS_VERSION} && \
                 apt-get clean
-             """)
+        """)
+      env("MAVEN_VERSION","3.3.9")
+      runRaw(
+        """mkdir -p /usr/share/maven /usr/share/maven/ref \
+          && curl -fsSL http://apache.osuosl.org/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz \
+          | tar -xzC /usr/share/maven --strip-components=1 \
+          && ln -s /usr/share/maven/bin/mvn /usr/bin/mvn
+        """)
+      env("MAVEN_HOME","/usr/share/maven")
+      env("MAVEN_CONFIG", "/.m2")
+
       copy(artifact, artifactTargetPath)
       copy(baseDirectory(_ / "bin" / "server_start.sh").value, file("app/server_start.sh"))
       copy(baseDirectory(_ / "bin" / "server_stop.sh").value, file("app/server_stop.sh"))
@@ -150,30 +178,30 @@ lazy val dockerSettings = Seq(
       run("mkdir", "-p", "/database")
       runRaw(
         s"""
-          |wget http://d3kbcqa49mib13.cloudfront.net/$sparkBuild.tgz && \\
-          |tar -xvf $sparkBuild.tgz && \\
-          |cd $sparkBuild && \\
-          |$sparkBuildCmd && \\
-          |cd .. && \\
-          |mv $sparkBuild/dist /spark && \\
-          |rm $sparkBuild.tgz && \\
-          |rm -r $sparkBuild
+           |wget http://d3kbcqa49mib13.cloudfront.net/$sparkBuild.tgz && \\
+           |tar -xvf $sparkBuild.tgz && \\
+           |cd $sparkBuild && \\
+           |$sparkBuildCmd && \\
+           |cd .. && \\
+           |mv $sparkBuild/dist /spark && \\
+           |rm $sparkBuild.tgz && \\
+           |rm -r $sparkBuild
         """.stripMargin.trim
-             )
+      )
       volume("/database")
       entryPoint("app/server_start.sh")
     }
   },
   imageNames in docker := Seq(
     sbtdocker.ImageName(namespace = Some("velvia"),
-                        repository = "spark-jobserver",
-                        tag = Some(
-                          s"${version.value}" +
-                          s".mesos-${mesosVersion.split('-')(0)}" +
-                          s".spark-$sparkVersion" +
-                          s".scala-${scalaBinaryVersion.value}" +
-                          s".jdk-$javaVersion")
-                        )
+      repository = "spark-jobserver",
+      tag = Some(
+        s"${version.value}" +
+          s".mesos-${Versions.mesos.split('-')(0)}" +
+          s".spark-${Versions.spark}" +
+          s".scala-${scalaBinaryVersion.value}" +
+          s".jdk-${Versions.java}")
+    )
   )
 )
 
@@ -208,8 +236,8 @@ lazy val revolverSettings = Seq(
 // To add an extra jar to the classpath when doing "re-start" for quick development, set the
 // env var EXTRA_JAR to the absolute full path to the jar
 lazy val extraJarPaths = Option(System.getenv("EXTRA_JAR"))
-                           .map(jarpath => Seq(Attributed.blank(file(jarpath))))
-                           .getOrElse(Nil)
+  .map(jarpath => Seq(Attributed.blank(file(jarpath))))
+  .getOrElse(Nil)
 
 // Create a default Scala style task to run with compiles
 lazy val runScalaStyle = taskKey[Unit]("testScalaStyle")
@@ -219,7 +247,6 @@ lazy val commonSettings = Defaults.coreDefaultSettings ++ dirSettings ++ implici
   crossPaths   := true,
   scalaVersion := sys.env.getOrElse("SCALA_VERSION", "2.11.8"),
   dependencyOverrides += "org.scala-lang" % "scala-compiler" % scalaVersion.value,
-  publishTo    := Some(Resolver.file("Unused repo", file("target/unusedrepo"))),
   // scalastyleFailOnError := true,
   runScalaStyle := {
     org.scalastyle.sbt.ScalastylePlugin.scalastyle.in(Compile).toTask("").value
@@ -229,14 +256,18 @@ lazy val commonSettings = Defaults.coreDefaultSettings ++ dirSettings ++ implici
   // In Scala 2.10, certain language features are disabled by default, such as implicit conversions.
   // Need to pass in language options or import scala.language.* to enable them.
   // See SIP-18 (https://docs.google.com/document/d/1nlkvpoIRkx7at1qJEZafJwthZ3GeIklTFhqmXMvTX9Q/edit)
-  scalacOptions := Seq("-deprecation", "-feature",
-                       "-language:implicitConversions", "-language:postfixOps"),
+  scalacOptions := Seq(
+    "-deprecation", "-feature",
+    "-language:implicitConversions",
+    "-language:postfixOps",
+    "-language:existentials"
+  ),
   // For Building on Encrypted File Systems...
-  scalacOptions ++= Seq("-Xmax-classfile-name","128"),
-  resolvers    ++= Dependencies.repos,
+  scalacOptions ++= Seq("-Xmax-classfile-name", "128"),
+  resolvers ++= Dependencies.repos,
   libraryDependencies ++= apiDeps,
   parallelExecution in Test := false,
-
+  testOptions in Test += Tests.Argument(TestFrameworks.ScalaTest, "-oDF"),
   // We need to exclude jms/jmxtools/etc because it causes undecipherable SBT errors  :(
   ivyXML :=
     <dependencies>

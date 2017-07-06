@@ -2,9 +2,11 @@ package spark.jobserver.io
 
 import com.typesafe.config._
 import java.io._
+import java.nio.file.{Files, Paths}
 
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
+
 import scala.collection.mutable
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -72,7 +74,7 @@ class JobFileDAO(config: Config) extends JobDAO {
         }
       } catch {
         case eof: EOFException => // do nothing
-        case e: Exception      => throw e
+        case e: Exception => throw e
 
       } finally {
         in.close()
@@ -105,7 +107,7 @@ class JobFileDAO(config: Config) extends JobDAO {
                           binaryType: BinaryType,
                           uploadTime: DateTime,
                           jarBytes: Array[Byte]) {
-    if(binaryType == BinaryType.Jar) {
+    if (binaryType == BinaryType.Jar) {
       // The order is important. Save the jar file first and then log it into jobsFile.
       val outFile = new File(rootDir, createJarName(appName, uploadTime) + s".${binaryType.extension}")
       val bos = new BufferedOutputStream(new FileOutputStream(outFile))
@@ -213,6 +215,10 @@ class JobFileDAO(config: Config) extends JobDAO {
 
   override def getJobConfigs: Future[Map[String, Config]] = Future { configs.toMap }
 
+  override def getJobConfig(jobId: String): Future[Option[Config]] = Future {
+    configs.get(jobId)
+  }
+
   private def writeJobConfig(out: DataOutputStream, jobId: String, jobConfig: Config) {
     out.writeUTF(jobId)
     out.writeUTF(jobConfig.root().render(ConfigRenderOptions.concise()))
@@ -222,4 +228,24 @@ class JobFileDAO(config: Config) extends JobDAO {
     in.readUTF,
     ConfigFactory.parseString(in.readUTF)
   )
+
+  override def getBinaryContent(appName: String, binaryType: BinaryType,
+                                uploadTime: DateTime): Array[Byte] = {
+    Files.readAllBytes(Paths.get(retrieveBinaryFile(appName, binaryType, uploadTime)))
+  }
+
+  /**
+    * Delete a jar.
+    *
+    * @param appName
+    */
+  override def deleteBinary(appName: String): Unit = {
+    val dir = new File(rootDir)
+    val binaries = dir.listFiles(new FilenameFilter {
+      override def accept(dir: File, name: String): Boolean = name.startsWith(appName)
+    })
+    if (binaries != null) {
+      binaries.foreach(f => f.delete())
+    }
+  }
 }

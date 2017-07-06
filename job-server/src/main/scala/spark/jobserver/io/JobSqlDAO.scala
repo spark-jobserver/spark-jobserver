@@ -1,6 +1,7 @@
 package spark.jobserver.io
 
 import java.io.File
+import java.nio.file.{Files, Paths}
 import java.sql.Timestamp
 import javax.sql.DataSource
 
@@ -9,14 +10,14 @@ import org.apache.commons.dbcp.BasicDataSource
 import org.flywaydb.core.Flyway
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
-import slick.driver.JdbcProfile
 
+import slick.driver.JdbcProfile
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
 import scala.reflect.runtime.universe
 
-class JobSqlDAO(config: Config) extends JobDAO with FileCasher {
+class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
   val slickDriverClass = config.getString("spark.jobserver.sqldao.slick-driver")
   val jdbcDriverClass = config.getString("spark.jobserver.sqldao.jdbc-driver")
 
@@ -100,6 +101,7 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCasher {
   }
   // TODO: migrateLocations should be removed when tests have a running configuration
   val migrateLocations = config.getString("flyway.locations")
+  val initOnMigrate = config.getBoolean("flyway.initOnMigrate")
 
   // Server initialization
   init()
@@ -113,6 +115,7 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCasher {
     flyway.setDataSource(jdbcUrl, jdbcUser, jdbcPassword)
     // TODO: flyway.setLocations(migrateLocations) should be removed when tests have a running configuration
     flyway.setLocations(migrateLocations)
+    flyway.setBaselineOnMigrate(initOnMigrate)
     flyway.migrate()
   }
 
@@ -132,12 +135,25 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCasher {
     }
   }
 
+
+  /**
+    * Delete a jar.
+    *
+    * @param appName
+    */
+  override def deleteBinary(appName: String): Unit = {
+    if (Await.result(deleteBinaryInfo(appName), 60 seconds) == 0) {
+      throw new SlickException(s"Failed to delete binary: $appName from database")
+    }
+    cleanCacheBinaries(appName)
+  }
+
   override def getApps: Future[Map[String, (BinaryType, DateTime)]] = {
     val query = binaries.groupBy { r =>
       (r.appName, r.binaryType)
     }.map {
       case ((appName, binaryType), bin) =>
-        (appName, binaryType,  bin.map(_.uploadTime).max.get)
+        (appName, binaryType, bin.map(_.uploadTime).max.get)
     }.result
     for (m <- db.run(query)) yield {
       m.map {
@@ -155,6 +171,10 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCasher {
       binInfo.binaryType.name,
       convertDateJodaToSql(binInfo.uploadTime),
       binBytes))
+  }
+
+  private def deleteBinaryInfo(appName: String): Future[Int] = {
+    db.run(binaries.filter(_.appName === appName).delete)
   }
 
   override def retrieveBinaryFile(appName: String, binaryType: BinaryType, uploadTime: DateTime): String = {
@@ -206,6 +226,13 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCasher {
     }
   }
 
+  override def getJobConfig(jobId: String): Future[Option[Config]] = {
+    val query = configs
+      .filter(_.jobId === jobId).map(_.jobConfig).result
+
+    db.run(query.headOption).map(c => c.map(ConfigFactory.parseString(_)))
+  }
+
   override def saveJobConfig(jobId: String, jobConfig: Config): Unit = {
     val configRender = jobConfig.root().render(ConfigRenderOptions.concise())
     if(Await.result(db.run(configs.map(c => c.*) += (jobId, configRender)), 60 seconds) == 0){
@@ -238,7 +265,7 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCasher {
                           // !endTime.isDefined
                           case Some(JobStatus.Running) => !j.endTime.isDefined && !j.error.isDefined
                           // endTime.isDefined && error.isDefined
-                          case Some(JobStatus.Error) =>  j.error.isDefined
+                          case Some(JobStatus.Error) => j.error.isDefined
                           // not RUNNING AND NOT ERROR
                           case Some(JobStatus.Finished) => j.endTime.isDefined && !j.error.isDefined
                           case _ => true
@@ -247,7 +274,7 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCasher {
       (j.jobId, j.contextName, bin.appName, bin.binaryType,
         bin.uploadTime, j.classPath, j.startTime, j.endTime, j.error)
     }
-    val sortQuery = joinQuery.sortBy(_._6.desc)
+    val sortQuery = joinQuery.sortBy(_._7.desc)
     val limitQuery = sortQuery.take(limit)
     // Transform the each row of the table into a map of JobInfo values
     for (r <- db.run(limitQuery.result)) yield {
@@ -285,6 +312,25 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCasher {
           err.map(new Throwable(_)))
       }.headOption
 
+    }
+  }
+
+  /**
+    * Fetch submited jar or egg content for remote driver and JobManagerActor to cache in local
+    *
+    * @param appName
+    * @param uploadTime
+    * @return
+    */
+  override def getBinaryContent(appName: String, binaryType: BinaryType,
+                                uploadTime: DateTime): Array[Byte] = {
+    val jarFile = new File(rootDir, createBinaryName(appName, binaryType, uploadTime))
+    if (!jarFile.exists()) {
+      val binBytes = Await.result(fetchBinary(appName, binaryType, uploadTime), 60.seconds)
+      cacheBinary(appName, binaryType, uploadTime, binBytes)
+      binBytes
+    } else {
+      Files.readAllBytes(Paths.get(jarFile.getAbsolutePath))
     }
   }
 }

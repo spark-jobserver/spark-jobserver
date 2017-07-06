@@ -1,8 +1,9 @@
 package spark.jobserver.util
 
-import scala.reflect.runtime.{universe => ru}
-import com.typesafe.config.{ConfigException, Config}
+import com.typesafe.config.{Config, ConfigException}
 import org.slf4j.LoggerFactory
+
+import scala.reflect.runtime.{universe => ru}
 
 
 trait SparkMasterProvider {

@@ -6,15 +6,13 @@ import akka.util.Timeout
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import spark.jobserver.JobManagerActor.{SparkContextAlive, SparkContextDead, SparkContextStatus}
-import spark.jobserver.io.JobDAO
 import spark.jobserver.util.SparkJobUtils
 import scala.collection.mutable
 import scala.concurrent.Await
 import scala.util.{Failure, Success, Try}
 
-import org.joda.time.DateTime
-import org.joda.time.format.DateTimeFormat
 import spark.jobserver.common.akka.InstrumentedActor
+import akka.pattern.gracefulStop
 
 /** Messages common to all ContextSupervisors */
 object ContextSupervisor {
@@ -30,6 +28,7 @@ object ContextSupervisor {
   // Errors/Responses
   case object ContextInitialized
   case class ContextInitError(t: Throwable)
+  case class ContextStopError(t: Throwable)
   case object ContextAlreadyExists
   case object NoSuchContext
   case object ContextStopped
@@ -75,7 +74,8 @@ class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
 
   val config = context.system.settings.config
   val defaultContextConfig = config.getConfig("spark.context-settings")
-  val contextTimeout = SparkJobUtils.getContextTimeout(config)
+  val contextTimeout = SparkJobUtils.getContextCreationTimeout(config)
+  val contextDeletionTimeout = SparkJobUtils.getContextDeletionTimeout(config)
   import context.dispatcher   // to get ExecutionContext for futures
 
   private val contexts = mutable.HashMap.empty[String, (ActorRef, ActorRef)]
@@ -109,11 +109,14 @@ class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
       logger.info("Creating SparkContext for adhoc jobs.")
 
       val mergedConfig = contextConfig.withFallback(defaultContextConfig)
+      val userNamePrefix = Try(mergedConfig.getString(SparkJobUtils.SPARK_PROXY_USER_PARAM))
+        .map(SparkJobUtils.userNamePrefix(_)).getOrElse("")
 
       // Keep generating context name till there is no collision
       var contextName = ""
       do {
-        contextName = java.util.UUID.randomUUID().toString().substring(0, 8) + "-" + classPath
+        contextName = userNamePrefix +
+          java.util.UUID.randomUUID().toString().substring(0, 8) + "-" + classPath
       } while (contexts contains contextName)
 
       // Create JobManagerActor and JobResultActor
@@ -144,8 +147,15 @@ class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
     case StopContext(name) =>
       if (contexts contains name) {
         logger.info("Shutting down context {}", name)
-        contexts(name)._1 ! PoisonPill
-        sender ! ContextStopped
+        try {
+          val stoppedCtx = gracefulStop(contexts(name)._1, contextDeletionTimeout seconds)
+          Await.result(stoppedCtx, contextDeletionTimeout + 1 seconds)
+          contexts.remove(name)
+          sender ! ContextStopped
+        }
+        catch {
+          case err: Exception => sender ! ContextStopError(err)
+        }
       } else {
         sender ! NoSuchContext
       }

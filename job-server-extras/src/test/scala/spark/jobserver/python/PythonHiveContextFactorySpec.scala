@@ -7,6 +7,9 @@ import org.apache.spark.sql.hive.HiveContext
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, FunSpec, Matchers}
 
+import java.nio.file.Files
+import java.nio.file.Paths
+import spark.jobserver.WindowsIgnore
 import scala.collection.JavaConverters._
 
 
@@ -21,9 +24,10 @@ object PythonHiveContextFactorySpec {
     *
     * This approach wouldn't be suitable in a production scenario, but ok for tests.
     */
+  // Note: Issue SPARK-10872 is RESOLVED by now with "Not A Problem"
   private def resetDerby(): Unit = {
-    new File("/tmp/metastore_db/dbex.lck").delete()
-    new File("/tmp/metastore_db/db.lck").delete()
+    Files.deleteIfExists(Paths.get("/tmp/metastore_db/dbex.lck"))
+    Files.deleteIfExists(Paths.get("/tmp/metastore_db/db.lck"))
   }
 }
 
@@ -34,21 +38,24 @@ class PythonHiveContextFactorySpec extends FunSpec with Matchers with BeforeAndA
   var context: HiveContext with PythonContextLike = null
 
   after {
-    if(context != null) {
+    if (context != null) {
       context.stop()
     }
     PythonHiveContextFactorySpec.resetDerby()
   }
 
+  /**
+    * resetDerby workaround doesn't work on Windows (file remains locked), so ignore the tests
+    * for now
+    */
   describe("PythonHiveContextFactory") {
-
-    it("should create PythonHiveContexts") {
+    it("should create PythonHiveContexts", WindowsIgnore) {
       val factory = new PythonHiveContextFactory()
       context = factory.makeContext(sparkConf, config, "test-create")
       context shouldBe an[HiveContext with PythonContextLike]
     }
 
-    it("should create JobContainers") {
+    it("should create JobContainers", WindowsIgnore) {
       val factory = new PythonHiveContextFactory()
       val result = factory.loadAndValidateJob("test", DateTime.now(), "path.to.Job", DummyJobCache)
       result.isGood should be (true)
@@ -60,8 +67,8 @@ class PythonHiveContextFactorySpec extends FunSpec with Matchers with BeforeAndA
     }
 
     def runHiveTest(factory: PythonHiveContextFactory,
-                   context: HiveContext with PythonContextLike,
-                   c:Config): Unit = {
+      context: HiveContext with PythonContextLike,
+      c: Config): Unit = {
       val loadResult = factory.loadAndValidateJob(
         "sql-average",
         DateTime.now(),
@@ -95,13 +102,13 @@ class PythonHiveContextFactorySpec extends FunSpec with Matchers with BeforeAndA
       }
     }
 
-    it("should return jobs which can be successfully run") {
+    it("should return jobs which can be successfully run", WindowsIgnore) {
       val factory = new PythonHiveContextFactory()
       context = factory.makeContext(sparkConf, config, "test-create")
       runHiveTest(factory, context, config)
     }
 
-    ignore("should successfully run jobs using python3") {
+    ignore("should successfully run jobs using python3", WindowsIgnore) {
       val factory = new PythonHiveContextFactory()
       val p3Config = ConfigFactory.parseString(
         """

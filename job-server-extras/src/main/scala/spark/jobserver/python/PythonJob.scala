@@ -10,7 +10,7 @@ import scala.sys.process.{ProcessLogger, Process}
 import scala.util.{Failure, Success, Try}
 
 case class PythonJob[X <: PythonContextLike](eggPath: String,
-                                             modulePath:String,
+                                             modulePath: String,
                                              py4JImports: Seq[String]) extends SparkJobBase {
   override type JobData = Config
   override type JobOutput = Any
@@ -18,7 +18,7 @@ case class PythonJob[X <: PythonContextLike](eggPath: String,
 
   val logger = LoggerFactory.getLogger(getClass)
 
-  private def endpoint(context: C, contextConfig:Config, jobId: String, jobConfig:Config) = {
+  private def endpoint(context: C, contextConfig: Config, jobId: String, jobConfig: Config) = {
     val sparkConf = context.sparkContext.getConf
     JobEndpoint(context, sparkConf, contextConfig, jobId, jobConfig, modulePath, py4JImports)
   }
@@ -54,7 +54,8 @@ case class PythonJob[X <: PythonContextLike](eggPath: String,
     logger.info(s"Running $modulePath from $eggPath")
     val ep = endpoint(sc, runtime.contextConfig, runtime.jobId, data)
     val server = new GatewayServer(ep, 0)
-    val pythonPath = (eggPath +: sc.pythonPath).mkString(":")
+    val pythonPathDelimiter : String = if (System.getProperty("os.name").indexOf("Win") >= 0) ";" else ":"
+    val pythonPath = (eggPath +: sc.pythonPath).mkString(pythonPathDelimiter)
     logger.info(s"Using Python path of ${pythonPath}")
     val subProcessOutcome = Try {
       //Server runs asynchronously on a dedicated thread. See Py4J source for more detail
@@ -65,8 +66,11 @@ case class PythonJob[X <: PythonContextLike](eggPath: String,
           None,
           "PYTHONPATH" -> pythonPath,
           "PYSPARK_PYTHON" -> sc.pythonExecutable)
+      val err = new StringBuffer
       val procLogger =
-        ProcessLogger(o => logger.info(s"From Python: $o"), e => logger.error(s"From Python: $e"))
+        ProcessLogger(
+          o => logger.info(s"From Python: $o"),
+          e => {logger.error(s"From Python: $e"); err.append(e)})
       val pythonExitCode = process.!(procLogger)
       (pythonExitCode, ep.result) match {
 
@@ -79,7 +83,7 @@ case class PythonJob[X <: PythonContextLike](eggPath: String,
 
         case (errorCode, _) =>
           logger.error(s"Python job failed with error code $errorCode")
-          throw new Exception(s"Python job failed with error code $errorCode")
+          throw new Exception(s"Python job failed with error code $errorCode and standard err [$err]")
       }
     }
     server.shutdown()

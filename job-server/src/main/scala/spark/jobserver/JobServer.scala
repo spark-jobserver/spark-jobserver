@@ -72,9 +72,13 @@ object JobServer {
           new DataFileDAO(config)), "data-manager")
       val binManager = system.actorOf(Props(classOf[BinaryManager], daoActor), "binary-manager")
       val supervisor =
-        system.actorOf(Props(if (contextPerJvm) { classOf[AkkaClusterSupervisorActor] }
-                             else               { classOf[LocalContextSupervisorActor] }, daoActor),
-                       "context-supervisor")
+        system.actorOf(Props(
+          if (contextPerJvm) {
+            classOf[AkkaClusterSupervisorActor]
+          } else {
+            classOf[LocalContextSupervisorActor]
+          },
+          daoActor), "context-supervisor")
       val jobInfo = system.actorOf(Props(classOf[JobInfoActor], jobDAO, supervisor), "job-info")
 
       // Add initial job JARs, if specified in configuration.
@@ -132,11 +136,11 @@ object JobServer {
             s"Python Egg packages (with extension .egg) are supported. Found $other")
       }
 
-      val contextTimeout = util.SparkJobUtils.getContextTimeout(config)
+      val contextCreationTimeout = util.SparkJobUtils.getContextCreationTimeout(config)
       val future =
-        (binaryManager ? StoreLocalBinaries(initialBinariesWithTypes))(contextTimeout.seconds)
+        (binaryManager ? StoreLocalBinaries(initialBinariesWithTypes))(contextCreationTimeout.seconds)
 
-      Await.result(future, contextTimeout.seconds) match {
+      Await.result(future, contextCreationTimeout.seconds) match {
         case InvalidBinary => sys.error("Could not store initial job binaries.")
         case BinaryStorageFailure(ex) =>
           logger.error("Failed to store initial binaries", ex)

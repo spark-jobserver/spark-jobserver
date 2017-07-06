@@ -18,7 +18,7 @@ class JobManagerActorSpec extends JobManagerSpec {
   after {
     AkkaTestUtils.shutdownAndWait(manager)
   }
-  
+
   describe("starting jobs") {
     it("jobs should be able to cache RDDs and retrieve them through getPersistentRDDs") {
       manager ! JobManagerActor.Initialize(None)
@@ -49,5 +49,4 @@ class JobManagerActorSpec extends JobManagerSpec {
       }
     }
   }
-
 }
