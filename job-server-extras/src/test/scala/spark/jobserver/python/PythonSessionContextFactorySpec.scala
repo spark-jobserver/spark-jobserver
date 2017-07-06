@@ -1,19 +1,20 @@
 package spark.jobserver.python
 
-import java.io.File
-
 import com.typesafe.config.{Config, ConfigFactory}
-import org.apache.spark.sql.hive.HiveContext
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, FunSpec, Matchers}
-
 import java.nio.file.Files
 import java.nio.file.Paths
+
+import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.sql.SparkSession
 import spark.jobserver.WindowsIgnore
+import spark.jobserver.util.SparkJobUtils
+
 import scala.collection.JavaConverters._
 
 
-object PythonHiveContextFactorySpec {
+object PythonSessionContextFactorySpec {
 
   /**
     * Because of this issue https://issues.apache.org/jira/browse/SPARK-10872 ,
@@ -31,32 +32,73 @@ object PythonHiveContextFactorySpec {
   }
 }
 
-class PythonHiveContextFactorySpec extends FunSpec with Matchers with BeforeAndAfter {
+class TestPythonSessionContextFactory extends PythonContextFactory {
 
+  override type C = PythonSessionContextLikeWrapper
+  var context : PythonSessionContextLikeWrapper = _
+
+  override def py4JImports: Seq[String] =
+    PythonContextFactory.hiveContextImports
+
+  override def doMakeContext(sc: SparkContext,
+                             contextConfig: Config,
+                             contextName: String): C = {
+    context
+  }
+
+  override def makeContext(sparkConf: SparkConf,
+                           contextConfig: Config,
+                           contextName: String): C = {
+    initializeContext(sparkConf, contextConfig, contextName)
+  }
+
+  def initializeContext(sparkConf: SparkConf,
+                        contextConfig: Config,
+                        contextName: String): C = {
+    if (! context.isInstanceOf[PythonSessionContextLikeWrapper]) {
+      val builder = SparkSession.builder().config(sparkConf.set("spark.yarn.isPython", "true"))
+      builder.appName(contextName).master("local")
+      builder.config("javax.jdo.option.ConnectionURL", "jdbc:derby:memory:myDB;create=true")
+      builder.config("javax.jdo.option.ConnectionDriverName", "org.apache.derby.jdbc.EmbeddedDriver")
+      try {
+        builder.enableHiveSupport()
+      } catch {
+        case e: IllegalArgumentException => println(s"Hive support not enabled - ${e.getMessage()}")
+      }
+      val spark = builder.getOrCreate()
+      for ((k, v) <- SparkJobUtils.getHadoopConfig(contextConfig))
+        spark.sparkContext.hadoopConfiguration.set(k, v)
+      context = PythonSessionContextLikeWrapper(spark, contextConfig)
+    }
+    context
+  }
+}
+
+class PythonSessionContextFactorySpec extends FunSpec with Matchers with BeforeAndAfter {
   import PythonSparkContextFactorySpec._
 
-  var context: HiveContext with PythonContextLike = null
+  var context: PythonSessionContextLikeWrapper = null
 
   after {
     if (context != null) {
       context.stop()
     }
-    PythonHiveContextFactorySpec.resetDerby()
+    PythonSessionContextFactorySpec.resetDerby()
   }
 
   /**
     * resetDerby workaround doesn't work on Windows (file remains locked), so ignore the tests
     * for now
-    */
-  describe("PythonHiveContextFactory") {
-    it("should create PythonHiveContexts", WindowsIgnore) {
-      val factory = new PythonHiveContextFactory()
+   */
+  describe("PythonSessionContextFactorySpec") {
+    it("should create PythonSessionContexts", WindowsIgnore) {
+      val factory = new TestPythonSessionContextFactory()
       context = factory.makeContext(sparkConf, config, "test-create")
-      context shouldBe an[HiveContext with PythonContextLike]
+      context shouldBe an[PythonSessionContextLikeWrapper]
     }
 
     it("should create JobContainers", WindowsIgnore) {
-      val factory = new PythonHiveContextFactory()
+      val factory = new TestPythonSessionContextFactory()
       val result = factory.loadAndValidateJob("test", DateTime.now(), "path.to.Job", DummyJobCache)
       result.isGood should be (true)
       val jobContainer = result.get
@@ -66,13 +108,13 @@ class PythonHiveContextFactorySpec extends FunSpec with Matchers with BeforeAndA
           PythonContextFactory.hiveContextImports))
     }
 
-    def runHiveTest(factory: PythonHiveContextFactory,
-                    context: HiveContext with PythonContextLike,
-                    c: Config): Unit = {
+    def runSessionTest(factory: TestPythonSessionContextFactory,
+                   context: PythonSessionContextLikeWrapper,
+                   c:Config): Unit = {
       val loadResult = factory.loadAndValidateJob(
         "sql-average",
         DateTime.now(),
-        "example_jobs.hive_window.HiveWindowJob",
+        "example_jobs.session_window.SessionWindowJob",
         DummyJobCache)
       loadResult.isGood should be (true)
       val jobContainer = loadResult.get
@@ -103,19 +145,19 @@ class PythonHiveContextFactorySpec extends FunSpec with Matchers with BeforeAndA
     }
 
     it("should return jobs which can be successfully run", WindowsIgnore) {
-      val factory = new PythonHiveContextFactory()
+      val factory = new TestPythonSessionContextFactory()
       context = factory.makeContext(sparkConf, config, "test-create")
-      runHiveTest(factory, context, config)
+      runSessionTest(factory, context, config)
     }
 
     it("should successfully run jobs using python3", WindowsIgnore) {
-      val factory = new PythonHiveContextFactory()
+      val factory = new TestPythonSessionContextFactory()
       val p3Config = ConfigFactory.parseString(
         """
           |python.executable = "python3"
         """.stripMargin).withFallback(config)
       context = factory.makeContext(sparkConf, p3Config, "test-create")
-      runHiveTest(factory, context, p3Config)
+      runSessionTest(factory, context, p3Config)
     }
   }
 }

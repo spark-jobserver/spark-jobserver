@@ -47,6 +47,7 @@ lazy val jobServerTestJar = Project(id = "job-server-tests", base = file("job-se
 
 lazy val jobServerApi = Project(id = "job-server-api", base = file("job-server-api"))
   .settings(commonSettings)
+  .settings(jobServerApiSettings)
   .settings(publishSettings)
   .disablePlugins(SbtScalariform)
 
@@ -89,14 +90,16 @@ lazy val root = Project(id = "root", base = file("."))
 lazy val jobServerExtrasSettings = revolverSettings ++ Assembly.settings ++ publishSettings ++ Seq(
   libraryDependencies ++= sparkExtraDeps,
   // Extras packages up its own jar for testing itself
-  test in Test <<= (test in Test).dependsOn(packageBin in Compile)
-    .dependsOn(clean in Compile),
+  test in Test <<= (test in Test).dependsOn(packageBin in Compile),
   fork in Test := true,
+  parallelExecution in Test := false,
   // Temporarily disable test for assembly builds so folks can package and get started.  Some tests
   // are flaky in extras esp involving paths.
   test in assembly := {},
   exportJars := true
 )
+
+lazy val jobServerApiSettings = Seq(libraryDependencies ++= sparkDeps ++ sparkExtraDeps)
 
 lazy val testPython = taskKey[Unit]("Launch a sub process to run the Python tests")
 lazy val buildPython = taskKey[Unit]("Build the python side of python support into an egg")
