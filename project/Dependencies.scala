@@ -42,6 +42,10 @@ object Dependencies {
       )
   )
 
+  lazy val sparkExtraDepsTest = Seq(
+    "com.google.guava" % "guava" % "16.0.1" % Test force()
+  )
+
   lazy val sparkPythonDeps = Seq(
     "net.sf.py4j" % "py4j" % py4j,
     "io.spray" %% "spray-json" % sprayJson % Test
