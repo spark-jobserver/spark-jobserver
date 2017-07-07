@@ -1,4 +1,4 @@
-#!/bin/bash -ue
+#!/bin/bash -e
 # Script for packaging all the job server files to .tar.gz for Mesos or other single-image deploys
 WORK_DIR=/tmp/job-server
 
