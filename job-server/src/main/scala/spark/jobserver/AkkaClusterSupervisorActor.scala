@@ -41,7 +41,9 @@ import spark.jobserver.io.JobDAOActor.CleanContextJobInfos
  *   }
  * }}}
  */
-class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
+class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
+    extends InstrumentedActor {
+
   import ContextSupervisor._
   import scala.collection.JavaConverters._
   import scala.concurrent.duration._
@@ -191,7 +193,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
 
     val resultActor = if (isAdHoc) globalResultActor else context.actorOf(Props(classOf[JobResultActor]))
     (ref ? JobManagerActor.Initialize(
-      Some(resultActor)))(Timeout(timeoutSecs.second)).onComplete {
+      Some(resultActor), dataManagerActor))(Timeout(timeoutSecs.second)).onComplete {
       case Failure(e: Exception) =>
         logger.info("Failed to send initialize message to context " + ref, e)
         cluster.down(ref.path.address)
@@ -221,26 +223,26 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
 
     logger.info("Starting context with actor name {}", contextActorName)
 
-    val driverMode = Try(config.getString("spark.jobserver.driver-mode")).toOption.getOrElse("client")
-    val (workDir, contextContent) = generateContext(name, contextConfig, isAdHoc, contextActorName)
-    logger.info("Ready to create working directory {} for context {}", workDir: Any, name)
-
-    //extract spark.proxy.user from contextConfig, if available and pass it to $managerStartCommand
-    var cmdString = if (driverMode == "mesos-cluster") {
-      s"$managerStartCommand $driverMode $workDir '$contextContent' ${selfAddress.toString}"
-    } else {
-      s"$managerStartCommand $driverMode $workDir $contextContent ${selfAddress.toString}"
+    val master = Try(config.getString("spark.master")).toOption.getOrElse("local[4]")
+    val deployMode = Try(config.getString("spark.submit.deployMode")).toOption.getOrElse("client")
+    val contextDir: java.io.File = try {
+      createContextDir(name, contextConfig, isAdHoc, contextActorName)
+    } catch {
+      case e: Exception =>
+        failureFunc(e)
+        return
     }
 
+    var managerArgs = Seq(master, deployMode, contextDir.toString, selfAddress.toString)
+    // extract spark.proxy.user from contextConfig, if available and pass it to manager start command
     if (contextConfig.hasPath(SparkJobUtils.SPARK_PROXY_USER_PARAM)) {
-      cmdString = cmdString + s" ${contextConfig.getString(SparkJobUtils.SPARK_PROXY_USER_PARAM)}"
+      managerArgs = managerArgs :+ contextConfig.getString(SparkJobUtils.SPARK_PROXY_USER_PARAM)
     }
 
-    val pb = Process(cmdString)
+    val pb = Process(managerStartCommand, managerArgs)
     val pio = new ProcessIO(_ => (),
-                        stdout => scala.io.Source.fromInputStream(stdout)
-                          .getLines.foreach(println),
-                        stderr => scala.io.Source.fromInputStream(stderr).getLines().foreach(println))
+                        stdout => scala.io.Source.fromInputStream(stdout).getLines.foreach(println),
+                        stderr => scala.io.Source.fromInputStream(stderr).getLines.foreach(println))
     logger.info("Starting to execute sub process {}", pb)
     val processStart = Try {
       val process = pb.run(pio)
@@ -284,21 +286,6 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
                 Charset.forName("UTF-8"))
 
     tmpDir.toFile
-  }
-
-  //generate remote context path and context config
-  private def generateContext(name: String,
-                              contextConfig: Config,
-                              isAdHoc: Boolean,
-                              actorName: String): (String, String) = {
-    (Option(System.getProperty("LOG_DIR")).getOrElse("/tmp/jobserver") + "/"
-      + java.net.URLEncoder.encode(name + "-" + actorName, "UTF-8"),
-      ConfigFactory.parseMap(
-        Map("is-adhoc" -> isAdHoc.toString,
-          "context.name" -> name,
-          "context.actorname" -> actorName).asJava
-      ).withFallback(contextConfig).root().render(ConfigRenderOptions.concise())
-      )
   }
 
   private def addContextsFromConfig(config: Config) {

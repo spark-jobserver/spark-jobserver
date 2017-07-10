@@ -15,7 +15,7 @@ import scala.collection.JavaConverters._
 
 /**
  * The JobManager is the main entry point for the forked JVM process running an individual
- * SparkContext.  It is passed $workDir $clusterAddr $configFile
+ * SparkContext.  It is passed $deployMode $workDir $clusterAddr $systemConfigFile
  *
  * Each forked process has a working directory with log files for that context only, plus
  * a file "context.conf" which contains context-specific settings.
@@ -25,43 +25,46 @@ object JobManager {
 
   // Allow custom function to create ActorSystem.  An example of why this is useful:
   // we can have something that stores the ActorSystem so it could be shut down easily later.
-  // Args: workDir contextContent clusterAddress
+  // Args: deployMode workDir clusterAddress systemConfig
   def start(args: Array[String], makeSystem: Config => ActorSystem) {
+    val deployMode = args(0)
     val clusterAddress = AddressFromURIString.parse(args(2))
-    val workDir = Paths.get(args(0))
-    try {
-      if (!Files.exists(workDir)) {
-        System.err.println(s"WorkDir $workDir does not exist, creating.")
-        Files.createDirectories(workDir)
-      }
 
-      //Create context.conf in the work dir with the config string
-      Files.write(workDir.resolve("context.conf"),
-        Seq(args(1)).asJava,
-        Charset.forName("UTF-8"))
-      // Set system property LOG_DIR
-      System.setProperty("LOG_DIR", args(0))
-    } catch {
-      case e: IOException =>
-        System.err.println(s"Write context config into temp work directory $workDir, error: ${e.getMessage}")
-        sys.exit(1)
+    val (systemConfigFile, contextConfigFile) = if (deployMode == "cluster") {
+      // read files from current dir
+      (new File(new File(args(3)).getName), new File("context.conf"))
+
+    } else { // client
+      var workDir = Paths.get(args(1))
+      System.setProperty("LOG_DIR", workDir.toAbsolutePath.toString) // export LOG_DIR
+      (new File(args(3)), new File(workDir + "/context.conf"))
     }
 
-    val contextConfig = ConfigFactory.parseString(args(1))
-    val managerName = contextConfig.getString("context.actorname")
+    if (!systemConfigFile.exists()) {
+      System.err.println(s"Could not find system configuration file $systemConfigFile")
+      sys.exit(1)
+    }
+
+    if (!contextConfigFile.exists()) {
+      System.err.println(s"Could not find context configuration file $contextConfigFile")
+      sys.exit(1)
+    }
 
     val defaultConfig = ConfigFactory.load()
-    val config = if (args.length > 3) {
-      val configFile = new File(args(3))
-      if (!configFile.exists()) {
-        System.err.println("Could not find configuration file " + configFile)
-        sys.exit(1)
-      }
-      ConfigFactory.parseFile(configFile).withFallback(defaultConfig)
+    val systemConfig = ConfigFactory.parseFile(systemConfigFile).withFallback(defaultConfig)
+    val config = if (deployMode == "cluster") {
+      logger.info("Cluster mode: Removing akka.remote.netty.tcp.hostname from config!")
+      logger.info("Cluster mode: Replacing spark.jobserver.sqldao.rootdir with container tmp dir.")
+      val sqlDaoDir = Files.createTempDirectory("sqldao")
+      val sqlDaoDirConfig = ConfigValueFactory.fromAnyRef(sqlDaoDir.toAbsolutePath.toString)
+      systemConfig.withoutPath("akka.remote.netty.tcp.hostname")
+                  .withValue("spark.jobserver.sqldao.rootdir", sqlDaoDirConfig)
     } else {
-      defaultConfig
+      systemConfig
     }
+    val contextConfig = ConfigFactory.parseFile(contextConfigFile)
 
+    val managerName = contextConfig.getString("context.actorname")
     val system = makeSystem(config.resolve())
     val clazz = Class.forName(config.getString("spark.jobserver.jobdao"))
     val ctor = clazz.getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
@@ -78,10 +81,16 @@ object JobManager {
     logger.info("Joining cluster at address {}", clusterAddress)
     Cluster(system).join(clusterAddress)
 
-    //Kill process on actor system shutdown
     val reaper = system.actorOf(Props[ProductionReaper])
-    system.registerOnTermination(System.exit(0))
     reaper ! WatchMe(jobManager)
+
+    if (deployMode == "cluster") {
+      // Wait for actor system shutdown
+      system.awaitTermination
+    } else {
+      // Kill process on actor system shutdown
+      system.registerOnTermination(System.exit(0))
+    }
   }
 
   def main(args: Array[String]) {

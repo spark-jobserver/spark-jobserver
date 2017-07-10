@@ -2,6 +2,7 @@ package spark.jobserver.io
 
 import com.typesafe.config._
 import java.io._
+import java.nio.file.Files
 
 import org.apache.commons.io.FileUtils
 import org.joda.time.DateTime
@@ -98,6 +99,16 @@ class DataFileDAO(config: Config) {
     out.writeLong(aInfo.uploadTime.getMillis)
   }
 
+  def readFile(aName: String): Array[Byte] = {
+    if (aName.startsWith(rootDir) && files.contains(aName)) {
+      // only read the file if it is known to this class,
+      // otherwise this could be abused
+      Files.readAllBytes(new File(aName).toPath)
+    } else {
+      throw new IOException("Unknown file: " + aName)
+    }
+  }
+
   def deleteAll(): Boolean = {
     try {
       FileUtils.deleteDirectory(new File(rootDir))
@@ -111,7 +122,6 @@ class DataFileDAO(config: Config) {
       }
     }
   }
-
 
   def deleteFile(aName: String): Boolean = {
     if (aName.startsWith(rootDir) && files.contains(aName)) {

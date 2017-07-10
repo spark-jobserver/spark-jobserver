@@ -72,7 +72,7 @@ object ContextSupervisor {
  *   }
  * }}}
  */
-class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
+class LocalContextSupervisorActor(dao: ActorRef, dataManagerActor: ActorRef) extends InstrumentedActor {
   import ContextSupervisor._
   import scala.collection.JavaConverters._
   import scala.concurrent.duration._
@@ -201,7 +201,7 @@ class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
                        ).withFallback(contextConfig)
     val ref = context.actorOf(JobManagerActor.props(mergedConfig, dao), name)
     (ref ? JobManagerActor.Initialize(
-      resultActorRef))(Timeout(timeoutSecs.second)).onComplete {
+      resultActorRef, dataManagerActor))(Timeout(timeoutSecs.second)).onComplete {
       case Failure(e: Exception) =>
         logger.error("Exception after sending Initialize to JobManagerActor", e)
         // Make sure we try to shut down the context in case it gets created anyways
