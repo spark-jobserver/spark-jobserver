@@ -61,8 +61,8 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
   val baseJobInfo =
     JobInfo("foo-1", "context", BinaryInfo("demo", BinaryType.Jar, dt), "com.abc.meme", dt, None, None)
   val finishedJobInfo = baseJobInfo.copy(endTime = Some(dt.plusMinutes(5)))
-  val errorJobInfo = finishedJobInfo.copy(error =  Some(new Throwable("test-error")))
-  val killedJobInfo = finishedJobInfo.copy(error =  Some(JobKilledException(finishedJobInfo.jobId)))
+  val errorJobInfo = finishedJobInfo.copy(error =  Some(ErrorData(new Throwable("test-error"))))
+  val killedJobInfo = finishedJobInfo.copy(error =  Some(ErrorData(JobKilledException(finishedJobInfo.jobId))))
   val JobId = "jobId"
   val StatusKey = "status"
   val ResultKey = "result"

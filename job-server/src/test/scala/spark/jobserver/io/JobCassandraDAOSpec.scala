@@ -76,11 +76,10 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
 
       val noEndTime: Option[DateTime] = None
       val someEndTime: Option[DateTime] = Some(startTime.plusSeconds(5)) // Any DateTime Option is fine
-      val noError: Option[Throwable] = None
-      val someError: Option[Throwable] = Some(throwable)
+      val someError = Some(ErrorData(throwable))
 
       val endTime: Option[DateTime] = if (hasEndTime) someEndTime else noEndTime
-      val error: Option[Throwable] = if (hasError) someError else noError
+      val error = if (hasError) someError else None
 
       Thread.sleep(2) // hack to guarantee order
       JobInfo(id, contextName, jarInfo, classPath, startTime, endTime, error)
@@ -292,8 +291,10 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
       jobs2.size should equal (2)
       jobs2.last.endTime should equal (None)
       jobs2.last.error.isDefined should equal (true)
-      intercept[Throwable] { jobs2.last.error.map(throw _) }
-      jobs2.last.error.get.getMessage should equal (throwable.getMessage)
+      jobs2.last.error shouldBe defined
+      jobs2.last.error.get.message should equal (throwable.getMessage)
+      jobs2.last.error.get.errorClass should equal (throwable.getClass.getName)
+      jobs2.last.error.get.stackTrace should not be empty
 
       // Third Test
       dao.saveJobInfo(jobInfoSomeEndNoErr)
@@ -310,14 +311,16 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
       jobs4.size should equal (2)
       jobs4.last.endTime should equal (expectedSomeEndSomeErr.endTime)
       jobs4.last.error.isDefined should equal (true)
-      intercept[Throwable] { jobs4.last.error.map(throw _) }
-      jobs4.last.error.get.getMessage should equal (throwable.getMessage)
+      jobs4.last.error shouldBe defined
+      jobs4.last.error.get.message should equal (throwable.getMessage)
+      jobs4.last.error.get.errorClass should equal (throwable.getClass.getName)
+      jobs4.last.error.get.stackTrace should not be empty
     }
     it("retrieve by status equals running should be no end and no error") {
       //save some job insure exist one running job
       val dt1 = DateTime.now()
       val dt2 = Some(DateTime.now())
-      val someError = Some(new Throwable("test-error"))
+      val someError = Some(ErrorData("test-error", "", ""))
       val finishedJob: JobInfo =
         JobInfo(UUID.randomUUID.toString, "test", jarInfo, "test-class", dt1, dt2, None)
       val errorJob: JobInfo =

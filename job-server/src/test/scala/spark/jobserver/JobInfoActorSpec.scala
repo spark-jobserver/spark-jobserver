@@ -119,7 +119,7 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
       val dt3 = dt2.plusMinutes(5)
       val dt4 = dt3.plusMinutes(5)
       val binaryInfo = BinaryInfo("demo", BinaryType.Jar, dt1)
-      val someError =  Some(new Throwable("test-error"))
+      val someError = Some(ErrorData(new Throwable("test-error")))
       val runningJob = JobInfo("running-1", "context", binaryInfo, "com.abc.meme", dt1, None, None)
       val errorJob = JobInfo("error-1", "context", binaryInfo, "com.abc.meme", dt2, None, someError)
       val finishedJob = JobInfo("finished-1", "context", binaryInfo, "com.abc.meme", dt3, Some(dt4), None)
@@ -152,7 +152,7 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
     }
 
     it("should return job info if job result is requested for running or errored out job") {
-      val someError: Option[Throwable] = Some(new Throwable("test-error"))
+      val someError = Some(ErrorData(new Throwable("test-error")))
       val dt1 = DateTime.parse("2013-05-28T00Z")
       val dt2 = DateTime.parse("2013-05-29T00Z")
       val jobInfo1 =

@@ -1,5 +1,7 @@
 package spark.jobserver.io
 
+import java.io.{PrintWriter, StringWriter}
+
 import com.typesafe.config._
 import org.joda.time.{DateTime, Duration}
 import org.slf4j.LoggerFactory
@@ -46,13 +48,26 @@ object BinaryType {
 // Uniquely identifies the binary used to run a job
 case class BinaryInfo(appName: String, binaryType: BinaryType, uploadTime: DateTime)
 
+case class ErrorData(message: String, errorClass: String, stackTrace: String)
+
+object ErrorData {
+  def apply(ex: Throwable): ErrorData = {
+    ErrorData(ex.getMessage, ex.getClass.getName, getStackTrace(ex))
+  }
+
+  def getStackTrace(ex: Throwable): String = {
+    val stackTrace = new StringWriter()
+    ex.printStackTrace(new PrintWriter(stackTrace))
+    stackTrace.toString
+  }
+}
 
 // Both a response and used to track job progress
 // NOTE: if endTime is not None, then the job has finished.
 case class JobInfo(jobId: String, contextName: String,
                    binaryInfo: BinaryInfo, classPath: String,
                    startTime: DateTime, endTime: Option[DateTime],
-                   error: Option[Throwable]) {
+                   error: Option[ErrorData]) {
   def jobLengthMillis: Option[Long] = endTime.map { end => new Duration(startTime, end).getMillis }
 
   def isRunning: Boolean = endTime.isEmpty
@@ -143,7 +158,7 @@ trait JobDAO {
       for (info <- infos) {
         val updatedInfo = info.copy(
           endTime = Some(endTime),
-          error = Some(JobKilledException(info.jobId)))
+          error = Some(ErrorData(JobKilledException(info.jobId))))
         saveJobInfo(jobInfo = updatedInfo)
       }
     }

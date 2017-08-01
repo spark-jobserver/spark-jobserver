@@ -378,10 +378,9 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         result(StatusKey) should equal(JobStatus.Error)
         result.keys should equal (Set(JobId, StatusKey, ResultKey))
         val exceptionMap = result(ResultKey).asInstanceOf[Map[String, Any]]
-        exceptionMap should contain key ("cause")
-        exceptionMap should contain key ("causingClass")
-        exceptionMap("cause") should equal ("foo")
-        exceptionMap("causingClass").asInstanceOf[String] should include ("IllegalArgumentException")
+        exceptionMap should contain key ("stack")
+        exceptionMap("stack").asInstanceOf[String] should include ("foo")
+        exceptionMap("stack").asInstanceOf[String] should include ("IllegalArgumentException")
       }
     }
   }

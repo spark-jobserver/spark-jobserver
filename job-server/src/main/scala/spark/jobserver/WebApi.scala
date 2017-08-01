@@ -16,7 +16,7 @@ import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import spark.jobserver.JobManagerActor.JobKilledException
 import spark.jobserver.auth._
-import spark.jobserver.io.{BinaryType, JobInfo, JobStatus}
+import spark.jobserver.io.{BinaryType, ErrorData, JobInfo, JobStatus}
 import spark.jobserver.routes.DataRoutes
 import spark.jobserver.util.{SSLContextFactory, SparkJobUtils}
 import spray.http.HttpHeaders.`Content-Type`
@@ -26,6 +26,7 @@ import spray.io.ServerSSLEngineProvider
 import spray.json.DefaultJsonProtocol._
 import spray.routing.directives.AuthMagnet
 import spray.routing.{HttpService, RequestContext, Route}
+
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.Try
 
@@ -74,27 +75,26 @@ object WebApi {
   }
 
   def formatException(t: Throwable): Any =
-    if (t.getCause != null) {
-      Map("message" -> t.getMessage,
-        "errorClass" -> t.getClass.getName,
-        "cause" -> t.getCause.getMessage,
-        "causingClass" -> t.getCause.getClass.getName,
-        "stack" -> t.getCause.getStackTrace.map(_.toString).toSeq)
-    } else {
-      Map("message" -> t.getMessage,
-        "errorClass" -> t.getClass.getName,
-        "stack" -> t.getStackTrace.map(_.toString).toSeq)
-    }
+    Map("message" -> t.getMessage,
+      "errorClass" -> t.getClass.getName,
+      "stack" -> ErrorData.getStackTrace(t))
+
+  def formatException(t: ErrorData): Any = {
+    Map("message" -> t.message,
+      "errorClass" -> t.errorClass,
+      "stack" -> t.stackTrace
+    )
+  }
 
   def getJobReport(jobInfo: JobInfo, jobStarted: Boolean = false): Map[String, Any] = {
 
     val statusMap = if (jobStarted) Map(StatusKey -> JobStatus.Started) else jobInfo match {
       case JobInfo(_, _, _, _, _, None, _) => Map(StatusKey -> JobStatus.Running)
-      case JobInfo(_, _, _, _, _, _, Some(ex)) =>
-        ex match {
-          case e: JobKilledException => Map(StatusKey -> JobStatus.Killed, ResultKey -> formatException(ex))
-          case _ => Map(StatusKey -> JobStatus.Error, ResultKey -> formatException(ex))
-        }
+      case JobInfo(_, _, _, _, _, _, Some(err))
+        if err.errorClass == classOf[JobKilledException].getName =>
+        Map(StatusKey -> JobStatus.Killed, ResultKey -> formatException(err))
+      case JobInfo(_, _, _, _, _, _, Some(err)) =>
+        Map(StatusKey -> JobStatus.Error, ResultKey -> formatException(err))
       case JobInfo(_, _, _, _, _, Some(e), None) => Map(StatusKey -> "FINISHED")
     }
     Map("jobId" -> jobInfo.jobId,
