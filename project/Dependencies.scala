@@ -55,9 +55,12 @@ object Dependencies {
     "org.flywaydb" % "flyway-core" % flyway
   )
 
+
+
   lazy val cassandraDeps = Seq(
-    "com.datastax.cassandra" % "cassandra-driver-core" % cassandra,
-    "com.datastax.cassandra" % "cassandra-driver-mapping" % cassandra
+    /*"com.datastax.cassandra" % "cassandra-driver-core" % cassandra,
+    "com.datastax.cassandra" % "cassandra-driver-mapping" % cassandra*/
+    "com.datastax.spark" %% "spark-cassandra-connector" % "2.0.3"
   )
 
   lazy val logbackDeps = Seq(
