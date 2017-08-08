@@ -134,6 +134,7 @@ class WebApi(system: ActorSystem,
       .fold(100 * 1024)(config.getBytes(_).toInt)
 
   val contextTimeout = SparkJobUtils.getContextCreationTimeout(config)
+  val contextDeletionTimeout = SparkJobUtils.getContextDeletionTimeout(config)
   val bindAddress = config.getString("spark.jobserver.bind-address")
 
   val logger = LoggerFactory.getLogger(getClass)
@@ -390,7 +391,7 @@ class WebApi(system: ActorSystem,
           //  and currently running jobs will be lost.  Use with care!
           path(Segment) { (contextName) =>
             val (cName, _) = determineProxyUser(config, authInfo, contextName)
-            val future = supervisor ? StopContext(cName)
+            val future = (supervisor ? StopContext(cName))(contextDeletionTimeout.seconds)
             respondWithMediaType(MediaTypes.`application/json`) { ctx =>
               future.map {
                 case ContextStopped => ctx.complete(StatusCodes.OK, successMap("Context stopped"))
