@@ -265,6 +265,7 @@ lazy val commonSettings = Defaults.coreDefaultSettings ++ dirSettings ++ implici
   // For Building on Encrypted File Systems...
   scalacOptions ++= Seq("-Xmax-classfile-name", "128"),
   resolvers ++= Dependencies.repos,
+  credentials += Credentials(Path.userHome / ".sbt" / ".credentials"),
   libraryDependencies ++= apiDeps,
   parallelExecution in Test := false,
   testOptions in Test += Tests.Argument(TestFrameworks.ScalaTest, "-oDF"),

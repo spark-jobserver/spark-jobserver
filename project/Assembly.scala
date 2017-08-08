@@ -10,7 +10,9 @@ object Assembly {
     assemblyExcludedJars in assembly <<= (fullClasspath in assembly) map { _ filter { cp =>
       List("servlet-api", "guice-all", "junit", "uuid",
         "jetty", "jsp-api-2.0", "antlr", "avro", "slf4j-log4j", "log4j-1.2",
-        "scala-actors", "spark", "commons-cli", "stax-api", "mockito").exists(cp.data.getName.startsWith(_))
+        "scala-actors", "spark", "commons-cli", "stax-api", "mockito",
+        // we rely on whatever version DSE has:
+        "netty", "dse-java-driver").exists(cp.data.getName.startsWith(_))
     } },
     // We don't need the Scala library, Spark already includes it
     assembleArtifact in assemblyPackageScala := false,
