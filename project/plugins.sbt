@@ -6,7 +6,7 @@ addSbtPlugin("io.spray" % "sbt-revolver" % "0.8.0")       // For quick restarts 
 
 addSbtPlugin("org.scalariform" % "sbt-scalariform" % "1.6.0")
 
-addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.14.3")
+addSbtPlugin("com.eed3si9n" % "sbt-assembly" % "0.14.5")
 
 addSbtPlugin("org.scalastyle" %% "scalastyle-sbt-plugin" % "0.8.0")
 

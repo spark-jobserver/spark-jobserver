@@ -1,6 +1,8 @@
-#!/bin/bash -ue
+#!/bin/bash -e
+
+set -x
 # Script for packaging all the job server files to .tar.gz for Mesos or other single-image deploys
-WORK_DIR=/tmp/job-server
+WORK_DIR="$TMPDIR"/tmp/job-server
 
 if [ "$#" -ne 1 ]; then
   echo "Syntax: ${0} <Environment>"
@@ -50,8 +52,7 @@ pushd "${bin}/.." > /dev/null
          bin/manager_start.sh
          bin/setenv.sh
          ${CONFIG_DIR}/${ENV}.conf
-         config/shiro.ini
-         config/log4j-server.properties"
+         config/logback-server.xml"
 
   rm -rf $WORK_DIR
   mkdir -p $WORK_DIR
@@ -62,7 +63,7 @@ popd > /dev/null
 pushd "${WORK_DIR}" > /dev/null
   TAR_FILE="${WORK_DIR}/job-server.tar.gz"
   rm -f "${TAR_FILE}"
-  tar zcvf "${TAR_FILE}" ./*
+  tar zcvf "${TAR_FILE}" *
 popd > /dev/null
 
 echo "Created distribution at ${TAR_FILE}"
