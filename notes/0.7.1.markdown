@@ -8,3 +8,4 @@
 * provide Java7 build compatibility (JAVA_VERSION) (@derSascha)
 * fixed starting a new job does not determine proxy user issue #827 (@zromi18)
 * Fix #857 - SJS is not properly storing/using timestamp milliseconds in the binaries (JARs) storage system (@Meehau)
+* Blob storage fixes (@msohn)
