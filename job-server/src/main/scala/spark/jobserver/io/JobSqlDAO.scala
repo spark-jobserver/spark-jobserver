@@ -1,21 +1,30 @@
 package spark.jobserver.io
 
 import java.io.File
-import java.nio.file.{Files, Paths}
+import java.nio.file.Files
+import java.nio.file.Paths
+import java.sql.Blob
 import java.sql.Timestamp
-import javax.sql.DataSource
 
-import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
+import scala.concurrent.Await
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
+import scala.concurrent.duration.DurationInt
+import scala.reflect.runtime.universe
+
 import org.apache.commons.dbcp.BasicDataSource
 import org.flywaydb.core.Flyway
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 
+import com.typesafe.config.Config
+import com.typesafe.config.ConfigFactory
+import com.typesafe.config.ConfigRenderOptions
+
+import javax.sql.DataSource
+import javax.sql.rowset.serial.SerialBlob
 import slick.driver.JdbcProfile
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration._
-import scala.concurrent.{Await, Future}
-import scala.reflect.runtime.universe
+import slick.lifted.ProvenShape.proveShapeOf
 
 class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
   val slickDriverClass = config.getString("spark.jobserver.sqldao.slick-driver")
@@ -36,12 +45,12 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
 
   // Definition of the tables
   //scalastyle:off
-  class Binaries(tag: Tag) extends Table[(Int, String, String, Timestamp, Array[Byte])](tag, "BINARIES") {
+  class Binaries(tag: Tag) extends Table[(Int, String, String, Timestamp, Blob)](tag, "BINARIES") {
     def binId = column[Int]("BIN_ID", O.PrimaryKey, O.AutoInc)
     def appName = column[String]("APP_NAME")
     def binaryType = column[String]("BINARY_TYPE")
     def uploadTime = column[Timestamp]("UPLOAD_TIME")
-    def binary = column[Array[Byte]]("BINARY")
+    def binary = column[Blob]("BINARY")
     def * = (binId, appName, binaryType, uploadTime, binary)
   }
 
@@ -165,16 +174,16 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
 
   // Insert JarInfo and its jar into db and return the primary key associated with that row
   private def insertBinaryInfo(binInfo: BinaryInfo, binBytes: Array[Byte]): Future[Int] = {
-    db.run(binaries.map(j => j.*) += (
+    db.run((binaries.map(j => j.*) += (
       -1,
       binInfo.appName,
       binInfo.binaryType.name,
       convertDateJodaToSql(binInfo.uploadTime),
-      binBytes))
+      new SerialBlob(binBytes))).transactionally)
   }
 
   private def deleteBinaryInfo(appName: String): Future[Int] = {
-    db.run(binaries.filter(_.appName === appName).delete)
+    db.run((binaries.filter(_.appName === appName).delete).transactionally)
   }
 
   override def retrieveBinaryFile(appName: String, binaryType: BinaryType, uploadTime: DateTime): String = {
@@ -199,7 +208,7 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
     val query = binaries.filter { bin =>
       bin.appName === appName && bin.uploadTime === dateTime && bin.binaryType === binaryType.name
     }.map(_.binary).result
-    db.run(query.head)
+    db.run(query.head.map { b => b.getBytes(1, b.length.toInt) }.transactionally)
   }
 
   private def queryBinaryId(appName: String, binaryType: BinaryType, uploadTime: DateTime): Future[Int] = {
