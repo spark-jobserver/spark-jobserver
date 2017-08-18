@@ -401,29 +401,32 @@ class WebApi(system: ActorSystem,
           }
         } ~
         put {
-          parameter("reset") { reset =>
+          parameters("reset", 'sync.as[Boolean] ?) { (reset, sync) =>
             respondWithMediaType(MediaTypes.`application/json`) { ctx =>
               reset match {
                 case "reboot" =>
                   import ContextSupervisor._
                   import java.util.concurrent.TimeUnit
 
-                  logger.warn("refreshing contexts")
                   val future = (supervisor ? ListContexts).mapTo[Seq[String]]
                   val lookupTimeout = Try(config.getDuration("spark.jobserver.context-lookup-timeout",
                     TimeUnit.MILLISECONDS).toInt / 1000).getOrElse(1)
                   val contexts = Await.result(future, lookupTimeout.seconds)
 
-                  val stopFutures = contexts.map(c => supervisor ? StopContext(c))
-                  Await.ready(Future.sequence(stopFutures), contextTimeout.seconds)
+                  if (sync.isDefined && !sync.get) {
+                    contexts.map(c => supervisor ! StopContext(c))
+                    ctx.complete(StatusCodes.OK, successMap("Context reset requested"))
+                  } else {
+                    val stopFutures = contexts.map(c => supervisor ? StopContext(c))
+                    Await.ready(Future.sequence(stopFutures), contextTimeout.seconds)
 
-                  Thread.sleep(1000) // we apparently need some sleeping in here, so spark can catch up
+                    Thread.sleep(1000) // we apparently need some sleeping in here, so spark can catch up
 
-                  (supervisor ? AddContextsFromConfig).onFailure {
-                    case t => ctx.complete("ERROR")
+                    (supervisor ? AddContextsFromConfig).onFailure {
+                      case t => ctx.complete("ERROR")
+                    }
+                    ctx.complete(StatusCodes.OK, successMap("Context reset"))
                   }
-                  ctx.complete(StatusCodes.OK, successMap("Context reset"))
-
                 case _ => ctx.complete("ERROR")
               }
             }
