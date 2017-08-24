@@ -23,7 +23,7 @@ import spark.jobserver.common.akka.InstrumentedActor
 
 object JobManagerActor {
   // Messages
-  case class Initialize(daoActor: ActorRef,resultActorOpt: Option[ActorRef])
+  case class Initialize(daoActor: ActorRef, resultActorOpt: Option[ActorRef])
   case class StartJob(appName: String, classPath: String, config: Config,
                       subscribedEvents: Set[Class[_]])
   case class KillJob(jobId: String)
@@ -133,9 +133,8 @@ class JobManagerActor(contextConfig: Config)
       }
   }
 
-
   def wrappedReceive: Receive = {
-    case Initialize(dao,resOpt) =>
+    case Initialize(dao, resOpt) =>
       daoActor = dao
       statusActor = context.actorOf(JobStatusActor.props(daoActor))
       resultActor = resOpt.getOrElse(context.actorOf(Props[JobResultActor]))
@@ -245,9 +244,9 @@ class JobManagerActor(contextConfig: Config)
     val jobId = java.util.UUID.randomUUID().toString()
     val jobContainer = factory.loadAndValidateJob(appName, lastUploadTime,
                                                   classPath, jobCache) match {
-      case Good(container)       => container
+      case Good(container) => container
       case Bad(JobClassNotFound) => return failed(NoSuchClass)
-      case Bad(JobWrongType)     => return failed(WrongJobType)
+      case Bad(JobWrongType) => return failed(WrongJobType)
       case Bad(JobLoadError(ex)) => return failed(JobLoadingError(ex))
     }
 
@@ -356,7 +355,7 @@ class JobManagerActor(contextConfig: Config)
   protected def wrapInRuntimeException(t: Throwable): RuntimeException = {
     val cause : Throwable = getRootCause(t)
     val e : RuntimeException = new RuntimeException("%s: %s"
-      .format(cause.getClass().getName() ,cause.getMessage))
+      .format(cause.getClass().getName(), cause.getMessage))
     e.setStackTrace(cause.getStackTrace())
     return e
   }

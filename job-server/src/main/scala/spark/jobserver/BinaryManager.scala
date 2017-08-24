@@ -69,7 +69,7 @@ class BinaryManager(jobDao: ActorRef) extends InstrumentedActor {
       val successF =
         localBinaries.foldLeft(Future.successful[Boolean](true)) { (succ, pair) =>
          succ.flatMap{s =>
-           if(!s) {
+           if (!s) {
              Future.successful(false)
            } else {
              val (appName, (binaryType, binPath)) = pair

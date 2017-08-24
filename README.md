@@ -6,7 +6,7 @@ spark-jobserver provides a RESTful interface for submitting and managing [Apache
 This repo contains the complete Spark job server project, including unit tests and deploy scripts.
 It was originally started at [Ooyala](http://www.ooyala.com), but this is now the main development repo.
 
-See [Troubleshooting Tips](doc/troubleshooting.md) as well as [Yarn tips](doc/yarn.md).
+Other useful links: [Troubleshooting Tips](doc/troubleshooting.md), [Yarn tips](doc/yarn.md), [Mesos tips](doc/mesos.md).
 
 Also see [Chinese docs / 中文](doc/chinese/job-server.md).
 
@@ -22,7 +22,8 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
   - [WordCountExample walk-through](#wordcountexample-walk-through)
     - [Package Jar - Send to Server](#package-jar---send-to-server)
     - [Ad-hoc Mode - Single, Unrelated Jobs (Transient Context)](#ad-hoc-mode---single-unrelated-jobs-transient-context)
-    - [Persistent Context Mode - Faster & Required for Related Jobs](#persistent-context-mode---faster-&-required-for-related-jobs)
+    - [Persistent Context Mode - Faster & Required for Related Jobs](#persistent-context-mode---faster--required-for-related-jobs)
+  - [Debug mode](#debug-mode)
 - [Create a Job Server Project](#create-a-job-server-project)
   - [Creating a project from scratch using giter8 template](#creating-a-project-from-scratch-using-giter8-template)
   - [Creating a project manually assuming that you already have sbt project structure](#creating-a-project-manually-assuming-that-you-already-have-sbt-project-structure)
@@ -36,11 +37,14 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
 - [Deployment](#deployment)
   - [Manual steps](#manual-steps)
   - [Context per JVM](#context-per-jvm)
-    - [Configuring Spark Jobserver meta data Database backend](#configuring-spark-jobserver-meta-data-database-backend)
+    - [Configuring Spark Jobserver H2 Database backend](#configuring-spark-jobserver-h2-database-backend)
+    - [Configuring Spark Jobserver PostgreSQL Database backend](#configuring-spark-jobserver-postgresql-database-backend)
+    - [Configuring Spark Jobserver MySQL Database backend](#configuring-spark-jobserver-mysql-database-backend)
   - [Chef](#chef)
 - [Architecture](#architecture)
 - [API](#api)
-  - [Jars](#jars)
+  - [Binaries](#binaries)
+  - [Jars (deprecated)](#jars-deprecated)
   - [Contexts](#contexts)
   - [Jobs](#jobs)
   - [Data](#data)
@@ -48,6 +52,7 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
   - [Context configuration](#context-configuration)
   - [Other configuration settings](#other-configuration-settings)
   - [Job Result Serialization](#job-result-serialization)
+  - [HTTP Override](#http-override)
 - [Clients](#clients)
 - [Contribution and Development](#contribution-and-development)
   - [Publishing packages](#publishing-packages)
@@ -87,7 +92,7 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 
 - *"Spark as a Service"*: Simple REST interface (including HTTPS) for all aspects of job, context management
 - Support for Spark SQL, Hive, Streaming Contexts/jobs and custom job contexts!  See [Contexts](doc/contexts.md).
-- [Python](doc/python.md), Scala, and Java (see [TestJob.java](https://github.com/spark-jobserver/spark-jobserver/blob/master/job-server-api/src/main/java/spark/jobserver/api/TestJob.java)) support
+- [Python](doc/python.md), Scala, and [Java](doc/javaapi.md) (see [TestJob.java](https://github.com/spark-jobserver/spark-jobserver/blob/master/job-server-api/src/main/java/spark/jobserver/api/TestJob.java)) support
 - LDAP Auth support via Apache Shiro integration
 - Separate JVM per SparkContext for isolation (EXPERIMENTAL)
 - Supports sub-second low-latency jobs via long-running job contexts
@@ -113,10 +118,10 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 | 0.6.0       | 1.4.1         |
 | 0.6.1       | 1.5.2         |
 | 0.6.2       | 1.6.1         |
-| master      | 1.6.2         |
-| spark-2.0-preview | 2.0     |
+| 0.7.0       | 1.6.2         |
+| 0.8.0-SNAPSHOT | 2.1.0    |
 
-For release notes, look in the `notes/` directory.  They should also be up on [notes.implicit.ly](http://notes.implicit.ly/search/spark-jobserver).
+For release notes, look in the `notes/` directory.
 
 If you need non-released jars, please visit [Jitpack](https://jitpack.io) - they provide non-release jar builds for any Git repo.  :)
 
@@ -149,7 +154,7 @@ From SBT shell, simply type "reStart".  This uses a default configuration file. 
 path to an alternative config file.  You can also specify JVM parameters after "---".  Including all the
 options looks like this:
 
-    job-server/reStart /path/to/my.conf --- -Xmx8g
+    job-server-extras/reStart /path/to/my.conf --- -Xmx8g
 
 Note that reStart (SBT Revolver) forks the job server in a separate process.  If you make a code change, simply
 type reStart again at the SBT shell prompt, it will compile your changes and restart the jobserver.  It enables
@@ -177,7 +182,7 @@ Let's upload the jar:
 The above jar is uploaded as app `test`.  Next, let's start an ad-hoc word count job, meaning that the job
 server will create its own SparkContext, and return a job ID for subsequent querying:
 
-    curl -d "input.string = a b c a b see" 'localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample'
+    curl -d "input.string = a b c a b see" "localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample"
     {
       "duration": "Job not done yet",
       "classPath": "spark.jobserver.WordCountExample",
@@ -190,7 +195,7 @@ server will create its own SparkContext, and return a job ID for subsequent quer
 NOTE: If you want to feed in a text file config and POST using curl, you want the `--data-binary` option, otherwise
 curl will munge your line separator chars.  Like:
 
-    curl --data-binary @my-job-config.json 'localhost:8090/jobs?appNam=...'
+    curl --data-binary @my-job-config.json "localhost:8090/jobs?appNam=..."
 
 NOTE2: If you want to send in UTF-8 chars, make sure you pass in a proper header to CURL for the encoding, otherwise it may assume an encoding which is not what you expect.
 
@@ -220,7 +225,7 @@ You can also append `&timeout=XX` to extend the request timeout for `sync=true` 
 #### Persistent Context Mode - Faster & Required for Related Jobs
 Another way of running this job is in a pre-created context.  Start a new context:
 
-    curl -d "" 'localhost:8090/contexts/test-context?num-cpu-cores=4&memory-per-node=512m'
+    curl -d "" "localhost:8090/contexts/test-context?num-cpu-cores=4&memory-per-node=512m"
     OK⏎
 
 You can verify that the context has been created:
@@ -230,7 +235,7 @@ You can verify that the context has been created:
 
 Now let's run the job in the context and get the results back right away:
 
-    curl -d "input.string = a b c a b see" 'localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample&context=test-context&sync=true'
+    curl -d "input.string = a b c a b see" "localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample&context=test-context&sync=true"
     {
       "result": {
         "a": 2,
@@ -241,6 +246,44 @@ Now let's run the job in the context and get the results back right away:
     }⏎
 
 Note the addition of `context=` and `sync=true`.
+
+### Debug mode
+Spark job server is started using SBT Revolver (which forks a new JVM), so debugging directly in an IDE is not feasible.
+To enable debugging, the Spark job server should be started from the SBT shell with the following Java options :
+```bash
+job-server-extras/reStart /absolute/path/to/your/dev.conf --- -Xdebug -Xrunjdwp:transport=dt_socket,address=15000,server=y,suspend=y
+```
+The above command starts a remote debugging server on port 15000. The Spark job server is not started until a debugging client
+(Intellij, Eclipse, telnet, ...) connects to the exposed port.
+
+In your IDE you just have to start a Remote debugging debug job and use the above defined port. Once the client connects to the debugging server the Spark job server is started and you can start adding breakpoints and debugging requests.
+
+Note that you might need to adjust some server parameters to avoid short Spary/Akka/Spark timeouts, in your `dev.conf` add the following values :
+```bash
+spark {
+  jobserver {
+    # Dev debug timeouts
+    context-creation-timeout = 1000000 s
+    yarn-context-creation-timeout = 1000000 s
+    default-sync-timeout = 1000000 s
+  }
+
+  context-settings {
+    # Dev debug timeout
+    context-init-timeout = 1000000 s
+  }
+}
+spray.can.server {
+      # Debug timeouts
+      idle-timeout = infinite
+      request-timeout = infinite
+}
+```
+
+Additionally, you might have to increase the Akka Timeouts by adding the following query parameter `timeout=1000000` in your HTTP requests :
+```bash
+curl -d "input.string = a b c a b see" "localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample&sync=true&timeout=100000"
+```
 
 ## Create a Job Server Project
 ### Creating a project from scratch using giter8 template
@@ -261,11 +304,11 @@ In your `build.sbt`, add this to use the job server jar:
 
         resolvers += "Job Server Bintray" at "https://dl.bintray.com/spark-jobserver/maven"
 
-        libraryDependencies += "spark.jobserver" %% "job-server-api" % "0.6.2" % "provided"
+        libraryDependencies += "spark.jobserver" %% "job-server-api" % "0.7.0" % "provided"
 
 If a SQL or Hive job/context is desired, you also want to pull in `job-server-extras`:
 
-    libraryDependencies += "spark.jobserver" %% "job-server-extras" % "0.6.2" % "provided"
+    libraryDependencies += "spark.jobserver" %% "job-server-extras" % "0.7.0" % "provided"
 
 For most use cases it's better to have the dependencies be "provided" because you don't want SBT assembly to include the whole job server jar.
 
@@ -309,7 +352,7 @@ It is much more type safe, separates context configuration, job ID, named object
 
 Let's try running our sample job with an invalid configuration:
 
-    curl -i -d "bad.input=abc" 'localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample'
+    curl -i -d "bad.input=abc" "localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample"
 
     HTTP/1.1 400 Bad Request
     Server: spray-can/1.2.0
@@ -334,6 +377,38 @@ Let's try running our sample job with an invalid configuration:
       }
     }
 
+### NEW SparkJob API with Spark v2.1
+
+Deploying Spark JobServer with Spark v2.x cluster, you can create a SparkSession context which enables Spark-SQL and Hive support 
+```scala
+curl -i -d "" 'http://localhost:8090/contexts/sql-context-1?num-cpu-cores=2&memory-per-node=512M&context-factory=spark.jobserver.context.SessionContextFactory'
+```
+Spark JobServer application shall extend from the SparkSessionJob to use the spark.jobserver.context.SessionContextFactory, here is an example
+```scala
+import com.typesafe.config.Config
+import org.apache.spark.sql.SparkSession
+import org.scalactic._
+import spark.jobserver.SparkSessionJob
+import spark.jobserver.api.{JobEnvironment, SingleProblem, ValidationProblem}
+
+import scala.util.Try
+
+object WordCountExampleSparkSession extends SparkSessionJob {
+  type JobData = Seq[String]
+  type JobOutput = collection.Map[String, Long]
+
+  override def runJob(sparkSession: SparkSession, runtime: JobEnvironment, data: JobData): JobOutput =
+    sparkSession.sparkContext.parallelize(data).countByValue
+
+  override def validate(sparkSession: SparkSession, runtime: JobEnvironment, config: Config):
+  JobData Or Every[ValidationProblem] = {
+    Try(config.getString("input.string").split(" ").toSeq)
+      .map(words => Good(words))
+      .getOrElse(Bad(One(SingleProblem("No input.string param"))))
+  }
+}
+```
+
 ### Dependency jars
 
 You have a couple options to package and upload dependency jars.
@@ -343,11 +418,11 @@ You have a couple options to package and upload dependency jars.
     - Use the `dependent-jar-uris` context configuration param. Then the jar gets loaded for every job.
     - The `dependent-jar-uris` can also be used in job configuration param when submitting a job. On an ad-hoc context this has the same effect as `dependent-jar-uris` context configuration param. On a persistent context the jars will be loaded for the current job and then for every job that will be executed on the persistent context.
         ````
-        curl -d "" 'localhost:8090/contexts/test-context?num-cpu-cores=4&memory-per-node=512m'
+        curl -d "" "localhost:8090/contexts/test-context?num-cpu-cores=4&memory-per-node=512m"
         OK⏎
         ````
         ````
-        curl 'localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample&context=test-context&sync=true' -d '{
+        curl "localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample&context=test-context&sync=true" -d '{
             dependent-jar-uris = ["file:///myjars/deps01.jar", "file:///myjars/deps02.jar"],
             input.string = "a b c a b see"
         }'
@@ -515,43 +590,45 @@ Log files are separated out for each context (assuming `context-per-jvm` is `tru
 Note: to test out the deploy to a local staging dir, or package the job server for Mesos,
 use `bin/server_package.sh <environment>`.
 
-#### Configuring Spark Jobserver meta data Database backend
-
+#### Configuring Spark Jobserver H2 Database backend
 By default, H2 database is used for storing Spark Jobserver related meta data.
-But this can be overridden. For example, to use PostgreSQL as backend add the
-following configuration to local.conf. Ensure that you have spark_jobserver
-database created with necessary rights granted to user.
+This can be overridden if you prefer to use PostgreSQL or MySQL.
+It is also important that any dependent jars are to be added to Job Server class path.
 
-    sqldao {
-      # Slick database driver, full classpath
-      slick-driver = slick.driver.PostgresDriver
+To use embedded H2 as backend add the following configuration to local.conf.
 
-      # JDBC driver, full classpath
-      jdbc-driver = org.postgresql.Driver
+    spark {
+      jobserver {
+        ...
+        sqldao {
+          # Slick database driver, full classpath
+          slick-driver = slick.driver.H2Driver
 
-      # Directory where default H2 driver stores its data. Only needed for H2.
-      rootdir = "/var/spark-jobserver/sqldao/data"
+          # JDBC driver, full classpath
+          jdbc-driver = org.h2.Driver
 
-      jdbc {
-        url = "jdbc:postgresql://db_host/spark_jobserver"
-        user = "secret"
-        password = "secret"
-      }
+          # Directory where default H2 driver stores its data. Only needed for H2.
+          rootdir = "/var/spark-jobserver/sqldao/data"
 
-      dbcp {
-        maxactive = 20
-        maxidle = 10
-        initialsize = 10
+          jdbc {
+            url = "jdbc:h2:file:/var/spark-jobserver/sqldao/data/h2-db"
+            user = "secret"
+            password = "secret"
+          }
+
+          dbcp {
+            maxactive = 20
+            maxidle = 10
+            initialsize = 10
+          }
+        }
       }
     }
+    # also add the following line at the root level.
+    flyway.locations="db/h2/migration"
 
-If you are using `context-per-jvm = true`, be sure to add [AUTO_MIXED_MODE](http://h2database.com/html/features.html#auto_mixed_mode) to your H2 JDBC URL; this allows multiple processes to share the same H2 database using a lock file.
-
-Also add the following line at the root level.
-
-    flyway.locations="db/postgresql/migration"
-
-It is also important that any dependent jars are to be added to Job Server class path.
+If you are using `context-per-jvm = true`, be sure to add [AUTO_MIXED_MODE](http://h2database.com/html/features.html#auto_mixed_mode) to your
+H2 JDBC URL; this allows multiple processes to share the same H2 database using a lock file.
 
 In a yarn-client mode if using H2 the below is advised.
 - Run H2 in server mode (http://www.h2database.com/html/download.html, and follow docs.,)
@@ -562,7 +639,105 @@ jdbc {
         user = "secret"
         password = "secret"
       }
-```      
+```
+
+#### Configuring Spark Jobserver PostgreSQL Database backend
+Ensure that you have spark_jobserver database created with necessary rights
+granted to user.
+
+    # create database user jobserver and database spark_jobserver:
+    $ createuser --username=<superuser> -RDIElPS jobserver
+    $ createdb -Ojobserver -Eutf8 spark_jobserver
+    CTRL-D -> logout from psql
+
+    # logon as superuser and enable the large object extension:
+    $ psql -U <superuser> spark_jobserver
+    spark_jobserver=# CREATE EXTENSION lo;
+    CTRL-D -> logout from psql
+
+    # you can connect to the database using the psql command line client:
+    $ psql -U jobserver spark_jobserver
+
+To use PostgreSQL as backend add the following configuration to local.conf.
+
+    spark {
+      jobserver {
+        ...
+        sqldao {
+          # Slick database driver, full classpath
+          slick-driver = slick.driver.PostgresDriver
+
+          # JDBC driver, full classpath
+          jdbc-driver = org.postgresql.Driver
+
+          # Directory where default H2 driver stores its data. Only needed for H2.
+          rootdir = "/var/spark-jobserver/sqldao/data"
+
+          jdbc {
+            url = "jdbc:postgresql://db_host/spark_jobserver"
+            user = "jobserver"
+            password = "secret"
+          }
+
+          dbcp {
+            maxactive = 20
+            maxidle = 10
+            initialsize = 10
+          }
+        }
+      }
+    }
+    # also add the following line at the root level.
+    flyway.locations="db/postgresql/migration"
+
+#### Configuring Spark Jobserver MySQL Database backend
+Ensure that you have spark_jobserver database created with necessary rights
+granted to user.
+
+    # secure your mysql installation and define password for mysql root user
+    $ mysql_secure_installation
+
+    # logon as database root
+    $ mysql -u root -p
+
+    # create a database user and a database for spark jobserver:
+    mysql> CREATE USER 'jobserver'@'localhost' IDENTIFIED BY 'secret';
+    mysql> CREATE DATABASE spark_jobserver;
+    mysql> GRANT ALL ON spark_jobserver.* TO 'jobserver'@'localhost';
+    mysql> FLUSH PRIVILEGES;
+    CTRL-D -> logout from mysql
+
+    # you can connect to the database using the mysql command line client:
+    $ mysql -u jobserver -p
+
+To use MySQL as backend add the following configuration to local.conf.
+
+    spark {
+      jobserver {
+        ...
+        sqldao {
+          # Slick database driver, full classpath
+          slick-driver = slick.driver.MySQLDriver
+
+          # JDBC driver, full classpath
+          jdbc-driver = com.mysql.jdbc.Driver
+
+          jdbc {
+            url = "jdbc:mysql://db_host/spark_jobserver"
+            user = "jobserver"
+            password = "secret"
+          }
+
+          dbcp {
+            maxactive = 20
+            maxidle = 10
+            initialsize = 10
+          }
+        }
+      }
+    }
+    # also add the following line at the root level.
+    flyway.locations="db/mysql/migration"
 
 ### Chef
 
@@ -589,14 +764,14 @@ Flow diagrams are checked in in the doc/ subdirectory.  .diagram files are for w
     GET /binaries               - lists all current binaries
     POST /binaries/<appName>    - upload a new binary file
     DELETE /binaries/<appName>  - delete defined binary
-    
+
 When POSTing new binaries, the content-type header must be set to one of the types supported by the subclasses of the `BinaryType` trait. e.g. "application/java-archive" or application/python-archive"
 
 ### Jars (deprecated)
 
     GET /jars                   - lists all the jars and the last upload timestamp
     POST /jars/<appName>        - uploads a new jar under <appName>
-    
+
 These routes are kept for legacy purposes but are deprecated in favour of the /binaries routes
 
 ### Contexts
@@ -751,6 +926,19 @@ serialized properly:
 
 If we encounter a data type that is not supported, then the entire result will be serialized to a string.
 
+### HTTP Override
+
+Spark Job Server offers HTTP override functionality. 
+Often reverse proxies and firewall implement access limitations to, for example, DELETE and PUT requests.
+HTTP override allows overcoming these limitations by wrapping, for example, a DELETE request into a POST request.
+
+Requesting the destruction of a context can be accomplished through HTTP override using the following syntax: 
+    
+    $ curl -X POST "localhost:8090/contexts/test_context?_method=DELETE"
+
+Here, a DELETE request is passed to Spark Job Server "through" a POST request.
+    
+    
 ## Clients
 
 Spark Jobserver project has a
@@ -759,7 +947,7 @@ This can be used to quickly develop python applications that can interact with
 Spark Jobserver programmatically.
 
 ## Contribution and Development
-Contributions via Github Pull Request are welcome.  See the TODO for some ideas.
+Contributions via Github Pull Request are welcome. Please start by taking a look at the [contribution guidelines](doc/contribution-guidelines.md) and check the TODO for some contribution ideas.
 
 - If you need to build with a specific scala version use ++x.xx.x followed by the regular command,
 for instance: `sbt ++2.11.6 job-server/compile`
@@ -767,8 +955,8 @@ for instance: `sbt ++2.11.6 job-server/compile`
    - You may need to set `SPARK_LOCAL_IP` to `localhost` to ensure Akka port can bind successfully
    - Note for Windows users: very few tests fail on Windows. Thus, run `testOnly -- -l WindowsIgnore` from SBT shell to ignore them.
 - Logging for tests goes to "job-server-test.log"
-- Run `scoverage:test` to check the code coverage and improve it. 
-  - Windows users: run `; coverage ; testOnly -- -l WindowsIgnore ; coverageReport` from SBT shell. 
+- Run `scoverage:test` to check the code coverage and improve it.
+  - Windows users: run `; coverage ; testOnly -- -l WindowsIgnore ; coverageReport` from SBT shell.
 - Please run scalastyle to ensure your code changes don't break the style guide.
 - Do "reStart" from SBT for quick restarts of the job server process
 - Please update the g8 template if you change the SparkJob API

@@ -24,6 +24,7 @@ class build(BuildPlugin):
     def run(self):
         log.info("TRACE", "entering", "run")
         self.importSbt()
+        os.environ["SPARK_LOCAL_IP"] = "127.0.0.1"
         commandOutput = self.buildSJS()
         if commandOutput > 0:
             raise XmakeException("sbt build failed. Command output is {}".format(str(commandOutput)))

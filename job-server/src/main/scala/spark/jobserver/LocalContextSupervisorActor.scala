@@ -6,14 +6,11 @@ import akka.util.Timeout
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import spark.jobserver.JobManagerActor.{SparkContextAlive, SparkContextDead, SparkContextStatus}
-import spark.jobserver.io.JobDAO
 import spark.jobserver.util.SparkJobUtils
 import scala.collection.mutable
 import scala.concurrent.Await
 import scala.util.{Failure, Success, Try}
 
-import org.joda.time.DateTime
-import org.joda.time.format.DateTimeFormat
 import spark.jobserver.common.akka.InstrumentedActor
 import akka.pattern.gracefulStop
 
@@ -112,11 +109,14 @@ class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
       logger.info("Creating SparkContext for adhoc jobs.")
 
       val mergedConfig = contextConfig.withFallback(defaultContextConfig)
+      val userNamePrefix = Try(mergedConfig.getString(SparkJobUtils.SPARK_PROXY_USER_PARAM))
+        .map(SparkJobUtils.userNamePrefix(_)).getOrElse("")
 
       // Keep generating context name till there is no collision
       var contextName = ""
       do {
-        contextName = java.util.UUID.randomUUID().toString().substring(0, 8) + "-" + classPath
+        contextName = userNamePrefix +
+          java.util.UUID.randomUUID().toString().substring(0, 8) + "-" + classPath
       } while (contexts contains contextName)
 
       // Create JobManagerActor and JobResultActor

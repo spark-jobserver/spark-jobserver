@@ -32,8 +32,10 @@ object JobDAOActor {
   case class SaveJobInfo(jobInfo: JobInfo) extends JobDAORequest
   case class GetJobInfos(limit: Int) extends JobDAORequest
 
-  case class SaveJobConfig(jobId:String, jobConfig:Config) extends JobDAORequest
+  case class SaveJobConfig(jobId: String, jobConfig: Config) extends JobDAORequest
+  @deprecated("Leads to performance problems and OutOfMemory error ultimately", "0.7.1")
   case object GetJobConfigs extends JobDAORequest
+  case class GetJobConfig(jobId: String) extends JobDAORequest
 
   case class GetLastUploadTimeAndType(appName: String) extends JobDAORequest
 
@@ -44,6 +46,7 @@ object JobDAOActor {
   case class BinaryContent(content: Array[Byte]) extends JobDAOResponse
   case class JobInfos(jobInfos: Seq[JobInfo]) extends JobDAOResponse
   case class JobConfigs(jobConfigs: Map[String, Config]) extends JobDAOResponse
+  case class JobConfig(jobConfig: Option[Config]) extends JobDAOResponse
   case class LastUploadTimeAndType(uploadTimeAndType: Option[(DateTime, BinaryType)]) extends JobDAOResponse
 
   case object InvalidJar extends JobDAOResponse
@@ -52,7 +55,7 @@ object JobDAOActor {
   def props(dao: JobDAO): Props = Props(classOf[JobDAOActor], dao)
 }
 
-class JobDAOActor(dao:JobDAO) extends InstrumentedActor {
+class JobDAOActor(dao: JobDAO) extends InstrumentedActor {
   import JobDAOActor._
   import akka.pattern.pipe
   import context.dispatcher
@@ -80,10 +83,13 @@ class JobDAOActor(dao:JobDAO) extends InstrumentedActor {
       dao.getJobInfos(limit).map(JobInfos).pipeTo(sender)
 
     case SaveJobConfig(jobId, jobConfig) =>
-      dao.saveJobConfig(jobId,jobConfig)
+      dao.saveJobConfig(jobId, jobConfig)
 
     case GetJobConfigs =>
       dao.getJobConfigs.map(JobConfigs).pipeTo(sender)
+
+    case GetJobConfig(jobId) =>
+      dao.getJobConfig(jobId).map(JobConfig).pipeTo(sender)
 
     case GetLastUploadTimeAndType(appName) =>
       sender() ! LastUploadTimeAndType(dao.getLastUploadTimeAndType(appName))

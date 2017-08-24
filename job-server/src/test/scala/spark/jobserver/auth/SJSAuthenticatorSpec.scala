@@ -1,5 +1,7 @@
 package spark.jobserver.auth
 
+import akka.actor.ActorSystem
+import akka.testkit.TestKit
 import org.scalatest.{ FunSpecLike, FunSpec, BeforeAndAfter, BeforeAndAfterAll, Matchers }
 import org.apache.shiro.config.IniSecurityManagerFactory
 import org.apache.shiro.mgt.DefaultSecurityManager
@@ -118,7 +120,11 @@ class SJSAuthenticatorSpec extends HttpService with SJSAuthenticator with FunSpe
 
   val testUserInvalid = "no-user"
   val testUserInvalidPassword = "pw"
-  
+
+  override def afterAll():Unit = {
+    TestKit.shutdownActorSystem(system)
+  }
+
   describe("SJSAuthenticator") {
     it("should allow user with valid role/group") {
       explicitValidation(new UserPass(testUserWithValidGroup, testUserWithValidGroupPassword), logger) should equal(Some(new AuthInfo(User(testUserWithValidGroup))))

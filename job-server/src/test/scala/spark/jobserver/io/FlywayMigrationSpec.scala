@@ -78,7 +78,7 @@ class FlywayMigrationSpec extends FunSpec with Matchers {
       val descBinariesIt = ResultSetIterator(descBinaries){ r: ResultSet =>
         r.getString("FIELD")
       }
-      descBinariesIt.toList should be (List("BIN_ID", "APP_NAME", "UPLOAD_TIME", "BINARY", "BINARY_TYPE"))
+      descBinariesIt.toList should be (List("BIN_ID", "APP_NAME", "UPLOAD_TIME", "BINARY_TYPE", "BINARY"))
       val descJobs = sqlConn.createStatement().executeQuery("SHOW COLUMNS FROM JOBS")
       val descJobsIt = ResultSetIterator(descJobs){ r: ResultSet =>
         r.getString("FIELD")
