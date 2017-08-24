@@ -1,10 +1,11 @@
 package spark.jobserver
 
 import com.typesafe.config.{Config, ConfigFactory}
-import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark._
+import org.apache.spark.SparkContext._
 import org.scalactic._
-
 import scala.util.Try
+
 import spark.jobserver.api.{SparkJob => NewSparkJob, _}
 
 /**

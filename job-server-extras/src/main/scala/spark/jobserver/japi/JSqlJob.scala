@@ -1,26 +1,14 @@
 package spark.jobserver.japi
 
-import com.typesafe.config.Config
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.hive.HiveContext
+import org.apache.spark.sql.hive.test.TestHiveContext
 import org.apache.spark.streaming.StreamingContext
-import spark.jobserver.api.JobEnvironment
-import spark.jobserver.context.SparkSessionContextLikeWrapper
 
-abstract class JSessionJob[R] extends BaseJavaJob[R, SparkSessionContextLikeWrapper] {
+trait JSqlJob[R] extends BaseJavaJob[R, SQLContext]
 
-  // Application should use this method to override
-  def run(sparkSession: SparkSession, runtime: JobEnvironment, data: Config): R
+trait JHiveJob[R] extends BaseJavaJob[R, HiveContext]
 
-  override def run(sc: SparkSessionContextLikeWrapper, runtime: JobEnvironment, data: Config): R = {
-    run(sc.spark, runtime, data)
-  }
-
-  // Application should use this method to override
-  def verify(sparkSession: SparkSession, runtime: JobEnvironment, config: Config): Config
-
-  override def verify(sc: SparkSessionContextLikeWrapper, runtime: JobEnvironment, config: Config): Config = {
-    verify(sc.spark, runtime, config)
-  }
-}
+trait JTestHiveJob[R] extends BaseJavaJob[R, TestHiveContext]
 
 trait JStreamingJob[R] extends BaseJavaJob[R, StreamingContext]

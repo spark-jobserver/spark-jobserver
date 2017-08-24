@@ -48,8 +48,6 @@ class StreamingJobSpec extends JobSpecBase(StreamingJobSpec.getNewSystem) {
           jobid
         }
       }
-      expectNoMsg()
-
       Thread sleep 1000
       val jobInfo = Await.result(dao.getJobInfo(jobId), 60 seconds)
       jobInfo.get match  {

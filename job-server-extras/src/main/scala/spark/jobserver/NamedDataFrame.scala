@@ -1,6 +1,6 @@
 package spark.jobserver
 
-import org.apache.spark.sql.DataFrame
+import org.apache.spark.sql.{ SQLContext, DataFrame }
 import org.apache.spark.storage.StorageLevel
 
 /**
