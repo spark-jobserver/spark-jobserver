@@ -496,6 +496,19 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         status should be (OK)
       }
     }
+
+    it("should return the sparkWebUi url if we get a context/id") {
+      Get("/contexts/context1") ~> sealRoute(routes) ~> check {
+        status should be (OK)
+        responseAs[Map[String, String]] should be (Map("context" -> "context1", "url" -> "http://spark:4040"))
+      }
+    }
+    it("should return the context name if even no URL can be found") {
+      Get("/contexts/context2") ~> sealRoute(routes) ~> check {
+        status should be (OK)
+        responseAs[Map[String, String]] should be (Map("context" -> "context2"))
+      }
+    }
   }
 }
 

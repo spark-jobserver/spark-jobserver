@@ -31,14 +31,19 @@ object JobManagerActor {
 
   case object GetContextConfig
   case object SparkContextStatus
+  case object GetSparkWebUIUrl
 
   // Results/Data
   case class ContextConfig(contextName: String, contextConfig: SparkConf, hadoopConfig: Configuration)
   case class Initialized(contextName: String, resultActor: ActorRef)
   case class InitError(t: Throwable)
   case class JobLoadingError(err: Throwable)
+  case class SparkWebUIUrl(url: String)
   case object SparkContextAlive
   case object SparkContextDead
+  case object NoSparkWebUI
+
+
 
   // Akka 2.2.x style actor props for actor creation
   def props(contextConfig: Config, daoActor: ActorRef): Props = Props(classOf[JobManagerActor],
@@ -208,6 +213,27 @@ class JobManagerActor(contextConfig: Config, daoActor: ActorRef)
           }
         }
       }
+    }
+    case GetSparkWebUIUrl => {
+      if (jobContext.sparkContext == null) {
+        sender ! SparkContextDead
+      } else {
+        try {
+          val webUiUrl = jobContext.sparkContext.uiWebUrl
+          val msg = if (webUiUrl.isDefined) {
+            SparkWebUIUrl(webUiUrl.get)
+          } else {
+            NoSparkWebUI
+          }
+          sender ! msg
+        } catch {
+          case e: Exception => {
+            logger.error("SparkContext does not exist!")
+            sender ! SparkContextDead
+          }
+        }
+      }
+
     }
   }
 
