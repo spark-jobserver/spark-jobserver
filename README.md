@@ -779,7 +779,7 @@ These routes are kept for legacy purposes but are deprecated in favour of the /b
     GET /contexts               - lists all current contexts
     POST /contexts/<name>       - creates a new context
     DELETE /contexts/<name>     - stops a context and all jobs running in it
-    PUT /contexts?reset=reboot  - kills all contexts and re-loads only the contexts from config
+    PUT /contexts?reset=reboot  - shuts down all contexts and re-loads only the contexts from config. Use ?sync=false to execute asynchronously.
 
 Spark context configuration params can follow `POST /contexts/<name>` as query params. See section below for more details.
 
