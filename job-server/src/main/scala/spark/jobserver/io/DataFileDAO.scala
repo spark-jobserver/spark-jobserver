@@ -2,8 +2,11 @@ package spark.jobserver.io
 
 import com.typesafe.config._
 import java.io._
+
+import org.apache.commons.io.FileUtils
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
+
 import scala.collection.mutable
 
 object DataFileDAO {
@@ -20,7 +23,7 @@ class DataFileDAO(config: Config) {
   private val files = mutable.HashSet.empty[String]
 
 
-  private val dataFile : File = {
+  private val dataFile: File = {
 
     val rootDir = config.getString("spark.jobserver.datadao.rootdir")
     val rootDirFile = new File(rootDir)
@@ -66,9 +69,9 @@ class DataFileDAO(config: Config) {
   }
 
   /**
-   * save the given data into a new file with the given prefix, a time stamp is appended to
-   * ensure uniqueness
-   */
+    * save the given data into a new file with the given prefix, a time stamp is appended to
+    * ensure uniqueness
+    */
   def saveFile(aNamePrefix: String, uploadTime: DateTime, aBytes: Array[Byte]): String = {
     // The order is important. Save the file first and then log it into meta data file.
     val outFile = new File(rootDir, createFileName(aNamePrefix, uploadTime) + DataFileDAO.EXTENSION)
@@ -94,6 +97,21 @@ class DataFileDAO(config: Config) {
     out.writeUTF(aInfo.appName)
     out.writeLong(aInfo.uploadTime.getMillis)
   }
+
+  def deleteAll(): Boolean = {
+    try {
+      FileUtils.deleteDirectory(new File(rootDir))
+      new File(rootDir).mkdir()
+      files.clear()
+      true
+    } catch {
+      case e: Exception => {
+        logger.error("An error occurred while deleting " + rootDir, e)
+        false
+      }
+    }
+  }
+
 
   def deleteFile(aName: String): Boolean = {
     if (aName.startsWith(rootDir) && files.contains(aName)) {

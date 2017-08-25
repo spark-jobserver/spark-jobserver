@@ -9,6 +9,7 @@ object DataManagerActor {
   // Messages to DataManager actor
   case class StoreData(name: String, bytes: Array[Byte])
   case class DeleteData(name: String)
+  case class DeleteAllData()
   case object ListData
 
   // Responses
@@ -27,6 +28,8 @@ class DataManagerActor(fileDao: DataFileDAO) extends InstrumentedActor {
 
     case DeleteData(fileName) =>
       sender ! { if (fileDao.deleteFile(fileName)) Deleted else Error }
+    case DeleteAllData =>
+      sender ! { if (fileDao.deleteAll()) Deleted else Error }
 
     case StoreData(aName, aBytes) =>
       logger.info("Storing data in file prefix {}, {} bytes", aName, aBytes.length)

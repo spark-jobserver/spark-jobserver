@@ -807,6 +807,7 @@ It is sometime necessary to programmatically upload files to the server. Use the
                                prefix is the prefix of the actual filename used on the server (a timestamp is
                                added to ensure uniqueness)
     DELETE /data/<filename>  - Deletes the specified file (only if under control of the JobServer)
+    PUT /data?reset=reboot   - Deletes all uploaded files. Use ?sync=false to execute asynchronously.
 
 These files are uploaded to the server and are stored in a local temporary
 directory where the JobServer runs. The POST command returns the full
