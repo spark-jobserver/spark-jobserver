@@ -60,8 +60,7 @@ object JobServer {
       // JobFileDAO and H2 mem is not supported.
       if (contextPerJvm) {
         if (clazz.getName == "spark.jobserver.io.JobFileDAO") {
-          // TODO: the current implementation of JobSqlDAO does not scale, we need still the old JobFileDAO
-          // throw new RuntimeException("JobFileDAO is not supported with context-per-jvm, use JobSqlDAO.")
+          throw new RuntimeException("JobFileDAO is not supported with context-per-jvm, use JobSqlDAO.")
         } else if (clazz.getName == "spark.jobserver.io.JobSqlDAO" &&
           config.getString("spark.jobserver.sqldao.jdbc.url").startsWith("jdbc:h2:mem")) {
             throw new RuntimeException("H2 mem backend is not support with context-per-jvm.")

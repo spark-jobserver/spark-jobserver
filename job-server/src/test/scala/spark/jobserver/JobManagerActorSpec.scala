@@ -11,7 +11,7 @@ class JobManagerActorSpec extends JobManagerSpec {
   before {
     dao = new InMemoryDAO
     daoActor = system.actorOf(JobDAOActor.props(dao))
-    manager = system.actorOf(JobManagerActor.props(JobManagerSpec.getContextConfig(adhoc = false)))
+    manager = system.actorOf(JobManagerActor.props(JobManagerSpec.getContextConfig(adhoc = false), daoActor))
     supervisor = TestProbe().ref
   }
 
@@ -21,7 +21,7 @@ class JobManagerActorSpec extends JobManagerSpec {
 
   describe("starting jobs") {
     it("jobs should be able to cache RDDs and retrieve them through getPersistentRDDs") {
-      manager ! JobManagerActor.Initialize(daoActor, None)
+      manager ! JobManagerActor.Initialize(None)
       expectMsgClass(classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
@@ -37,7 +37,7 @@ class JobManagerActorSpec extends JobManagerSpec {
     }
 
     it ("jobs should be able to cache and retrieve RDDs by name") {
-      manager ! JobManagerActor.Initialize(daoActor, None)
+      manager ! JobManagerActor.Initialize(None)
       expectMsgClass(classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
