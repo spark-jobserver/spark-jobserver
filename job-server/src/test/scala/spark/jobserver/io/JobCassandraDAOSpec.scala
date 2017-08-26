@@ -66,14 +66,13 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
     genTestJarInfo _
   }
 
-  private def genJobInfoClosure = {
+  case class GenJobInfoClosure() {
     var count: Int = 0
 
-    def genTestJobInfo(jarInfo: BinaryInfo, hasEndTime: Boolean, hasError: Boolean, isNew:Boolean):JobInfo ={
+    def apply(jarInfo: BinaryInfo, hasEndTime: Boolean, hasError: Boolean, isNew:Boolean, contextName: String = "test-context"):JobInfo ={
       count = count + (if (isNew) 1 else 0)
 
       val id: String = UUIDs.random().toString
-      val contextName: String = "test-context"
       val classPath: String = "test-classpath"
       val startTime: DateTime = new DateTime()
 
@@ -89,11 +88,10 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
       JobInfo(id, contextName, jarInfo, classPath, startTime, endTime, error)
     }
 
-    genTestJobInfo _
   }
 
   def genJarInfo: (Boolean, Boolean) => BinaryInfo = genJarInfoClosure
-  def genJobInfo: (BinaryInfo, Boolean, Boolean, Boolean) => JobInfo = genJobInfoClosure
+  lazy val genJobInfo = GenJobInfoClosure()
   //**********************************
   override def beforeAll() {
     EmbeddedCassandraServerHelper.startEmbeddedCassandra()
@@ -355,6 +353,26 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
 
       //test
       retrieved.error.isDefined should equal (true)
+    }
+
+    it("retrieve running jobs by context name") {
+      val jobInfo = genJobInfo(jarInfo, false, false, true, "context")
+      dao.saveJobInfo(jobInfo)
+
+      val results = Await.result(dao.getRunningJobInfosForContextName("context"), timeout)
+      results should have size 1
+      results.head.jobId shouldBe jobInfo.jobId
+    }
+
+    it("should clean jobs for given context") {
+      val jobInfo = genJobInfo(jarInfo, false, false, false, "context")
+      dao.saveJobInfo(jobInfo)
+
+      Await.result(dao.cleanRunningJobInfosForContext("context", DateTime.now()), timeout)
+      val updatedJobInfo = Await.result(dao.getJobInfo(jobInfo.jobId), timeout)
+      updatedJobInfo shouldBe defined
+      updatedJobInfo.get.endTime shouldBe defined
+      updatedJobInfo.get.error shouldBe defined
     }
   }
 
