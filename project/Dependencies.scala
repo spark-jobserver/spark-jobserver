@@ -28,18 +28,16 @@ object Dependencies {
   )
 
   lazy val sparkDeps = Seq(
-    "org.apache.spark" %% "spark-core" % spark % "provided" excludeAll(excludeNettyIo, excludeQQ),
-    // Force netty version.  This avoids some Spark netty dependency problem.
-    "io.netty" % "netty-all" % netty
+    "com.datastax.spark" %% "spark-core" % spark % Provided excludeAll(excludeQQ)
   )
 
   lazy val sparkExtraDeps = Seq(
-    "org.apache.spark" %% "spark-mllib" % spark % Provided excludeAll(excludeNettyIo, excludeQQ),
-    "org.apache.spark" %% "spark-sql" % spark % Provided excludeAll(excludeNettyIo, excludeQQ),
-    "org.apache.spark" %% "spark-streaming" % spark % Provided excludeAll(excludeNettyIo, excludeQQ),
-    "org.apache.spark" %% "spark-hive" % spark % Provided excludeAll(
+    "com.datastax.spark" %% "spark-mllib" % spark % Provided excludeAll(excludeNettyIo, excludeQQ),
+    "com.datastax.spark" %% "spark-sql" % spark % Provided excludeAll(excludeNettyIo, excludeQQ),
+    "com.datastax.spark" %% "spark-streaming" % spark % Provided excludeAll(excludeNettyIo, excludeQQ),
+    "com.datastax.spark" %% "spark-hive" % spark % Provided excludeAll(
       excludeNettyIo, excludeQQ, excludeScalaTest
-      )
+    )
   )
 
   lazy val sparkExtraDepsTest = Seq(
@@ -60,8 +58,8 @@ object Dependencies {
   )
 
   lazy val cassandraDeps = Seq(
-    "com.datastax.cassandra" % "cassandra-driver-core" % cassandra,
-    "com.datastax.cassandra" % "cassandra-driver-mapping" % cassandra
+    "com.datastax.dse" % "dse-java-driver-core" % dseDriver % Provided excludeAll excludeNettyIo,
+    "com.datastax.dse" % "dse-java-driver-mapping" % dseDriver % Provided excludeAll excludeNettyIo
   )
 
   lazy val logbackDeps = Seq(
@@ -85,6 +83,7 @@ object Dependencies {
   lazy val apiDeps = sparkDeps ++ miscDeps :+ typeSafeConfigDeps :+ scalaTestDep
 
   val repos = Seq(
+    "datastax-release" at "http://datastax.artifactoryonline.com/datastax/datastax-releases-local",
     "Typesafe Repo" at "http://repo.typesafe.com/typesafe/releases/",
     "sonatype snapshots" at "https://oss.sonatype.org/content/repositories/snapshots/",
     "spray repo" at "http://repo.spray.io"
