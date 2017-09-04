@@ -20,6 +20,7 @@ import spark.jobserver.common.akka.InstrumentedActor
 import scala.concurrent.Await
 import akka.pattern.gracefulStop
 import org.joda.time.DateTime
+import org.slf4j.LoggerFactory
 import spark.jobserver.io.JobDAOActor.CleanContextJobInfos
 
 /**
@@ -236,28 +237,11 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
       cmdString = cmdString + s" ${contextConfig.getString(SparkJobUtils.SPARK_PROXY_USER_PARAM)}"
     }
 
-    val pb = Process(cmdString)
-    val pio = new ProcessIO(_ => (),
-                        stdout => scala.io.Source.fromInputStream(stdout)
-                          .getLines.foreach(println),
-                        stderr => scala.io.Source.fromInputStream(stderr).getLines().foreach(println))
-    logger.info("Starting to execute sub process {}", pb)
-    val processStart = Try {
-      val process = pb.run(pio)
-      if (waitForManagerStart) {
-        val exitVal = process.exitValue()
-        if (exitVal != 0) {
-          throw new IOException("Failed to launch context process, got exit code " + exitVal)
-        }
-      }
-    }
+    val contextLogger = LoggerFactory.getLogger("manager_start")
+    val process = Process(cmdString.split(" "))
+    process.run(ProcessLogger(out => contextLogger.info(out), err => contextLogger.warn(err)))
 
-    if (processStart.isSuccess) {
-      contextInitInfos(contextActorName) = (isAdHoc, successFunc, failureFunc)
-    } else {
-      failureFunc(processStart.failed.get)
-    }
-
+    contextInitInfos(contextActorName) = (isAdHoc, successFunc, failureFunc)
   }
 
   private def createContextDir(name: String,
