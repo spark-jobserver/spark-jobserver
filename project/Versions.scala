@@ -25,7 +25,7 @@ object Versions {
 
   lazy val mysql = "5.1.42"
   lazy val py4j = "0.10.4"
-  lazy val scalaTest = "2.2.6"
-  lazy val scalatic = "2.2.6"
+  lazy val scalaTest = "3.0.1"
+  lazy val scalatic = "3.0.1"
   lazy val shiro = "1.2.4"
 }
