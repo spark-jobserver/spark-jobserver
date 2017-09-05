@@ -181,6 +181,11 @@ class WebApi(system: ActorSystem,
       ServerSSLEngineProvider { engine =>
         val protocols = config.getStringList("spray.can.server.enabledProtocols")
         engine.setEnabledProtocols(protocols.toArray(Array[String]()))
+        val sprayConfig = config.getConfig("spray.can.server")
+        if(sprayConfig.hasPath("truststore")) {
+          engine.setNeedClientAuth(true)
+          logger.info("Client authentication activated.")
+        }
         engine
       }
     }
