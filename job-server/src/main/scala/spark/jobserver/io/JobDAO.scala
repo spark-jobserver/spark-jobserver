@@ -2,9 +2,13 @@ package spark.jobserver.io
 
 import com.typesafe.config._
 import org.joda.time.{DateTime, Duration}
+import org.slf4j.LoggerFactory
+import spark.jobserver.JobManagerActor.JobKilledException
 import spray.http.{HttpHeaders, MediaType, MediaTypes}
-import scala.concurrent.{Await, Future}
+
 import scala.concurrent.duration._
+import scala.concurrent.{Await, Future}
+import scala.concurrent.ExecutionContext.Implicits.global
 
 trait BinaryType {
   def extension: String
@@ -63,6 +67,10 @@ object JobStatus {
   val Killed = "KILLED"
 }
 
+object JobDAO {
+  private val logger = LoggerFactory.getLogger(classOf[JobDAO])
+}
+
 /**
  * Core trait for data access objects for persisting data such as jars, applications, jobs, etc.
  */
@@ -117,6 +125,29 @@ trait JobDAO {
    * @return
    */
   def getJobInfos(limit: Int, status: Option[String] = None): Future[Seq[JobInfo]]
+
+  /**
+    * Return all job ids to their job info.
+    */
+  def getRunningJobInfosForContextName(contextName: String): Future[Seq[JobInfo]]
+
+  /**
+    * Move all jobs running on context with given name to error state
+    *
+    * @param contextName name of the context
+    * @param endTime time to put into job infos end time column
+    */
+  def cleanRunningJobInfosForContext(contextName: String, endTime: DateTime): Future[Unit] = {
+    getRunningJobInfosForContextName(contextName).map { infos =>
+      JobDAO.logger.info("cleaning {} running jobs for {}", infos.size, contextName)
+      for (info <- infos) {
+        val updatedInfo = info.copy(
+          endTime = Some(endTime),
+          error = Some(JobKilledException(info.jobId)))
+        saveJobInfo(jobInfo = updatedInfo)
+      }
+    }
+  }
 
   /**
    * Persist a job configuration along with provided jobId.

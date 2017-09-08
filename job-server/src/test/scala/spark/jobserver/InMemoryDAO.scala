@@ -65,6 +65,10 @@ class InMemoryDAO extends JobDAO {
     filterJobs.take(limit)
   }
 
+  override def getRunningJobInfosForContextName(contextName: String): Future[Seq[JobInfo]] = Future {
+    jobInfos.values.toSeq.filter(j => j.endTime.isEmpty && j.error.isEmpty && j.contextName == contextName)
+  }
+
   override def getJobInfo(jobId: String): Future[Option[JobInfo]] = Future {
     jobInfos.get(jobId)
   }
