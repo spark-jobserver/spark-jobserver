@@ -53,12 +53,12 @@ class HiveJobSpec extends ExtrasJobSpecBase(HiveJobSpec.getNewSystem) {
     dao = new InMemoryDAO
     daoActor = system.actorOf(JobDAOActor.props(dao))
     manager = system.actorOf(JobManagerActor.props(
-      HiveJobSpec.getContextConfig(false, HiveJobSpec.contextConfig)))
+      HiveJobSpec.getContextConfig(false, HiveJobSpec.contextConfig), daoActor))
   }
 
   describe("Spark Hive Jobs") {
     it("should be able to create a Hive table, then query it using separate Hive-SQL jobs") {
-      manager ! JobManagerActor.Initialize(daoActor, None)
+      manager ! JobManagerActor.Initialize(None)
       expectMsgClass(30 seconds, classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
