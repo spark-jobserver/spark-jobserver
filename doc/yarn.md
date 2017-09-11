@@ -1,10 +1,6 @@
-## Configuring Job Server for YARN
+## Configuring Job Server for YARN in client mode with docker
 
-(Looking for contributors for this page)
-
-(I would like to thank Jon Buffington for sharing the config tips below.... @velvia)
-
-Note:  This is for yarn with docker.  If you are looking to deploy on a yarn cluster via EMR, then this link would be more useful [EMR](https://github.com/spark-jobserver/spark-jobserver/blob/master/doc/EMR.md)
+See also running [YARN in cluster mode](yarn-cluster.md), running [YARN on EMR](EMR.md) and running on [Mesos](mesos.md).
 
 ### Configuring the Spark-Jobserver Docker package to run in Yarn-Client Mode
 
@@ -19,11 +15,10 @@ Files we need:
 - dockerfile
 - cluster-config directory with hdfs-site.xml and yarn-site.xml (You should have these files already)
 
-Example docker.conf (important settings are marked with # important):
+Example docker.conf:
 
     spark {
-      master = "yarn-client" # important
-      master = ${?SPARK_MASTER}
+      master = yarn
     
       # Default # of CPUs for jobs to use for Spark standalone cluster
       job-number-cpus = 4
