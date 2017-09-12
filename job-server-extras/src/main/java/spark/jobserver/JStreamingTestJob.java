@@ -1,10 +1,11 @@
 package spark.jobserver;
 
 import com.typesafe.config.Config;
+import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
+import org.apache.spark.api.java.function.VoidFunction;
 import org.apache.spark.streaming.StreamingContext;
 import org.apache.spark.streaming.api.java.JavaDStream;
-import org.apache.spark.streaming.api.java.JavaPairDStream;
 import org.apache.spark.streaming.api.java.JavaStreamingContext;
 import spark.jobserver.api.JobEnvironment;
 import spark.jobserver.japi.JStreamingJob;
@@ -23,9 +24,14 @@ public class JStreamingTestJob implements JStreamingJob<Integer> {
         q.add(d);
 
         final JavaDStream<Integer> dStream = jsc.queueStream(q);
-        final JavaPairDStream<Integer, Long> counts = dStream.countByValue();
 
-        counts.print(5);
+        dStream.countByValue().foreachRDD(new VoidFunction<JavaPairRDD<Integer, Long>>() {
+            @Override
+            public void call(JavaPairRDD<Integer, Long> rdd) throws Exception {
+                rdd.collect(); // do something
+            }
+        });
+
         jsc.start();
         try {
           jsc.awaitTermination();
