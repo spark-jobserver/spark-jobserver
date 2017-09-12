@@ -29,7 +29,7 @@ class PythonJobManagerSpec extends ExtrasJobSpecBase(PythonJobManagerSpec.getNew
         withFallback(PythonSparkContextFactorySpec.config)
       manager = system.actorOf(JobManagerActor.props(pyContextConfig, daoActor))
 
-      manager ! JobManagerActor.Initialize(None)
+      manager ! JobManagerActor.Initialize(None, emptyActor)
       expectMsgClass(30 seconds, classOf[JobManagerActor.Initialized])
 
       uploadTestEgg("python-demo")
