@@ -1,5 +1,6 @@
 package spark.jobserver
 
+import java.io.File
 import java.net.{URI, URL}
 import java.util.concurrent.Executors._
 import java.util.concurrent.atomic.AtomicInteger
@@ -12,9 +13,9 @@ import org.apache.spark.scheduler.SparkListener
 import org.apache.spark.scheduler.SparkListenerApplicationEnd
 import org.joda.time.DateTime
 import org.scalactic._
-import spark.jobserver.api.JobEnvironment
+import spark.jobserver.api.{JobEnvironment, DataFileCache}
 import spark.jobserver.context.{JobContainer, SparkContextFactory}
-import spark.jobserver.io.{BinaryInfo, JobDAOActor, JobInfo}
+import spark.jobserver.io.{BinaryInfo, JobDAOActor, JobInfo, RemoteFileCache}
 import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -23,7 +24,7 @@ import spark.jobserver.common.akka.InstrumentedActor
 
 object JobManagerActor {
   // Messages
-  case class Initialize(resultActorOpt: Option[ActorRef])
+  case class Initialize(resultActorOpt: Option[ActorRef], dataFileActor: ActorRef)
   case class StartJob(appName: String, classPath: String, config: Config,
                       subscribedEvents: Set[Class[_]])
   case class KillJob(jobId: String)
@@ -34,6 +35,8 @@ object JobManagerActor {
   case object GetContextConfig
   case object SparkContextStatus
   case object GetSparkWebUIUrl
+
+  case class DeleteData(name: String)
 
   // Results/Data
   case class ContextConfig(contextName: String, contextConfig: SparkConf, hadoopConfig: Configuration)
@@ -114,15 +117,19 @@ class JobManagerActor(contextConfig: Config, daoActor: ActorRef)
   private var statusActor: ActorRef = _
   protected var resultActor: ActorRef = _
   private var factory: SparkContextFactory = _
+  private var remoteFileCache: RemoteFileCache = _
 
   private val jobServerNamedObjects = new JobServerNamedObjects(context.system)
 
   private def getEnvironment(_jobId: String): JobEnvironment = {
     val _contextCfg = contextConfig
-    new JobEnvironment {
+    new JobEnvironment with DataFileCache {
       def jobId: String = _jobId
       def namedObjects: NamedObjects = jobServerNamedObjects
       def contextConfig: Config = _contextCfg
+      def getDataFile(dataFile: String): File = {
+        remoteFileCache.getDataFile(dataFile)
+      }
     }
   }
 
@@ -142,9 +149,10 @@ class JobManagerActor(contextConfig: Config, daoActor: ActorRef)
   }
 
   def wrappedReceive: Receive = {
-    case Initialize(resOpt) =>
+    case Initialize(resOpt, dataManagerActor) =>
       statusActor = context.actorOf(JobStatusActor.props(daoActor))
       resultActor = resOpt.getOrElse(context.actorOf(Props[JobResultActor]))
+      remoteFileCache = new RemoteFileCache(self, dataManagerActor)
 
       try {
         // Load side jars first in case the ContextFactory comes from it
@@ -200,6 +208,7 @@ class JobManagerActor(contextConfig: Config, daoActor: ActorRef)
         }
       }
     }
+
     case GetContextConfig => {
       if (jobContext.sparkContext == null) {
         sender ! SparkContextDead
@@ -216,6 +225,7 @@ class JobManagerActor(contextConfig: Config, daoActor: ActorRef)
         }
       }
     }
+
     case GetSparkWebUIUrl => {
       if (jobContext.sparkContext == null) {
         sender ! SparkContextDead
@@ -235,7 +245,10 @@ class JobManagerActor(contextConfig: Config, daoActor: ActorRef)
           }
         }
       }
+    }
 
+    case DeleteData(name: String) => {
+      remoteFileCache.deleteDataFile(name)
     }
   }
 

@@ -41,7 +41,9 @@ import spark.jobserver.io.JobDAOActor.CleanContextJobInfos
  *   }
  * }}}
  */
-class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
+class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
+    extends InstrumentedActor {
+
   import ContextSupervisor._
   import scala.collection.JavaConverters._
   import scala.concurrent.duration._
@@ -191,7 +193,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
 
     val resultActor = if (isAdHoc) globalResultActor else context.actorOf(Props(classOf[JobResultActor]))
     (ref ? JobManagerActor.Initialize(
-      Some(resultActor)))(Timeout(timeoutSecs.second)).onComplete {
+      Some(resultActor), dataManagerActor))(Timeout(timeoutSecs.second)).onComplete {
       case Failure(e: Exception) =>
         logger.info("Failed to send initialize message to context " + ref, e)
         cluster.down(ref.path.address)

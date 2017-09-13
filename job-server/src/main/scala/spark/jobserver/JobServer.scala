@@ -68,8 +68,7 @@ object JobServer {
       }
       val jobDAO = ctor.newInstance(config).asInstanceOf[JobDAO]
       val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO), "dao-manager")
-      val dataManager = system.actorOf(Props(classOf[DataManagerActor],
-          new DataFileDAO(config)), "data-manager")
+      val dataManager = system.actorOf(DataManagerActor.props(new DataFileDAO(config)), "data-manager")
       val binManager = system.actorOf(Props(classOf[BinaryManager], daoActor), "binary-manager")
       val supervisor =
         system.actorOf(Props(
@@ -78,7 +77,7 @@ object JobServer {
           } else {
             classOf[LocalContextSupervisorActor]
           },
-          daoActor), "context-supervisor")
+          daoActor, dataManager), "context-supervisor")
       val jobInfo = system.actorOf(Props(classOf[JobInfoActor], jobDAO, supervisor), "job-info")
 
       // Add initial job JARs, if specified in configuration.
