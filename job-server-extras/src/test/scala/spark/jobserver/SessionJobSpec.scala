@@ -35,7 +35,7 @@ object SessionJobSpec extends JobSpecConfig {
 class SessionJobSpec extends ExtrasJobSpecBase(SessionJobSpec.getNewSystem) {
 
   val classPrefix = "spark.jobserver."
-  private val hiveLoaderClass = classPrefix + "SessionLoaderJob"
+  private val hiveLoaderClass = classPrefix + "SessionLoaderTestJob"
   private val hiveQueryClass = classPrefix + "SessionTestJob"
 
   val emptyConfig = ConfigFactory.parseString("spark.master = bar")
