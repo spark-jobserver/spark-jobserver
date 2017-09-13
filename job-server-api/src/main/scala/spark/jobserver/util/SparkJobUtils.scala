@@ -130,7 +130,7 @@ object SparkJobUtils {
 
   private def getContextTimeout(config: Config, yarn : String, standalone : String): Int = {
     config.getString("spark.master") match {
-      case "yarn-client" =>
+      case "yarn" =>
         Try(config.getDuration(yarn,
               TimeUnit.MILLISECONDS).toInt / 1000).getOrElse(40)
       case _ =>
