@@ -44,6 +44,7 @@ lazy val jobServerTestJar = Project(id = "job-server-tests", base = file("job-se
   .settings(noPublishSettings)
   .dependsOn(jobServerApi)
   .disablePlugins(SbtScalariform)
+  .disablePlugins(ScoverageSbtPlugin) // do not include in coverage report
 
 lazy val jobServerApi = Project(id = "job-server-api", base = file("job-server-api"))
   .settings(commonSettings)
@@ -274,7 +275,7 @@ lazy val commonSettings = Defaults.coreDefaultSettings ++ dirSettings ++ implici
 
 lazy val scoverageSettings = {
   // Semicolon-separated list of regexs matching classes to exclude
-  coverageExcludedPackages := ".+Benchmark.*"
+  coverageExcludedPackages := ".+Benchmark.*;.+Example.*"
 }
 
 lazy val publishSettings = Seq(
