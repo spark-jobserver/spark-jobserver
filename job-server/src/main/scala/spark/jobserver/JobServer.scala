@@ -66,6 +66,14 @@ object JobServer {
             throw new RuntimeException("H2 mem backend is not support with context-per-jvm.")
         }
       }
+
+      // start embedded H2 server
+      if (config.getBoolean("spark.jobserver.startH2Server")) {
+        val rootDir = config.getString("spark.jobserver.sqldao.rootdir")
+        val h2 = org.h2.tools.Server.createTcpServer("-tcpAllowOthers", "-baseDir", rootDir).start();
+        logger.info("Embeded H2 server started with base dir {} and URL {}", rootDir, h2.getURL: Any)
+      }
+
       val jobDAO = ctor.newInstance(config).asInstanceOf[JobDAO]
       val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO), "dao-manager")
       val dataManager = system.actorOf(Props(classOf[DataManagerActor],
