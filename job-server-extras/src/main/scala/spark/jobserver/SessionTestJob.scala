@@ -10,7 +10,7 @@ import spark.jobserver.api.{JobEnvironment, ValidationProblem}
   * Initializes some dummy data into a table, reads it back out, and returns a count.
   * Will create Hive metastore at job-server/metastore_db if Hive isn't configured.
   */
-object SessionLoaderJob extends SparkSessionJob {
+object SessionLoaderTestJob extends SparkSessionJob {
   // The following data is stored at ./hive_test_job_addresses.txt
   // val addresses = Seq(
   //   Address("Bob", "Charles", "101 A St.", "San Jose"),
