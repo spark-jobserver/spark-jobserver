@@ -32,7 +32,7 @@ class JavaStreamingSpec extends ExtrasJobSpecBase(JavaStreamingSpec.getNewSystem
 
   describe("Running Java based Streaming Jobs") {
     it("Should return Correct results") {
-      manager ! JobManagerActor.Initialize(None)
+      manager ! JobManagerActor.Initialize(None, emptyActor)
       expectMsgClass(10 seconds, classOf[JobManagerActor.Initialized])
 
       uploadTestJar()

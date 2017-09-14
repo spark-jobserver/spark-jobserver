@@ -16,7 +16,7 @@ class NamedObjectsJobSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
       daoActor))
     supervisor = TestProbe().ref
 
-    manager ! JobManagerActor.Initialize(None)
+    manager ! JobManagerActor.Initialize(None, emptyActor)
 
     expectMsgClass(10.seconds, classOf[JobManagerActor.Initialized])
 
