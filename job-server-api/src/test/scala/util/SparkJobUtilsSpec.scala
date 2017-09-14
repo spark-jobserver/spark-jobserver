@@ -46,18 +46,18 @@ class SparkJobUtilsSpec extends FunSpec with Matchers {
       SparkJobUtils.getContextCreationTimeout(config) should equal (15)
     }
 
-    it("should read contextCreationTimeout for yarn-client mode") {
+    it("should read contextCreationTimeout for yarn mode") {
       val config = ConfigFactory.parseMap(Map(
-        "spark.master" -> "yarn-client",
+        "spark.master" -> "yarn",
         "spark.jobserver.yarn-context-creation-timeout" -> 20000,
         "spark.jobserver.context-creation-timeout" -> 10000
       ).asJava)
       SparkJobUtils.getContextCreationTimeout(config) should equal (20)
     }
 
-    it("should read default contextCreationTimeout for yarn-client mode") {
+    it("should read default contextCreationTimeout for yarn mode") {
       val config = ConfigFactory.parseMap(Map(
-        "spark.master" -> "yarn-client"
+        "spark.master" -> "yarn"
       ).asJava)
       SparkJobUtils.getContextCreationTimeout(config) should equal (40)
     }
@@ -78,18 +78,18 @@ class SparkJobUtilsSpec extends FunSpec with Matchers {
       SparkJobUtils.getContextDeletionTimeout(config) should equal (15)
     }
 
-    it("should read contextDeletionTimeout for yarn-client mode") {
+    it("should read contextDeletionTimeout for yarn mode") {
       val config = ConfigFactory.parseMap(Map(
-        "spark.master" -> "yarn-client",
+        "spark.master" -> "yarn",
         "spark.jobserver.yarn-context-deletion-timeout" -> 20000,
         "spark.jobserver.context-deletion-timeout" -> 10000
       ).asJava)
       SparkJobUtils.getContextDeletionTimeout(config) should equal (20)
     }
 
-    it("should read default contextDeletionTimeout for yarn-client mode") {
+    it("should read default contextDeletionTimeout for yarn mode") {
       val config = ConfigFactory.parseMap(Map(
-        "spark.master" -> "yarn-client"
+        "spark.master" -> "yarn"
       ).asJava)
       SparkJobUtils.getContextDeletionTimeout(config) should equal (40)
     }
