@@ -61,7 +61,8 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
   //TODO: try to pass this state to the jobManager at start instead of having to track
   //extra state.  What happens if the WebApi process dies before the forked process
   //starts up?  Then it never gets initialized, and this state disappears.
-  private val contextInitInfos = mutable.HashMap.empty[String, (Boolean, ActorRef => Unit, Throwable => Unit)]
+  private val contextInitInfos = mutable.HashMap.empty[String,
+                                                      (Config, Boolean, ActorRef => Unit, Throwable => Unit)]
 
   // actor name -> (JobManagerActor ref, ResultActor ref)
   private val contexts = mutable.HashMap.empty[String, (ActorRef, ActorRef)]
@@ -97,9 +98,10 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
         val actorName = actorRef.path.name
         if (actorName.startsWith("jobManager")) {
           logger.info("Received identify response, attempting to initialize context at {}", memberActors)
-          (for { (isAdHoc, successFunc, failureFunc) <- contextInitInfos.remove(actorName) }
+          (for { (contextConfig, isAdHoc, successFunc, failureFunc) <- contextInitInfos.remove(actorName) }
            yield {
-             initContext(actorName, actorRef, contextInitTimeout)(isAdHoc, successFunc, failureFunc)
+             initContext(contextConfig, actorName,
+                         actorRef, contextInitTimeout)(isAdHoc, successFunc, failureFunc)
            }).getOrElse({
             logger.warn("No initialization or callback found for jobManager actor {}", actorRef.path)
             actorRef ! PoisonPill
@@ -185,7 +187,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
       cluster.down(actorRef.path.address)
   }
 
-  private def initContext(actorName: String, ref: ActorRef, timeoutSecs: Long = 1)
+  private def initContext(contextConfig: Config, actorName: String, ref: ActorRef, timeoutSecs: Long = 1)
                          (isAdHoc: Boolean,
                           successFunc: ActorRef => Unit,
                           failureFunc: Throwable => Unit): Unit = {
@@ -193,7 +195,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
 
     val resultActor = if (isAdHoc) globalResultActor else context.actorOf(Props(classOf[JobResultActor]))
     (ref ? JobManagerActor.Initialize(
-      Some(resultActor), dataManagerActor))(Timeout(timeoutSecs.second)).onComplete {
+      contextConfig, Some(resultActor), dataManagerActor))(Timeout(timeoutSecs.second)).onComplete {
       case Failure(e: Exception) =>
         logger.info("Failed to send initialize message to context " + ref, e)
         cluster.down(ref.path.address)
@@ -223,26 +225,31 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
 
     logger.info("Starting context with actor name {}", contextActorName)
 
-    val driverMode = Try(config.getString("spark.jobserver.driver-mode")).toOption.getOrElse("client")
-    val (workDir, contextContent) = generateContext(name, contextConfig, isAdHoc, contextActorName)
-    logger.info("Ready to create working directory {} for context {}", workDir: Any, name)
+    val master = Try(config.getString("spark.master")).toOption.getOrElse("local[4]")
+    val deployMode = Try(config.getString("spark.submit.deployMode")).toOption.getOrElse("client")
 
-    //extract spark.proxy.user from contextConfig, if available and pass it to $managerStartCommand
-    var cmdString = if (driverMode == "mesos-cluster") {
-      s"$managerStartCommand $driverMode $workDir '$contextContent' ${selfAddress.toString}"
-    } else {
-      s"$managerStartCommand $driverMode $workDir $contextContent ${selfAddress.toString}"
-    }
+    // Create a temporary dir, preferably in the LOG_DIR
+    val encodedContextName = java.net.URLEncoder.encode(name, "UTF-8")
+    val contextDir = Option(System.getProperty("LOG_DIR")).map { logDir =>
+      Files.createTempDirectory(Paths.get(logDir), s"jobserver-$encodedContextName")
+    }.getOrElse(Files.createTempDirectory("jobserver"))
+    logger.info("Created working directory {} for context {}", contextDir: Any, name)
 
+    // Now create the contextConfig merged with the values we need
+    val mergedContextConfig = ConfigFactory.parseMap(
+      Map("is-adhoc" -> isAdHoc.toString, "context.name" -> name).asJava
+    ).withFallback(contextConfig)
+
+    var managerArgs = Seq(master, deployMode, selfAddress.toString, contextActorName, contextDir.toString)
+    // extract spark.proxy.user from contextConfig, if available and pass it to manager start command
     if (contextConfig.hasPath(SparkJobUtils.SPARK_PROXY_USER_PARAM)) {
-      cmdString = cmdString + s" ${contextConfig.getString(SparkJobUtils.SPARK_PROXY_USER_PARAM)}"
+      managerArgs = managerArgs :+ contextConfig.getString(SparkJobUtils.SPARK_PROXY_USER_PARAM)
     }
 
-    val pb = Process(cmdString)
+    val pb = Process(managerStartCommand, managerArgs)
     val pio = new ProcessIO(_ => (),
-                        stdout => scala.io.Source.fromInputStream(stdout)
-                          .getLines.foreach(println),
-                        stderr => scala.io.Source.fromInputStream(stderr).getLines().foreach(println))
+                        stdout => scala.io.Source.fromInputStream(stdout).getLines.foreach(println),
+                        stderr => scala.io.Source.fromInputStream(stderr).getLines.foreach(println))
     logger.info("Starting to execute sub process {}", pb)
     val processStart = Try {
       val process = pb.run(pio)
@@ -255,52 +262,11 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
     }
 
     if (processStart.isSuccess) {
-      contextInitInfos(contextActorName) = (isAdHoc, successFunc, failureFunc)
+      contextInitInfos(contextActorName) = (mergedContextConfig, isAdHoc, successFunc, failureFunc)
     } else {
       failureFunc(processStart.failed.get)
     }
 
-  }
-
-  private def createContextDir(name: String,
-                               contextConfig: Config,
-                               isAdHoc: Boolean,
-                               actorName: String): java.io.File = {
-    // Create a temporary dir, preferably in the LOG_DIR
-    val encodedContextName = java.net.URLEncoder.encode(name, "UTF-8")
-    val tmpDir = Option(System.getProperty("LOG_DIR")).map { logDir =>
-      Files.createTempDirectory(Paths.get(logDir), s"jobserver-$encodedContextName")
-    }.getOrElse(Files.createTempDirectory("jobserver"))
-    logger.info("Created working directory {} for context {}", tmpDir: Any, name)
-
-    // Now create the contextConfig merged with the values we need
-    val mergedConfig = ConfigFactory.parseMap(
-                         Map("is-adhoc" -> isAdHoc.toString,
-                             "context.name" -> name,
-                             "context.actorname" -> actorName).asJava
-                       ).withFallback(contextConfig)
-
-    // Write out the config to the temp dir
-    Files.write(tmpDir.resolve("context.conf"),
-                Seq(mergedConfig.root.render(ConfigRenderOptions.concise)).asJava,
-                Charset.forName("UTF-8"))
-
-    tmpDir.toFile
-  }
-
-  //generate remote context path and context config
-  private def generateContext(name: String,
-                              contextConfig: Config,
-                              isAdHoc: Boolean,
-                              actorName: String): (String, String) = {
-    (Option(System.getProperty("LOG_DIR")).getOrElse("/tmp/jobserver") + "/"
-      + java.net.URLEncoder.encode(name + "-" + actorName, "UTF-8"),
-      ConfigFactory.parseMap(
-        Map("is-adhoc" -> isAdHoc.toString,
-          "context.name" -> name,
-          "context.actorname" -> actorName).asJava
-      ).withFallback(contextConfig).root().render(ConfigRenderOptions.concise())
-      )
   }
 
   private def addContextsFromConfig(config: Config) {

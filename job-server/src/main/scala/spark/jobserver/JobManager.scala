@@ -15,51 +15,36 @@ import scala.collection.JavaConverters._
 
 /**
  * The JobManager is the main entry point for the forked JVM process running an individual
- * SparkContext.  It is passed $workDir $clusterAddr $configFile
- *
- * Each forked process has a working directory with log files for that context only, plus
- * a file "context.conf" which contains context-specific settings.
+ * SparkContext.  It is passed $deployMode $clusterAddr $actorName $systemConfigFile
  */
 object JobManager {
   val logger = LoggerFactory.getLogger(getClass)
 
   // Allow custom function to create ActorSystem.  An example of why this is useful:
   // we can have something that stores the ActorSystem so it could be shut down easily later.
-  // Args: workDir contextContent clusterAddress
+  // Args: deployMode workDir clusterAddress systemConfig
   def start(args: Array[String], makeSystem: Config => ActorSystem) {
-    val clusterAddress = AddressFromURIString.parse(args(2))
-    val workDir = Paths.get(args(0))
-    try {
-      if (!Files.exists(workDir)) {
-        System.err.println(s"WorkDir $workDir does not exist, creating.")
-        Files.createDirectories(workDir)
-      }
+    val deployMode = args(0)
+    val clusterAddress = AddressFromURIString.parse(args(1))
+    val managerName = args(2)
+    val systemConfigFile = new File(args(3))
 
-      //Create context.conf in the work dir with the config string
-      Files.write(workDir.resolve("context.conf"),
-        Seq(args(1)).asJava,
-        Charset.forName("UTF-8"))
-      // Set system property LOG_DIR
-      System.setProperty("LOG_DIR", args(0))
-    } catch {
-      case e: IOException =>
-        System.err.println(s"Write context config into temp work directory $workDir, error: ${e.getMessage}")
-        sys.exit(1)
+    if (!systemConfigFile.exists()) {
+      System.err.println(s"Could not find system configuration file $systemConfigFile")
+      sys.exit(1)
     }
 
-    val contextConfig = ConfigFactory.parseString(args(1))
-    val managerName = contextConfig.getString("context.actorname")
-
     val defaultConfig = ConfigFactory.load()
-    val config = if (args.length > 3) {
-      val configFile = new File(args(3))
-      if (!configFile.exists()) {
-        System.err.println("Could not find configuration file " + configFile)
-        sys.exit(1)
-      }
-      ConfigFactory.parseFile(configFile).withFallback(defaultConfig)
+    val systemConfig = ConfigFactory.parseFile(systemConfigFile).withFallback(defaultConfig)
+    val config = if (deployMode == "cluster") {
+      logger.info("Cluster mode: Removing akka.remote.netty.tcp.hostname from config!")
+      logger.info("Cluster mode: Replacing spark.jobserver.sqldao.rootdir with container tmp dir.")
+      val sqlDaoDir = Files.createTempDirectory("sqldao")
+      val sqlDaoDirConfig = ConfigValueFactory.fromAnyRef(sqlDaoDir.toAbsolutePath.toString)
+      systemConfig.withoutPath("akka.remote.netty.tcp.hostname")
+                  .withValue("spark.jobserver.sqldao.rootdir", sqlDaoDirConfig)
     } else {
-      defaultConfig
+      systemConfig
     }
 
     val system = makeSystem(config.resolve())
@@ -70,18 +55,23 @@ object JobManager {
 
     logger.info("Starting JobManager named " + managerName + " with config {}",
       config.getConfig("spark").root.render())
-    logger.info("..and context config:\n" + contextConfig.root.render)
 
-    val jobManager = system.actorOf(JobManagerActor.props(contextConfig, daoActor), managerName)
+    val jobManager = system.actorOf(JobManagerActor.props(daoActor), managerName)
 
     //Join akka cluster
     logger.info("Joining cluster at address {}", clusterAddress)
     Cluster(system).join(clusterAddress)
 
-    //Kill process on actor system shutdown
     val reaper = system.actorOf(Props[ProductionReaper])
-    system.registerOnTermination(System.exit(0))
     reaper ! WatchMe(jobManager)
+
+    if (deployMode == "cluster") {
+      // Wait for actor system shutdown
+      system.awaitTermination
+    } else {
+      // Kill process on actor system shutdown
+      system.registerOnTermination(System.exit(0))
+    }
   }
 
   def main(args: Array[String]) {
