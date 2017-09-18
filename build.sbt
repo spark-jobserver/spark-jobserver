@@ -3,6 +3,8 @@ import Dependencies._
 import JobServerRelease._
 import sbtassembly.AssemblyPlugin.autoImport.assemblyMergeStrategy
 import sbtassembly.MergeStrategy
+import scala.xml.{Node => XmlNode, NodeSeq => XmlNodeSeq, _}
+import scala.xml.transform.{RewriteRule, RuleTransformer}
 
 transitiveClassifiers in Global := Seq(Artifact.SourceClassifier)
 lazy val dirSettings = Seq()
@@ -11,7 +13,7 @@ lazy val akkaApp = Project(id = "akka-app", base = file("akka-app"))
   .settings(description := "Common Akka application stack: metrics, tracing, logging, and more.")
   .settings(commonSettings)
   .settings(libraryDependencies ++= coreTestDeps ++ akkaDeps)
-  .settings(publishSettings)
+  .settings(noPublishSettings)
   .disablePlugins(SbtScalariform)
 
 lazy val jobServer = Project(id = "job-server", base = file("job-server"))
@@ -36,7 +38,7 @@ lazy val jobServer = Project(id = "job-server", base = file("job-server"))
     test in assembly := {},
     fork in Test := true
   )
-  .settings(publishSettings)
+  .settings(noPublishSettings)
   .dependsOn(akkaApp, jobServerApi)
   .disablePlugins(SbtScalariform)
 
@@ -283,9 +285,36 @@ lazy val scoverageSettings = {
   coverageExcludedPackages := ".+Benchmark.*"
 }
 
+/** Used for publishing `extras`, `api` and `python` jars. Main Spark Job Server assembly is published
+  * as always. */
 lazy val publishSettings = Seq(
+  autoScalaLibrary := false,
+  credentials += Credentials(Path.userHome / ".sbt" / ".credentials"),
+  publishMavenStyle := true,
+  publishTo := Some(sys.env("MVN_PUBLISH_REPO") at sys.env("MVN_PUBLISH_URL")),
   licenses += ("Apache-2.0", url("http://choosealicense.com/licenses/apache/")),
-  bintrayOrganization := Some("spark-jobserver")
+  pomIncludeRepository := { _ => false },
+  /** Since users are encouraged to use dse-spark-dependencies, which provides most of the needed
+    * dependencies, we remove most of the Spark Job Server deps here. Provided, test and blacklisted
+    * deps are removed from resulting poms. */
+  pomPostProcess := { (node: XmlNode) =>
+    new RuleTransformer(new RewriteRule {
+      val pomDependencyBlacklist = Seq("job-server_", "joda-convert", "joda-time")
+      val emptyElement = Text("")
+
+      def hasTestOrProvidedScope(e: Elem): Boolean = e.child.exists(child =>
+        child.label == "scope" && (child.text == "provided" || child.text == "test"))
+
+      def isBlacklisted(e: Elem): Boolean = e.child.exists(child =>
+        child.label == "artifactId" && pomDependencyBlacklist.exists(child.text.startsWith))
+
+      override def transform(node: XmlNode): XmlNodeSeq = node match {
+        case e: Elem if e.label == "dependency" && (hasTestOrProvidedScope(e) || isBlacklisted(e)) =>
+          emptyElement
+        case _ => node
+      }
+    }).transform(node).head
+  }
 )
 
 // This is here so we can easily switch back to Logback when Spark fixes its log4j dependency.
