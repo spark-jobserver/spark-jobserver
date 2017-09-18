@@ -1,6 +1,7 @@
 package spark.jobserver
 
 import akka.actor._
+import akka.pattern._
 import akka.testkit._
 import com.typesafe.config.ConfigFactory
 import spark.jobserver.CommonMessages._
@@ -28,6 +29,10 @@ class JavaStreamingSpec extends ExtrasJobSpecBase(JavaStreamingSpec.getNewSystem
     daoActor = system.actorOf(JobDAOActor.props(dao))
     manager = system.actorOf(JobManagerActor.props(daoActor))
     supervisor = TestProbe().ref
+  }
+
+  after {
+    Await.result(gracefulStop(manager, 5 seconds), 5 seconds) // stop context
   }
 
   describe("Running Java based Streaming Jobs") {
