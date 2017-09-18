@@ -26,13 +26,13 @@ class JavaStreamingSpec extends ExtrasJobSpecBase(JavaStreamingSpec.getNewSystem
   before {
     dao = new InMemoryDAO
     daoActor = system.actorOf(JobDAOActor.props(dao))
-    manager = system.actorOf(JobManagerActor.props(cfg, daoActor))
+    manager = system.actorOf(JobManagerActor.props(daoActor))
     supervisor = TestProbe().ref
   }
 
   describe("Running Java based Streaming Jobs") {
     it("Should return Correct results") {
-      manager ! JobManagerActor.Initialize(None, emptyActor)
+      manager ! JobManagerActor.Initialize(cfg, None, emptyActor)
       expectMsgClass(10 seconds, classOf[JobManagerActor.Initialized])
 
       uploadTestJar()

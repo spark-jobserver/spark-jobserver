@@ -42,18 +42,17 @@ class SessionJobSpec extends ExtrasJobSpecBase(SessionJobSpec.getNewSystem) {
   val queryConfig = ConfigFactory.parseString(
     """sql = "SELECT firstName, lastName FROM `default`.`test_addresses` WHERE city = 'San Jose'" """
   )
+  lazy val contextConfig = SessionJobSpec.getContextConfig(false, SessionJobSpec.contextConfig)
 
   before {
     dao = new InMemoryDAO
     daoActor = system.actorOf(JobDAOActor.props(dao))
-    manager = system.actorOf(JobManagerActor.props(
-      SessionJobSpec.getContextConfig(false, SessionJobSpec.contextConfig),
-      daoActor))
+    manager = system.actorOf(JobManagerActor.props(daoActor))
   }
 
   describe("Spark Session Jobs") {
     it("should be able to create a Hive table, then query it using separate Spark-SQL jobs") {
-      manager ! JobManagerActor.Initialize(None, emptyActor)
+      manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(30 seconds, classOf[JobManagerActor.Initialized])
 
       uploadTestJar()

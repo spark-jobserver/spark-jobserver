@@ -8,15 +8,15 @@ import spark.jobserver.io.JobDAOActor
 class NamedObjectsJobSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
   import scala.concurrent.duration._
 
+  lazy val cfg = JobManagerSpec.getContextConfig(adhoc = false)
+
   override def beforeAll() {
     dao = new InMemoryDAO
     daoActor = system.actorOf(JobDAOActor.props(dao))
-    manager = system.actorOf(JobManagerActor.props(
-      JobManagerSpec.getContextConfig(adhoc = false),
-      daoActor))
+    manager = system.actorOf(JobManagerActor.props(daoActor))
     supervisor = TestProbe().ref
 
-    manager ! JobManagerActor.Initialize(None, emptyActor)
+    manager ! JobManagerActor.Initialize(cfg, None, emptyActor)
 
     expectMsgClass(10.seconds, classOf[JobManagerActor.Initialized])
 

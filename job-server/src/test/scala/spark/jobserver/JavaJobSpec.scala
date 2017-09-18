@@ -29,7 +29,6 @@ class JavaJobSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
       "context-factory" -> contextFactory,
       "spark.context-settings.test" -> "",
       "context.name" -> "ctx",
-      "context.actorname" -> "ctx",
       "is-adhoc" -> "false"
     )
     ConfigFactory.parseMap(ConfigMap.asJava).withFallback(ConfigFactory.defaultOverrides())
@@ -38,7 +37,7 @@ class JavaJobSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
   before {
     dao = new InMemoryDAO
     daoActor = system.actorOf(JobDAOActor.props(dao))
-    manager = system.actorOf(JobManagerActor.props(config, daoActor))
+    manager = system.actorOf(JobManagerActor.props(daoActor))
     supervisor = TestProbe().ref
   }
 
@@ -56,7 +55,7 @@ class JavaJobSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
 
   describe("Running Java Jobs") {
     it("Should run a java job") {
-      manager ! JobManagerActor.Initialize(None, emptyActor)
+      manager ! JobManagerActor.Initialize(config, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
       uploadTestJar()
       manager ! JobManagerActor.StartJob("demo", javaJob, config, syncEvents ++ errorEvents)
@@ -65,7 +64,7 @@ class JavaJobSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
       }
     }
     it("Should fail running this java job"){
-      manager ! JobManagerActor.Initialize(None, emptyActor)
+      manager ! JobManagerActor.Initialize(config, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
       uploadTestJar()
       manager ! JobManagerActor.StartJob("demo", failedJob, config, errorEvents)

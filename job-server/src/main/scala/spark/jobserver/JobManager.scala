@@ -77,6 +77,7 @@ object JobManager {
 
   def main(args: Array[String]) {
     import scala.collection.JavaConverters._
+
     def makeManagerSystem(name: String)(config: Config): ActorSystem = {
       val configWithRole = config.withValue("akka.cluster.roles",
         ConfigValueFactory.fromIterable(List("manager").asJava))
