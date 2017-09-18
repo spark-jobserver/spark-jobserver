@@ -6,7 +6,7 @@ spark-jobserver provides a RESTful interface for submitting and managing [Apache
 This repo contains the complete Spark job server project, including unit tests and deploy scripts.
 It was originally started at [Ooyala](http://www.ooyala.com), but this is now the main development repo.
 
-Other useful links: [Troubleshooting Tips](doc/troubleshooting.md), [Yarn tips](doc/yarn.md), [Mesos tips](doc/mesos.md), [JMX tips](doc/jmx.md).
+Other useful links: [Troubleshooting](doc/troubleshooting.md), [cluster](doc/cluster.md), [YARN client](doc/yarn.md), [YARN on EMR](doc/EMR.md), [Mesos](doc/mesos.md), [JMX tips](doc/jmx.md).
 
 Also see [Chinese docs / 中文](doc/chinese/job-server.md).
 
@@ -100,7 +100,7 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 - Kill running jobs via stop context and delete job
 - Separate jar uploading step for faster job startup
 - Asynchronous and synchronous job API.  Synchronous API is great for low latency jobs!
-- Works with Standalone Spark as well as Mesos and yarn-client
+- Works with Standalone Spark as well on [cluster](doc/cluster.md), [Mesos](doc/mesos.md), YARN [client](doc/yarn.md) and [on EMR](doc/EMR.md))
 - Job and jar info is persisted via a pluggable DAO interface
 - Named Objects (such as RDDs or DataFrames) to cache and retrieve RDDs or DataFrames by name, improving object sharing and reuse among jobs.
 - Supports Scala 2.10 and 2.11
@@ -554,6 +554,8 @@ curl -k --basic --user 'user:pw' https://localhost:8090/contexts
 
 ## Deployment
 
+See also running on [cluster](doc/cluster.md), [YARN client](doc/yarn.md), on [EMR](doc/EMR.md) and running on [Mesos](doc/mesos.md).
+
 ### Manual steps
 
 1. Copy `config/local.sh.template` to `<environment>.sh` and edit as appropriate.  NOTE: be sure to set SPARK_VERSION if you need to compile against a different version.
@@ -891,8 +893,6 @@ To add to the underlying Hadoop configuration in a Spark context, add the hadoop
     }
 
 For the exact context configuration parameters, see JobManagerActor docs as well as application.conf.
-
-Also see the [yarn doc](doc/yarn.md) for more tips.
 
 ### Other configuration settings
 
