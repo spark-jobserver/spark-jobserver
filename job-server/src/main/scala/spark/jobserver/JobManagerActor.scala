@@ -24,7 +24,8 @@ import spark.jobserver.common.akka.InstrumentedActor
 
 object JobManagerActor {
   // Messages
-  case class Initialize(resultActorOpt: Option[ActorRef], dataFileActor: ActorRef)
+  case class Initialize(contextConfig: Config, resultActorOpt: Option[ActorRef],
+                        dataFileActor: ActorRef)
   case class StartJob(appName: String, classPath: String, config: Config,
                       subscribedEvents: Set[Class[_]])
   case class KillJob(jobId: String)
@@ -51,8 +52,7 @@ object JobManagerActor {
 
 
   // Akka 2.2.x style actor props for actor creation
-  def props(contextConfig: Config, daoActor: ActorRef): Props = Props(classOf[JobManagerActor],
-    contextConfig, daoActor)
+  def props(daoActor: ActorRef): Props = Props(classOf[JobManagerActor], daoActor)
 }
 
 /**
@@ -83,7 +83,7 @@ object JobManagerActor {
  *   }
  * }}}
  */
-class JobManagerActor(contextConfig: Config, daoActor: ActorRef)
+class JobManagerActor(daoActor: ActorRef)
   extends InstrumentedActor {
 
   import CommonMessages._
@@ -108,16 +108,18 @@ class JobManagerActor(contextConfig: Config, daoActor: ActorRef)
   private val jobCacheEnabled = Try(config.getBoolean("spark.job-cache.enabled")).getOrElse(false)
   // Use Spark Context's built in classloader when SPARK-1230 is merged.
   private val jarLoader = new ContextURLClassLoader(Array[URL](), getClass.getClassLoader)
-  private val contextName = contextConfig.getString("context.name")
-  private val isAdHoc = Try(contextConfig.getBoolean("is-adhoc")).getOrElse(false)
 
-  //NOTE: Must be initialized after sparkContext is created
-  private var jobCache: JobCache = _
-
+  // NOTE: Must be initialized after cluster joined
+  private var contextConfig: Config = _
+  private var contextName: String = _
+  private var isAdHoc: Boolean = _
   private var statusActor: ActorRef = _
   protected var resultActor: ActorRef = _
   private var factory: SparkContextFactory = _
   private var remoteFileCache: RemoteFileCache = _
+
+  // NOTE: Must be initialized after sparkContext is created
+  private var jobCache: JobCache = _
 
   private val jobServerNamedObjects = new JobServerNamedObjects(context.system)
 
@@ -149,7 +151,11 @@ class JobManagerActor(contextConfig: Config, daoActor: ActorRef)
   }
 
   def wrappedReceive: Receive = {
-    case Initialize(resOpt, dataManagerActor) =>
+    case Initialize(ctxConfig, resOpt, dataManagerActor) =>
+      contextConfig = ctxConfig
+      logger.info("Starting context with config:\n" + contextConfig.root.render)
+      contextName = contextConfig.getString("context.name")
+      isAdHoc = Try(contextConfig.getBoolean("is-adhoc")).getOrElse(false)
       statusActor = context.actorOf(JobStatusActor.props(daoActor))
       resultActor = resOpt.getOrElse(context.actorOf(Props[JobResultActor]))
       remoteFileCache = new RemoteFileCache(self, dataManagerActor)
