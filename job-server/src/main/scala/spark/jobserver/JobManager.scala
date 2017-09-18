@@ -23,7 +23,10 @@ object JobManager {
   // Allow custom function to create ActorSystem.  An example of why this is useful:
   // we can have something that stores the ActorSystem so it could be shut down easily later.
   // Args: deployMode workDir clusterAddress systemConfig
-  def start(args: Array[String], makeSystem: Config => ActorSystem) {
+  // Allow custom function to wait for termination. Useful in tests.
+  def start(args: Array[String], makeSystem: Config => ActorSystem,
+            waitForTermination: (ActorSystem, String) => Unit) {
+
     val deployMode = args(0)
     val clusterAddress = AddressFromURIString.parse(args(1))
     val managerName = args(2)
@@ -65,23 +68,27 @@ object JobManager {
     val reaper = system.actorOf(Props[ProductionReaper])
     reaper ! WatchMe(jobManager)
 
-    if (deployMode == "cluster") {
-      // Wait for actor system shutdown
-      system.awaitTermination
-    } else {
-      // Kill process on actor system shutdown
-      system.registerOnTermination(System.exit(0))
-    }
+    waitForTermination(system, deployMode)
   }
 
   def main(args: Array[String]) {
     import scala.collection.JavaConverters._
+
     def makeManagerSystem(name: String)(config: Config): ActorSystem = {
       val configWithRole = config.withValue("akka.cluster.roles",
         ConfigValueFactory.fromIterable(List("manager").asJava))
       ActorSystem(name, configWithRole)
     }
-    start(args, makeManagerSystem("JobServer")(_))
+
+    def waitForTermination(system: ActorSystem, deployMode: String) {
+      if (deployMode == "cluster") {
+        system.awaitTermination // Wait for actor system shutdown
+      } else {
+        system.registerOnTermination(System.exit(0)) // Kill process on actor system shutdown
+      }
+    }
+
+    start(args, makeManagerSystem("JobServer"), waitForTermination)
   }
 }
 
