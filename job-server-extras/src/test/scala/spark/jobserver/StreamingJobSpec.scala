@@ -1,7 +1,8 @@
 package spark.jobserver
 
-import scala.concurrent.Await
+import akka.pattern._
 
+import scala.concurrent.Await
 import com.typesafe.config.ConfigFactory
 import spark.jobserver.context.StreamingContextFactory
 import spark.jobserver.io.{JobDAOActor, JobInfo}
@@ -33,6 +34,10 @@ class StreamingJobSpec extends JobSpecBase(StreamingJobSpec.getNewSystem) {
     dao = new InMemoryDAO
     daoActor = system.actorOf(JobDAOActor.props(dao))
     manager = system.actorOf(JobManagerActor.props(daoActor))
+  }
+
+  after {
+    Await.result(gracefulStop(manager, 5 seconds), 5 seconds) // stop context
   }
 
   describe("Spark Streaming Jobs") {
