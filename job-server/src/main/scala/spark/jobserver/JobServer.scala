@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory
 import scala.collection.JavaConverters._
 import scala.concurrent.{Await, ExecutionContext}
 import scala.concurrent.duration._
+import scala.util.Try
 
 /**
  * The Spark Job Server is a web service that allows users to submit and run Spark jobs, check status,
@@ -32,6 +33,8 @@ import scala.concurrent.duration._
 object JobServer {
   val logger = LoggerFactory.getLogger(getClass)
 
+  class InvalidConfiguration(error: String) extends RuntimeException(error)
+
   // Allow custom function to create ActorSystem.  An example of why this is useful:
   // we can have something that stores the ActorSystem so it could be shut down easily later.
   def start(args: Array[String], makeSystem: Config => ActorSystem) {
@@ -48,57 +51,75 @@ object JobServer {
     }
     logger.info("Starting JobServer with config {}", config.getConfig("spark").root.render())
     logger.info("Spray config: {}", config.getConfig("spray.can.server").root.render())
-    val port = config.getInt("spark.jobserver.port")
 
     // TODO: Hardcode for now to get going. Make it configurable later.
     val system = makeSystem(config)
-    val clazz = Class.forName(config.getString("spark.jobserver.jobdao"))
-    val ctor = clazz.getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
-    try {
-      val contextPerJvm = config.getBoolean("spark.jobserver.context-per-jvm")
-      // Check if we are using correct DB backend when context-per-jvm is enabled.
-      // JobFileDAO and H2 mem is not supported.
-      if (contextPerJvm) {
-        if (clazz.getName == "spark.jobserver.io.JobFileDAO") {
-          throw new RuntimeException("JobFileDAO is not supported with context-per-jvm, use JobSqlDAO.")
-        } else if (clazz.getName == "spark.jobserver.io.JobSqlDAO" &&
-          config.getString("spark.jobserver.sqldao.jdbc.url").startsWith("jdbc:h2:mem")) {
-            throw new RuntimeException("H2 mem backend is not support with context-per-jvm.")
-        }
-      }
+    val port = config.getInt("spark.jobserver.port")
+    val sparkMaster = config.getString("spark.master")
+    val driverMode = config.getString("spark.submit.deployMode")
+    val contextPerJvm = config.getBoolean("spark.jobserver.context-per-jvm")
+    val jobDaoClass = Class.forName(config.getString("spark.jobserver.jobdao"))
 
-      // start embedded H2 server
-      if (config.getBoolean("spark.jobserver.startH2Server")) {
-        val rootDir = config.getString("spark.jobserver.sqldao.rootdir")
-        val h2 = org.h2.tools.Server.createTcpServer("-tcpAllowOthers", "-baseDir", rootDir).start();
-        logger.info("Embeded H2 server started with base dir {} and URL {}", rootDir, h2.getURL: Any)
-      }
-
-      val jobDAO = ctor.newInstance(config).asInstanceOf[JobDAO]
-      val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO), "dao-manager")
-      val dataManager = system.actorOf(DataManagerActor.props(new DataFileDAO(config)), "data-manager")
-      val binManager = system.actorOf(Props(classOf[BinaryManager], daoActor), "binary-manager")
-      val supervisor =
-        system.actorOf(Props(
-          if (contextPerJvm) {
-            classOf[AkkaClusterSupervisorActor]
-          } else {
-            classOf[LocalContextSupervisorActor]
-          },
-          daoActor, dataManager), "context-supervisor")
-      val jobInfo = system.actorOf(Props(classOf[JobInfoActor], jobDAO, supervisor), "job-info")
-
-      // Add initial job JARs, if specified in configuration.
-      storeInitialBinaries(config, binManager)
-
-      // Create initial contexts
-      supervisor ! ContextSupervisor.AddContextsFromConfig
-      new WebApi(system, config, port, binManager, dataManager, supervisor, jobInfo).start()
-    } catch {
-      case e: Exception =>
-        logger.error("Unable to start Spark JobServer: ", e)
-        sys.exit(1)
+    // ensure context-per-jvm is enabled
+    if (sparkMaster.startsWith("yarn") && !contextPerJvm) {
+      throw new InvalidConfiguration("YARN mode requires context-per-jvm")
+    } else if (sparkMaster.startsWith("mesos") && !contextPerJvm) {
+      throw new InvalidConfiguration("Mesos mode requires context-per-jvm")
+    } else if (driverMode == "cluster" && !contextPerJvm) {
+      throw new InvalidConfiguration("Cluster mode requires context-per-jvm")
     }
+
+    // Check if we are using correct DB backend when context-per-jvm is enabled.
+    // JobFileDAO and H2 mem is not supported.
+    if (contextPerJvm) {
+      if (jobDaoClass.getName == "spark.jobserver.io.JobFileDAO") {
+        throw new InvalidConfiguration("JobFileDAO is not supported with context-per-jvm, use JobSqlDAO.")
+      } else if (jobDaoClass.getName == "spark.jobserver.io.JobSqlDAO" &&
+        config.getString("spark.jobserver.sqldao.jdbc.url").startsWith("jdbc:h2:mem")) {
+        throw new InvalidConfiguration("H2 mem backend is not support with context-per-jvm.")
+      }
+    }
+
+    // cluster mode requires network base H2 server
+    if (driverMode == "cluster" && jobDaoClass.getName == "spark.jobserver.io.JobSqlDAO") {
+      val jdbcUrl = config.getString("spark.jobserver.sqldao.jdbc.url")
+        if (jdbcUrl.startsWith("jdbc:h2") && !jdbcUrl.startsWith("jdbc:h2:tcp")
+            && !jdbcUrl.startsWith("jdbc:h2:ssl")) {
+          throw new InvalidConfiguration(
+            """H2 backend and cluster mode is not supported with file or in-memory storage,
+               use tcp or ssl server.""")
+        }
+    }
+
+    // start embedded H2 server
+    if (config.getBoolean("spark.jobserver.startH2Server")) {
+      val rootDir = config.getString("spark.jobserver.sqldao.rootdir")
+      val h2 = org.h2.tools.Server.createTcpServer("-tcpAllowOthers", "-baseDir", rootDir).start();
+      logger.info("Embeded H2 server started with base dir {} and URL {}", rootDir, h2.getURL: Any)
+    }
+
+    val ctor = jobDaoClass.getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
+    val jobDAO = ctor.newInstance(config).asInstanceOf[JobDAO]
+    val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO), "dao-manager")
+    val dataFileDAO = new DataFileDAO(config)
+    val dataManager = system.actorOf(Props(classOf[DataManagerActor], dataFileDAO), "data-manager")
+    val binManager = system.actorOf(Props(classOf[BinaryManager], daoActor), "binary-manager")
+    val supervisor =
+      system.actorOf(Props(
+        if (contextPerJvm) {
+          classOf[AkkaClusterSupervisorActor]
+        } else {
+          classOf[LocalContextSupervisorActor]
+        },
+        daoActor, dataManager), "context-supervisor")
+    val jobInfo = system.actorOf(Props(classOf[JobInfoActor], jobDAO, supervisor), "job-info")
+
+    // Add initial job JARs, if specified in configuration.
+    storeInitialBinaries(config, binManager)
+
+    // Create initial contexts
+    supervisor ! ContextSupervisor.AddContextsFromConfig
+    new WebApi(system, config, port, binManager, dataManager, supervisor, jobInfo).start()
   }
 
   private def parseInitialBinaryConfig(key: String, config: Config): Map[String, String] = {
@@ -164,8 +185,13 @@ object JobServer {
         ConfigValueFactory.fromIterable(List("supervisor").asJava))
       ActorSystem(name, configWithRole)
     }
-    start(args, makeSupervisorSystem("JobServer")(_))
+
+    try {
+      start(args, makeSupervisorSystem("JobServer")(_))
+    } catch {
+      case e: Exception =>
+        logger.error("Unable to start Spark JobServer: ", e)
+        sys.exit(1)
+    }
   }
-
-
 }
