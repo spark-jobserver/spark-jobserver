@@ -19,7 +19,12 @@ object StreamingTestJob extends SparkStreamingJob {
     val words = lines.flatMap(_.split(" "))
     val wordCounts = words.countByValue()
     //do something
-    wordCounts.foreachRDD(rdd => println(rdd.count()))
+    wordCounts.foreachRDD(rdd =>
+      try {
+        println(rdd.count())
+      } catch {
+        case _: InterruptedException => {}
+      })
     ssc.start()
     ssc.awaitTermination()
   }
