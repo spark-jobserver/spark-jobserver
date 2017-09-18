@@ -18,7 +18,8 @@ class JobManagerActorSpec extends JobManagerSpec {
   before {
     dao = new InMemoryDAO
     daoActor = system.actorOf(JobDAOActor.props(dao))
-    manager = system.actorOf(JobManagerActor.props(JobManagerSpec.getContextConfig(adhoc = false), daoActor))
+    contextConfig = JobManagerSpec.getContextConfig(adhoc = false)
+    manager = system.actorOf(JobManagerActor.props(daoActor))
     supervisor = TestProbe().ref
   }
 
@@ -28,7 +29,7 @@ class JobManagerActorSpec extends JobManagerSpec {
 
   describe("starting jobs") {
     it("jobs should be able to cache RDDs and retrieve them through getPersistentRDDs") {
-      manager ! JobManagerActor.Initialize(None, emptyActor)
+      manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
@@ -43,14 +44,14 @@ class JobManagerActorSpec extends JobManagerSpec {
       sum2 should equal (sum)
     }
 
-    it("jobs should be able to cache and retrieve RDDs by name") {
-      manager ! JobManagerActor.Initialize(None, emptyActor)
+    it ("jobs should be able to cache and retrieve RDDs by name") {
+      manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(classOf[JobManagerActor.Initialized])
 
       uploadTestJar()
       manager ! JobManagerActor.StartJob("demo", classPrefix + "CacheRddByNameJob", emptyConfig,
         errorEvents ++ syncEvents)
-      expectMsgPF(1.second.dilated, "Expected a JobResult or JobErroredOut message!") {
+      expectMsgPF(2 seconds, "Expected a JobResult or JobErroredOut message!") {
         case JobResult(_, sum: Int) => sum should equal (1 + 4 + 9 + 16 + 25)
         case JobErroredOut(_, _, error: Throwable) => throw error
       }
@@ -62,7 +63,7 @@ class JobManagerActorSpec extends JobManagerSpec {
       val testData = "test-data".getBytes
       val dataFileActor = TestProbe()
 
-      manager ! JobManagerActor.Initialize(None, dataFileActor.ref)
+      manager ! JobManagerActor.Initialize(contextConfig, None, dataFileActor.ref)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
       uploadTestJar()
 
@@ -115,7 +116,7 @@ class JobManagerActorSpec extends JobManagerSpec {
       val testData = "test-data".getBytes
       val dataFileActor = TestProbe()
 
-      manager ! JobManagerActor.Initialize(None, dataFileActor.ref)
+      manager ! JobManagerActor.Initialize(contextConfig, None, dataFileActor.ref)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
       uploadTestJar()
 
