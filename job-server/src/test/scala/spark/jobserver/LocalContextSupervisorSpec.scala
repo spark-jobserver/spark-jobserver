@@ -60,6 +60,7 @@ class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.syst
 
   var supervisor: ActorRef = _
   var daoProbe: TestProbe = _
+  var dataManager: ActorRef = _
 
   val contextConfig = LocalContextSupervisorSpec.config.getConfig("spark.context-settings")
 
@@ -68,7 +69,8 @@ class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.syst
 
   before {
     daoProbe = TestProbe()
-    supervisor = system.actorOf(Props(classOf[LocalContextSupervisorActor], daoProbe.ref))
+    dataManager = system.actorOf(Props.empty)
+    supervisor = system.actorOf(Props(classOf[LocalContextSupervisorActor], daoProbe.ref, dataManager))
   }
 
   after {

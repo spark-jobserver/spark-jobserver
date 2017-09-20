@@ -53,7 +53,7 @@ class SessionJobSpec extends ExtrasJobSpecBase(SessionJobSpec.getNewSystem) {
 
   describe("Spark Session Jobs") {
     it("should be able to create a Hive table, then query it using separate Spark-SQL jobs") {
-      manager ! JobManagerActor.Initialize(None)
+      manager ! JobManagerActor.Initialize(None, emptyActor)
       expectMsgClass(30 seconds, classOf[JobManagerActor.Initialized])
 
       uploadTestJar()

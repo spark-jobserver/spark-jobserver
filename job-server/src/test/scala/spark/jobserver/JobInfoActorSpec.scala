@@ -33,11 +33,13 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
   var actor: ActorRef = _
   var dao: JobDAO = _
   var daoActor: ActorRef = _
+  var dataManager: ActorRef = _
 
   before {
     dao = new InMemoryDAO
     daoActor = system.actorOf(JobDAOActor.props(dao))
-    val supervisor = system.actorOf(Props(classOf[LocalContextSupervisorActor], daoActor))
+    dataManager = system.actorOf(Props.empty)
+    val supervisor = system.actorOf(Props(classOf[LocalContextSupervisorActor], daoActor, dataManager))
     actor = system.actorOf(Props(classOf[JobInfoActor], dao, supervisor))
   }
 
