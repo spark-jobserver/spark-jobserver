@@ -10,7 +10,7 @@ import spark.jobserver.io.JobDAOActor
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 
-class JavaJobSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
+class JavaJobSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) {
 
   val JobResultCacheSize = Integer.valueOf(30)
   val NumCpuCores = Integer.valueOf(Runtime.getRuntime.availableProcessors())
