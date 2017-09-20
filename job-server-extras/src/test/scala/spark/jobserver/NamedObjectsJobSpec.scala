@@ -5,10 +5,10 @@ import akka.testkit.TestProbe
 import spark.jobserver.CommonMessages.JobResult
 import spark.jobserver.io.JobDAOActor
 
-class NamedObjectsJobSpec extends JobSpecBase(JobManagerSpec.getNewSystem) {
+class NamedObjectsJobSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) {
   import scala.concurrent.duration._
 
-  lazy val cfg = JobManagerSpec.getContextConfig(adhoc = false)
+  lazy val cfg = JobManagerActorSpec.getContextConfig(adhoc = false)
 
   override def beforeAll() {
     dao = new InMemoryDAO
