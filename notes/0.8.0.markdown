@@ -12,3 +12,4 @@
 * asynchronous context reset (@marcoboi)
 * route for getting context info (@addisonj)
 * delete all data endpoint (@marcoboi)
+* clean running jobs after context JobManager dies (@krcz)
