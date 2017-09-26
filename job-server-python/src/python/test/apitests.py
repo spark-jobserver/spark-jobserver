@@ -98,20 +98,20 @@ class TestSJSApi(unittest.TestCase):
         self.assertEqual('Expected a SQL context', result[0].problem)
         self.assertEqual('config input.data not found', result[1].problem)
 
-    # def test_run_sql_job(self):
-    #     job = SQLJob()
-    #     sqlContext = SQLContext(self.sc)
-    #     config = ConfigFactory.parse_string("""
-    #       input.data = [
-    #         ['bob', 20, 1200],
-    #         ['jon', 21, 1400],
-    #         ['mary', 20, 1300],
-    #         ['sue, 21, 1600]
-    #       ]
-    #     """)
-    #     jobData = job.validate(sqlContext, None, config)
-    #     result = job.run_job(sqlContext, None, jobData)
-    #     self.assertEqual([(20, 1250), (21, 1500)], result)
+    def test_run_sql_job(self):
+        job = SQLJob()
+        sqlContext = SQLContext(self.sc)
+        config = ConfigFactory.parse_string("""
+          input.data = [
+            ['bob', 20, 1200],
+            ['jon', 21, 1400],
+            ['mary', 20, 1300],
+            ['sue, 21, 1600]
+          ]
+        """)
+        jobData = job.validate(sqlContext, None, config)
+        result = job.run_job(sqlContext, None, jobData)
+        self.assertEqual([(20, 1250), (21, 1500)], result)
 
     def test_run_hive_job(self):
         job = SQLJob()
