@@ -4,7 +4,7 @@ object Versions {
   lazy val spark = sys.env.getOrElse("SPARK_VERSION", "2.2.0")
 
   lazy val akka = "2.4.9"
-  lazy val cassandra = "3.0.3"
+  lazy val cassandra = "3.3.0"
   lazy val cassandraUnit = "2.2.2.1"
   lazy val commons = "1.4"
   lazy val flyway = "3.2.1"
