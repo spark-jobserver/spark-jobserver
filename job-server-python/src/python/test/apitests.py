@@ -64,7 +64,7 @@ class TestSJSApi(unittest.TestCase):
     def tearDown(self):
         self.sc.stop()
         pwd = os.path.dirname(os.path.realpath(__file__))
-        metastore_dir = os.path.abspath(os.path.join(pwd, '..', '..',
+        metastore_dir = os.path.abspath(os.path.join(pwd, '..',
                                                      'metastore_db'))
         os.remove(os.path.join(metastore_dir, "dbex.lck"))
         os.remove(os.path.join(metastore_dir, "db.lck"))
