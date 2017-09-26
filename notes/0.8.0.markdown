@@ -10,3 +10,4 @@
 * Fix #857 - SJS is not properly storing/using timestamp milliseconds in the binaries (JARs) storage system (@Meehau)
 * Blob storage fixes (@msohn)
 * asynchronous context reset (@marcoboi)
+* route for getting context info (@addisonj)
