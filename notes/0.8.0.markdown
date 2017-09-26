@@ -11,3 +11,4 @@
 * Blob storage fixes (@msohn)
 * asynchronous context reset (@marcoboi)
 * route for getting context info (@addisonj)
+* delete all data endpoint (@marcoboi)
