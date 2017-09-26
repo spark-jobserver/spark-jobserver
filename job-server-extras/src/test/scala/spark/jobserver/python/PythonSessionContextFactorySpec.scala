@@ -27,8 +27,8 @@ object PythonSessionContextFactorySpec {
     */
   // Note: Issue SPARK-10872 is RESOLVED by now with "Not A Problem"
   private def resetDerby(): Unit = {
-    Files.deleteIfExists(Paths.get("/tmp/metastore_db/dbex.lck"))
-    Files.deleteIfExists(Paths.get("/tmp/metastore_db/db.lck"))
+    Files.deleteIfExists(Paths.get("metastore_db/dbex.lck"))
+    Files.deleteIfExists(Paths.get("metastore_db/db.lck"))
   }
 }
 
