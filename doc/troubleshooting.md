@@ -37,10 +37,10 @@ If your job returns a large job result, it may exceed Akka's maximum network mes
 
 ## Job with status finished has no result
 
-On jobs with large results or many concurrent jobs, the REST API at `/job/abc..` might return status `FINISHED` but does not contains any result. This might happen in two cases:
+On jobs with large results or many concurrent jobs, the REST API at `/job/abc..` might return status `FINISHED` but does not contain any result. This might happen in three cases:
 
-1. The job finished right now and results are in transfer.
-2. The job finished some time ago and results are remove from results cache already. See `spark.jobserver.job-result-cache-size` to increase the cache.
+1. The job finished right now and results are in transfer between the akka actors. Try it again some milliseconds later.
+2. The job finished some time ago and results are removed from results cache already. See `spark.jobserver.job-result-cache-size` to increase the cache size.
 3. The spark jobserver instance restarted which clears the results cache.
 
 
