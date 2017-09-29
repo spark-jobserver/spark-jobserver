@@ -5,10 +5,6 @@ import sbtassembly.AssemblyPlugin.autoImport._
 object Assembly {
   lazy val settings = Seq(
     assemblyJarName in assembly := "spark-job-server.jar",
-/*
-    assemblyShadeRules in assembly := Seq(ShadeRule.rename("com.google.**" -> "sjs.com.google.@1").inAll),
-*/
-
       // uncomment below to exclude tests
     // test in assembly := {},
     assemblyExcludedJars in assembly <<= (fullClasspath in assembly) map { _ filter { cp =>
