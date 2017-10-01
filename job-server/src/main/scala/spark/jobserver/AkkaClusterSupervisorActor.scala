@@ -1,6 +1,5 @@
 package spark.jobserver
 
-import java.io.IOException
 import java.nio.file.{Files, Paths}
 import java.nio.charset.Charset
 import java.util.concurrent.TimeUnit
@@ -38,7 +37,6 @@ import spark.jobserver.io.JobDAOActor.CleanContextJobInfos
  * {{{
  *   deploy {
  *     manager-start-cmd = "./manager_start.sh"
- *     wait-for-manager-start = true
  *   }
  * }}}
  */
@@ -53,7 +51,6 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
                                                 TimeUnit.SECONDS)
   val contextDeletionTimeout = SparkJobUtils.getContextDeletionTimeout(config)
   val managerStartCommand = config.getString("deploy.manager-start-cmd")
-  val waitForManagerStart = config.getBoolean("deploy.wait-for-manager-start")
   import context.dispatcher
 
   //actor name -> (context isadhoc, success callback, failure callback)
