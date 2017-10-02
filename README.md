@@ -353,27 +353,19 @@ It is much more type safe, separates context configuration, job ID, named object
 Let's try running our sample job with an invalid configuration:
 
     curl -i -d "bad.input=abc" "localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample"
-
     HTTP/1.1 400 Bad Request
-    Server: spray-can/1.2.0
-    Date: Tue, 10 Jun 2014 22:07:18 GMT
+    Server: spray-can/1.3.4
+    Date: Thu, 14 Sep 2017 12:01:37 GMT
+    Access-Control-Allow-Origin: *
     Content-Type: application/json; charset=UTF-8
-    Content-Length: 929
+    Content-Length: 738
 
     {
       "status": "VALIDATION FAILED",
       "result": {
-        "message": "No input.string config param",
+        "message": "One(SparkJobInvalid(No input.string config param))",
         "errorClass": "java.lang.Throwable",
-        "stack": ["spark.jobserver.JobManagerActor$$anonfun$spark$jobserver$JobManagerActor$$getJobFuture$4.apply(JobManagerActor.scala:212)",
-        "scala.concurrent.impl.Future$PromiseCompletingRunnable.liftedTree1$1(Future.scala:24)",
-        "scala.concurrent.impl.Future$PromiseCompletingRunnable.run(Future.scala:24)",
-        "akka.dispatch.TaskInvocation.run(AbstractDispatcher.scala:42)",
-        "akka.dispatch.ForkJoinExecutorConfigurator$AkkaForkJoinTask.exec(AbstractDispatcher.scala:386)",
-        "scala.concurrent.forkjoin.ForkJoinTask.doExec(ForkJoinTask.java:260)",
-        "scala.concurrent.forkjoin.ForkJoinPool$WorkQueue.runTask(ForkJoinPool.java:1339)",
-        "scala.concurrent.forkjoin.ForkJoinPool.runWorker(ForkJoinPool.java:1979)",
-        "scala.concurrent.forkjoin.ForkJoinWorkerThread.run(ForkJoinWorkerThread.java:107)"]
+        "stack": "java.lang.Throwable: One(SparkJobInvalid(No input.string config param))\n\tat spark.jobserver.JobManagerActor$$anonfun$getJobFuture$4.apply(JobManagerActor.scala:327)\n\tat scala.concurrent.impl.Future$PromiseCompletingRunnable.liftedTree1$1(Future.scala:24)\n\tat scala.concurrent.impl.Future$PromiseCompletingRunnable.run(Future.scala:24)\n\tat java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1142)\n\tat java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:617)\n\tat java.lang.Thread.run(Thread.java:748)\n"
       }
     }
 

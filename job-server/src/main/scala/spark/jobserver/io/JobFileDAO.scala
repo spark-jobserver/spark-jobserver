@@ -171,13 +171,16 @@ class JobFileDAO(config: Config) extends JobDAO {
     out.writeLong(jobInfo.startTime.getMillis)
     val time = if (jobInfo.endTime.isEmpty) jobInfo.startTime.getMillis else jobInfo.endTime.get.getMillis
     out.writeLong(time)
-    val errorStr = if (jobInfo.error.isEmpty) "" else jobInfo.error.get.toString
-    out.writeUTF(errorStr)
+    out.writeUTF(jobInfo.error.map(_.message).getOrElse(""))
+    out.writeUTF(jobInfo.error.map(_.errorClass).getOrElse(""))
+    out.writeUTF(jobInfo.error.map(_.stackTrace).getOrElse(""))
   }
 
   private def readError(in: DataInputStream) = {
-    val error = in.readUTF()
-    if (error == "") None else Some(new Throwable(error))
+    val error = Some(in.readUTF()).filter(_.isEmpty)
+    val errorClass = in.readUTF()
+    val errorStackTrace = in.readUTF()
+    error.map(ErrorData(_, errorClass, errorStackTrace))
   }
 
   private def readJobInfo(in: DataInputStream) = JobInfo(

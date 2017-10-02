@@ -44,6 +44,8 @@ object Metadata {
   val StartDate = "start_date"
   val EndTime = "end_time"
   val Error = "error"
+  val ErrorClass = "error_class"
+  val ErrorStackTrace = "error_stack_trace"
 
 }
 
@@ -160,7 +162,8 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
   override def getJobInfos(limit: Int, status: Option[String] = None): Future[Seq[JobInfo]] = {
     import Metadata._
     val query = QB.select(
-      JobId, ContextName, AppName, BType, UploadTime, Classpath, StartTime, EndTime, Error
+      JobId, ContextName, AppName, BType, UploadTime, Classpath, StartTime, EndTime,
+      Error, ErrorClass, ErrorStackTrace
     ).from(JobsChronologicalTable).where(QB.eq(StartDate, today())).limit(limit)
 
     session.executeAsync(query).map { rs =>
@@ -180,7 +183,8 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
   override def getRunningJobInfosForContextName(contextName: String): Future[Seq[JobInfo]] = {
     import Metadata._
     val query = QB.select(
-      JobId, ContextName, AppName, BType, UploadTime, Classpath, StartTime, EndTime, Error
+      JobId, ContextName, AppName, BType, UploadTime, Classpath, StartTime, EndTime,
+      Error, ErrorClass, ErrorStackTrace
     ).from(RunningJobsTable).where(QB.eq(ContextName, contextName))
 
     session.executeAsync(query).map { rs =>
@@ -222,6 +226,11 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
   }
 
   private def rowToJobInfo(row: Row): JobInfo = {
+    val errorData = Option(row.getString(Error)).map { error =>
+      val errorClass = if (row.isNull(ErrorClass)) "" else row.getString(ErrorClass)
+      val stackTrace = if (row.isNull(ErrorStackTrace)) "" else row.getString(ErrorStackTrace)
+      ErrorData(error, errorClass, stackTrace)
+    }
     JobInfo(
       row.getUUID(Metadata.JobId).toString,
       row.getString(ContextName),
@@ -233,13 +242,14 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
       row.getString(Classpath),
       new DateTime(row.getTimestamp(StartTime)),
       Option(row.getTimestamp(EndTime)).map(new DateTime(_)),
-      Option(row.getString(Error)).map(new Throwable(_))
+      errorData
     )
   }
 
   override def getJobInfo(jobId: String): Future[Option[JobInfo]] = {
     val query = QB.select(
-      JobId, ContextName, AppName, BType, UploadTime, Classpath, StartTime, EndTime, Error
+      JobId, ContextName, AppName, BType, UploadTime, Classpath, StartTime, EndTime,
+      Error, ErrorClass, ErrorStackTrace
     ).from(JobsTable).
       where(QB.eq(JobId, UUID.fromString(jobId))).
       limit(1)
@@ -252,9 +262,6 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
 
   override def saveJobInfo(jobInfo: JobInfo): Unit = {
     val JobInfo(jobId, contextName, binaryInfo, classPath, startTime, endTime, error) = jobInfo
-    val (_, endOpt, errOpt) = (startTime,
-      endTime.map(e => e),
-      error.map(_.getMessage))
 
     val localDate: LocalDate = LocalDate.fromMillisSinceEpoch(jobInfo.startTime.getMillis)
 
@@ -268,8 +275,13 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
         value(Classpath, classPath).
         value(StartTime, startTime.getMillis).
         value(StartDate, localDate)
-      endOpt.foreach{e => insert.value(EndTime, e.getMillis)}
-      errOpt.foreach(insert.value(Error, _))
+
+      endTime.foreach{e => insert.value(EndTime, e.getMillis)}
+      error.foreach { err =>
+        insert.value(Error, err.message)
+        insert.value(ErrorClass, err.errorClass)
+        insert.value(ErrorStackTrace, err.stackTrace)
+      }
       insert
     }
 
@@ -365,7 +377,9 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
       addColumn(StartTime, DataType.timestamp).
       addColumn(StartDate, DataType.date).
       addColumn(EndTime, DataType.timestamp).
-      addColumn(Error, DataType.text)
+      addColumn(Error, DataType.text).
+      addColumn(ErrorClass, DataType.text).
+      addColumn(ErrorStackTrace, DataType.text)
 
     session.execute(jobsTableStatement)
 
@@ -381,6 +395,8 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
       addColumn(Classpath, DataType.text).
       addColumn(EndTime, DataType.timestamp).
       addColumn(Error, DataType.text).
+      addColumn(ErrorClass, DataType.text).
+      addColumn(ErrorStackTrace, DataType.text).
       withOptions().clusteringOrder(StartTime, Direction.DESC)
 
     session.execute(jobsChronologicalView)
@@ -396,7 +412,9 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
       addColumn(StartTime, DataType.timestamp).
       addColumn(StartDate, DataType.date).
       addColumn(EndTime, DataType.timestamp).
-      addColumn(Error, DataType.text)
+      addColumn(Error, DataType.text).
+      addColumn(ErrorClass, DataType.text).
+      addColumn(ErrorStackTrace, DataType.text)
 
     session.execute(runningJobsView)
   }
