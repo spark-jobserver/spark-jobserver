@@ -13,3 +13,5 @@
 * route for getting context info (@addisonj)
 * delete all data endpoint (@marcoboi)
 * clean running jobs after context JobManager dies (@krcz)
+* fix for #916,#917: logging for manager_start.sh (@marcoboi) 
+* fix(job-server) store error class and stack trace in database (@krcz)
