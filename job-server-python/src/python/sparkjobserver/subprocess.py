@@ -72,6 +72,7 @@ if __name__ == "__main__":
     spark_conf = SparkConf(_jconf=jspark_conf)
     context_class = jcontext.contextType()
     context = None
+    sc = None
     if context_class == 'org.apache.spark.api.java.JavaSparkContext':
         context = SparkContext(
                 gateway=gateway, jsc=jcontext, conf=spark_conf)
@@ -99,13 +100,15 @@ if __name__ == "__main__":
             exit_with_failure(
                     "Expected JavaSparkContext, SQLContext "
                     "or HiveContext but received %s" % repr(context_class), 2)
-    try:
-        egg_path = os.environ.get("EGGPATH", None)
-        sc.addPyFile(egg_path)
-    except Exception as error:
-        exit_with_failure(
-            "Error while adding Python Egg to Spark Context: %s\n%s" %
-            (repr(error), traceback.format_exc()), 3)
+
+    egg_path = os.environ.get("EGGPATH", None)
+    if egg_path is not None and sc is not None:
+        try:
+            sc.addPyFile(egg_path)
+        except Exception as error:
+            exit_with_failure(
+                "Error while adding Python Egg to Spark Context: %s\n%s" %
+                (repr(error), traceback.format_exc()), 5)
     try:
         job_data = job.validate(context, None, job_config)
     except Exception as error:
