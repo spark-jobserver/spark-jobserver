@@ -137,7 +137,7 @@ lazy val dockerSettings = Seq(
     val sparkBuild = s"spark-${Versions.spark}"
     val sparkBuildCmd = scalaBinaryVersion.value match {
       case "2.11" =>
-        "./make-distribution.sh -Dscala-2.11 -Phadoop-2.7 -Phive"
+        "./dev/make-distribution.sh -Dscala-2.11 -Phadoop-2.7 -Phive"
       case other => throw new RuntimeException(s"Scala version $other is not supported!")
     }
 
