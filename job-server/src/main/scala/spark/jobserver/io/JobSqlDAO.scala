@@ -41,18 +41,19 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
 
   // Definition of the tables
   //scalastyle:off
-  class Binaries(tag: Tag) extends Table[(Int, String, String, Timestamp)](tag, "BINARIES") {
+  class Binaries(tag: Tag) extends Table[(Int, String, String, Timestamp, Array[Byte])](tag, "BINARIES") {
     def binId = column[Int]("BIN_ID", O.PrimaryKey, O.AutoInc)
     def appName = column[String]("APP_NAME")
     def binaryType = column[String]("BINARY_TYPE")
     def uploadTime = column[Timestamp]("UPLOAD_TIME")
-    def * = (binId, appName, binaryType, uploadTime)
+    def binHash = column[Array[Byte]]("BIN_HASH")
+    def * = (binId, appName, binaryType, uploadTime, binHash)
   }
 
-  class BinariesContents(tag: Tag) extends Table[(Int, Blob)](tag, "BINARIES_CONTENTS") {
-    def binId = column[Int]("BIN_ID", O.PrimaryKey)
+  class BinariesContents(tag: Tag) extends Table[(Array[Byte], Blob)](tag, "BINARIES_CONTENTS") {
+    def binHash = column[Array[Byte]]("BIN_HASH", O.PrimaryKey)
     def binary = column[Blob]("BINARY")
-    def * = (binId, binary)
+    def * = (binHash, binary)
   }
 
   val binaries = TableQuery[Binaries]
@@ -183,12 +184,24 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
     Await.result(db.run(query), 60 seconds)
   }
 
+  private def calculateBinaryHash(binBytes: Array[Byte]): Array[Byte] = {
+    import java.security.MessageDigest
+    val md = MessageDigest.getInstance("SHA-256");
+    md.digest(binBytes)
+  }
+
   // Insert JarInfo and its jar into db and return the primary key associated with that row
   private def insertBinaryInfo(binInfo: BinaryInfo, binBytes: Array[Byte]): Future[Int] = {
+    val hash = calculateBinaryHash(binBytes);
     val dbAction = (for {
       binId <- binaries.returning(binaries.map(_.binId)) +=
-        (-1, binInfo.appName, binInfo.binaryType.name, convertDateJodaToSql(binInfo.uploadTime))
-      _ <- binariesContents.map(bc => bc.*) += (binId, new SerialBlob(binBytes))
+        (-1, binInfo.appName, binInfo.binaryType.name, convertDateJodaToSql(binInfo.uploadTime), hash)
+      _ <- binariesContents.filter(_.binHash === hash).result.headOption.flatMap{
+            case None =>
+              binariesContents.map(bc => bc.*) += (hash, new SerialBlob(binBytes))
+            case Some(bc) =>
+              DBIO.successful(None) // no-op
+          }
     } yield binId).transactionally
     db.run(dbAction)
   }
@@ -200,9 +213,15 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
 
   private def deleteBinaryInfo(appName: String): Future[Int] = {
     val deleteBinary = binaries.filter(_.appName === appName)
-    val deleteBinariesContents = binariesContents.filter(_.binId in deleteBinary.map(_.binId))
+    val hashUsed = binaries.filter(_.binHash in deleteBinary.map(_.binHash)).filter(_.appName =!= appName)
+    val deleteBinariesContents = binariesContents.filter(_.binHash in deleteBinary.map(_.binHash))
     val dbAction = (for {
-      _ <- deleteBinariesContents.delete
+      _ <- hashUsed.result.headOption.flatMap{
+        case None =>
+          deleteBinariesContents.delete
+        case Some(bc) =>
+          DBIO.successful(None) // no-op
+      }
       b <- deleteBinary.delete
     } yield b).transactionally
     db.run(dbAction).recover(logDeleteErrors)
@@ -231,7 +250,7 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
       b <- binaries.filter { bin =>
         bin.appName === appName && bin.uploadTime === dateTime && bin.binaryType === binaryType.name
       }
-      bc <- binariesContents if b.binId === bc.binId
+      bc <- binariesContents if b.binHash === bc.binHash
     } yield bc.binary
     val dbAction = query.result
     db.run(dbAction.head.map { b => b.getBytes(1, b.length.toInt) }.transactionally)

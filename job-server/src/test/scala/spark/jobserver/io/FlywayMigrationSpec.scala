@@ -80,13 +80,13 @@ class FlywayMigrationSpec extends FunSpec with Matchers {
       val descBinariesIt = ResultSetIterator(descBinaries){ r: ResultSet =>
         r.getString("FIELD")
       }
-      descBinariesIt.toList should be (List("BIN_ID", "APP_NAME", "UPLOAD_TIME", "BINARY_TYPE"))
+      descBinariesIt.toList should be (List("BIN_ID", "APP_NAME", "UPLOAD_TIME", "BINARY_TYPE", "BIN_HASH"))
 
       val descBinariesContents = sqlConn.createStatement().executeQuery("SHOW COLUMNS FROM BINARIES_CONTENTS")
       val descBinariesContentsIt = ResultSetIterator(descBinariesContents){ r: ResultSet =>
         r.getString("FIELD")
       }
-      descBinariesContentsIt.toList should be (List("BIN_ID", "BINARY"))
+      descBinariesContentsIt.toList should be (List("BIN_HASH", "BINARY"))
 
       val descJobs = sqlConn.createStatement().executeQuery("SHOW COLUMNS FROM JOBS")
       val descJobsIt = ResultSetIterator(descJobs){ r: ResultSet =>
@@ -115,14 +115,14 @@ class FlywayMigrationSpec extends FunSpec with Matchers {
       ))
 
       val migratedBinariesContents =
-        sqlConn.createStatement().executeQuery("SELECT BIN_ID, BINARY FROM BINARIES_CONTENTS")
+        sqlConn.createStatement().executeQuery("SELECT BIN_HASH, BINARY FROM BINARIES_CONTENTS")
       val migratedBinariesContentsIt = ResultSetIterator(migratedBinariesContents){ r: ResultSet =>
-        (r.getInt("BIN_ID"),
+        (r.getString("BIN_HASH"),
           r.getString("BINARY"))
       }
       migratedBinariesContentsIt.toList should be (List(
-        (1, "deadbeef"),
-        (2, "beadface")
+        ("0000000000000001", "deadbeef"),
+        ("0000000000000002", "beadface")
       ))
     }
   }
