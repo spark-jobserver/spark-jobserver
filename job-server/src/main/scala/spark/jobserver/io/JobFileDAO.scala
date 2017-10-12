@@ -220,8 +220,6 @@ class JobFileDAO(config: Config) extends JobDAO {
     configs(jobId) = jobConfig
   }
 
-  override def getJobConfigs: Future[Map[String, Config]] = Future { configs.toMap }
-
   override def getJobConfig(jobId: String): Future[Option[Config]] = Future {
     configs.get(jobId)
   }
