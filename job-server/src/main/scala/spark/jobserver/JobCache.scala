@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory
 import spark.jobserver.io.{BinaryType, JobDAOActor}
 import spark.jobserver.japi.BaseJavaJob
 import spark.jobserver.util.{ContextURLClassLoader, JarUtils, LRUCache}
+import spark.jobserver.common.akka.metrics.YammerMetrics
 
 import akka.pattern.ask
 
@@ -25,12 +26,14 @@ import scala.concurrent.Await
 class JobCacheImpl(maxEntries: Int,
                    dao: ActorRef,
                    sparkContext: SparkContext,
-                   loader: ContextURLClassLoader) extends JobCache {
+                   loader: ContextURLClassLoader) extends JobCache with YammerMetrics {
   import scala.concurrent.duration._
 
   private val cache = new LRUCache[(String, DateTime, String, BinaryType), BinaryJobInfo](maxEntries)
   private val logger = LoggerFactory.getLogger(getClass)
   implicit val daoAskTimeout: Timeout = Timeout(60 seconds)
+
+  val metricJobCache = gauge("job-cache-size", cache.size)
 
   /**
    * Retrieves the given SparkJob class from the cache if it's there, otherwise use the DAO to retrieve it.
