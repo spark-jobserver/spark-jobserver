@@ -59,8 +59,6 @@ object JobDAOActorSpec {
 
     override def saveJobInfo(jobInfo: JobInfo): Unit = ???
 
-    override def getJobConfigs: Future[Map[String, Config]] = ???
-
     override def getJobConfig(jobId: String): Future[Option[Config]] = ???
 
     override def deleteBinary(appName: String): Unit = {

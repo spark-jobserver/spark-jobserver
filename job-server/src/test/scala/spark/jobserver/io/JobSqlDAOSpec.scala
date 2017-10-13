@@ -178,11 +178,7 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
     }
   }
 
-  describe("saveJobConfig() and getJobConfigs() tests") {
-    it("should provide an empty map on getJobConfigs() for an empty CONFIGS table") {
-      Map.empty[String, Config] should equal (Await.result(dao.getJobConfigs, timeout))
-    }
-
+  describe("saveJobConfig() tests") {
     it("should provide None on getJobConfig(jobId) where there is no config for a given jobId") {
       val config = Await.result(dao.getJobConfig("44c32fe1-38a4-11e1-a06a-485d60c81a3e"), timeout)
       config shouldBe None
@@ -193,25 +189,18 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
       dao.saveJobConfig(jobId, jobConfig)
 
       // get all configs
-      val configs = Await.result(dao.getJobConfigs, timeout)
       val config = Await.result(dao.getJobConfig(jobId), timeout).get
 
       // test
-      configs.keySet should equal (Set(jobId))
-      configs(jobId) should equal (expectedConfig)
       config should equal (expectedConfig)
     }
 
     it("should be able to get previously saved config") {
       // config saved in prior test
 
-      // get job configs
-      val configs = Await.result(dao.getJobConfigs, timeout)
       val config = Await.result(dao.getJobConfig(jobId), timeout).get
 
       // test
-      configs.keySet should equal (Set(jobId))
-      configs(jobId) should equal (expectedConfig)
       config should equal (expectedConfig)
     }
 
@@ -229,13 +218,10 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
       dao = new JobSqlDAO(config)
 
       // Get all configs
-      val configs = Await.result(dao.getJobConfigs, timeout)
       val jobIdConfig = Await.result(dao.getJobConfig(jobId), timeout).get
       val jobId2Config = Await.result(dao.getJobConfig(jobId2), timeout).get
 
       // test
-      configs.keySet should equal (Set(jobId, jobId2))
-      configs.values.toSeq should equal (Seq(expectedConfig, expectedConfig2))
       jobIdConfig should equal (expectedConfig)
       jobId2Config should equal (expectedConfig2)
     }

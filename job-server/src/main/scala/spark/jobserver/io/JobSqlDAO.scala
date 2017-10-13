@@ -231,14 +231,6 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
   // Convert from java.sql.Timestamp to joda DateTime
   private def convertDateSqlToJoda(timestamp: Timestamp): DateTime = new DateTime(timestamp.getTime)
 
-  override def getJobConfigs: Future[Map[String, Config]] = {
-    for (r <- db.run(configs.result)) yield {
-      r.map {
-        case (jobId, jobConfig) => jobId -> ConfigFactory.parseString(jobConfig)
-      }.toMap
-    }
-  }
-
   override def getJobConfig(jobId: String): Future[Option[Config]] = {
     val query = configs
       .filter(_.jobId === jobId).map(_.jobConfig).result

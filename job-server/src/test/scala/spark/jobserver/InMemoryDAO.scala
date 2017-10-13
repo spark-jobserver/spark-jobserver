@@ -77,10 +77,6 @@ class InMemoryDAO extends JobDAO {
 
   override def saveJobConfig(jobId: String, jobConfig: Config) { jobConfigs(jobId) = jobConfig }
 
-  override def getJobConfigs: Future[Map[String, Config]] = Future {
-    jobConfigs.toMap
-  }
-
   override  def getJobConfig(jobId: String): Future[Option[Config]] = Future {
     jobConfigs.get(jobId)
   }

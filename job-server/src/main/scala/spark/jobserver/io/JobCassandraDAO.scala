@@ -298,16 +298,6 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
     }
   }
 
-  override def getJobConfigs: Future[Map[String, Config]] = {
-    val query = QB.select(Metadata.JobId, Metadata.JobConfig).from(Metadata.JobsTable)
-    session.executeAsync(query).map { rs =>
-      JListWrapper(rs.all()).map { row =>
-        val config = Option(row.getString(Metadata.JobConfig)).getOrElse("")
-        (row.getUUID(Metadata.JobId).toString, ConfigFactory.parseString(config))
-      }.toMap
-    }
-  }
-
   override def getJobConfig(jobId: String): Future[Option[Config]] = {
     val query = QB.select(Metadata.JobConfig).from(Metadata.JobsTable)
       .where(QB.eq(Metadata.JobId, UUID.fromString(jobId)))
