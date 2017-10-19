@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # Docker environment vars
 # NOTE: only static vars not intended to be changed by users should appear here, because
 #       this file gets sourced in the middle of server_start.sh, so it will override
