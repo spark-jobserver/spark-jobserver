@@ -48,7 +48,7 @@ object WordCountExampleNewApi extends NewSparkJob {
   type JobOutput = collection.Map[String, Long]
 
   def runJob(sc: SparkContext, runtime: JobEnvironment, data: JobData): JobOutput =
-    sc.parallelize(data._1).countByValue
+    sc.parallelize(data._1).countByValue ++ sc.parallelize(data._2).countByValue
 
   def validate(sc: SparkContext, runtime: JobEnvironment, config: Config):
     JobData Or Every[ValidationProblem] = {
