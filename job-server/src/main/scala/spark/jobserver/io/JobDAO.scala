@@ -104,6 +104,7 @@ trait JobDAO {
     * @param appName
     */
   def deleteBinary(appName: String)
+
   /**
    * Return all applications name and their last upload times.
    *
@@ -182,8 +183,7 @@ trait JobDAO {
    * Returns the last upload time for a given app name.
    * @return Some(lastUploadedTime) if the app exists and the list of times is nonempty, None otherwise
    */
-  def getLastUploadTimeAndType(appName: String): Option[(DateTime, BinaryType)] =
-    Await.result(getApps, 60 seconds).get(appName).map(t => (t._2, t._1))
+  def getLastUploadTimeAndType(appName: String): Option[(DateTime, BinaryType)]
 
   /**
     * Fetch submited jar or egg content for remote driver and JobManagerActor to cache in local

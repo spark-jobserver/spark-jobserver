@@ -1,15 +1,15 @@
 package spark.jobserver.io
 
-import com.typesafe.config._
 import java.io._
 import java.nio.file.{Files, Paths}
 
+import com.typesafe.config._
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 
 import scala.collection.mutable
-import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 
 /**
   * NB This class does NOT support persisting binary types
@@ -222,6 +222,10 @@ class JobFileDAO(config: Config) extends JobDAO {
 
   override def getJobConfig(jobId: String): Future[Option[Config]] = Future {
     configs.get(jobId)
+  }
+
+  override def getLastUploadTimeAndType(appName: String): Option[(DateTime, BinaryType)] = {
+    apps(appName).headOption.map(uploadTime => (uploadTime, BinaryType.Jar))
   }
 
   private def writeJobConfig(out: DataOutputStream, jobId: String, jobConfig: Config) {
