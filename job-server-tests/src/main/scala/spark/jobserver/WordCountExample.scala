@@ -55,6 +55,6 @@ object WordCountExampleNewApi extends NewSparkJob {
     Try((config.getString("queryInputParameters").split(" ").toSeq,
       config.getString("datasetInfo").split(" ").toSeq))
       .map(words => Good(words))
-      .getOrElse(Bad(One(SingleProblem("No input.string param"))))
+      .getOrElse(Bad(One(SingleProblem("No queryInputParameters param"))))
   }
 }
