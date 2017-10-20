@@ -53,7 +53,7 @@ object WordCountExampleNewApi extends NewSparkJob {
   def validate(sc: SparkContext, runtime: JobEnvironment, config: Config):
     JobData Or Every[ValidationProblem] = {
     Try((config.getString("queryInputParameters").split(" ").toSeq,
-      config.getString("datasetInfo").split(" ").toSeq))
+      Seq()))
       .map(words => Good(words))
       .getOrElse(Bad(One(SingleProblem("No queryInputParameters param"))))
   }
