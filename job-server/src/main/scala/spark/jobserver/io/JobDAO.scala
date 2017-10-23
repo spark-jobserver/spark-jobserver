@@ -184,14 +184,4 @@ trait JobDAO {
    * @return Some(lastUploadedTime) if the app exists and the list of times is nonempty, None otherwise
    */
   def getLastUploadTimeAndType(appName: String): Option[(DateTime, BinaryType)]
-
-  /**
-    * Fetch submited jar or egg content for remote driver and JobManagerActor to cache in local
-    * @param appName
-    * @param uploadTime
-    * @return
-    */
-  def getBinaryContent(appName: String,
-                       binaryType: BinaryType,
-                       uploadTime: DateTime): Array[Byte]
 }

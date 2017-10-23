@@ -133,18 +133,6 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
       jarFile.exists() should equal (true)
       jarFilePath should equal (jarFile.getAbsolutePath)
     }
-
-    it("should retrieve the jar binary content for remote job manager") {
-      // chack the pre-condition
-      jarFile.exists() should equal (false)
-
-      // retrieve the jar content
-      val jarBinaryContent: Array[Byte] = dao.getBinaryContent(jarInfo.appName, BinaryType.Jar, jarInfo.uploadTime)
-
-      // test
-      jarFile.exists() should equal (true)
-      jarBinaryContent should equal (jarBytes)
-    }
   }
 
   describe("save and get Python eggs") {

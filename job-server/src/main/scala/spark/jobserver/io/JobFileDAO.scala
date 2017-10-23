@@ -1,7 +1,6 @@
 package spark.jobserver.io
 
 import java.io._
-import java.nio.file.{Files, Paths}
 
 import com.typesafe.config._
 import org.joda.time.DateTime
@@ -237,11 +236,6 @@ class JobFileDAO(config: Config) extends JobDAO {
     in.readUTF,
     ConfigFactory.parseString(in.readUTF)
   )
-
-  override def getBinaryContent(appName: String, binaryType: BinaryType,
-                                uploadTime: DateTime): Array[Byte] = {
-    Files.readAllBytes(Paths.get(retrieveBinaryFile(appName, binaryType, uploadTime)))
-  }
 
   /**
     * Delete a jar.
