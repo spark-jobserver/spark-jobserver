@@ -10,6 +10,7 @@ import scala.concurrent.{Await, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.DurationInt
 import scala.reflect.runtime.universe
+import scala.util.Try
 
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
@@ -137,8 +138,11 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
                           binaryType: BinaryType,
                           uploadTime: DateTime,
                           binBytes: Array[Byte]) {
-    // The order is important. Save the jar file first and then log it into database.
-    cacheBinary(appName, binaryType, uploadTime, binBytes)
+    val cacheOnUploadEnabled = Try(config.getBoolean("spark.jobserver.cache-on-upload")).getOrElse(true)
+    if (cacheOnUploadEnabled) {
+      // The order is important. Save the jar file first and then log it into database.
+      cacheBinary(appName, binaryType, uploadTime, binBytes)
+    }
 
     // log it into database
     if (Await.result(insertBinaryInfo(
