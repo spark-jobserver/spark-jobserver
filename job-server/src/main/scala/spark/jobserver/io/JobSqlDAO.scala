@@ -1,7 +1,6 @@
 package spark.jobserver.io
 
 import java.io.File
-import java.nio.file.{Files, Paths}
 import java.sql.{Blob, Timestamp}
 import javax.sql.DataSource
 import javax.sql.rowset.serial.SerialBlob
@@ -372,25 +371,6 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
     }
     for (r <- db.run(joinQuery.result)) yield {
       r.map(jobInfoFromRow).headOption
-    }
-  }
-
-  /**
-    * Fetch submited jar or egg content for remote driver and JobManagerActor to cache in local
-    *
-    * @param appName
-    * @param uploadTime
-    * @return
-    */
-  override def getBinaryContent(appName: String, binaryType: BinaryType,
-                                uploadTime: DateTime): Array[Byte] = {
-    val jarFile = new File(rootDir, createBinaryName(appName, binaryType, uploadTime))
-    if (!jarFile.exists()) {
-      val binBytes = Await.result(fetchBinary(appName, binaryType, uploadTime), 60.seconds)
-      cacheBinary(appName, binaryType, uploadTime, binBytes)
-      binBytes
-    } else {
-      Files.readAllBytes(Paths.get(jarFile.getAbsolutePath))
     }
   }
 }
