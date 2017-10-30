@@ -2,6 +2,7 @@
 
 * Add support to create a SparkSession context  !! (@rmettu-rms)
 
+* Proper cluster-mode support for multi-jvm / transfer context conf via akka (@derSascha)
 * Mark actor as down on context initialization errors. (@derSascha)
 * fix(akka): Stop job manager actor on context stop (@derSascha)
 * Mesos config docs (@vatsalmevada)
