@@ -28,12 +28,15 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
   - [Creating a project from scratch using giter8 template](#creating-a-project-from-scratch-using-giter8-template)
   - [Creating a project manually assuming that you already have sbt project structure](#creating-a-project-manually-assuming-that-you-already-have-sbt-project-structure)
   - [NEW SparkJob API](#new-sparkjob-api)
+  - [NEW SparkJob API with Spark v2.1](#new-sparkjob-api-with-spark-v21)
   - [Dependency jars](#dependency-jars)
   - [Named Objects](#named-objects)
     - [Using Named RDDs](#using-named-rdds)
     - [Using Named Objects](#using-named-objects)
   - [HTTPS / SSL Configuration](#https--ssl-configuration)
-  - [Authentication](#authentication)
+    - [Server authentication](#server-authentication)
+    - [Client authentication](#client-authentication)
+  - [Basic authentication](#basic-authentication)
 - [Deployment](#deployment)
   - [Manual steps](#manual-steps)
   - [Context per JVM](#context-per-jvm)
@@ -497,7 +500,8 @@ def validate(sc:SparkContext, config: Config): SparkJobValidation = {
 ```
 
 ### HTTPS / SSL Configuration
-To activate ssl communication, set these flags in your application.conf file (Section 'spray.can.server'):
+#### Server authentication
+To activate server authentication and ssl communication, set these flags in your application.conf file (Section 'spray.can.server'):
 ```
   ssl-encryption = on
   # absolute path to keystore file
@@ -516,9 +520,19 @@ curl -k https://localhost:8090/contexts
 ```
 The ```-k``` flag tells curl to "Allow connections to SSL sites without certs". Export your server certificate and import it into the client's truststore to fully utilize ssl security.
 
-### Authentication
+#### Client authentication
+Client authentication can be enabled by simply pointing Job Server to a valid Trust Store. 
+As for server authentication, this is done by setting appropriate values in the application.conf.
+The minimum set of parameters to enable client authentication consists of:
+```
+  # truststore = "/some/path/server-truststore.jks"
+  # truststorePW = "changeit"
+```
+Note, client authentication implies server authentication, therefore client authentication will only be enabled once server authentication is activated.
 
-Authentication uses the [Apache Shiro](http://shiro.apache.org/index.html) framework. Authentication is activated by setting this flag (Section 'shiro'):
+### Basic authentication
+Basic authentication (username and password) in Job Server relies on the [Apache Shiro](http://shiro.apache.org/index.html) framework. 
+Basic authentication is activated by setting this flag (Section 'shiro'):
 ```
 authentication = on
 # absolute path to shiro config file, including file name
