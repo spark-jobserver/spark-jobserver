@@ -15,7 +15,7 @@ lazy val akkaApp = Project(id = "akka-app", base = file("akka-app"))
 lazy val jobServer = Project(id = "job-server", base = file("job-server"))
   .settings(commonSettings)
   .settings(revolverSettings)
-  .settings(Assembly.settings)
+  .settings(assembly := null.asInstanceOf[File])
   .settings(
     description := "Spark as a Service: a RESTful job server for Apache Spark",
     libraryDependencies ++= sparkDeps ++ slickDeps ++ cassandraDeps ++ securityDeps ++ coreTestDeps,
@@ -31,7 +31,6 @@ lazy val jobServer = Project(id = "job-server", base = file("job-server"))
     fullClasspath in Compile <<= (fullClasspath in Compile).map { classpath =>
       extraJarPaths ++ classpath
     },
-    test in assembly := {},
     fork in Test := true
   )
   .settings(publishSettings)

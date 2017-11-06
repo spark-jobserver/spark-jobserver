@@ -582,7 +582,7 @@ See also running on [cluster](doc/cluster.md), [YARN client](doc/yarn.md), on [E
 
 The `server_start.sh` script uses `spark-submit` under the hood and may be passed any of the standard extra arguments from `spark-submit`.
 
-NOTE: by default the assembly jar from `job-server-extras`, which includes support for SQLContext and HiveContext, is used.  If you face issues with all the extra dependencies, consider modifying the install scripts to invoke `sbt job-server/assembly` instead, which doesn't include the extra dependencies.
+NOTE: Under the hood, the deploy scripts generate an assembly jar from the `job-server-extras` project.  Generating assemblies from other projects may not include all the necessary components for job execution.
 
 ### Context per JVM
 
