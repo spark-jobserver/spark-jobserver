@@ -3,13 +3,10 @@ package spark.jobserver.io
 import akka.actor.Props
 import com.typesafe.config.Config
 import org.joda.time.DateTime
-import spark.jobserver.JobManagerActor.JobKilledException
-
 import scala.concurrent.duration._
-import scala.util.{Failure, Success, Try}
-import spark.jobserver.common.akka.InstrumentedActor
+import scala.util.Try
 
-import scala.concurrent.Future
+import spark.jobserver.common.akka.InstrumentedActor
 
 object JobDAOActor {
 
@@ -39,7 +36,6 @@ object JobDAOActor {
   @deprecated("Leads to performance problems and OutOfMemory error ultimately", "0.7.1")
   case object GetJobConfigs extends JobDAORequest
   case class GetJobConfig(jobId: String) extends JobDAORequest
-  case class CleanContextJobInfos(contextName: String, endTime: DateTime)
 
   case class GetLastUploadTimeAndType(appName: String) extends JobDAORequest
 
@@ -100,8 +96,5 @@ class JobDAOActor(dao: JobDAO) extends InstrumentedActor {
 
     case GetBinaryContent(appName, binaryType, uploadTime) =>
       sender() ! BinaryContent(dao.getBinaryContent(appName, binaryType, uploadTime))
-
-    case CleanContextJobInfos(contextName, endTime) =>
-      dao.cleanRunningJobInfosForContext(contextName, endTime)
   }
 }

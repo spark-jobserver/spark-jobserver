@@ -11,16 +11,13 @@ import akka.cluster.ClusterEvent.{InitialStateAsEvents, MemberEvent, MemberUp}
 import akka.util.Timeout
 import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
 import spark.jobserver.util.SparkJobUtils
-
 import scala.collection.mutable
 import scala.util.{Failure, Success, Try}
 import scala.sys.process._
-import spark.jobserver.common.akka.InstrumentedActor
 
+import spark.jobserver.common.akka.InstrumentedActor
 import scala.concurrent.Await
 import akka.pattern.gracefulStop
-import org.joda.time.DateTime
-import spark.jobserver.io.JobDAOActor.CleanContextJobInfos
 
 /**
  * The AkkaClusterSupervisorActor launches Spark Contexts as external processes
@@ -176,10 +173,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef) extends InstrumentedActor {
     case Terminated(actorRef) =>
       val name: String = actorRef.path.name
       logger.info("Actor terminated: {}", name)
-      for ((name, _) <- contexts.find(_._2._1 == actorRef)) {
-        contexts.remove(name)
-        daoActor ! CleanContextJobInfos(name, DateTime.now())
-      }
+      contexts.retain { case (name, (jobMgr, resActor)) => jobMgr != actorRef }
       cluster.down(actorRef.path.address)
   }
 

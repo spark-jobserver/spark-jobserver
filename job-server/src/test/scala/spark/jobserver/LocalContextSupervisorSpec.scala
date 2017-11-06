@@ -1,15 +1,15 @@
 package spark.jobserver
 
 import akka.actor._
-import akka.testkit.{ImplicitSender, TestKit, TestProbe}
-import com.typesafe.config.{ConfigFactory, ConfigValueFactory}
+import akka.testkit.{ImplicitSender, TestKit}
+import com.typesafe.config.{ConfigValueFactory, ConfigFactory}
+import spark.jobserver.io.{JobDAO, JobDAOActor}
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
+import spark.jobserver.util.SparkJobUtils
+import scala.concurrent.duration._
+
 import spark.jobserver.common.akka
 import spark.jobserver.common.akka.AkkaTestUtils
-import spark.jobserver.io.JobDAOActor.CleanContextJobInfos
-import spark.jobserver.util.SparkJobUtils
-
-import scala.concurrent.duration._
 
 
 object LocalContextSupervisorSpec {
@@ -59,7 +59,8 @@ class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.syst
   }
 
   var supervisor: ActorRef = _
-  var daoProbe: TestProbe = _
+  var dao: JobDAO = _
+  var daoActor: ActorRef = _
 
   val contextConfig = LocalContextSupervisorSpec.config.getConfig("spark.context-settings")
 
@@ -67,8 +68,9 @@ class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.syst
   System.setProperty("spark.driver.host", "localhost")
 
   before {
-    daoProbe = TestProbe()
-    supervisor = system.actorOf(Props(classOf[LocalContextSupervisorActor], daoProbe.ref))
+    dao = new InMemoryDAO
+    daoActor = system.actorOf(JobDAOActor.props(dao))
+    supervisor = system.actorOf(Props(classOf[LocalContextSupervisorActor], daoActor))
   }
 
   after {
@@ -163,17 +165,6 @@ class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.syst
 
       supervisor ! AddContext("c1", contextConfig)
       expectMsg(ContextAlreadyExists)
-    }
-
-    it("should clean up context running jobs on context termination") {
-      supervisor ! AddContext("c1", contextConfig)
-      expectMsg(ContextInitialized)
-      supervisor ! GetContext("c1")
-      val (jobManager: ActorRef, _) = expectMsgType[(_, _)]
-
-      jobManager ! PoisonPill
-      val msg = daoProbe.expectMsgType[CleanContextJobInfos]
-      msg.contextName shouldBe "c1"
     }
   }
 }

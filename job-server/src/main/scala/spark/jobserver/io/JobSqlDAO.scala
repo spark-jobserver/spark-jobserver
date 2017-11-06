@@ -25,7 +25,6 @@ import javax.sql.DataSource
 import javax.sql.rowset.serial.SerialBlob
 import slick.driver.JdbcProfile
 import slick.lifted.ProvenShape.proveShapeOf
-import spark.jobserver.JobManagerActor.ContextTerminatedException
 
 class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
   val slickDriverClass = config.getString("spark.jobserver.sqldao.slick-driver")
@@ -267,21 +266,6 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
     }
   }
 
-  private def jobInfoFromRow(row: (String, String, String, String,
-    Timestamp, String, Timestamp,
-    Option[Timestamp], Option[String])): JobInfo = row match {
-    case (id, context, app, binType, upload, classpath, start, end, err) =>
-    JobInfo(
-      id,
-      context,
-      BinaryInfo(app, BinaryType.fromString(binType), convertDateSqlToJoda(upload)),
-      classpath,
-      convertDateSqlToJoda(start),
-      end.map(convertDateSqlToJoda),
-      err.map(new Throwable(_))
-    )
-  }
-
   override def getJobInfos(limit: Int, statusOpt: Option[String] = None): Future[Seq[JobInfo]] = {
 
     val joinQuery = for {
@@ -314,37 +298,6 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
           err.map(new Throwable(_)))
       }
     }
-  }
-
-  /**
-    * Return all job ids to their job info.
-    *
-    * @return
-    */
-  override def getRunningJobInfosForContextName(contextName: String): Future[Seq[JobInfo]] = {
-    val joinQuery = for {
-      bin <- binaries
-      j <- jobs if (j.binId === bin.binId
-        && !j.endTime.isDefined && !j.error.isDefined
-        && j.contextName === contextName)
-    } yield {
-      (j.jobId, j.contextName, bin.appName, bin.binaryType,
-        bin.uploadTime, j.classPath, j.startTime, j.endTime, j.error)
-    }
-    db.run(joinQuery.result).map(_.map(jobInfoFromRow))
-  }
-
-
-  override def cleanRunningJobInfosForContext(contextName: String, endTime: DateTime): Future[Unit] = {
-    val sqlEndTime = Some(convertDateJodaToSql(endTime))
-    val error = Some(new ContextTerminatedException(contextName).getMessage())
-    val selectQuery = for {
-      j <- jobs if (!j.endTime.isDefined
-        && !j.error.isDefined
-        && j.contextName === contextName)
-    } yield (j.endTime, j.error)
-    val updateQuery = selectQuery.update((sqlEndTime, error))
-    db.run(updateQuery).map(_ => ())
   }
 
   override def getJobInfo(jobId: String): Future[Option[JobInfo]] = {

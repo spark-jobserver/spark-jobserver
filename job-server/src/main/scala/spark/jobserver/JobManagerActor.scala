@@ -28,8 +28,6 @@ object JobManagerActor {
                       subscribedEvents: Set[Class[_]])
   case class KillJob(jobId: String)
   case class JobKilledException(jobId: String) extends Exception(s"Job $jobId killed")
-  case class ContextTerminatedException(contextName: String)
-    extends Exception(s"Unexpected termination of context $contextName")
 
   case object GetContextConfig
   case object SparkContextStatus
