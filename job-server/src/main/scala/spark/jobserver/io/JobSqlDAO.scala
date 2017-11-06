@@ -137,8 +137,11 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
                           binaryType: BinaryType,
                           uploadTime: DateTime,
                           binBytes: Array[Byte]) {
-    // The order is important. Save the jar file first and then log it into database.
-    cacheBinary(appName, binaryType, uploadTime, binBytes)
+    val cacheOnUploadEnabled = config.getBoolean("spark.jobserver.cache-on-upload")
+    if (cacheOnUploadEnabled) {
+      // The order is important. Save the jar file first and then log it into database.
+      cacheBinary(appName, binaryType, uploadTime, binBytes)
+    }
 
     // log it into database
     if (Await.result(insertBinaryInfo(
