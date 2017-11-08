@@ -102,7 +102,7 @@ if __name__ == "__main__":
                     "or HiveContext but received %s" % repr(context_class), 2)
 
     egg_path = os.environ.get("EGGPATH", None)
-    if egg_path is not None and sc is not None:
+    if egg_path and sc:
         try:
             sc.addPyFile(egg_path)
         except Exception as error:
