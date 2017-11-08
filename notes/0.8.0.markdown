@@ -2,6 +2,7 @@
 
 * Add support to create a SparkSession context  !! (@rmettu-rms)
 
+* Proper cluster-mode support for multi-jvm / transfer context conf via akka (@derSascha)
 * Mark actor as down on context initialization errors. (@derSascha)
 * fix(akka): Stop job manager actor on context stop (@derSascha)
 * Mesos config docs (@vatsalmevada)
@@ -9,3 +10,10 @@
 * fixed starting a new job does not determine proxy user issue #827 (@zromi18)
 * Fix #857 - SJS is not properly storing/using timestamp milliseconds in the binaries (JARs) storage system (@Meehau)
 * Blob storage fixes (@msohn)
+* asynchronous context reset (@marcoboi)
+* route for getting context info (@addisonj)
+* delete all data endpoint (@marcoboi)
+* clean running jobs after context JobManager dies (@krcz)
+* fix for #916,#917: logging for manager_start.sh (@marcoboi) 
+* fix(job-server) store error class and stack trace in database (@krcz)
+* Support for certificate based client authentication (@marcoboi)

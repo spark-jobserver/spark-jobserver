@@ -1,5 +1,7 @@
 package spark.jobserver.api
 
+import java.io.{File, IOException}
+
 import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.spark.SparkContext
 import org.apache.spark.api.java.JavaSparkContext
@@ -12,6 +14,21 @@ trait JobEnvironment {
   def namedObjects: NamedObjects
 
   def contextConfig: Config
+}
+
+/**
+ * This trait provides data file access on local and cluster deployments of job manager.
+ */
+trait DataFileCache {
+  /**
+   * Returns data file if exists on this host or a temporary copy if job server and manager
+   * running on different hosts (cluster deployment).
+   *
+   * @param dataFile full path of data file on job server returned by web API
+   * @return data file or temporary copy cluster deployments
+   */
+  @throws(classOf[IOException])
+  def getDataFile(dataFile: String): File
 }
 
 trait ValidationProblem

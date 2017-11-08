@@ -2,14 +2,13 @@ package spark.jobserver
 
 import scala.collection.mutable
 import scala.util.Try
-
 import akka.actor.{ActorRef, Props}
 import com.yammer.metrics.core.Meter
 import org.joda.time.DateTime
 import spark.jobserver.JobManagerActor.JobKilledException
 import spark.jobserver.common.akka.InstrumentedActor
 import spark.jobserver.common.akka.metrics.YammerMetrics
-import spark.jobserver.io.{JobDAOActor, JobInfo}
+import spark.jobserver.io.{ErrorData, JobDAOActor, JobInfo}
 
 object JobStatusActor {
   case class JobInit(jobInfo: JobInfo)
@@ -40,8 +39,9 @@ class JobStatusActor(jobDao: ActorRef) extends InstrumentedActor with YammerMetr
   override def postStop(): Unit = {
     val stopTime = DateTime.now()
     val stoppedInfos = infos.values.map { info =>
-      info.copy(endTime = Some(stopTime),
-                error = Some(new Exception(s"Context (${info.contextName}) for this job was terminated"))) }
+      val errorData = ErrorData(s"Context (${info.contextName}) for this job was terminated", "", "")
+      info.copy(endTime = Some(stopTime), error = Some(errorData))
+    }
     stoppedInfos.foreach({info => jobDao ! JobDAOActor.SaveJobInfo(info)})
   }
 
@@ -90,19 +90,20 @@ class JobStatusActor(jobDao: ActorRef) extends InstrumentedActor with YammerMetr
     case msg: JobValidationFailed =>
       processStatus(msg, "validation failed", remove = true) {
         case (info, msg: JobValidationFailed) =>
-          info.copy(endTime = Some(msg.endTime), error = Some(msg.err))
+          info.copy(endTime = Some(msg.endTime), error = Some(ErrorData(msg.err)))
       }
 
     case msg: JobErroredOut =>
       processStatus(msg, "finished with an error", remove = true) {
         case (info, msg: JobErroredOut) =>
-          info.copy(endTime = Some(msg.endTime), error = Some(msg.err))
+          info.copy(endTime = Some(msg.endTime), error = Some(ErrorData(msg.err)))
       }
 
     case msg: JobKilled =>
       processStatus(msg, "killed", remove = true) {
         case (info, msg: JobKilled) =>
-          info.copy(endTime = Some(msg.endTime), error = Some(JobKilledException(info.jobId)))
+          info.copy(endTime = Some(msg.endTime),
+            error = Some(ErrorData(JobKilledException(info.jobId))))
       }
   }
 

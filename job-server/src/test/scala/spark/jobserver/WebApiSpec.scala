@@ -61,8 +61,8 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
   val baseJobInfo =
     JobInfo("foo-1", "context", BinaryInfo("demo", BinaryType.Jar, dt), "com.abc.meme", dt, None, None)
   val finishedJobInfo = baseJobInfo.copy(endTime = Some(dt.plusMinutes(5)))
-  val errorJobInfo = finishedJobInfo.copy(error =  Some(new Throwable("test-error")))
-  val killedJobInfo = finishedJobInfo.copy(error =  Some(JobKilledException(finishedJobInfo.jobId)))
+  val errorJobInfo = finishedJobInfo.copy(error =  Some(ErrorData(new Throwable("test-error"))))
+  val killedJobInfo = finishedJobInfo.copy(error =  Some(ErrorData(JobKilledException(finishedJobInfo.jobId))))
   val JobId = "jobId"
   val StatusKey = "status"
   val ResultKey = "result"
@@ -119,6 +119,7 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
           case _ => sender ! Seq(baseJobInfo, finishedJobInfo)
         }
       }
+
 
 
       case ListBinaries(Some(BinaryType.Jar)) =>
@@ -196,6 +197,9 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
 
       case StoreJobConfig(_, _) => sender ! JobConfigStored
       case KillJob(jobId) => sender ! JobKilled(jobId, DateTime.now())
+
+      case GetSparkWebUI("context1") => sender ! WebUIForContext("context1", Some("http://spark:4040"))
+      case GetSparkWebUI("context2") => sender ! WebUIForContext("context1", None)
     }
   }
 
