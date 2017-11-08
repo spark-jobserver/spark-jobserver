@@ -19,7 +19,6 @@ object Versions {
   lazy val cassandra = "3.0.3"
   lazy val cassandraUnit = "2.2.2.1"
   lazy val commons = "1.4"
-  lazy val derby = "10.12.1.1"
   lazy val flyway = "3.2.1"
   lazy val java = sys.env.getOrElse("JAVA_VERSION", "8-jdk")
   lazy val logback = "1.0.7"

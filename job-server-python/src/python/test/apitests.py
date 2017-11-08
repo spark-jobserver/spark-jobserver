@@ -1,19 +1,9 @@
-import errno
-import os
 import unittest
 from pyhocon import ConfigFactory
 from pyspark import SparkConf, SparkContext
 from pyspark.sql import SQLContext, HiveContext
 from sparkjobserver.api import SparkJob, build_problems, ValidationProblem
 from py4j.java_gateway import java_import
-
-
-def silentremove(filename):
-    try:
-        os.remove(filename)
-    except OSError as exc:
-        if exc.errno != errno.ENOENT:
-            raise
 
 
 class WordCountSparkJob(SparkJob):
@@ -66,11 +56,6 @@ class TestSJSApi(unittest.TestCase):
 
     def setUp(self):
         conf = SparkConf().setAppName('test').setMaster('local[*]')
-        pwd = os.path.dirname(os.path.realpath(__file__))
-        metastore_dir = os.path.abspath(os.path.join(pwd, '..',
-                                                     'metastore_db'))
-        silentremove(os.path.join(metastore_dir, "dbex.lck"))
-        silentremove(os.path.join(metastore_dir, "db.lck"))
         self.sc = SparkContext(conf=conf)
         self.jvm = self.sc._gateway.jvm
         java_import(self.jvm, "org.apache.spark.sql.*")
