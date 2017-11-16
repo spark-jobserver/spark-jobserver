@@ -44,16 +44,20 @@ object WordCountExample extends SparkJob {
  * - the job could parse the jobId and other environment vars from JobEnvironment
  */
 object WordCountExampleNewApi extends NewSparkJob {
-  type JobData = Seq[String]
+  type JobData = (Seq[String], Seq[String])
   type JobOutput = collection.Map[String, Long]
 
   def runJob(sc: SparkContext, runtime: JobEnvironment, data: JobData): JobOutput =
-    sc.parallelize(data).countByValue
+    sc.parallelize(data._1 ++ data._2).countByValue
 
   def validate(sc: SparkContext, runtime: JobEnvironment, config: Config):
     JobData Or Every[ValidationProblem] = {
-    Try(config.getString("input.string").split(" ").toSeq)
-      .map(words => Good(words))
-      .getOrElse(Bad(One(SingleProblem("No input.string param"))))
+    Try((config.getString("queryInputParameters").split(" ").toSeq,
+      config.getString("datasetInfo").split(" ").toSeq))
+      .map(words => {
+        println(s">>>> queryInputParameters: ${words._1}")
+        println(s">>>> datasetInfo: ${words._2}")
+        Good(words)})
+      .getOrElse(Bad(One(SingleProblem("No queryInputParameters param"))))
   }
 }

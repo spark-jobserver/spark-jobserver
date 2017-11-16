@@ -1,0 +1,79 @@
+# Template for Spark Job Server Docker config
+# You can easily override the spark master through SPARK_MASTER env variable
+#
+# Spark Cluster / Job Server configuration
+spark {
+  #
+  master = "local[*]"
+  master = ${?SPARK_MASTER}
+
+  # Default # of CPUs for jobs to use for Spark standalone cluster
+  job-number-cpus = 8
+
+  jobserver {
+    port = 8090
+    jobdao = spark.jobserver.io.JobSqlDAO
+
+    context-per-jvm = true
+    
+    // for client calling timeout. Cubean added at Sat 28 Oct 2017
+    short-timeout = 60s
+
+    # Default client mode will start up a new JobManager int local machine
+    # You can use mesos-cluster mode with REMOTE_JOBSERVER_DIR and MESOS_SPARK_DISPATCHER
+    # environment value set in xxxx.sh file to launch JobManager in remote node
+    # Mesos will take responsibility to offer resource to the JobManager process
+    driver-mode = client
+
+    sqldao {
+      # Directory where default H2 driver stores its data. Only needed for H2.
+      rootdir = /database
+
+      # Full JDBC URL / init string.  Sorry, needs to match above.
+      # Substitutions may be used to launch job-server, but leave it out here in the default or tests won't pass
+      jdbc.url = "jdbc:h2:file:/database/h2-db"
+    }
+  }
+
+  # predefined Spark contexts
+  # contexts {
+  #   my-low-latency-context {
+  #     num-cpu-cores = 1           # Number of cores to allocate.  Required.
+  #     memory-per-node = 512m         # Executor memory per node, -Xmx style eg 512m, 1G, etc.
+  #   }
+  #   # define additional contexts here
+  # }
+
+  # universal context configuration.  These settings can be overridden, see README.md
+  context-settings {
+    num-cpu-cores = 16           # Number of cores to allocate.  Required.
+    memory-per-node = 40G         # Executor memory per node, -Xmx style eg 512m, #1G, etc.
+
+    spark.driver.port=6000
+    spark.driver.blockManager.port=6100
+    spark.port.maxRetries=16 #default 16
+
+
+    # in case spark distribution should be accessed from HDFS (as opposed to being installed on every mesos slave)
+    # spark.executor.uri = "hdfs://namenode:8020/apps/spark/spark.tgz"
+
+    # uris of jars to be loaded into the classpath for this context. Uris is a string list, or a string separated by commas ','
+    # dependent-jar-uris = ["file:///some/path/present/in/each/mesos/slave/somepackage.jar"]
+
+    # If you wish to pass any settings directly to the sparkConf as-is, add them here in passthrough,
+    # such as hadoop connection settings that don't use the "spark." prefix
+    passthrough {
+      #es.nodes = "192.1.1.1"
+    }
+  }
+
+  # This needs to match SPARK_HOME for cluster SparkContexts to be created successfully
+  home = "/spark"
+}
+
+deploy {
+  manager-start-cmd = "app/manager_start.sh"
+}
+
+# Note that you can use this file to define settings not only for job server,
+# but for your Spark jobs as well.  Spark job configuration merges with this configuration file as defaults.
