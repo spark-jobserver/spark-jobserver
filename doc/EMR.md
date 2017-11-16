@@ -1,5 +1,7 @@
 ## Step by step instruction on how to run Spark Job Server on EMR 4.2.0 (Spark 1.6.0)
 
+See also running in [cluster mode](cluster.md), running [YARN in client mode](yarn.md) and running on [Mesos](Mesos.md).
+
 ### Create EMR 4.2.0 cluster
 
 Create EMR cluster using AWS EMR console or aws cli.

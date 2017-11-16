@@ -137,27 +137,9 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
       jarFile.length() should equal (retrieved.length())
       Files.toByteArray(jarFile) should equal(Files.toByteArray(retrieved))
     }
-
-    it("should retrieve the jar binary content for remote job manager") {
-      // chack the pre-condition
-      jarFile.exists() should equal (false)
-
-      // retrieve the jar content
-      val jarBinaryContent: Array[Byte] = dao.getBinaryContent(jarInfo.appName, jarInfo.binaryType, jarInfo.uploadTime)
-
-      // test
-      jarFile.exists() should equal (true)
-      jarBinaryContent.length should equal (jarBytes.length)
-      jarBinaryContent should equal(jarBytes)
-    }
   }
 
-  describe("saveJobConfig() and getJobConfigs() tests") {
-    it("should provide an empty map on getJobConfigs() for an empty CONFIGS table") {
-      val configs = Await.result(dao.getJobConfigs, timeout)
-      (Map.empty[String, Config]) should equal (configs)
-    }
-
+  describe("saveJobConfig() tests") {
     it("should provide None on getJobConfig(jobId) where there is no config for a given jobId") {
       val config = Await.result(dao.getJobConfig("44c32fe1-38a4-11e1-a06a-485d60c81a3e"), timeout)
       config shouldBe None
@@ -167,13 +149,9 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
       // save job config
       dao.saveJobConfig(jobId, jobConfig)
 
-      // get all configs
-      val configs = Await.result(dao.getJobConfigs, timeout)
       val config = Await.result(dao.getJobConfig(jobId), timeout).get
 
       // test
-      configs.keySet should equal (Set(jobId))
-      configs(jobId) should equal (expectedConfig)
       config should equal (expectedConfig)
     }
 
@@ -181,12 +159,9 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
       // config saved in prior test
 
       // get job configs
-      val configs = Await.result(dao.getJobConfigs, timeout)
       val config = Await.result(dao.getJobConfig(jobId), timeout).get
 
       // test
-      configs.keySet should equal (Set(jobId))
-      configs(jobId) should equal (expectedConfig)
       config should equal (expectedConfig)
     }
 
@@ -204,14 +179,10 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
       dao = new JobCassandraDAO(config)
 
       // Get all configs
-      val configs = Await.result(dao.getJobConfigs, timeout)
       val jobIdConfig = Await.result(dao.getJobConfig(jobId), timeout).get
       val jobId2Config = Await.result(dao.getJobConfig(jobId2), timeout).get
 
       // test
-      configs.keySet should equal (Set(jobId, jobId2))
-      configs.values.toSeq should contain (expectedConfig)
-      configs.values.toSeq should contain (expectedConfig2)
       jobIdConfig should equal (expectedConfig)
       jobId2Config should equal (expectedConfig2)
     }
