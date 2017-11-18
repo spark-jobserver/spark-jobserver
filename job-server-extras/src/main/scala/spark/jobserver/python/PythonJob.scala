@@ -64,7 +64,6 @@ case class PythonJob[X <: PythonContextLike](eggPath: String,
         Process(
           Seq(sc.pythonExecutable, "-m", "sparkjobserver.subprocess", server.getListeningPort.toString),
           None,
-          "EGGPATH" -> eggPath,
           "PYTHONPATH" -> pythonPath,
           "PYSPARK_PYTHON" -> sc.pythonExecutable)
       val err = new StringBuffer
