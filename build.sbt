@@ -68,6 +68,15 @@ lazy val jobServerExtras = Project(id = "job-server-extras", base = file("job-se
       .dependsOn(buildPyExamples in jobServerPython)
       .dependsOn(clean in Compile in jobServerPython)
   )
+  .settings(
+    artifact in (Compile, assembly) := {
+      val art = (artifact in (Compile, assembly)).value
+      art.copy(`classifier` = Some("assembly"))
+    }
+  )
+  .settings(
+    addArtifact(artifact in (Compile, assembly), assembly)
+  )
   .dependsOn(jobServerApi, jobServer % "compile->compile; test->test")
   .disablePlugins(SbtScalariform)
 
