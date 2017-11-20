@@ -36,6 +36,7 @@ jobs:
       - run:
           # TODO: For some reason circleci gets stuck in the shell if we don't add exit to sbt
           command: |
+            sbt about
             sbt update
             sbt compile exit
 
