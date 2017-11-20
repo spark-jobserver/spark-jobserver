@@ -34,10 +34,11 @@ jobs:
             docker load -i /caches/app.tar | true
 
       - run:
+          command: sbt sbtVersion
+
+      - run:
           # TODO: For some reason circleci gets stuck in the shell if we don't add exit to sbt
           command: |
-            sbt about
-            sbt update
             sbt compile exit
 
 #      - run:
