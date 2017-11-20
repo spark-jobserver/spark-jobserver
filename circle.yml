@@ -4,7 +4,7 @@ jobs:
   build:
     working_directory: /app
     docker:
-      - image: codestar/circleci-scala-sbt-git:scala-2.12.2-sbt-0.13.15 #docker:17.05.0-ce-git
+      - image: codestar/circleci-scala-sbt-git:scala-2.11.11-sbt-0.13.15 #docker:17.05.0-ce-git
     steps:
       - checkout
       - setup_remote_docker
