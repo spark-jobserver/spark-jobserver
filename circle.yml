@@ -35,16 +35,17 @@ jobs:
 
       - run:
           # TODO: For some reason circleci gets stuck in the shell if we don't add exit to sbt
-          command:
+          command: |
             sbt compile exit
 
 #      - run:
 #          command:
 #            sbt test exit
 
-#      - run:
-#          name: Build application Docker image
-#          command: |
+      - run:
+          name: Build application Docker image
+          command: |
+             sbt docker
 #            docker build --cache-from=hyperanna1/${CIRCLE_PROJECT_REPONAME}:cache -t hyperanna1/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_BRANCH} .
       - run:
           name: Save Docker image layer cache
