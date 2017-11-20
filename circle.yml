@@ -17,6 +17,9 @@ jobs:
           command: |
             set +o pipefail
             docker load -i /caches/app.tar | true
+
+      - run: cat /dev/null | sbt test:compile
+
 #      - run:
 #          name: Build application Docker image
 #          command: |
