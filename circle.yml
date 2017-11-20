@@ -2,22 +2,10 @@ version: 2
 
 jobs:
   build:
-    environment:
-      - SBT_VERSION: 0.13.15
-      # REDIS_URL: redis://localhost:6391
-    java:
-      - version: oraclejdk8
-    services:
-      - redis      # this will use the default Redis 2.8.4
-
     working_directory: /app
     docker:
-      - image: docker:17.05.0-ce-git
+      - image: codestar/circleci-scala-sbt-git:scala-2.12.2-sbt-0.13.15 #docker:17.05.0-ce-git
     steps:
-      - run:
-          name: run sbt
-          command: 'sbt update'
-
       - checkout
       - setup_remote_docker
       - restore_cache:
@@ -31,7 +19,14 @@ jobs:
             set +o pipefail
             docker load -i /caches/app.tar | true
 
-      - run: cat /dev/null | sbt test:compile
+      - run:
+          # TODO: For some reason circleci gets stuck in the shell if we don't add exit to sbt
+          command:
+            sbt compile exit
+
+#      - run:
+#          command:
+#            sbt test exit
 
 #      - run:
 #          name: Build application Docker image
