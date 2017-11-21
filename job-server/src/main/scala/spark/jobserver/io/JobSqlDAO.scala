@@ -196,16 +196,13 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
   // Insert JarInfo and its jar into db and return the primary key associated with that row
   private def insertBinaryInfo(binInfo: BinaryInfo, binBytes: Array[Byte]): Future[Int] = {
     val hash = calculateBinaryHash(binBytes);
-    val dbAction = (for {
-      binId <- binaries.returning(binaries.map(_.binId)) +=
-        (-1, binInfo.appName, binInfo.binaryType.name, convertDateJodaToSql(binInfo.uploadTime), hash)
-      _ <- binariesContents.filter(_.binHash === hash).result.headOption.flatMap{
-            case None =>
-              binariesContents.map(bc => bc.*) += (hash, new SerialBlob(binBytes))
-            case Some(bc) =>
-              DBIO.successful(None) // no-op
-          }
-    } yield binId).transactionally
+    val dbAction = (binaries +=
+        (-1, binInfo.appName, binInfo.binaryType.name, convertDateJodaToSql(binInfo.uploadTime), hash))
+                     .andThen(binariesContents.filter(_.binHash === hash).map(_.binHash)
+                         .result.headOption.flatMap {
+                       case Some(bc) => DBIO.successful(1)
+                       case None => binariesContents += (hash, new SerialBlob(binBytes))
+                     }).transactionally
     db.run(dbAction)
   }
 
