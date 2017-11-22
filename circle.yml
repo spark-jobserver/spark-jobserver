@@ -4,8 +4,12 @@ jobs:
   build:
     working_directory: /app
     docker:
+
+      - image: hyperanna1/docker-base:latest
+
       # https://hub.docker.com/r/codestar/circleci-scala-sbt-git/tags/
-      - image: codestar/circleci-scala-sbt-git:scala-2.11.11-sbt-0.13.15 #docker:17.05.0-ce-git
+      #codestar/circleci-scala-sbt-git:scala-2.11.11-sbt-0.13.15
+      #docker:17.05.0-ce-git
     steps:
       - checkout
       - setup_remote_docker:
@@ -54,7 +58,7 @@ jobs:
           name: Save Docker image layer cache
           command: |
             mkdir -p /caches
-            docker tag hyperanna1/spark-jobserver:0.8.0-SNAPSHOT.mesos-1.0.0.spark-2.2.0.scala-2.11.jdk-8u131 hyperanna1/${CIRCLE_PROJECT_REPONAME}:cache
+            docker tag hyperanna1/${CIRCLE_PROJECT_REPONAME}:${JOBSEVER_BRANCH} hyperanna1/${CIRCLE_PROJECT_REPONAME}:cache
             docker save -o /caches/app.tar hyperanna1/${CIRCLE_PROJECT_REPONAME}:cache
       - save_cache:
           key: v1-{{ .Branch }}-{{ epoch }}
@@ -65,9 +69,9 @@ jobs:
           timeout: 1200
           command: |
             docker login -u ${DOCKERHUB_USERNAME} -p ${DOCKERHUB_PASSWORD}
-            docker push hyperanna1/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_BRANCH}
+            docker push hyperanna1/${CIRCLE_PROJECT_REPONAME}:${JOBSEVER_BRANCH}
             if [ "${CIRCLE_BRANCH}" == "master" ]; then
-              docker tag hyperanna1/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_BRANCH} hyperanna1/${CIRCLE_PROJECT_REPONAME}:latest
-              docker push hyperanna1/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_BRANCH}
+              docker tag hyperanna1/${CIRCLE_PROJECT_REPONAME}:${JOBSEVER_BRANCH} hyperanna1/${CIRCLE_PROJECT_REPONAME}:latest
+              docker push hyperanna1/${CIRCLE_PROJECT_REPONAME}:${JOBSEVER_BRANCH}
               docker push hyperanna1/${CIRCLE_PROJECT_REPONAME}:latest
             fi
