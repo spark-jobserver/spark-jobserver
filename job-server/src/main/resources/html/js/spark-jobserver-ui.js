@@ -1,4 +1,4 @@
-function showJobs(filter,$tableBody) {
+function showJobs(filter,$tableBody,allowKill) {
     $.getJSON(
         'jobs',
         filter,
@@ -12,6 +12,9 @@ function showJobs(filter,$tableBody) {
                 jobsHtml += "<td>" + job.context + "</td>";
                 jobsHtml += "<td>" + job.startTime + "</td>";
                 jobsHtml += "<td>" + job.duration + "</td>";
+                if (allowKill) {
+                    jobsHtml += "<td><a href='#' id=" + job.jobId + " onclick='deleteJob(this.id);return false;'>kill</a></td>";
+                }
                 jobsHtml += "</tr>";
             });
             $tableBody.html(jobsHtml);
@@ -20,11 +23,11 @@ function showJobs(filter,$tableBody) {
 
 function getJobs() {
     //show error jobs
-    showJobs({status:"error"},$('#failedJobsTable > tbody:last'));
+    showJobs({status:"error"},$('#failedJobsTable > tbody:last'), false);
     //show running jobs
-    showJobs({status:"running"},$('#runningJobsTable > tbody:last'));
+    showJobs({status:"running"},$('#runningJobsTable > tbody:last'), true);
     //show complete jobs
-    showJobs({status:"finished"},$('#completedJobsTable > tbody:last'));
+    showJobs({status:"finished"},$('#completedJobsTable > tbody:last'), false);
 }
 
 function getContexts() {
@@ -35,27 +38,70 @@ function getContexts() {
             $('#contextsTable tbody').empty();
 
             $.each(contexts, function(key, contextName) {
-                var items = [];
-                items.push("<tr><td>" + contextName + "</td></tr>");
-                $('#contextsTable > tbody:last').append(items.join(""));
+                $.getJSON(
+                    'contexts/' + contextName,
+                    '',
+                    function (contextDetail) {
+                        var items = [];
+                        items.push(
+                            "<tr><td>" + contextDetail.context + "</td>" +
+                            "<td><a href='" + contextDetail.url + "' target='_blank'>" + contextDetail.url + "</a></td>" +
+                            "<td><a href='#' id=" + contextDetail.context + " onclick='deleteContext(this.id);return false;'>kill</a></td>" +
+                            "</tr>");
+                        $('#contextsTable > tbody:last').append(items.join(""));
+                        console.log(items);
+                    });
             });
         });
 }
 
-function getJars() {
-    $.getJSON(
-        'jars',
-        '',
-        function(jars) {
-            $('#jarsTable tbody').empty();
+function deleteJob(jobID) {
+    var deleteURL = "./jobs/" + jobID;
 
-            $.each(jars, function(jarName, deploymentTime) {
+    $.ajax ({
+        type: 'DELETE',
+        url: deleteURL
+    })
+    .done(function( responseText) {
+        alert( "Killed job: " + jobID + "\n" + JSON.stringify(responseText) );
+        window.location.reload(true);
+    })
+    .fail(function( jqXHR ) {
+        alert( "Failed killing job: " + jobID + "\n" + JSON.stringify(jqXHR.responseJSON) );
+    });
+}
+
+function deleteContext(contextName) {
+    var deleteURL = "./contexts/" + contextName;
+
+    $.ajax ({
+        type: 'DELETE',
+        url: deleteURL
+    })
+    .done(function( responseText) {
+        alert( "Killed context: " + contextName + "\n" + JSON.stringify(responseText) );
+        window.location.reload(true);
+    })
+    .fail(function( jqXHR ) {
+        alert( "Failed killing context: " + contextName + "\n" + JSON.stringify(jqXHR.responseJSON) );
+    });
+}
+
+function getBinaries() {
+    $.getJSON(
+        'binaries',
+        '',
+        function(binaries) {
+            $('#binariesTable tbody').empty();
+
+            $.each(binaries, function(binariesName, binaryInfo) {
                 var items = [];
                 items.push("<tr>");
-                items.push("<td>" + jarName + "</td>");
-                items.push("<td>" + deploymentTime + "</td>");
+                items.push("<td>" + binariesName + "</td>");
+                items.push("<td>" + binaryInfo['binary-type'] + "</td>");
+                items.push("<td>" + binaryInfo['upload-time'] + "</td>");
                 items.push("</tr>");
-                $('#jarsTable > tbody:last').append(items.join(""));
+                $('#binariesTable > tbody:last').append(items.join(""));
             });
         });
 }
@@ -70,7 +116,7 @@ $(function () {
         } else if (target == "#contexts") {
             getContexts();
         } else {
-            getJars();
+            getBinaries();
         }
     })
     getJobs();
