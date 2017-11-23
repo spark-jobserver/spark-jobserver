@@ -21,6 +21,7 @@ import slick.driver.JdbcProfile
 import slick.lifted.ProvenShape.proveShapeOf
 import spark.jobserver.JobManagerActor.ContextTerminatedException
 import spray.http.ErrorInfo
+import spark.jobserver.util.NoSuchBinaryException
 
 class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
   val slickDriverClass = config.getString("spark.jobserver.sqldao.slick-driver")
@@ -159,7 +160,7 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
     */
   override def deleteBinary(appName: String): Unit = {
     if (Await.result(deleteBinaryInfo(appName), 60 seconds) == 0) {
-      throw new SlickException(s"Failed to delete binary: $appName from database")
+      throw new NoSuchBinaryException(appName)
     }
     cleanCacheBinaries(appName)
   }
