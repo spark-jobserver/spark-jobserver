@@ -87,3 +87,29 @@ fi
 export SPARK_HOME
 export YARN_CONF_DIR
 export HADOOP_CONF_DIR
+
+GC_OPTS_BASE="-XX:+UseConcMarkSweepGC
+         -verbose:gc -XX:+PrintGCTimeStamps
+         -XX:MaxPermSize=512m
+         -XX:+CMSClassUnloadingEnabled "
+
+JAVA_OPTS_BASE="-XX:MaxDirectMemorySize=$MAX_DIRECT_MEMORY
+         -XX:+HeapDumpOnOutOfMemoryError -Djava.net.preferIPv4Stack=true"
+
+GC_OUT_FILE_NAME="gc.out"
+
+# To truly enable JMX in AWS and other containerized environments, also need to set
+# -Djava.rmi.server.hostname equal to the hostname in that environment.  This is specific
+# depending on AWS vs GCE etc.
+JAVA_OPTS_SERVER="${JAVA_OPTS_BASE} \
+          -Dcom.sun.management.jmxremote.port=$JMX_PORT \
+          -Dcom.sun.management.jmxremote.rmi.port=$JMX_PORT \
+          -Dcom.sun.management.jmxremote.authenticate=false \
+          -Dcom.sun.management.jmxremote.ssl=false"
+
+MANAGER_JAR_FILE="$appdir/spark-job-server.jar"
+MANAGER_CONF_FILE="$conffile"
+MANAGER_EXTRA_JAVA_OPTIONS=
+MANAGER_EXTRA_SPARK_CONFS=
+MANAGER_LOGGING_OPTS="-Dlog4j.configuration=file:$appdir/log4j-server.properties"
+SPARK_LAUNCHER_VERBOSE=0

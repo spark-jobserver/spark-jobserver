@@ -13,14 +13,6 @@ get_abs_script_path
 
 . $appdir/setenv.sh
 
-GC_OPTS="-XX:+UseConcMarkSweepGC
-         -verbose:gc -XX:+PrintGCTimeStamps
-         -XX:MaxPermSize=512m
-         -XX:+CMSClassUnloadingEnabled "
-
-JAVA_OPTS="-XX:MaxDirectMemorySize=$MAX_DIRECT_MEMORY
-           -XX:+HeapDumpOnOutOfMemoryError -Djava.net.preferIPv4Stack=true"
-
 MAIN="spark.jobserver.JobManager"
 
 # copy files via spark-submit and read them from current (container) dir
@@ -47,7 +39,7 @@ else
   JAR_FILE="$appdir/spark-job-server.jar"
   CONF_FILE="$conffile"
   LOGGING_OPTS="-Dlog4j.configuration=file:$appdir/log4j-server.properties -DLOG_DIR=$5"
-  GC_OPTS="$GC_OPTS -Xloggc:$5/gc.out"
+  GC_OPTS_MANAGER="$GC_OPTS_BASE -Xloggc:$5/$GC_OUT_FILE_NAME"
 fi
 
 if [ -n "$6" ]; then
@@ -61,7 +53,7 @@ fi
 cmd='$SPARK_HOME/bin/spark-submit --class $MAIN --driver-memory $JOBSERVER_MEMORY
       --conf "spark.executor.extraJavaOptions=$LOGGING_OPTS"
       $SPARK_SUBMIT_OPTIONS
-      --driver-java-options "$GC_OPTS $JAVA_OPTS $LOGGING_OPTS $CONFIG_OVERRIDES $SPARK_SUBMIT_JAVA_OPTIONS"
+      --driver-java-options "$GC_OPTS_MANAGER $JAVA_OPTS_BASE $LOGGING_OPTS $CONFIG_OVERRIDES $SPARK_SUBMIT_JAVA_OPTIONS"
       $JAR_FILE $3 $4 $CONF_FILE'
 
 eval $cmd 2>&1 > $5/spark-job-server.out

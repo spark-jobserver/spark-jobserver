@@ -9,7 +9,7 @@ import akka.cluster.Cluster
 import akka.cluster.ClusterEvent.{InitialStateAsEvents, MemberEvent, MemberUp}
 import akka.util.Timeout
 import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
-import spark.jobserver.util.SparkJobUtils
+import spark.jobserver.util.{SparkJobUtils, ManagerLauncher}
 
 import scala.collection.mutable
 import scala.util.{Failure, Success, Try}
@@ -52,7 +52,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
   val contextInitTimeout = config.getDuration("spark.context-settings.context-init-timeout",
                                                 TimeUnit.SECONDS)
   val contextDeletionTimeout = SparkJobUtils.getContextDeletionTimeout(config)
-  val managerStartCommand = config.getString("deploy.manager-start-cmd")
+
   import context.dispatcher
 
   //actor name -> (context isadhoc, success callback, failure callback)
@@ -241,17 +241,13 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
       Map("is-adhoc" -> isAdHoc.toString, "context.name" -> name).asJava
     ).withFallback(contextConfig)
 
-    var managerArgs = Seq(master, deployMode, selfAddress.toString, contextActorName, contextDir.toString)
-    // extract spark.proxy.user from contextConfig, if available and pass it to manager start command
-    if (contextConfig.hasPath(SparkJobUtils.SPARK_PROXY_USER_PARAM)) {
-      managerArgs = managerArgs :+ contextConfig.getString(SparkJobUtils.SPARK_PROXY_USER_PARAM)
+    val launcher = new ManagerLauncher(config, contextConfig,
+        selfAddress.toString, contextActorName, contextDir.toString)
+    if (!launcher.start()) {
+      failureFunc(new Exception("Failed to launch context JVM"))
+    } else {
+      contextInitInfos(contextActorName) = (mergedContextConfig, isAdHoc, successFunc, failureFunc)
     }
-
-    val contextLogger = LoggerFactory.getLogger("manager_start")
-    val process = Process(managerStartCommand, managerArgs)
-    process.run(ProcessLogger(out => contextLogger.info(out), err => contextLogger.warn(err)))
-
-    contextInitInfos(contextActorName) = (mergedContextConfig, isAdHoc, successFunc, failureFunc)
   }
 
   private def addContextsFromConfig(config: Config) {
