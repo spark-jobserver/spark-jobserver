@@ -267,6 +267,7 @@ class WebApi(system: ActorSystem,
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
             future.map {
               case BinaryDeleted => ctx.complete(StatusCodes.OK)
+              case NoSuchBinary => notFound(ctx, s"can't find binary with name $appName")
             }.recover {
               case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
             }
@@ -353,7 +354,7 @@ class WebApi(system: ActorSystem,
             case WebUIForContext(name, Some(url)) =>
               ctx.complete(200, Map("context" -> contextName, "url" -> url))
             case WebUIForContext(name, None) => ctx.complete(200, Map("context" -> contextName))
-            case NoSuchContext => ctx.complete(404, s"can't find context with name $contextName")
+            case NoSuchContext => notFound(ctx, s"can't find context with name $contextName")
 
           }.recover {
             case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
