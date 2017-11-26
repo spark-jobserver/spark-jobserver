@@ -17,3 +17,8 @@
 * fix for #916,#917: logging for manager_start.sh (@marcoboi) 
 * fix(job-server) store error class and stack trace in database (@krcz)
 * Support for certificate based client authentication (@marcoboi)
+* Disable job-server module assembly build (@velvia)
+* fix(jobserver): return 404 for deletion of non existing binary (@ecandreev)
+* fix(jobserver): Simplify and optimize DB query (@bsikander)
+* UI additions / updates (@rfrohock)
+* fix(job-server): JobSQLDAO: Prevent saving the same binary multiple times (@ecandreev)
