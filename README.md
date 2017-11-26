@@ -123,7 +123,8 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 | 0.6.1       | 1.5.2         |
 | 0.6.2       | 1.6.1         |
 | 0.7.0       | 1.6.2         |
-| 0.8.0-SNAPSHOT | 2.2.0    |
+| 0.8.0       | 2.2.0    |
+| 0.8.1-SNAPSHOT | 2.2.0 |
 
 For release notes, look in the `notes/` directory.
 
@@ -308,11 +309,11 @@ In your `build.sbt`, add this to use the job server jar:
 
         resolvers += "Job Server Bintray" at "https://dl.bintray.com/spark-jobserver/maven"
 
-        libraryDependencies += "spark.jobserver" %% "job-server-api" % "0.7.0" % "provided"
+        libraryDependencies += "spark.jobserver" %% "job-server-api" % "0.8.0" % "provided"
 
 If a SQL or Hive job/context is desired, you also want to pull in `job-server-extras`:
 
-    libraryDependencies += "spark.jobserver" %% "job-server-extras" % "0.7.0" % "provided"
+    libraryDependencies += "spark.jobserver" %% "job-server-extras" % "0.8.0" % "provided"
 
 For most use cases it's better to have the dependencies be "provided" because you don't want SBT assembly to include the whole job server jar.
 
