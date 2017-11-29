@@ -13,7 +13,6 @@ import spark.jobserver.util.{SparkJobUtils, ManagerLauncher}
 
 import scala.collection.mutable
 import scala.util.{Failure, Success, Try}
-import scala.sys.process._
 import spark.jobserver.common.akka.InstrumentedActor
 
 import scala.concurrent.Await
@@ -30,15 +29,7 @@ import spark.jobserver.io.JobDAOActor.CleanContextJobInfos
  * it is assumed to be one starting up, and it will be asked to identify itself,
  * and then the Supervisor will try to initialize it.
  *
- * See the [[LocalContextSupervisorActor]] for normal config options.  Here are ones
- * specific to this class.
- *
- * ==Configuration==
- * {{{
- *   deploy {
- *     manager-start-cmd = "./manager_start.sh"
- *   }
- * }}}
+ * See the [[LocalContextSupervisorActor]] for normal config options.
  */
 class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
     extends InstrumentedActor {
@@ -52,7 +43,6 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
   val contextInitTimeout = config.getDuration("spark.context-settings.context-init-timeout",
                                                 TimeUnit.SECONDS)
   val contextDeletionTimeout = SparkJobUtils.getContextDeletionTimeout(config)
-
   import context.dispatcher
 
   //actor name -> (context isadhoc, success callback, failure callback)
@@ -225,9 +215,6 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
     val contextActorName = "jobManager-" + java.util.UUID.randomUUID().toString.substring(16)
 
     logger.info("Starting context with actor name {}", contextActorName)
-
-    val master = Try(config.getString("spark.master")).toOption.getOrElse("local[4]")
-    val deployMode = Try(config.getString("spark.submit.deployMode")).toOption.getOrElse("client")
 
     // Create a temporary dir, preferably in the LOG_DIR
     val encodedContextName = java.net.URLEncoder.encode(name, "UTF-8")
