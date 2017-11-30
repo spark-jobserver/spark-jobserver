@@ -29,6 +29,7 @@ import spray.routing.{HttpService, RequestContext, Route}
 
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.Try
+import org.slf4j.LoggerFactory
 
 object WebApi {
   val StatusKey = "status"
@@ -36,13 +37,26 @@ object WebApi {
   val ResultKeyStartBytes = "{\n".getBytes
   val ResultKeyEndBytes = "}".getBytes
   val ResultKeyBytes = ("\"" + ResultKey + "\":").getBytes
+  val logger = LoggerFactory.getLogger(getClass)
 
   def badRequest(ctx: RequestContext, msg: String) {
+    logger.info("StatusCode: " + StatusCodes.BadRequest + ", ErrorMessage: " + msg);
     ctx.complete(StatusCodes.BadRequest, errMap(msg))
   }
 
   def notFound(ctx: RequestContext, msg: String) {
+    logger.info("StatusCode: " + StatusCodes.NotFound + ", ErrorMessage: " + msg);
     ctx.complete(StatusCodes.NotFound, errMap(msg))
+  }
+
+  def logAndComplete(ctx: RequestContext, errMsg: String, stcode: Int) {
+    logger.info("StatusCode: " + stcode + ", ErrorMessage: " + errMsg);
+    ctx.complete(stcode, errMap(errMsg))
+  }
+
+  def logAndComplete(ctx: RequestContext, errMsg: String, stcode: Int, e: Throwable) {
+    logger.info("StatusCode: " + stcode + ", ErrorMessage: " + errMsg + ", StackTrace: " + e.getStackTrace);
+    ctx.complete(stcode, errMap(e, errMsg))
   }
 
   def errMap(errMsg: String) : Map[String, String] = Map(StatusKey -> JobStatus.Error, ResultKey -> errMsg)
@@ -220,6 +234,7 @@ class WebApi(system: ActorSystem,
       // GET /binaries route returns a JSON map of the app name
       // and the type of and last upload time of a binary.
       get { ctx =>
+        logger.info(s"GET /binaries");
         val future = (binaryManager ? ListBinaries(None)).
           mapTo[collection.Map[String, (BinaryType, DateTime)]]
         future.map { binTimeMap =>
@@ -227,9 +242,10 @@ class WebApi(system: ActorSystem,
             case (app, (binType, dt)) =>
               (app, Map("binary-type" -> binType.name, "upload-time" -> dt.toString()))
           }.toMap
+          logger.info(stringTimeMap.toString());
           ctx.complete(stringTimeMap)
         }.recover {
-          case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+          case e: Exception => logAndComplete(ctx, "ERROR", 500, e);
         }
       } ~
       // POST /binaries/<appName>
@@ -237,6 +253,7 @@ class WebApi(system: ActorSystem,
       // requires a recognised content-type header
       post {
         path(Segment) { appName =>
+          logger.info(s"POST /binaries/$appName");
           entity(as[Array[Byte]]) { binBytes =>
             contentType {
               case Some(x) =>
@@ -244,18 +261,24 @@ class WebApi(system: ActorSystem,
                   BinaryType.fromMediaType(x.mediaType) match {
                     case Some(binaryType) =>
                       val future = binaryManager ? StoreBinary(appName, binaryType, binBytes)
-
                       future.map {
-                        case BinaryStored => ctx.complete(StatusCodes.OK)
+                        case BinaryStored =>
+                          val stcode = StatusCodes.OK;
+                          logger.info("StatusCode: " + stcode);
+                          ctx.complete(stcode)
                         case InvalidBinary => badRequest(ctx, "Binary is not of the right format")
-                        case BinaryStorageFailure(ex) => ctx.complete(500, errMap(ex, "Storage Failure"))
+                        case BinaryStorageFailure(ex) => logAndComplete(ctx, "Storage Failure", 500, ex);
                       }.recover {
-                        case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+                        case e: Exception => logAndComplete(ctx, "ERROR", 500, e);
                       }
-                    case None => ctx.complete(415, s"Unsupported binary type $x")
+                    case None => logAndComplete(ctx, s"Unsupported binary type $x", 415);
                   }
                 }
-              case None => complete(415, s"Content-Type header must be set to indicate binary type")
+              case None =>
+                val stcode = 415;
+                val errMes = s"Content-Type header must be set to indicate binary type";
+                logger.info("StatusCode: " + stcode + ", ErrorMessage: " + errMes);
+                complete(stcode, errMes)
             }
           }
         }
@@ -263,13 +286,17 @@ class WebApi(system: ActorSystem,
       // DELETE /binaries/<appName>
       delete {
         path(Segment) { appName =>
+          logger.info(s"DELETE /binaries/$appName");
           val future = binaryManager ? DeleteBinary(appName)
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
             future.map {
-              case BinaryDeleted => ctx.complete(StatusCodes.OK)
+              case BinaryDeleted =>
+                val stcode = StatusCodes.OK;
+                logger.info("StatusCode: " + stcode);
+                ctx.complete(stcode)
               case NoSuchBinary => notFound(ctx, s"can't find binary with name $appName")
             }.recover {
-              case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+              case e: Exception => logAndComplete(ctx, "ERROR", 500, e);
             }
           }
         }
@@ -347,26 +374,37 @@ class WebApi(system: ActorSystem,
 
     // user authentication
     authenticate(authenticator) { authInfo =>
+      logger.info("User authentication");
       (get & path(Segment)) { (contextName) =>
         respondWithMediaType(MediaTypes.`application/json`) { ctx =>
           val future = supervisor ? GetSparkWebUI(contextName)
           future.map {
             case WebUIForContext(name, Some(url)) =>
-              ctx.complete(200, Map("context" -> contextName, "url" -> url))
-            case WebUIForContext(name, None) => ctx.complete(200, Map("context" -> contextName))
+              val stcode = 200;
+              val contextMap = Map("context" -> contextName, "url" -> url)
+              logger.info("StatusCode: " + stcode + ", " + contextMap);
+              ctx.complete(stcode, contextMap)
+            case WebUIForContext(name, None) =>
+              val stcode = 200;
+              val contextMap = Map("context" -> contextName)
+              logger.info("StatusCode: " + stcode + ", " + contextMap);
+              ctx.complete(stcode, contextMap)
             case NoSuchContext => notFound(ctx, s"can't find context with name $contextName")
-
           }.recover {
-            case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+            case e: Exception =>
+              logAndComplete(ctx, "ERROR", 500, e);
           }
         }
       } ~
       get { ctx =>
+        logger.info("GET /contexts");
         (supervisor ? ListContexts).mapTo[Seq[String]]
           .map { contexts =>
-            ctx.complete(SparkJobUtils.removeProxyUserPrefix(
+            val getContexts = SparkJobUtils.removeProxyUserPrefix(
               authInfo.toString, contexts,
-              config.getBoolean("shiro.authentication") && config.getBoolean("shiro.use-as-proxy-user"))) }
+              config.getBoolean("shiro.authentication") && config.getBoolean("shiro.use-as-proxy-user"))
+            logger.info(getContexts.toString());
+            ctx.complete(getContexts) }
       } ~
       post {
         /**
@@ -383,9 +421,13 @@ class WebApi(system: ActorSystem,
          */
         entity(as[String]) { configString =>
           path(Segment) { (contextName) =>
+            logger.info(s"POST /contexts/$contextName");
             // Enforce user context name to start with letters
             if (!contextName.head.isLetter) {
-              complete(StatusCodes.BadRequest, errMap("context name must start with letters"))
+              val stcode = StatusCodes.BadRequest;
+              val errMes = "context name must start with letters";
+              logger.info("StatusCode: " + stcode + ", ErrorMessage: " + errMes);
+              complete(stcode, errMap(errMes))
             } else {
               parameterMap { (params) =>
                 // parse the config from the body, using url params as fallback values
@@ -394,11 +436,15 @@ class WebApi(system: ActorSystem,
                 val (cName, config) = determineProxyUser(contextConfig, authInfo, contextName)
                 val future = (supervisor ? AddContext(cName, config))(contextTimeout.seconds)
                 respondWithMediaType(MediaTypes.`application/json`) { ctx =>
+                  logger.info("used configuration: " + contextConfig);
                   future.map {
-                    case ContextInitialized => ctx.complete(StatusCodes.OK,
-                      successMap("Context initialized"))
+                    case ContextInitialized =>
+                      val stcode = StatusCodes.OK;
+                      val mes = "Context initialized";
+                      logger.info("StatusCode: " + stcode + ", Message: " + mes);
+                      ctx.complete(stcode, successMap(mes))
                     case ContextAlreadyExists => badRequest(ctx, "context " + contextName + " exists")
-                    case ContextInitError(e) => ctx.complete(500, errMap(e, "CONTEXT INIT ERROR"))
+                    case ContextInitError(e) => logAndComplete(ctx, "CONTEXT INIT ERROR", 500, e);
                   }
                 }
               }
@@ -411,13 +457,18 @@ class WebApi(system: ActorSystem,
           //  Stop the context with the given name.  Executors will be shut down and all cached RDDs
           //  and currently running jobs will be lost.  Use with care!
           path(Segment) { (contextName) =>
+            logger.info(s"DELETE /contexts/$contextName");
             val (cName, _) = determineProxyUser(config, authInfo, contextName)
             val future = (supervisor ? StopContext(cName))(contextDeletionTimeout.seconds)
             respondWithMediaType(MediaTypes.`application/json`) { ctx =>
               future.map {
-                case ContextStopped => ctx.complete(StatusCodes.OK, successMap("Context stopped"))
+                case ContextStopped =>
+                  val stcode = StatusCodes.OK;
+                  val mes = "Context stopped";
+                  logger.info("StatusCode: " + stcode + ", Message: " + mes);
+                  ctx.complete(stcode, successMap(mes))
                 case NoSuchContext => notFound(ctx, "context " + contextName + " not found")
-                case ContextStopError(e) => ctx.complete(500, errMap(e, "CONTEXT DELETE ERROR"))
+                case ContextStopError(e) => logAndComplete(ctx, "CONTEXT DELETE ERROR", 500, e);
               }
             }
           }
@@ -425,6 +476,7 @@ class WebApi(system: ActorSystem,
         put {
           parameters("reset", 'sync.as[Boolean] ?) { (reset, sync) =>
             respondWithMediaType(MediaTypes.`application/json`) { ctx =>
+              logger.info(s"PUT /contexts");
               reset match {
                 case "reboot" =>
                   import ContextSupervisor._
@@ -437,7 +489,10 @@ class WebApi(system: ActorSystem,
 
                   if (sync.isDefined && !sync.get) {
                     contexts.map(c => supervisor ! StopContext(c))
-                    ctx.complete(StatusCodes.OK, successMap("Context reset requested"))
+                    val stcode = StatusCodes.OK;
+                    val mes = "Context reset requested";
+                    logger.info("StatusCode: " + stcode + ", Message: " + mes);
+                    ctx.complete(stcode, successMap(mes))
                   } else {
                     val stopFutures = contexts.map(c => supervisor ? StopContext(c))
                     Await.ready(Future.sequence(stopFutures), contextTimeout.seconds)
@@ -445,11 +500,20 @@ class WebApi(system: ActorSystem,
                     Thread.sleep(1000) // we apparently need some sleeping in here, so spark can catch up
 
                     (supervisor ? AddContextsFromConfig).onFailure {
-                      case t => ctx.complete("ERROR")
+                      case t =>
+                        val errMes = "ERROR";
+                        logger.info("ErrorMessage: " + errMes);
+                        ctx.complete(errMes)
                     }
-                    ctx.complete(StatusCodes.OK, successMap("Context reset"))
+                    val stcode = StatusCodes.OK;
+                    val mes = "Context reset";
+                    logger.info("StatusCode: " + stcode + ", Message: " + mes);
+                    ctx.complete(stcode, successMap(mes))
                   }
-                case _ => ctx.complete("ERROR")
+                case _ =>
+                  val errMes = "ERROR";
+                  logger.info("ErrorMessage: " + errMes);
+                  ctx.complete(errMes)
             }
           }
         }
@@ -502,6 +566,7 @@ class WebApi(system: ActorSystem,
        * @required @param jobId
        */
       (get & path(Segment / "config")) { jobId =>
+        logger.info(s"GET /jobs/$jobId/config");
         val renderOptions = ConfigRenderOptions.defaults().setComments(false).setOriginComments(false)
 
         val future = jobInfoActor ? GetJobConfig(jobId)
@@ -510,7 +575,9 @@ class WebApi(system: ActorSystem,
             case NoSuchJobId =>
               notFound(ctx, "No such job ID " + jobId)
             case cnf: Config =>
-              ctx.complete(cnf.root().render(renderOptions))
+              val getConfig = cnf.root().render(renderOptions)
+              logger.info(getConfig);
+              ctx.complete(getConfig)
           }
         }
       } ~
@@ -519,6 +586,7 @@ class WebApi(system: ActorSystem,
         // If the job isn't finished yet, then {"status": "RUNNING" | "ERROR"} is returned.
         // Returned JSON contains result attribute if status is "FINISHED"
         (get & path(Segment)) { jobId =>
+          logger.info(s"GET /jobs/$jobId");
           val statusFuture = jobInfoActor ? GetJobStatus(jobId)
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
             statusFuture.map {
@@ -533,9 +601,12 @@ class WebApi(system: ActorSystem,
                       case s: Stream[_] =>
                         sendStreamingResponse(ctx, ResultChunkSize,
                           resultToByteIterator(jobReport, s.toIterator))
-                      case _ => ctx.complete(jobReport ++ resultToTable(result))
+                      case _ =>
+                        logger.info(jobReport.toString() + ", " + result);
+                        ctx.complete(jobReport ++ resultToTable(result))
                     }
                   case _ =>
+                    logger.info(jobReport.toString());
                     ctx.complete(jobReport)
                 }
             }
@@ -545,6 +616,7 @@ class WebApi(system: ActorSystem,
         //  Stop the current job. All other jobs submitted with this spark context
         //  will continue to run
         (delete & path(Segment)) { jobId =>
+          logger.info(s"DELETE /jobs/$jobId");
           val future = jobInfoActor ? GetJobStatus(jobId)
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
             future.map {
@@ -554,11 +626,15 @@ class WebApi(system: ActorSystem,
                 val jobManager = getJobManagerForContext(Some(contextName), config, classPath)
                 val future = jobManager.get ? KillJob(jobId)
                 future.map {
-                  case JobKilled(_, _) => ctx.complete(Map(StatusKey -> JobStatus.Killed))
+                  case JobKilled(_, _) =>
+                    logger.info("Job " + jobId + " was killed and has status: " + JobStatus.Killed);
+                    ctx.complete(Map(StatusKey -> JobStatus.Killed))
                 }.recover {
-                  case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+                  case e: Exception => logAndComplete(ctx, "ERROR", 500, e);
                 }
               case JobInfo(_, _, _, _, _, _, Some(ex)) =>
+                logger.info("JobStatus: " + JobStatus.Error + ", ErrorMessage: " + ex.message
+                    + ", StackTrace: " + ex.stackTrace);
                 ctx.complete(Map(StatusKey -> JobStatus.Error, "ERROR" -> formatException(ex)))
               case JobInfo(_, _, _, _, _, Some(e), None) =>
                 notFound(ctx, "No running job with ID " + jobId)
@@ -588,10 +664,12 @@ class WebApi(system: ActorSystem,
             }
             val future = (jobInfoActor ? GetJobStatuses(Some(limit), statusUpperCaseOpt)).mapTo[Seq[JobInfo]]
             respondWithMediaType(MediaTypes.`application/json`) { ctx =>
+              logger.info("GET /jobs");
               future.map { infos =>
                 val jobReport = infos.map { info =>
                   getJobReport(info)
                 }
+                logger.info("JobReport: " + jobReport);
                 ctx.complete(jobReport)
               }
             }
@@ -619,6 +697,7 @@ class WebApi(system: ActorSystem,
               'context ?, 'sync.as[Boolean] ?, 'timeout.as[Int] ?, SparkJobUtils.SPARK_PROXY_USER_PARAM ?) {
                 (appName, classPath, contextOpt, syncOpt, timeoutOpt, sparkProxyUser) =>
                   try {
+                    logger.info(s"POST /jobs");
                     val async = !syncOpt.getOrElse(false)
                     val postedJobConfig = ConfigFactory.parseString(configString)
                     val jobConfig = postedJobConfig.withFallback(config).resolve()
@@ -631,6 +710,10 @@ class WebApi(system: ActorSystem,
                       contextOpt.map(_ => cName), cConfig, classPath)
                     val events = if (async) asyncEvents else syncEvents
                     val timeout = timeoutOpt.map(t => Timeout(t.seconds)).getOrElse(DefaultSyncTimeout)
+                    logger.info(s"Post parameters:  appName=$appName, classPath=$classPath, context="
+                        + contextOpt.getOrElse("none") + ", sync=" + !async
+                        + ", timeout=" + timeout.toString()
+                        + ", sparkProxyUser=" + sparkProxyUser.getOrElse("none"));
                     val future = jobManager.get.ask(
                       JobManagerActor.StartJob(appName, classPath, jobConfig, events))(timeout)
                     respondWithMediaType(MediaTypes.`application/json`) { ctx =>
@@ -639,43 +722,63 @@ class WebApi(system: ActorSystem,
                           res match {
                             case s: Stream[_] => sendStreamingResponse(ctx, ResultChunkSize,
                               resultToByteIterator(Map.empty, s.toIterator))
-                            case _ => ctx.complete(Map[String, Any]("jobId" -> jobId) ++ resultToTable(res))
+                            case _ =>
+                              logger.info("jobId: " + jobId + ", result: " + res);
+                              ctx.complete(Map[String, Any]("jobId" -> jobId) ++ resultToTable(res))
                           }
-                        case JobErroredOut(jobId, _, ex) => ctx.complete(
-                          Map[String, String]("jobId" -> jobId) ++ errMap(ex, "ERROR")
+                        case JobErroredOut(jobId, _, ex) =>
+                          logger.info("jobId: " + jobId
+                              + ", ErrorMessage: ERROR, StackTrace: " + ex.getStackTrace);
+                          ctx.complete(Map[String, String]("jobId" -> jobId) ++ errMap(ex, "ERROR")
                         )
                         case JobStarted(_, jobInfo) =>
                           val future = jobInfoActor ? StoreJobConfig(jobInfo.jobId, postedJobConfig)
                           future.map {
                             case JobConfigStored =>
-                              ctx.complete(202, getJobReport(jobInfo, jobStarted = true))
+                              val stcode = 202;
+                              val jobReport = getJobReport(jobInfo, jobStarted = true);
+                              logger.info("StatusCode: " + stcode + ", jobReport: " + jobReport);
+                              ctx.complete(stcode, jobReport)
                           }.recover {
-                            case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+                            case e: Exception => logAndComplete(ctx, "ERROR", 500, e);
                           }
                         case JobValidationFailed(_, _, ex) =>
-                          ctx.complete(400, errMap(ex, "VALIDATION FAILED"))
+                          logAndComplete(ctx, "VALIDATION FAILED", 400, ex);
                         case NoSuchApplication => notFound(ctx, "appName " + appName + " not found")
                         case NoSuchClass => notFound(ctx, "classPath " + classPath + " not found")
-                        case WrongJobType =>
-                          ctx.complete(400, errMap("Invalid job type for this context"))
-                        case JobLoadingError(err) =>
-                          ctx.complete(500, errMap(err, "JOB LOADING FAILED"))
+                        case WrongJobType => logAndComplete(ctx, "Invalid job type for this context", 400);
+                        case JobLoadingError(err) => logAndComplete(ctx, "JOB LOADING FAILED", 500, err);
                         case NoJobSlotsAvailable(maxJobSlots) =>
+                          val stcode = 503;
                           val errorMsg = "Too many running jobs (" + maxJobSlots.toString +
                             ") for job context '" + contextOpt.getOrElse("ad-hoc") + "'"
-                          ctx.complete(503, Map(StatusKey -> "NO SLOTS AVAILABLE", ResultKey -> errorMsg))
-                        case ContextInitError(e) => ctx.complete(500, errMap(e, "CONTEXT INIT FAILED"))
+                          logger.info("StatusCode: " + stcode
+                                + ", ErrorMessage: NO SLOTS AVAILABLE, " + errorMsg);
+                          ctx.complete(stcode, Map(StatusKey -> "NO SLOTS AVAILABLE", ResultKey -> errorMsg))
+                        case ContextInitError(e) => logAndComplete(ctx, "CONTEXT INIT FAILED", 500, e);
                       }.recover {
-                        case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+                        case e: Exception => logAndComplete(ctx, "ERROR", 500, e);
                       }
                     }
                   } catch {
                     case e: NoSuchElementException =>
-                      complete(StatusCodes.NotFound, errMap("context " + contextOpt.get + " not found"))
+                      val stcode = StatusCodes.NotFound;
+                      val errMes = "context " + contextOpt.get + " not found";
+                      logger.info("StatusCode: " + stcode + ", ErrorMessage: " + errMes
+                            + ", StackTrace: " + e.getStackTrace);
+                      complete(stcode, errMap(errMes))
                     case e: ConfigException =>
-                      complete(StatusCodes.BadRequest, errMap("Cannot parse config: " + e.getMessage))
+                      val stcode = StatusCodes.BadRequest;
+                      val errMes = "Cannot parse config: " + e.getMessage;
+                      logger.info("StatusCode: " + stcode + ", ErrorMessage: " + errMes
+                            + ", StackTrace: " + e.getStackTrace);
+                      complete(stcode, errMap(errMes))
                     case e: Exception =>
-                      complete(500, errMap(e, "ERROR"))
+                      val stcode = 500;
+                      val errMes = "ERROR";
+                      logger.info("StatusCode: " + stcode + ", ErrorMessage: " + errMes
+                          + ", StackTrace: " + e.getStackTrace);
+                      complete(stcode, errMap(e, errMes))
                   }
               }
           }
