@@ -18,7 +18,8 @@ final class ManagerLauncher(systemConfig: Config, contextConfig: Config,
 
   override def addCustomArguments() {
       if (deployMode == "client") {
-        val gcFilePath = new File(contextDir, getEnvironmentVariable("GC_OUT_FILE_NAME")).toString()
+        val gcFilePath = new File(contextDir,
+            getEnvironmentVariable("GC_OUT_FILE_NAME", "gc.out")).toString()
         loggingOpts += s" -DLOG_DIR=$contextDir"
         gcOPTS += s" -Xloggc:$gcFilePath"
       }

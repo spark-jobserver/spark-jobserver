@@ -23,7 +23,6 @@ abstract class Launcher(config: Config) {
 
     protected final val master = config.getString("spark.master")
     protected final val deployMode = config.getString("spark.submit.deployMode")
-    protected final val currentWorkingDirectory = getEnvironmentVariable("appdir")
     protected final val sjsJarPath = getEnvironmentVariable("MANAGER_JAR_FILE")
     protected final val baseGCOPTS = getEnvironmentVariable("GC_OPTS_BASE")
     protected final val baseJavaOPTS = getEnvironmentVariable("JAVA_OPTS_BASE")
@@ -35,7 +34,6 @@ abstract class Launcher(config: Config) {
       if (!validate()) return false
 
       initSparkLauncher()
-      logger.info(s"Spark launcher working directory is $currentWorkingDirectory")
 
       try {
         logger.info("Adding custom arguments to launcher")
@@ -49,8 +47,8 @@ abstract class Launcher(config: Config) {
       }
     }
 
-    protected final def getEnvironmentVariable(name: String): String = {
-      sys.env.get(name).getOrElse("")
+    protected final def getEnvironmentVariable(name: String, default: String = ""): String = {
+      sys.env.get(name).getOrElse(default)
     }
 
     private def initSparkLauncher() {
@@ -63,10 +61,7 @@ abstract class Launcher(config: Config) {
     }
 
     private def validate(): Boolean = {
-      if (!new File(currentWorkingDirectory).isDirectory()) {
-        logger.error(s"Working directory is empty or doesnot exist. Path is $currentWorkingDirectory")
-        return false
-      } else if (!new File(sjsJarPath).isFile()) {
+      if (!new File(sjsJarPath).isFile()) {
         logger.error(s"job-server jar file doesn't exist. Path is $sjsJarPath")
         return false
       }
