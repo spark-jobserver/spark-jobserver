@@ -1,12 +1,12 @@
 # Python Support
 
 Spark Job Server supports Python jobs through a Python specific context factory
-`spark.jobserver.python.PythonSparkContextFactory`. See the [Contexts](contexts.md) documentation
+`spark.jobserver.python.PythonSessionContextFactory`. See the [Contexts](contexts.md) documentation
 for information on contexts.
 
 ## Setting up Spark Job Server with Python support
 
-The `PythonSparkContextFactory` class is part of `job-server-extras`, therefore it is the assembly jar of that sub-module
+The `PythonSessionContextFactory` class is part of `job-server-extras`, therefore it is the assembly jar of that sub-module
 which should be used (this is the default for deployment anyway).
 
 The application config can be configured with paths to be added to the `PYTHONPATH` environment variable when the python
@@ -30,7 +30,7 @@ A basic config supporting Python might look like:
         python {
           paths = [
             ${SPARK_HOME}/python,
-            "/home/user/spark-jobserver/job-server-extras/job-server-python/target/python/spark_jobserver_python-0.7.0_SNAPSHOT-py2.7.egg"
+            "/home/user/spark-jobserver/job-server-extras/job-server-python/target/python/spark_jobserver_python-0.8.0_SNAPSHOT-py2.7.egg"
           ]
 
           # The default value in application.conf is "python"
@@ -106,7 +106,7 @@ class WordCountSparkJob(SparkJob):
             return build_problems(['config input.strings not found'])
 
     def run_job(self, context, runtime, data):
-        return context.parallelize(data).countByValue()
+        return context._sc.parallelize(data).countByValue()
 ```
 
 ### Return types
@@ -150,7 +150,7 @@ Then, running `python setup.py bdist_egg` will create a file `dist/my_job_packag
 
 If Spark Job Server is running with Python support, A Python context can be started with, for example:
 
-    curl -X POST "localhost:8090/contexts/py-context?context-factory=spark.jobserver.python.PythonSparkContextFactory"
+    curl -X POST "localhost:8090/contexts/py-context?context-factory=spark.jobserver.python.PythonSessionContextFactory"
 
 Whereas Java and Scala jobs are packaged as Jar files, Python jobs need to be packaged as `Egg` files. A set of example jobs
 can be build using the `job-server-python/` sbt task `job-server-python/buildPyExamples`. this builds an examples Egg
@@ -166,12 +166,18 @@ Then, running a Python job is similar to running other job types:
 
     curl "localhost:8090/jobs/<job-id>"
 
-## SQLContext and HiveContext support
+Note: The SparkJobServer takes care of pushing the Egg file you uploaded to Spark as part of the job submission, ensuring that all workers have access to the full contents of the Egg file.  
 
-Python support is also available for `SQLContext` and `HiveContext`. Simply launch a context using
-`spark.jobserver.python.PythonSQLContextFactory` or `spark.jobserver.python.PythonHiveContextFactory`. For example:
+## PythonSessionContext
 
-    curl -X POST "localhost:8090/contexts/pysql-context?context-factory=spark.jobserver.python.PythonSQLContextFactory"
+Python session context provides full access to Spark Session including access to the underlaying Spark Context.  
+The previously available  `SQLContext` and `HiveContext` Context Factory are no longer supported. 
+
+
+Simply launch a context using
+`spark.jobserver.python.PythonSessionContextFactory` For example:
+
+    curl -X POST "localhost:8090/contexts/pysql-context?context-factory=spark.jobserver.python.PythonSessionContextFactory"
 
 When implementing the Python job, you can simply assume that the `context` argument to `validate` and `run_job`
 is of the appropriate type. Due to dynamic typing in Python, this is not enforced in the method definitions. For example:
@@ -182,8 +188,6 @@ class SQLAverageJob(SparkJob):
     def validate(self, context, runtime, config):
         problems = []
         job_data = None
-        if not isinstance(context, SQLContext):
-            problems.append('Expected a SQL context')
         if config.get('input.data', None):
             job_data = config.get('input.data')
         else:
@@ -204,15 +208,15 @@ class SQLAverageJob(SparkJob):
 ```
 
 The above job implementation checks during the `validate` stage that the `context` object is of the correct type.
-Then in `run_job` dataframe operations are used, which exist on `SQLContext`.
+Then in `run_job` dataframe operations are used, which exist on `SessionContext`.
 
 This job is one of the examples so running the sbt task `job-server-python/buildPyExamples` and uploading the resulting
 Egg makes this job available:
 
-    curl --data-binary @job-server-python/target/python/sjs_python_examples-0.7.0_SNAPSHOT-py2.7.egg \
+    curl --data-binary @job-server-python/target/python/sjs_python_examples-0.8.0_SNAPSHOT-py2.7.egg \
     -H 'Content-Type: application/python-archive' localhost:8090/binaries/example_jobs
 
-The input to the job can be provided as a conf file, e.g. with the contents:
+The input to the job can be provided as a conf file, in this example `sqlinput.conf`, with the contents:
 
     input.data = [
       ["bob", 20, 1200],
@@ -221,7 +225,7 @@ The input to the job can be provided as a conf file, e.g. with the contents:
       ["sue", 21, 1600]
     ]
 
-Then we can submit the `SQLContext` based job:
+Then we can submit the `SessionContext` based job:
 
     curl -d @sqlinput.conf \
     "localhost:8090/jobs?appName=example_jobs&classPath=example_jobs.sql_average.SQLAverageJob&context=pysql-context"
