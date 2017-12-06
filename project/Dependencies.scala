@@ -33,7 +33,8 @@ object Dependencies {
 
   lazy val sparkExtraDeps = Seq(
     "org.apache.derby" % "derby" % derby % Provided excludeAll(excludeNettyIo, excludeQQ),
-    "org.apache.hadoop" % "hadoop-client" % hadoop % Provided excludeAll(excludeNettyIo, excludeQQ),
+    "org.apache.hadoop" % "hadoop-client" % hadoop % Provided
+      excludeAll(excludeNettyIo, excludeQQ, excludeAsm, excludeServlet),
     "com.datastax.spark" %% "spark-mllib" % spark % Provided excludeAll(excludeNettyIo, excludeQQ),
     "com.datastax.spark" %% "spark-sql" % spark % Provided excludeAll(excludeNettyIo, excludeQQ),
     "com.datastax.spark" %% "spark-streaming" % spark % Provided excludeAll(excludeNettyIo, excludeQQ),
@@ -63,7 +64,8 @@ object Dependencies {
 
 
   lazy val cassandraDeps = Seq(
-    "com.datastax.dse" %% "spark-connector" % cassandraConnector
+    "com.datastax.dse" % "spark-connector" % cassandraConnector % Provided excludeAll(
+      excludeNettyIo, excludeQQ)
   )
 
   lazy val logbackDeps = Seq(
