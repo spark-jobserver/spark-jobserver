@@ -20,6 +20,7 @@ import scala.concurrent.{Await, Future}
 import scala.util.{Failure, Success}
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
+import spark.jobserver.util.NoSuchBinaryException
 
 // Tests web response codes and formatting
 // Does NOT test underlying Supervisor / JarManager functionality
@@ -61,8 +62,8 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
   val baseJobInfo =
     JobInfo("foo-1", "context", BinaryInfo("demo", BinaryType.Jar, dt), "com.abc.meme", dt, None, None)
   val finishedJobInfo = baseJobInfo.copy(endTime = Some(dt.plusMinutes(5)))
-  val errorJobInfo = finishedJobInfo.copy(error =  Some(new Throwable("test-error")))
-  val killedJobInfo = finishedJobInfo.copy(error =  Some(JobKilledException(finishedJobInfo.jobId)))
+  val errorJobInfo = finishedJobInfo.copy(error =  Some(ErrorData(new Throwable("test-error"))))
+  val killedJobInfo = finishedJobInfo.copy(error =  Some(ErrorData(JobKilledException(finishedJobInfo.jobId))))
   val JobId = "jobId"
   val StatusKey = "status"
   val ResultKey = "result"
@@ -121,6 +122,7 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
       }
 
 
+
       case ListBinaries(Some(BinaryType.Jar)) =>
         sender ! Map("demo1" -> (BinaryType.Jar, dt), "demo2" -> (BinaryType.Jar, dt.plusHours(1)))
 
@@ -135,6 +137,7 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
       case StoreBinary("daofail", _, _) => sender ! BinaryStorageFailure(new Exception("DAO failed to store"))
       case StoreBinary(_, _, _)         => sender ! BinaryStored
 
+      case DeleteBinary("badbinary") => sender ! NoSuchBinary
       case DeleteBinary(_) => sender ! BinaryDeleted
 
       case DataManagerActor.StoreData("errorfileToRemove", _) => sender ! DataManagerActor.Error
@@ -196,6 +199,9 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
 
       case StoreJobConfig(_, _) => sender ! JobConfigStored
       case KillJob(jobId) => sender ! JobKilled(jobId, DateTime.now())
+
+      case GetSparkWebUI("context1") => sender ! WebUIForContext("context1", Some("http://spark:4040"))
+      case GetSparkWebUI("context2") => sender ! WebUIForContext("context1", None)
     }
   }
 

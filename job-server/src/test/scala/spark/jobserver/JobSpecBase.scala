@@ -1,6 +1,6 @@
 package spark.jobserver
 
-import akka.actor.{ActorRef, ActorSystem}
+import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.testkit.ImplicitSender
 import akka.testkit.TestKit
 import com.typesafe.config.{Config, ConfigFactory}
@@ -61,6 +61,7 @@ abstract class JobSpecBaseBase(system: ActorSystem) extends TestKit(system) with
 with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
   var dao: JobDAO = _
   var daoActor: ActorRef = _
+  val emptyActor = system.actorOf(Props.empty)
   var manager: ActorRef = _
   def testJar: java.io.File
   def testEgg: java.io.File

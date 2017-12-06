@@ -19,7 +19,7 @@
     <ul class="nav nav-tabs nav-justified" id="navTabs">
       <li class="active"><a href="#jobs" data-toggle="tab">Jobs</a></li>
       <li><a href="#contexts" data-toggle="tab">Contexts</a></li>
-      <li><a href="#jars" data-toggle="tab">Jars</a></li>
+      <li><a href="#binaries" data-toggle="tab">Binaries</a></li>
     </ul>
     <div class="tab-content">
       <div class="tab-pane active" id="jobs">
@@ -86,6 +86,8 @@
               <thead>
                 <tr>
                   <th>Name</th>
+                  <th>Spark URL</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -94,14 +96,15 @@
           </div>
         </div>
       </div>
-      <div class="tab-pane" id="jars">
+      <div class="tab-pane" id="binaries">
         <div class="panel">
           <div class="panel-heading"></div>
           <div class="panel-body">
-            <table class="table table-striped" id="jarsTable">
+            <table class="table table-striped" id="binariesTable">
               <thead>
                 <tr>
                   <th>Name</th>
+                  <th>Type</th>
                   <th>Deployment Time</th>
                 </tr>
               </thead>

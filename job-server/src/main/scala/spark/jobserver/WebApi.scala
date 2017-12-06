@@ -16,7 +16,7 @@ import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import spark.jobserver.JobManagerActor.JobKilledException
 import spark.jobserver.auth._
-import spark.jobserver.io.{BinaryType, JobInfo, JobStatus}
+import spark.jobserver.io.{BinaryType, ErrorData, JobInfo, JobStatus}
 import spark.jobserver.routes.DataRoutes
 import spark.jobserver.util.{SSLContextFactory, SparkJobUtils}
 import spray.http.HttpHeaders.`Content-Type`
@@ -26,6 +26,7 @@ import spray.io.ServerSSLEngineProvider
 import spray.json.DefaultJsonProtocol._
 import spray.routing.directives.AuthMagnet
 import spray.routing.{HttpService, RequestContext, Route}
+
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.Try
 
@@ -74,27 +75,26 @@ object WebApi {
   }
 
   def formatException(t: Throwable): Any =
-    if (t.getCause != null) {
-      Map("message" -> t.getMessage,
-        "errorClass" -> t.getClass.getName,
-        "cause" -> t.getCause.getMessage,
-        "causingClass" -> t.getCause.getClass.getName,
-        "stack" -> t.getCause.getStackTrace.map(_.toString).toSeq)
-    } else {
-      Map("message" -> t.getMessage,
-        "errorClass" -> t.getClass.getName,
-        "stack" -> t.getStackTrace.map(_.toString).toSeq)
-    }
+    Map("message" -> t.getMessage,
+      "errorClass" -> t.getClass.getName,
+      "stack" -> ErrorData.getStackTrace(t))
+
+  def formatException(t: ErrorData): Any = {
+    Map("message" -> t.message,
+      "errorClass" -> t.errorClass,
+      "stack" -> t.stackTrace
+    )
+  }
 
   def getJobReport(jobInfo: JobInfo, jobStarted: Boolean = false): Map[String, Any] = {
 
     val statusMap = if (jobStarted) Map(StatusKey -> JobStatus.Started) else jobInfo match {
       case JobInfo(_, _, _, _, _, None, _) => Map(StatusKey -> JobStatus.Running)
-      case JobInfo(_, _, _, _, _, _, Some(ex)) =>
-        ex match {
-          case e: JobKilledException => Map(StatusKey -> JobStatus.Killed, ResultKey -> formatException(ex))
-          case _ => Map(StatusKey -> JobStatus.Error, ResultKey -> formatException(ex))
-        }
+      case JobInfo(_, _, _, _, _, _, Some(err))
+        if err.errorClass == classOf[JobKilledException].getName =>
+        Map(StatusKey -> JobStatus.Killed, ResultKey -> formatException(err))
+      case JobInfo(_, _, _, _, _, _, Some(err)) =>
+        Map(StatusKey -> JobStatus.Error, ResultKey -> formatException(err))
       case JobInfo(_, _, _, _, _, Some(e), None) => Map(StatusKey -> "FINISHED")
     }
     Map("jobId" -> jobInfo.jobId,
@@ -182,6 +182,11 @@ class WebApi(system: ActorSystem,
       ServerSSLEngineProvider { engine =>
         val protocols = config.getStringList("spray.can.server.enabledProtocols")
         engine.setEnabledProtocols(protocols.toArray(Array[String]()))
+        val sprayConfig = config.getConfig("spray.can.server")
+        if(sprayConfig.hasPath("truststore")) {
+          engine.setNeedClientAuth(true)
+          logger.info("Client authentication activated.")
+        }
         engine
       }
     }
@@ -262,6 +267,7 @@ class WebApi(system: ActorSystem,
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
             future.map {
               case BinaryDeleted => ctx.complete(StatusCodes.OK)
+              case NoSuchBinary => notFound(ctx, s"can't find binary with name $appName")
             }.recover {
               case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
             }
@@ -332,6 +338,7 @@ class WebApi(system: ActorSystem,
   /**
    * Routes for listing, adding, and stopping contexts
    *     GET /contexts         - lists all current contexts
+   *     GET /contexts/<contextName> - returns some info about the context (such as spark UI url)
    *     POST /contexts/<contextName> - creates a new context
    *     DELETE /contexts/<contextName> - stops a context and all jobs running in it
    */
@@ -340,6 +347,20 @@ class WebApi(system: ActorSystem,
 
     // user authentication
     authenticate(authenticator) { authInfo =>
+      (get & path(Segment)) { (contextName) =>
+        respondWithMediaType(MediaTypes.`application/json`) { ctx =>
+          val future = supervisor ? GetSparkWebUI(contextName)
+          future.map {
+            case WebUIForContext(name, Some(url)) =>
+              ctx.complete(200, Map("context" -> contextName, "url" -> url))
+            case WebUIForContext(name, None) => ctx.complete(200, Map("context" -> contextName))
+            case NoSuchContext => notFound(ctx, s"can't find context with name $contextName")
+
+          }.recover {
+            case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+          }
+        }
+      } ~
       get { ctx =>
         (supervisor ? ListContexts).mapTo[Seq[String]]
           .map { contexts =>
@@ -402,34 +423,37 @@ class WebApi(system: ActorSystem,
           }
         } ~
         put {
-          parameter("reset") { reset =>
+          parameters("reset", 'sync.as[Boolean] ?) { (reset, sync) =>
             respondWithMediaType(MediaTypes.`application/json`) { ctx =>
               reset match {
                 case "reboot" =>
                   import ContextSupervisor._
                   import java.util.concurrent.TimeUnit
 
-                  logger.warn("refreshing contexts")
                   val future = (supervisor ? ListContexts).mapTo[Seq[String]]
                   val lookupTimeout = Try(config.getDuration("spark.jobserver.context-lookup-timeout",
                     TimeUnit.MILLISECONDS).toInt / 1000).getOrElse(1)
                   val contexts = Await.result(future, lookupTimeout.seconds)
 
-                  val stopFutures = contexts.map(c => supervisor ? StopContext(c))
-                  Await.ready(Future.sequence(stopFutures), contextTimeout.seconds)
+                  if (sync.isDefined && !sync.get) {
+                    contexts.map(c => supervisor ! StopContext(c))
+                    ctx.complete(StatusCodes.OK, successMap("Context reset requested"))
+                  } else {
+                    val stopFutures = contexts.map(c => supervisor ? StopContext(c))
+                    Await.ready(Future.sequence(stopFutures), contextTimeout.seconds)
 
-                  Thread.sleep(1000) // we apparently need some sleeping in here, so spark can catch up
+                    Thread.sleep(1000) // we apparently need some sleeping in here, so spark can catch up
 
-                  (supervisor ? AddContextsFromConfig).onFailure {
-                    case t => ctx.complete("ERROR")
+                    (supervisor ? AddContextsFromConfig).onFailure {
+                      case t => ctx.complete("ERROR")
+                    }
+                    ctx.complete(StatusCodes.OK, successMap("Context reset"))
                   }
-                  ctx.complete(StatusCodes.OK, successMap("Context reset"))
-
                 case _ => ctx.complete("ERROR")
-              }
             }
           }
         }
+      }
     }
   }
 

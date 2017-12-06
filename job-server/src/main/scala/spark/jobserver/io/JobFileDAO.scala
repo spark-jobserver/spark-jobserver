@@ -1,15 +1,14 @@
 package spark.jobserver.io
 
-import com.typesafe.config._
 import java.io._
-import java.nio.file.{Files, Paths}
 
+import com.typesafe.config._
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 
 import scala.collection.mutable
-import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 
 /**
   * NB This class does NOT support persisting binary types
@@ -171,13 +170,16 @@ class JobFileDAO(config: Config) extends JobDAO {
     out.writeLong(jobInfo.startTime.getMillis)
     val time = if (jobInfo.endTime.isEmpty) jobInfo.startTime.getMillis else jobInfo.endTime.get.getMillis
     out.writeLong(time)
-    val errorStr = if (jobInfo.error.isEmpty) "" else jobInfo.error.get.toString
-    out.writeUTF(errorStr)
+    out.writeUTF(jobInfo.error.map(_.message).getOrElse(""))
+    out.writeUTF(jobInfo.error.map(_.errorClass).getOrElse(""))
+    out.writeUTF(jobInfo.error.map(_.stackTrace).getOrElse(""))
   }
 
   private def readError(in: DataInputStream) = {
-    val error = in.readUTF()
-    if (error == "") None else Some(new Throwable(error))
+    val error = Some(in.readUTF()).filter(_.isEmpty)
+    val errorClass = in.readUTF()
+    val errorStackTrace = in.readUTF()
+    error.map(ErrorData(_, errorClass, errorStackTrace))
   }
 
   private def readJobInfo(in: DataInputStream) = JobInfo(
@@ -208,15 +210,21 @@ class JobFileDAO(config: Config) extends JobDAO {
     filterJobs.take(limit)
   }
 
+  override def getRunningJobInfosForContextName(contextName: String): Future[Seq[JobInfo]] = Future {
+    jobs.values.toSeq.filter(j => j.endTime.isEmpty && j.error.isEmpty && j.contextName == contextName)
+  }
+
   override def saveJobConfig(jobId: String, jobConfig: Config) {
     writeJobConfig(jobConfigsOutputStream, jobId, jobConfig)
     configs(jobId) = jobConfig
   }
 
-  override def getJobConfigs: Future[Map[String, Config]] = Future { configs.toMap }
-
   override def getJobConfig(jobId: String): Future[Option[Config]] = Future {
     configs.get(jobId)
+  }
+
+  override def getLastUploadTimeAndType(appName: String): Option[(DateTime, BinaryType)] = {
+    apps(appName).headOption.map(uploadTime => (uploadTime, BinaryType.Jar))
   }
 
   private def writeJobConfig(out: DataOutputStream, jobId: String, jobConfig: Config) {
@@ -228,11 +236,6 @@ class JobFileDAO(config: Config) extends JobDAO {
     in.readUTF,
     ConfigFactory.parseString(in.readUTF)
   )
-
-  override def getBinaryContent(appName: String, binaryType: BinaryType,
-                                uploadTime: DateTime): Array[Byte] = {
-    Files.readAllBytes(Paths.get(retrieveBinaryFile(appName, binaryType, uploadTime)))
-  }
 
   /**
     * Delete a jar.

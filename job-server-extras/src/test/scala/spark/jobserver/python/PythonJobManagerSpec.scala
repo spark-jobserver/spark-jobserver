@@ -8,7 +8,7 @@ import scala.concurrent.duration._
 import scala.collection.JavaConverters._
 
 object PythonJobManagerSpec extends JobSpecConfig {
-  override val contextFactory = classOf[PythonSparkContextFactory].getName
+  override val contextFactory = classOf[PythonSessionContextFactory].getName
 }
 
 class PythonJobManagerSpec extends ExtrasJobSpecBase(PythonJobManagerSpec.getNewSystem) {
@@ -22,21 +22,21 @@ class PythonJobManagerSpec extends ExtrasJobSpecBase(PythonJobManagerSpec.getNew
     it("should work with JobManagerActor") {
       val pyContextConfig = ConfigFactory.parseString(
         """
-          |context-factory = "spark.jobserver.python.PythonSparkContextFactory"
+          |context-factory = "spark.jobserver.python.TestPythonSessionContextFactory"
           |context.name = "python_ctx"
           |context.actorName = "python_ctx"
         """.stripMargin).
         withFallback(PythonSparkContextFactorySpec.config)
-      manager = system.actorOf(JobManagerActor.props(pyContextConfig, daoActor))
+      manager = system.actorOf(JobManagerActor.props(daoActor))
 
-      manager ! JobManagerActor.Initialize(None)
-      expectMsgClass(classOf[JobManagerActor.Initialized])
+      manager ! JobManagerActor.Initialize(pyContextConfig, None, emptyActor)
+      expectMsgClass(30 seconds, classOf[JobManagerActor.Initialized])
 
       uploadTestEgg("python-demo")
 
       manager ! JobManagerActor.StartJob(
         "python-demo",
-        "example_jobs.word_count.WordCountSparkJob",
+        "example_jobs.word_count.WordCountSparkSessionJob",
         ConfigFactory.parseString("""input.strings = ["a", "b", "a"]"""),
         errorEvents ++ syncEvents)
       expectMsgPF(3 seconds, "Expected a JobResult or JobErroredOut message!") {
@@ -45,6 +45,7 @@ class PythonJobManagerSpec extends ExtrasJobSpecBase(PythonJobManagerSpec.getNew
         }
         case JobErroredOut(_, _, error: Throwable) => throw error
       }
+      expectNoMsg()
     }
   }
 }
