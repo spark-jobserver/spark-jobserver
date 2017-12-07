@@ -1,6 +1,6 @@
 package spark.jobserver
 
-import java.nio.file.{Files, Paths}
+import java.nio.file.{FileAlreadyExistsException, Files, Paths}
 import java.nio.charset.Charset
 import java.util.concurrent.TimeUnit
 
@@ -232,7 +232,13 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
     // Create a temporary dir, preferably in the LOG_DIR
     val encodedContextName = java.net.URLEncoder.encode(name, "UTF-8")
     val contextDir = Option(System.getProperty("LOG_DIR")).map { logDir =>
-      Files.createTempDirectory(Paths.get(logDir), s"jobserver-$encodedContextName")
+      val path = Paths.get(logDir, encodedContextName)
+      try {
+        Files.createDirectory(path)
+      } catch {
+        case ignored: FileAlreadyExistsException =>
+          path
+      }
     }.getOrElse(Files.createTempDirectory("jobserver"))
     logger.info("Created working directory {} for context {}", contextDir: Any, name)
 
