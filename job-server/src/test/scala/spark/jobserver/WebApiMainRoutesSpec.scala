@@ -104,6 +104,12 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         status should be (OK)
       }
     }
+
+    it("should respond with 404 Not Found if binary was not found during deletion") {
+      Delete("/binaries/badbinary") ~> sealRoute(routes) ~> check {
+        status should be (NotFound)
+      }
+    }
   }
 
   describe("list jobs") {
@@ -378,10 +384,9 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         result(StatusKey) should equal(JobStatus.Error)
         result.keys should equal (Set(JobId, StatusKey, ResultKey))
         val exceptionMap = result(ResultKey).asInstanceOf[Map[String, Any]]
-        exceptionMap should contain key ("cause")
-        exceptionMap should contain key ("causingClass")
-        exceptionMap("cause") should equal ("foo")
-        exceptionMap("causingClass").asInstanceOf[String] should include ("IllegalArgumentException")
+        exceptionMap should contain key ("stack")
+        exceptionMap("stack").asInstanceOf[String] should include ("foo")
+        exceptionMap("stack").asInstanceOf[String] should include ("IllegalArgumentException")
       }
     }
   }
@@ -494,6 +499,19 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         """.stripMargin
       Post("/contexts/custom-ctx?num-cpu-cores=2&override_me=2", config) ~> sealRoute(routes) ~> check {
         status should be (OK)
+      }
+    }
+
+    it("should return the sparkWebUi url if we get a context/id") {
+      Get("/contexts/context1") ~> sealRoute(routes) ~> check {
+        status should be (OK)
+        responseAs[Map[String, String]] should be (Map("context" -> "context1", "url" -> "http://spark:4040"))
+      }
+    }
+    it("should return the context name if even no URL can be found") {
+      Get("/contexts/context2") ~> sealRoute(routes) ~> check {
+        status should be (OK)
+        responseAs[Map[String, String]] should be (Map("context" -> "context2"))
       }
     }
   }

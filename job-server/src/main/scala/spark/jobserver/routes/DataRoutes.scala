@@ -4,13 +4,20 @@ import akka.actor.ActorRef
 import akka.pattern.ask
 import akka.util.Timeout
 import spark.jobserver.DataManagerActor._
-import spray.routing.{ HttpService, Route }
+import spray.routing.{HttpService, Route}
 import spray.http.MediaTypes
 import spray.http.StatusCodes
 import java.net.URLDecoder
+import java.util.concurrent.TimeUnit
+
+import org.slf4j.LoggerFactory
+import spark.jobserver.ContextSupervisor.StopContext
+import spark.jobserver.common.akka.web.JsonUtils.getClass
 import spray.httpx.SprayJsonSupport.sprayJsonMarshaller
 import spray.json.DefaultJsonProtocol._
-import scala.concurrent.ExecutionContext
+
+import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.util.Try
 
 /**
  * Routes for listing, deletion of and storing data files
@@ -48,6 +55,30 @@ trait DataRoutes extends HttpService {
                 badRequest(ctx, "Unable to delete data file '" + filename + "'.")
             }.recover {
               case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+            }
+          }
+        }
+      } ~
+      put {
+        parameters("reset", 'sync.as[Boolean] ?) { (reset, sync) =>
+          respondWithMediaType(MediaTypes.`application/json`) { ctx =>
+            reset match {
+              case "reboot" => {
+                if (sync.isDefined && !sync.get) {
+                  dataManager ! DeleteAllData
+                  ctx.complete(StatusCodes.OK, successMap("Data reset requested"))
+                }
+                else {
+                  val future = dataManager ? DeleteAllData
+                  future.map {
+                    case Deleted => ctx.complete(StatusCodes.OK, successMap("Data reset"))
+                    case Error => badRequest(ctx, "Unable to delete data folder")
+                  }.recover {
+                    case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+                  }
+                }
+              }
+              case _ => ctx.complete("ERROR")
             }
           }
         }

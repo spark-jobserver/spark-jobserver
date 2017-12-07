@@ -1,10 +1,16 @@
 package spark.jobserver.io
 
+import java.io.{PrintWriter, StringWriter}
+
 import com.typesafe.config._
 import org.joda.time.{DateTime, Duration}
+import org.slf4j.LoggerFactory
+import spark.jobserver.JobManagerActor.JobKilledException
 import spray.http.{HttpHeaders, MediaType, MediaTypes}
-import scala.concurrent.{Await, Future}
+
 import scala.concurrent.duration._
+import scala.concurrent.{Await, Future}
+import scala.concurrent.ExecutionContext.Implicits.global
 
 trait BinaryType {
   def extension: String
@@ -42,13 +48,26 @@ object BinaryType {
 // Uniquely identifies the binary used to run a job
 case class BinaryInfo(appName: String, binaryType: BinaryType, uploadTime: DateTime)
 
+case class ErrorData(message: String, errorClass: String, stackTrace: String)
+
+object ErrorData {
+  def apply(ex: Throwable): ErrorData = {
+    ErrorData(ex.getMessage, ex.getClass.getName, getStackTrace(ex))
+  }
+
+  def getStackTrace(ex: Throwable): String = {
+    val stackTrace = new StringWriter()
+    ex.printStackTrace(new PrintWriter(stackTrace))
+    stackTrace.toString
+  }
+}
 
 // Both a response and used to track job progress
 // NOTE: if endTime is not None, then the job has finished.
 case class JobInfo(jobId: String, contextName: String,
                    binaryInfo: BinaryInfo, classPath: String,
                    startTime: DateTime, endTime: Option[DateTime],
-                   error: Option[Throwable]) {
+                   error: Option[ErrorData]) {
   def jobLengthMillis: Option[Long] = endTime.map { end => new Duration(startTime, end).getMillis }
 
   def isRunning: Boolean = endTime.isEmpty
@@ -61,6 +80,10 @@ object JobStatus {
   val Finished = "FINISHED"
   val Started = "STARTED"
   val Killed = "KILLED"
+}
+
+object JobDAO {
+  private val logger = LoggerFactory.getLogger(classOf[JobDAO])
 }
 
 /**
@@ -81,6 +104,7 @@ trait JobDAO {
     * @param appName
     */
   def deleteBinary(appName: String)
+
   /**
    * Return all applications name and their last upload times.
    *
@@ -119,20 +143,35 @@ trait JobDAO {
   def getJobInfos(limit: Int, status: Option[String] = None): Future[Seq[JobInfo]]
 
   /**
+    * Return all job ids to their job info.
+    */
+  def getRunningJobInfosForContextName(contextName: String): Future[Seq[JobInfo]]
+
+  /**
+    * Move all jobs running on context with given name to error state
+    *
+    * @param contextName name of the context
+    * @param endTime time to put into job infos end time column
+    */
+  def cleanRunningJobInfosForContext(contextName: String, endTime: DateTime): Future[Unit] = {
+    getRunningJobInfosForContextName(contextName).map { infos =>
+      JobDAO.logger.info("cleaning {} running jobs for {}", infos.size, contextName)
+      for (info <- infos) {
+        val updatedInfo = info.copy(
+          endTime = Some(endTime),
+          error = Some(ErrorData(JobKilledException(info.jobId))))
+        saveJobInfo(jobInfo = updatedInfo)
+      }
+    }
+  }
+
+  /**
    * Persist a job configuration along with provided jobId.
    *
    * @param jobId
    * @param jobConfig
    */
   def saveJobConfig(jobId: String, jobConfig: Config)
-
-  /**
-   * Return all job ids to their job configuration.
-   * @todo remove. used only in test
-   * @return
-   */
-  @deprecated("Leads to performance problems and OutOfMemory error ultimately", "0.7.1")
-  def getJobConfigs: Future[Map[String, Config]]
 
   /**
     * Returns a config for a given jobId
@@ -144,16 +183,5 @@ trait JobDAO {
    * Returns the last upload time for a given app name.
    * @return Some(lastUploadedTime) if the app exists and the list of times is nonempty, None otherwise
    */
-  def getLastUploadTimeAndType(appName: String): Option[(DateTime, BinaryType)] =
-    Await.result(getApps, 60 seconds).get(appName).map(t => (t._2, t._1))
-
-  /**
-    * Fetch submited jar or egg content for remote driver and JobManagerActor to cache in local
-    * @param appName
-    * @param uploadTime
-    * @return
-    */
-  def getBinaryContent(appName: String,
-                       binaryType: BinaryType,
-                       uploadTime: DateTime): Array[Byte]
+  def getLastUploadTimeAndType(appName: String): Option[(DateTime, BinaryType)]
 }

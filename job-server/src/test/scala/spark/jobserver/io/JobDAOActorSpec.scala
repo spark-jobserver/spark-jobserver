@@ -1,13 +1,14 @@
 package spark.jobserver.io
 
 import akka.actor.ActorSystem
-import akka.testkit.{ImplicitSender, TestKit}
+import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import com.typesafe.config.Config
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfterAll, FunSpecLike, Matchers}
+import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.io.JobDAOActor._
 
-import scala.concurrent.Future
+import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
@@ -18,9 +19,9 @@ object JobDAOActorSpec {
   val dt = DateTime.now()
   val dtplus1 = dt.plusHours(1)
 
-  object DummyDao extends JobDAO{
+  val cleanupProbe = TestProbe()(system)
 
-    val jarContent = Array.empty[Byte]
+  object DummyDao extends JobDAO{
 
     override def saveBinary(appName: String, binaryType: BinaryType,
                             uploadTime: DateTime, binaryBytes: Array[Byte]): Unit = {
@@ -36,14 +37,6 @@ object JobDAOActorSpec {
         "app2" -> (BinaryType.Egg, dtplus1)
       ))
 
-    override def getBinaryContent(appName: String, binaryType: BinaryType,
-                                  uploadTime: DateTime): Array[Byte] = {
-      appName match {
-        case "failOnThis" => throw new Exception("get binary content failure")
-        case _ => jarContent
-      }
-    }
-
     override def retrieveBinaryFile(appName: String,
                                     binaryType: BinaryType, uploadTime: DateTime): String = ???
 
@@ -52,19 +45,26 @@ object JobDAOActorSpec {
     override def getJobInfos(limit: Int, status: Option[String]): Future[Seq[JobInfo]] =
       Future.successful(Seq())
 
+    override def getRunningJobInfosForContextName(contextName: String): Future[Seq[JobInfo]] = ???
+
     override def getJobInfo(jobId: String): Future[Option[JobInfo]] = ???
 
     override def saveJobInfo(jobInfo: JobInfo): Unit = ???
 
-    override def getJobConfigs: Future[Map[String, Config]] = ???
-
     override def getJobConfig(jobId: String): Future[Option[Config]] = ???
+
+    override def getLastUploadTimeAndType(appName: String): Option[(DateTime, BinaryType)] = ???
 
     override def deleteBinary(appName: String): Unit = {
       appName match {
         case "failOnThis" => throw new Exception("deliberate failure")
         case _ => //Do nothing
       }
+    }
+
+    override def cleanRunningJobInfosForContext(contextName: String, endTime: DateTime): Future[Unit] = {
+      cleanupProbe.ref ! contextName
+      Future.successful(())
     }
   }
 }
@@ -119,9 +119,9 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       expectMsg(JobInfos(Seq()))
     }
 
-    it("should get binary content") {
-      daoActor ! GetBinaryContent("succeed", BinaryType.Jar, DateTime.now)
-      expectMsg(BinaryContent(DummyDao.jarContent))
+    it("should request jobs cleanup") {
+      daoActor ! CleanContextJobInfos("context", DateTime.now())
+      cleanupProbe.expectMsg("context")
     }
   }
 

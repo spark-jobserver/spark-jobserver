@@ -4,7 +4,11 @@
 # Spark Cluster / Job Server configuration
 spark {
   # spark.master will be passed to each job's JobContext
+  # local[...], yarn, mesos://... or spark://...
   master = "spark://"
+
+  # client or cluster deployment
+  submit.deployMode = "client"
 
   # Default # of CPUs for jobs to use for Spark standalone cluster
   #job-number-cpus = 1
@@ -13,12 +17,6 @@ spark {
     port = 8090
 
     context-per-jvm = false
-
-    # Default client mode will start up a new JobManager int local machine
-    # You can use mesos-cluster mode with REMOTE_JOBSERVER_DIR and MESOS_SPARK_DISPATCHER
-    # environment value set in xxxx.sh file to launch JobManager in remote node
-    # Mesos will take responsibility to offer resource to the JobManager process
-    driver-mode = client
 
     # Note: JobFileDAO is deprecated from v0.7.0 because of issues in
     # production and will be removed in future, now defaults to H2 file.

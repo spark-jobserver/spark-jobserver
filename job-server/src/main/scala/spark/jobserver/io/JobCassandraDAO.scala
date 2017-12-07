@@ -3,25 +3,24 @@ package spark.jobserver.io
 import java.io.File
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
-import java.nio.file.{Files, Paths}
 import java.util.UUID
 
-import com.datastax.driver.core.querybuilder.{QueryBuilder => QB}
-import com.datastax.driver.core.querybuilder.QueryBuilder._
+import scala.collection.convert.WrapAsJava
+import scala.collection.convert.Wrappers.JListWrapper
+import scala.concurrent.{Await, Future}
+import scala.concurrent.duration.DurationInt
+import scala.util.Try
+
 import com.datastax.driver.core._
-import com.datastax.driver.core.schemabuilder.SchemaBuilder.Direction
+import com.datastax.driver.core.querybuilder.{Insert, QueryBuilder => QB }
+import com.datastax.driver.core.querybuilder.QueryBuilder._
 import com.datastax.driver.core.schemabuilder.{Create, SchemaBuilder}
+import com.datastax.driver.core.schemabuilder.SchemaBuilder.Direction
 import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 
-import scala.concurrent.duration._
-import scala.collection.convert.WrapAsJava
-import scala.collection.convert.Wrappers.JListWrapper
-import scala.concurrent.{Await, Future}
 import spark.jobserver.cassandra.Cassandra.Resultset.toFuture
-
-import scala.util.Try
 
 object Metadata {
   val BinariesTable = "binaries"
@@ -35,6 +34,7 @@ object Metadata {
 
   val JobsTable = "jobs"
   val JobsChronologicalTable = "jobs_chronological"
+  val RunningJobsTable = "jobs_running"
   val JobId = "job_id"
   val ContextName = "context_name"
   val JobConfig = "job_config"
@@ -43,6 +43,8 @@ object Metadata {
   val StartDate = "start_date"
   val EndTime = "end_time"
   val Error = "error"
+  val ErrorClass = "error_class"
+  val ErrorStackTrace = "error_stack_trace"
 
 }
 
@@ -157,30 +159,13 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
   }
 
   override def getJobInfos(limit: Int, status: Option[String] = None): Future[Seq[JobInfo]] = {
-    import Metadata._
     val query = QB.select(
-      JobId, ContextName, AppName, BType, UploadTime, Classpath, StartTime, EndTime, Error
+      JobId, ContextName, AppName, BType, UploadTime, Classpath, StartTime, EndTime,
+      Error, ErrorClass, ErrorStackTrace
     ).from(JobsChronologicalTable).where(QB.eq(StartDate, today())).limit(limit)
 
     session.executeAsync(query).map { rs =>
-      val allJobs = JListWrapper(rs.all()).map { row =>
-        val endTime = row.getTimestamp(EndTime)
-        val error = row.getString(Error)
-
-        JobInfo(
-          row.getUUID(JobId).toString,
-          row.getString(ContextName),
-          BinaryInfo(
-            row.getString(AppName),
-            BinaryType.fromString(row.getString(BType)),
-            new DateTime(row.getTimestamp(UploadTime))
-          ),
-          row.getString(Classpath),
-          new DateTime(row.getTimestamp(StartTime)),
-          if (endTime != null) Option(new DateTime(endTime)) else None,
-          if (error != null) Option(new Throwable(error)) else None
-        )
-      }
+      val allJobs = JListWrapper(rs.all()).map(rowToJobInfo)
       status match {
         // !endTime.isDefined
         case Some(JobStatus.Running) => allJobs.filter(j => j.endTime.isEmpty && j.error.isEmpty)
@@ -190,6 +175,17 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
         case Some(JobStatus.Finished) => allJobs.filter(j => j.endTime.isDefined && j.error.isEmpty)
         case _ => allJobs
       }
+    }
+  }
+
+  override def getRunningJobInfosForContextName(contextName: String): Future[Seq[JobInfo]] = {
+    val query = QB.select(
+      JobId, ContextName, AppName, BType, UploadTime, Classpath, StartTime, EndTime,
+      Error, ErrorClass, ErrorStackTrace
+    ).from(RunningJobsTable).where(QB.eq(ContextName, contextName))
+
+    session.executeAsync(query).map { rs =>
+      JListWrapper(rs.all()).map(rowToJobInfo)
     }
   }
 
@@ -226,76 +222,76 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
     tuples.map(_._2).foldLeft(Array[Byte]()) { _ ++ _ }
   }
 
+  private def rowToJobInfo(row: Row): JobInfo = {
+    val errorData = Option(row.getString(Error)).map { error =>
+      val errorClass = if (row.isNull(ErrorClass)) "" else row.getString(ErrorClass)
+      val stackTrace = if (row.isNull(ErrorStackTrace)) "" else row.getString(ErrorStackTrace)
+      ErrorData(error, errorClass, stackTrace)
+    }
+    JobInfo(
+      row.getUUID(Metadata.JobId).toString,
+      row.getString(ContextName),
+      BinaryInfo(
+        row.getString(AppName),
+        BinaryType.fromString(row.getString(BType)),
+        new DateTime(row.getTimestamp(UploadTime))
+      ),
+      row.getString(Classpath),
+      new DateTime(row.getTimestamp(StartTime)),
+      Option(row.getTimestamp(EndTime)).map(new DateTime(_)),
+      errorData
+    )
+  }
+
   override def getJobInfo(jobId: String): Future[Option[JobInfo]] = {
     val query = QB.select(
-      JobId, ContextName, AppName, BType, UploadTime, Classpath, StartTime, EndTime, Error
+      JobId, ContextName, AppName, BType, UploadTime, Classpath, StartTime, EndTime,
+      Error, ErrorClass, ErrorStackTrace
     ).from(JobsTable).
       where(QB.eq(JobId, UUID.fromString(jobId))).
       limit(1)
 
     session.executeAsync(query).map { rs =>
       val row = rs.one()
-      Option(row).map(r =>
-        JobInfo(
-          r.getUUID(Metadata.JobId).toString,
-          r.getString(ContextName),
-          BinaryInfo(
-            r.getString(AppName),
-            BinaryType.fromString(r.getString(BType)),
-            new DateTime(r.getTimestamp(UploadTime))
-          ),
-          r.getString(Classpath),
-          new DateTime(r.getTimestamp(StartTime)),
-          Option(r.getTimestamp(EndTime)).map(new DateTime(_)),
-          Option(r.getString(Error)).map(new Throwable(_))
-        ))
+      Option(row).map(rowToJobInfo)
     }
   }
 
   override def saveJobInfo(jobInfo: JobInfo): Unit = {
     val JobInfo(jobId, contextName, binaryInfo, classPath, startTime, endTime, error) = jobInfo
-    val (_, endOpt, errOpt) = (startTime,
-      endTime.map(e => e),
-      error.map(_.getMessage))
 
     val localDate: LocalDate = LocalDate.fromMillisSinceEpoch(jobInfo.startTime.getMillis)
 
-    val insert = insertInto(JobsTable).
-      value(JobId, UUID.fromString(jobId)).
-      value(ContextName, contextName).
-      value(AppName, binaryInfo.appName).
-      value(BType, binaryInfo.binaryType.name).
-      value(UploadTime, binaryInfo.uploadTime.getMillis).
-      value(Classpath, classPath).
-      value(StartTime, startTime.getMillis).
-      value(StartDate, localDate)
+    def fillInsert(insert: Insert): Insert = {
+      insert.
+        value(JobId, UUID.fromString(jobId)).
+        value(ContextName, contextName).
+        value(AppName, binaryInfo.appName).
+        value(BType, binaryInfo.binaryType.name).
+        value(UploadTime, binaryInfo.uploadTime.getMillis).
+        value(Classpath, classPath).
+        value(StartTime, startTime.getMillis).
+        value(StartDate, localDate)
 
-    endOpt.foreach{e => insert.value(EndTime, e.getMillis)}
-    errOpt.foreach(insert.value(Error, _))
-    session.execute(insert)
+      endTime.foreach{e => insert.value(EndTime, e.getMillis)}
+      error.foreach { err =>
+        insert.value(Error, err.message)
+        insert.value(ErrorClass, err.errorClass)
+        insert.value(ErrorStackTrace, err.stackTrace)
+      }
+      insert
+    }
 
-    val insert2 = insertInto(JobsChronologicalTable).
-      value(StartDate, localDate).
-      value(StartTime, startTime.getMillis).
-      value(JobId, UUID.fromString(jobId)).
-      value(ContextName, contextName).
-      value(AppName, binaryInfo.appName).
-      value(BType, binaryInfo.binaryType.name).
-      value(UploadTime, binaryInfo.uploadTime.getMillis).
-      value(Classpath, classPath)
+    session.execute(fillInsert(insertInto(JobsTable)))
+    session.execute(fillInsert(insertInto(JobsChronologicalTable)))
 
-    endOpt.foreach{e => insert2.value(EndTime, e.getMillis)}
-    errOpt.foreach(insert2.value(Error, _))
-    session.execute(insert2)
-  }
-
-  override def getJobConfigs: Future[Map[String, Config]] = {
-    val query = QB.select(Metadata.JobId, Metadata.JobConfig).from(Metadata.JobsTable)
-    session.executeAsync(query).map { rs =>
-      JListWrapper(rs.all()).map { row =>
-        val config = Option(row.getString(Metadata.JobConfig)).getOrElse("")
-        (row.getUUID(Metadata.JobId).toString, ConfigFactory.parseString(config))
-      }.toMap
+    if (!endTime.isDefined && !error.isDefined) {
+      session.execute(fillInsert(insertInto(RunningJobsTable)))
+    } else {
+      val deleteQuery = delete().from(RunningJobsTable)
+        .where(QB.eq(ContextName, contextName))
+        .and(QB.eq(JobId, UUID.fromString(jobId)))
+      session.execute(deleteQuery)
     }
   }
 
@@ -306,6 +302,11 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
       rs => Option(rs.one()).map(
         row => ConfigFactory.parseString(row.getString(Metadata.JobConfig)))
     }
+  }
+
+  override def getLastUploadTimeAndType(appName: String): Option[(DateTime, BinaryType)] = {
+    // Copied from the base JobDAO, feel free to optimize this (having in mind this specific storage type)
+    Await.result(getApps, 60 seconds).get(appName).map(t => (t._2, t._1))
   }
 
   private def setup(config: Config): Session = {
@@ -338,7 +339,6 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
   }
 
   private def setupSchema() = {
-    import Metadata._
 
     val binariesTable: Create = SchemaBuilder.createTable(BinariesTable).ifNotExists.
       addPartitionKey(AppName, DataType.text).
@@ -368,7 +368,9 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
       addColumn(StartTime, DataType.timestamp).
       addColumn(StartDate, DataType.date).
       addColumn(EndTime, DataType.timestamp).
-      addColumn(Error, DataType.text)
+      addColumn(Error, DataType.text).
+      addColumn(ErrorClass, DataType.text).
+      addColumn(ErrorStackTrace, DataType.text)
 
     session.execute(jobsTableStatement)
 
@@ -384,21 +386,27 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
       addColumn(Classpath, DataType.text).
       addColumn(EndTime, DataType.timestamp).
       addColumn(Error, DataType.text).
+      addColumn(ErrorClass, DataType.text).
+      addColumn(ErrorStackTrace, DataType.text).
       withOptions().clusteringOrder(StartTime, Direction.DESC)
 
     session.execute(jobsChronologicalView)
 
-  }
+    val runningJobsView = SchemaBuilder.createTable(RunningJobsTable).ifNotExists().
+      addPartitionKey(ContextName, DataType.text).
+      addClusteringColumn(JobId, DataType.uuid).
+      addColumn(AppName, DataType.text).
+      addColumn(BType, DataType.text).
+      addColumn(UploadTime, DataType.timestamp).
+      addColumn(JobConfig, DataType.text).
+      addColumn(Classpath, DataType.text).
+      addColumn(StartTime, DataType.timestamp).
+      addColumn(StartDate, DataType.date).
+      addColumn(EndTime, DataType.timestamp).
+      addColumn(Error, DataType.text).
+      addColumn(ErrorClass, DataType.text).
+      addColumn(ErrorStackTrace, DataType.text)
 
-  override def getBinaryContent(appName: String, binaryType: BinaryType,
-                                uploadTime: DateTime): Array[Byte] = {
-    val jarFile = new File(rootDir, createBinaryName(appName, binaryType, uploadTime))
-    if (!jarFile.exists()) {
-      val binBytes = fetchBinary(appName, binaryType, uploadTime)
-      cacheBinary(appName, binaryType, uploadTime, binBytes)
-      binBytes
-    } else {
-      Files.readAllBytes(Paths.get(jarFile.getAbsolutePath))
-    }
+    session.execute(runningJobsView)
   }
 }

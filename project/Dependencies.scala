@@ -32,12 +32,15 @@ object Dependencies {
   )
 
   lazy val sparkExtraDeps = Seq(
+    "org.apache.derby" % "derby" % derby % Provided excludeAll(excludeNettyIo, excludeQQ),
+    "org.apache.hadoop" % "hadoop-client" % hadoop % Provided
+      excludeAll(excludeNettyIo, excludeQQ, excludeAsm, excludeServlet),
     "com.datastax.spark" %% "spark-mllib" % spark % Provided excludeAll(excludeNettyIo, excludeQQ),
     "com.datastax.spark" %% "spark-sql" % spark % Provided excludeAll(excludeNettyIo, excludeQQ),
     "com.datastax.spark" %% "spark-streaming" % spark % Provided excludeAll(excludeNettyIo, excludeQQ),
     "com.datastax.spark" %% "spark-hive" % spark % Provided excludeAll(
       excludeNettyIo, excludeQQ, excludeScalaTest
-    )
+      )
   )
 
   lazy val sparkExtraDepsTest = Seq(
@@ -53,13 +56,16 @@ object Dependencies {
     "com.typesafe.slick" %% "slick" % slick,
     "com.h2database" % "h2" % h2,
     "org.postgresql" % "postgresql" % postgres,
+    "mysql" % "mysql-connector-java" % mysql,
     "commons-dbcp" % "commons-dbcp" % commons,
     "org.flywaydb" % "flyway-core" % flyway
   )
 
+
+
   lazy val cassandraDeps = Seq(
-    "com.datastax.dse" % "dse-java-driver-core" % dseDriver % Provided excludeAll excludeNettyIo,
-    "com.datastax.dse" % "dse-java-driver-mapping" % dseDriver % Provided excludeAll excludeNettyIo
+    "com.datastax.dse" % "spark-connector" % cassandraConnector % Provided excludeAll(
+      excludeNettyIo, excludeQQ)
   )
 
   lazy val logbackDeps = Seq(

@@ -5,14 +5,17 @@ import akka.pattern.ask
 import akka.util.Timeout
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
+import spark.jobserver.JobManagerActor.{GetSparkWebUIUrl, NoSparkWebUI, SparkWebUIUrl}
 import spark.jobserver.JobManagerActor.{SparkContextAlive, SparkContextDead, SparkContextStatus}
 import spark.jobserver.util.SparkJobUtils
+
 import scala.collection.mutable
 import scala.concurrent.Await
 import scala.util.{Failure, Success, Try}
-
 import spark.jobserver.common.akka.InstrumentedActor
 import akka.pattern.gracefulStop
+import org.joda.time.DateTime
+import spark.jobserver.io.JobDAOActor.CleanContextJobInfos
 
 /** Messages common to all ContextSupervisors */
 object ContextSupervisor {
@@ -24,6 +27,7 @@ object ContextSupervisor {
   case class GetContext(name: String) // returns JobManager, JobResultActor
   case class GetResultActor(name: String)  // returns JobResultActor
   case class StopContext(name: String)
+  case class GetSparkWebUI(name: String)
 
   // Errors/Responses
   case object ContextInitialized
@@ -32,6 +36,7 @@ object ContextSupervisor {
   case object ContextAlreadyExists
   case object NoSuchContext
   case object ContextStopped
+  case class WebUIForContext(name: String, url: Option[String])
 }
 
 /**
@@ -67,7 +72,7 @@ object ContextSupervisor {
  *   }
  * }}}
  */
-class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
+class LocalContextSupervisorActor(dao: ActorRef, dataManagerActor: ActorRef) extends InstrumentedActor {
   import ContextSupervisor._
   import scala.collection.JavaConverters._
   import scala.concurrent.duration._
@@ -90,6 +95,21 @@ class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
 
     case ListContexts =>
       sender ! contexts.keys.toSeq
+
+    case GetSparkWebUI(name) =>
+      contexts.get(name) match {
+        case Some((actor, _)) =>
+          val future = (actor ? GetSparkWebUIUrl)(contextTimeout.seconds)
+          val originator = sender
+          future.collect {
+            case SparkWebUIUrl(webUi) => originator ! WebUIForContext(name, Some(webUi))
+            case NoSparkWebUI => originator ! WebUIForContext(name, None)
+            case SparkContextDead =>
+              logger.info("SparkContext {} is dead", name)
+              originator ! NoSuchContext
+          }
+        case _ => sender ! NoSuchContext
+      }
 
     case AddContext(name, contextConfig) =>
       val originator = sender // Sender is a mutable reference, must capture in immutable val
@@ -164,6 +184,7 @@ class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
       val name = actorRef.path.name
       logger.info("Actor terminated: " + name)
       contexts.remove(name)
+      dao ! CleanContextJobInfos(name, DateTime.now())
   }
 
   private def startContext(name: String, contextConfig: Config, isAdHoc: Boolean, timeoutSecs: Int = 1)
@@ -174,13 +195,11 @@ class LocalContextSupervisorActor(dao: ActorRef) extends InstrumentedActor {
 
     val resultActorRef = if (isAdHoc) Some(globalResultActor) else None
     val mergedConfig = ConfigFactory.parseMap(
-                         Map("is-adhoc" -> isAdHoc.toString,
-                             "context.name" -> name,
-                             "context.actorname" -> name).asJava
+                         Map("is-adhoc" -> isAdHoc.toString, "context.name" -> name).asJava
                        ).withFallback(contextConfig)
-    val ref = context.actorOf(JobManagerActor.props(mergedConfig, dao), name)
+    val ref = context.actorOf(JobManagerActor.props(dao), name)
     (ref ? JobManagerActor.Initialize(
-      resultActorRef))(Timeout(timeoutSecs.second)).onComplete {
+      mergedConfig, resultActorRef, dataManagerActor))(Timeout(timeoutSecs.second)).onComplete {
       case Failure(e: Exception) =>
         logger.error("Exception after sending Initialize to JobManagerActor", e)
         // Make sure we try to shut down the context in case it gets created anyways

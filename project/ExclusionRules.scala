@@ -8,4 +8,5 @@ object ExclusionRules {
   val excludeNettyIo = ExclusionRule(organization = "io.netty")
   val excludeAsm = ExclusionRule(organization = "asm")
   val excludeQQ = ExclusionRule(organization = "org.scalamacros")
+  val excludeServlet = ExclusionRule(organization = "javax.servlet")
 }
