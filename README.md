@@ -584,7 +584,7 @@ MANAGER_EXTRA_SPARK_CONFS="spark.yarn.submit.waitAppCompletion=false"
 MANAGER_LOGGING_OPTS="-Dlog4j.configuration=$REMOTE_JOBSERVER_DIR/log4j-cluster.properties"
 ```
 
-  - Cluster mode for mesos/yarn
+  - Cluster mode for Mesos
 ```
 MANAGER_JAR_FILE="$appdir/spark-job-server.jar"
 MANAGER_CONF_FILE="$(basename $conffile)"
@@ -592,6 +592,16 @@ MANAGER_EXTRA_JAVA_OPTIONS=
 MANAGER_EXTRA_SPARK_CONFS="spark.yarn.submit.waitAppCompletion=false|spark.files=$appdir/log4jcluster.properties,$conffile"
 MANAGER_LOGGING_OPTS="-Dlog4j.configuration=log4j-cluster.properties"
 ```
+
+  - Cluster mode for YARN
+```
+MANAGER_JAR_FILE="$appdir/spark-job-server.jar"
+MANAGER_CONF_FILE="$(basename $conffile)"
+MANAGER_EXTRA_JAVA_OPTIONS=
+MANAGER_EXTRA_SPARK_CONFS="spark.yarn.submit.waitAppCompletion=false|spark.files=$appdir/log4jcluster.properties,$conffile"
+MANAGER_LOGGING_OPTS="-Dlog4j.configuration=log4j-cluster.properties"
+```
+
 3. Copy `config/shiro.ini.template` to `shiro.ini` and edit as appropriate. NOTE: only required when `authentication = on`
 4. Copy `config/local.conf.template` to `<environment>.conf` and edit as appropriate.
 5. `bin/server_deploy.sh <environment>` -- this packages the job server along with config files and pushes
