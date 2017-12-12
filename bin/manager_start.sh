@@ -1,6 +1,6 @@
 #!/bin/bash
 # Script to start the job manager
-# args: <master> <deployMode> <akkaAdress> <actorName> <workDir> [<proxyUser>]
+# args: <master> <deployMode> <akkaAdress> <actorName> <workDir> <contextConfig> [<proxyUser>]
 set -e
 
 get_abs_script_path() {
@@ -50,8 +50,8 @@ else
   GC_OPTS="$GC_OPTS -Xloggc:$5/gc.out"
 fi
 
-if [ -n "$6" ]; then
-  SPARK_SUBMIT_OPTIONS="$SPARK_SUBMIT_OPTIONS --proxy-user $6"
+if [ -n "$7" ]; then
+  SPARK_SUBMIT_OPTIONS="$SPARK_SUBMIT_OPTIONS --proxy-user $7"
 fi
 
 if [ -n "$JOBSERVER_KEYTAB" ]; then
