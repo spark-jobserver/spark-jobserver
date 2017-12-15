@@ -75,7 +75,8 @@ class DataFileDAO(config: Config) {
     */
   def saveFile(aNamePrefix: String, uploadTime: DateTime, aBytes: Array[Byte]): String = {
     // The order is important. Save the file first and then log it into meta data file.
-    val outFile = new File(rootDir, createFileName(aNamePrefix, uploadTime) + DataFileDAO.EXTENSION)
+    val fileExtension = getFileExtension(aNamePrefix)
+    val outFile = new File(rootDir, createFileName(aNamePrefix, uploadTime) + fileExtension)
     val name = outFile.getAbsolutePath
     val bos = new BufferedOutputStream(new FileOutputStream(outFile))
     try {
@@ -144,6 +145,15 @@ class DataFileDAO(config: Config) {
 
   private def createFileName(aName: String, uploadTime: DateTime): String =
     aName + "-" + uploadTime.toString().replace(':', '_')
+
+  private def getFileExtension(fileName: String): String = {
+    if (fileName.lastIndexOf(".") != -1 && fileName.lastIndexOf(".") != 0) {
+      "." + fileName.substring(fileName.lastIndexOf(".") + 1)
+    }
+    else {
+      ""
+    }
+  }
 
   private def readError(in: DataInputStream) = {
     val error = in.readUTF()
