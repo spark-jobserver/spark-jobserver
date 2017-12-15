@@ -5,6 +5,7 @@ import java.io._
 import java.nio.file.Files
 
 import org.apache.commons.io.FileUtils
+import org.apache.commons.io.FilenameUtils
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 
@@ -76,7 +77,8 @@ class DataFileDAO(config: Config) {
   def saveFile(aNamePrefix: String, uploadTime: DateTime, aBytes: Array[Byte]): String = {
     // The order is important. Save the file first and then log it into meta data file.
     val fileExtension = getFileExtension(aNamePrefix)
-    val outFile = new File(rootDir, createFileName(aNamePrefix, uploadTime) + fileExtension)
+    val fileBase = FilenameUtils.removeExtension(aNamePrefix)
+    val outFile = new File(rootDir, createFileName(fileBase, uploadTime) + fileExtension)
     val name = outFile.getAbsolutePath
     val bos = new BufferedOutputStream(new FileOutputStream(outFile))
     try {
