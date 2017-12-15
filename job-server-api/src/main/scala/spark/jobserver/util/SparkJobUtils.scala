@@ -82,11 +82,6 @@ object SparkJobUtils {
     // Set the Jetty port to 0 to find a random port
     conf.set("spark.ui.port", "0")
 
-    // Set spark broadcast factory in yarn-client mode
-    if (sparkMaster == "yarn-client") {
-      conf.set("spark.broadcast.factory", config.getString("spark.jobserver.yarn-broadcast-factory"))
-    }
-
     // Set number of akka threads
     // TODO: need to figure out how many extra threads spark needs, besides the job threads
     conf.set("spark.akka.threads", (getMaxRunningJobs(config) + 4).toString)
@@ -130,7 +125,7 @@ object SparkJobUtils {
 
   private def getContextTimeout(config: Config, yarn : String, standalone : String): Int = {
     config.getString("spark.master") match {
-      case "yarn-client" =>
+      case "yarn" =>
         Try(config.getDuration(yarn,
               TimeUnit.MILLISECONDS).toInt / 1000).getOrElse(40)
       case _ =>

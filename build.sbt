@@ -15,7 +15,7 @@ lazy val akkaApp = Project(id = "akka-app", base = file("akka-app"))
 lazy val jobServer = Project(id = "job-server", base = file("job-server"))
   .settings(commonSettings)
   .settings(revolverSettings)
-  .settings(Assembly.settings)
+  .settings(assembly := null.asInstanceOf[File])
   .settings(
     description := "Spark as a Service: a RESTful job server for Apache Spark",
     libraryDependencies ++= sparkDeps ++ slickDeps ++ cassandraDeps ++ securityDeps ++ coreTestDeps,
@@ -31,7 +31,6 @@ lazy val jobServer = Project(id = "job-server", base = file("job-server"))
     fullClasspath in Compile <<= (fullClasspath in Compile).map { classpath =>
       extraJarPaths ++ classpath
     },
-    test in assembly := {},
     fork in Test := true
   )
   .settings(publishSettings)
@@ -44,6 +43,7 @@ lazy val jobServerTestJar = Project(id = "job-server-tests", base = file("job-se
   .settings(noPublishSettings)
   .dependsOn(jobServerApi)
   .disablePlugins(SbtScalariform)
+  .disablePlugins(ScoverageSbtPlugin) // do not include in coverage report
 
 lazy val jobServerApi = Project(id = "job-server-api", base = file("job-server-api"))
   .settings(commonSettings)
@@ -137,7 +137,10 @@ lazy val dockerSettings = Seq(
     val sparkBuild = s"spark-${Versions.spark}"
     val sparkBuildCmd = scalaBinaryVersion.value match {
       case "2.11" =>
-        "./make-distribution.sh -Dscala-2.11 -Phadoop-2.7 -Phive"
+        Versions.spark match {
+          case s if s.startsWith("1") => {"./make-distribution.sh -Dscala-2.11 -Phadoop-2.7 -Phive"}
+          case _ => {"./dev/make-distribution.sh -Dscala-2.11 -Phadoop-2.7 -Phive"}
+        }
       case other => throw new RuntimeException(s"Scala version $other is not supported!")
     }
 
@@ -274,7 +277,7 @@ lazy val commonSettings = Defaults.coreDefaultSettings ++ dirSettings ++ implici
 
 lazy val scoverageSettings = {
   // Semicolon-separated list of regexs matching classes to exclude
-  coverageExcludedPackages := ".+Benchmark.*"
+  coverageExcludedPackages := ".+Benchmark.*;.+Example.*;.+TestJob"
 }
 
 lazy val publishSettings = Seq(

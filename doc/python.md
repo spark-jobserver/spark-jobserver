@@ -30,7 +30,7 @@ A basic config supporting Python might look like:
         python {
           paths = [
             ${SPARK_HOME}/python,
-            "/home/user/spark-jobserver/job-server-extras/job-server-python/target/python/spark_jobserver_python-0.7.0_SNAPSHOT-py2.7.egg"
+            "/home/user/spark-jobserver/job-server-extras/job-server-python/target/python/spark_jobserver_python-0.8.0-py2.7.egg"
           ]
 
           # The default value in application.conf is "python"
@@ -209,7 +209,7 @@ Then in `run_job` dataframe operations are used, which exist on `SQLContext`.
 This job is one of the examples so running the sbt task `job-server-python/buildPyExamples` and uploading the resulting
 Egg makes this job available:
 
-    curl --data-binary @job-server-python/target/python/sjs_python_examples-0.7.0_SNAPSHOT-py2.7.egg \
+    curl --data-binary @job-server-python/target/python/sjs_python_examples-0.8.0-py2.7.egg \
     -H 'Content-Type: application/python-archive' localhost:8090/binaries/example_jobs
 
 The input to the job can be provided as a conf file, e.g. with the contents:

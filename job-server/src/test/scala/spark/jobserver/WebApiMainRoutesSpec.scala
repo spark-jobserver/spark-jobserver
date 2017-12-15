@@ -104,6 +104,12 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         status should be (OK)
       }
     }
+
+    it("should respond with 404 Not Found if binary was not found during deletion") {
+      Delete("/binaries/badbinary") ~> sealRoute(routes) ~> check {
+        status should be (NotFound)
+      }
+    }
   }
 
   describe("list jobs") {

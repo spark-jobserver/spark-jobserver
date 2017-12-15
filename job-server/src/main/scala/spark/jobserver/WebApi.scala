@@ -134,6 +134,7 @@ class WebApi(system: ActorSystem,
       .fold(100 * 1024)(config.getBytes(_).toInt)
 
   val contextTimeout = SparkJobUtils.getContextCreationTimeout(config)
+  val contextDeletionTimeout = SparkJobUtils.getContextDeletionTimeout(config)
   val bindAddress = config.getString("spark.jobserver.bind-address")
 
   val logger = LoggerFactory.getLogger(getClass)
@@ -181,6 +182,11 @@ class WebApi(system: ActorSystem,
       ServerSSLEngineProvider { engine =>
         val protocols = config.getStringList("spray.can.server.enabledProtocols")
         engine.setEnabledProtocols(protocols.toArray(Array[String]()))
+        val sprayConfig = config.getConfig("spray.can.server")
+        if(sprayConfig.hasPath("truststore")) {
+          engine.setNeedClientAuth(true)
+          logger.info("Client authentication activated.")
+        }
         engine
       }
     }
@@ -261,6 +267,7 @@ class WebApi(system: ActorSystem,
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
             future.map {
               case BinaryDeleted => ctx.complete(StatusCodes.OK)
+              case NoSuchBinary => notFound(ctx, s"can't find binary with name $appName")
             }.recover {
               case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
             }
@@ -347,7 +354,7 @@ class WebApi(system: ActorSystem,
             case WebUIForContext(name, Some(url)) =>
               ctx.complete(200, Map("context" -> contextName, "url" -> url))
             case WebUIForContext(name, None) => ctx.complete(200, Map("context" -> contextName))
-            case NoSuchContext => ctx.complete(404, s"can't find context with name $contextName")
+            case NoSuchContext => notFound(ctx, s"can't find context with name $contextName")
 
           }.recover {
             case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
@@ -405,7 +412,7 @@ class WebApi(system: ActorSystem,
           //  and currently running jobs will be lost.  Use with care!
           path(Segment) { (contextName) =>
             val (cName, _) = determineProxyUser(config, authInfo, contextName)
-            val future = supervisor ? StopContext(cName)
+            val future = (supervisor ? StopContext(cName))(contextDeletionTimeout.seconds)
             respondWithMediaType(MediaTypes.`application/json`) { ctx =>
               future.map {
                 case ContextStopped => ctx.complete(StatusCodes.OK, successMap("Context stopped"))

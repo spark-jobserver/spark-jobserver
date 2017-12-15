@@ -1,6 +1,6 @@
 package spark.jobserver.io
 
-import java.sql.{ResultSet, DriverManager, Connection}
+import java.sql.{Connection, DriverManager, ResultSet}
 
 import org.flywaydb.core.Flyway
 import org.scalatest.{FunSpec, Matchers}
@@ -48,7 +48,8 @@ class FlywayMigrationSpec extends FunSpec with Matchers {
     val h2Pass = ""
     val h2Driver = "org.h2.Driver"
 
-    it("should migrate from JAR schema to more generic BINARY schema") {
+    it("should migrate from JAR schema to more generic BINARY schema " +
+      "and move raw binaries into BINARIES_CONTENTS") {
       val flyway = new Flyway()
       flyway.setDataSource(h2Url, h2User, h2Pass)
       flyway.setLocations("db/h2/migration/V0_7_0")
@@ -57,8 +58,8 @@ class FlywayMigrationSpec extends FunSpec with Matchers {
       val statement = sqlConn.createStatement()
       statement.addBatch(
         """INSERT INTO JARS VALUES
-          |(1, 'ABC', '2012-01-01', 'DEADBEEF'),
-          |(2, 'DEF', '2012-02-01', 'BEADFACE');
+          |(1, 'ABC', '2012-01-01', X'deadbeef'),
+          |(2, 'DEF', '2012-02-01', X'beadface');
         """.stripMargin)
       statement.addBatch(
         """INSERT INTO JOBS VALUES
@@ -74,17 +75,26 @@ class FlywayMigrationSpec extends FunSpec with Matchers {
       sqlConn.commit()
       flyway.setLocations("db/h2/migration")
       flyway.migrate()
+
       val descBinaries = sqlConn.createStatement().executeQuery("SHOW COLUMNS FROM BINARIES")
       val descBinariesIt = ResultSetIterator(descBinaries){ r: ResultSet =>
         r.getString("FIELD")
       }
-      descBinariesIt.toList should be (List("BIN_ID", "APP_NAME", "UPLOAD_TIME", "BINARY_TYPE", "BINARY"))
+      descBinariesIt.toList should be (List("BIN_ID", "APP_NAME", "UPLOAD_TIME", "BINARY_TYPE", "BIN_HASH"))
+
+      val descBinariesContents = sqlConn.createStatement().executeQuery("SHOW COLUMNS FROM BINARIES_CONTENTS")
+      val descBinariesContentsIt = ResultSetIterator(descBinariesContents){ r: ResultSet =>
+        r.getString("FIELD")
+      }
+      descBinariesContentsIt.toList should be (List("BIN_HASH", "BINARY"))
+
       val descJobs = sqlConn.createStatement().executeQuery("SHOW COLUMNS FROM JOBS")
       val descJobsIt = ResultSetIterator(descJobs){ r: ResultSet =>
         r.getString("FIELD")
       }
       descJobsIt.toList should be (List(
         "JOB_ID", "CONTEXT_NAME", "BIN_ID", "CLASSPATH", "START_TIME", "END_TIME", "ERROR", "ERROR_CLASS", "ERROR_STACK_TRACE"))
+
       val descConfigs = sqlConn.createStatement().executeQuery("SHOW COLUMNS FROM CONFIGS")
       val descConfigsIt = ResultSetIterator(descConfigs){ r: ResultSet =>
         r.getString("FIELD")
@@ -102,6 +112,17 @@ class FlywayMigrationSpec extends FunSpec with Matchers {
       migratedBinariesIt.toList should be (List(
         (1, "ABC", "Jar"),
         (2, "DEF", "Jar")
+      ))
+
+      val migratedBinariesContents =
+        sqlConn.createStatement().executeQuery("SELECT BIN_HASH, BINARY FROM BINARIES_CONTENTS")
+      val migratedBinariesContentsIt = ResultSetIterator(migratedBinariesContents){ r: ResultSet =>
+        (r.getString("BIN_HASH"),
+          r.getString("BINARY"))
+      }
+      migratedBinariesContentsIt.toList should be (List(
+        ("0000000000000001", "deadbeef"),
+        ("0000000000000002", "beadface")
       ))
     }
   }
@@ -121,7 +142,8 @@ class FlywayMigrationSpec extends FunSpec with Matchers {
     val pgPass = "pass"
     val pgDriver = "org.postgresql.Driver"
 
-    ignore("should migrate from JAR schema to more generic BINARY schema") {
+    ignore("should migrate from JAR schema to more generic BINARY schema " +
+      "and move raw binaries into BINARIES_CONTENTS") {
       val flyway = new Flyway()
       flyway.setDataSource(pgUrl, pgUser, pgPass)
       flyway.clean()
@@ -131,8 +153,8 @@ class FlywayMigrationSpec extends FunSpec with Matchers {
       val statement = sqlConn.createStatement()
       statement.addBatch(
         """INSERT INTO "JARS" VALUES
-          |(1, 'ABC', '2012-01-01', 'DEADBEEF'),
-          |(2, 'DEF', '2012-02-01', 'BEADFACE');
+          |(1, 'ABC', '2012-01-01', X'deadbeef'),
+          |(2, 'DEF', '2012-02-01', X'beadface');
         """.stripMargin)
       statement.addBatch(
         """INSERT INTO "JOBS" VALUES
@@ -178,6 +200,17 @@ class FlywayMigrationSpec extends FunSpec with Matchers {
       migratedBinariesIt.toList should be (List(
         (1, "ABC", "Jar"),
         (2, "DEF", "Jar")
+      ))
+
+      val migratedBinariesContents =
+        sqlConn.createStatement().executeQuery("SELECT \"BIN_ID\", \"BINARY\" FROM \"BINARIES_CONTENTS\"")
+      val migratedBinariesContentsIt = ResultSetIterator(migratedBinariesContents){ r: ResultSet =>
+        (r.getInt("BIN_ID"),
+          r.getString("BINARY"))
+      }
+      migratedBinariesContentsIt.toList should be (List(
+        (1, "deadbeef"),
+        (2, "beadface")
       ))
     }
   }

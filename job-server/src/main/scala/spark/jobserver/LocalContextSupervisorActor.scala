@@ -195,13 +195,11 @@ class LocalContextSupervisorActor(dao: ActorRef, dataManagerActor: ActorRef) ext
 
     val resultActorRef = if (isAdHoc) Some(globalResultActor) else None
     val mergedConfig = ConfigFactory.parseMap(
-                         Map("is-adhoc" -> isAdHoc.toString,
-                             "context.name" -> name,
-                             "context.actorname" -> name).asJava
+                         Map("is-adhoc" -> isAdHoc.toString, "context.name" -> name).asJava
                        ).withFallback(contextConfig)
-    val ref = context.actorOf(JobManagerActor.props(mergedConfig, dao), name)
+    val ref = context.actorOf(JobManagerActor.props(dao), name)
     (ref ? JobManagerActor.Initialize(
-      resultActorRef, dataManagerActor))(Timeout(timeoutSecs.second)).onComplete {
+      mergedConfig, resultActorRef, dataManagerActor))(Timeout(timeoutSecs.second)).onComplete {
       case Failure(e: Exception) =>
         logger.error("Exception after sending Initialize to JobManagerActor", e)
         // Make sure we try to shut down the context in case it gets created anyways

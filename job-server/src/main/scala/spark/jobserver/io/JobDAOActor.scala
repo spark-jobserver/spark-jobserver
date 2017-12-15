@@ -28,16 +28,11 @@ object JobDAOActor {
   case class GetBinaryPath(appName: String,
                            binaryType: BinaryType,
                            uploadTime: DateTime) extends JobDAORequest
-  case class GetBinaryContent(appName: String,
-                              binaryType: BinaryType,
-                              uploadTime: DateTime) extends JobDAORequest
 
   case class SaveJobInfo(jobInfo: JobInfo) extends JobDAORequest
   case class GetJobInfos(limit: Int) extends JobDAORequest
 
   case class SaveJobConfig(jobId: String, jobConfig: Config) extends JobDAORequest
-  @deprecated("Leads to performance problems and OutOfMemory error ultimately", "0.7.1")
-  case object GetJobConfigs extends JobDAORequest
   case class GetJobConfig(jobId: String) extends JobDAORequest
   case class CleanContextJobInfos(contextName: String, endTime: DateTime)
 
@@ -47,9 +42,7 @@ object JobDAOActor {
   sealed trait JobDAOResponse
   case class Apps(apps: Map[String, (BinaryType, DateTime)]) extends JobDAOResponse
   case class BinaryPath(binPath: String) extends JobDAOResponse
-  case class BinaryContent(content: Array[Byte]) extends JobDAOResponse
   case class JobInfos(jobInfos: Seq[JobInfo]) extends JobDAOResponse
-  case class JobConfigs(jobConfigs: Map[String, Config]) extends JobDAOResponse
   case class JobConfig(jobConfig: Option[Config]) extends JobDAOResponse
   case class LastUploadTimeAndType(uploadTimeAndType: Option[(DateTime, BinaryType)]) extends JobDAOResponse
 
@@ -89,17 +82,11 @@ class JobDAOActor(dao: JobDAO) extends InstrumentedActor {
     case SaveJobConfig(jobId, jobConfig) =>
       dao.saveJobConfig(jobId, jobConfig)
 
-    case GetJobConfigs =>
-      dao.getJobConfigs.map(JobConfigs).pipeTo(sender)
-
     case GetJobConfig(jobId) =>
       dao.getJobConfig(jobId).map(JobConfig).pipeTo(sender)
 
     case GetLastUploadTimeAndType(appName) =>
       sender() ! LastUploadTimeAndType(dao.getLastUploadTimeAndType(appName))
-
-    case GetBinaryContent(appName, binaryType, uploadTime) =>
-      sender() ! BinaryContent(dao.getBinaryContent(appName, binaryType, uploadTime))
 
     case CleanContextJobInfos(contextName, endTime) =>
       dao.cleanRunningJobInfosForContext(contextName, endTime)
