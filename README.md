@@ -574,39 +574,11 @@ See also running on [cluster](doc/cluster.md), [YARN client](doc/yarn.md), on [E
 ### Manual steps
 
 1. Copy `config/local.sh.template` to `<environment>.sh` and edit as appropriate.  NOTE: be sure to set SPARK_VERSION if you need to compile against a different version.
-2. If your `spark.submit.deployMode` is set `cluster` then update the following variables in bin/setenv.sh according to your environment.
-  - Cluster mode for spark-standalone
-```
-MANAGER_JAR_FILE="$REMOTE_JOBSERVER_DIR/spark-job-server.jar"
-MANAGER_CONF_FILE="$REMOTE_JOBSERVER_DIR/$(basename $conffile)"
-MANAGER_EXTRA_JAVA_OPTIONS=
-MANAGER_EXTRA_SPARK_CONFS="spark.yarn.submit.waitAppCompletion=false"
-MANAGER_LOGGING_OPTS="-Dlog4j.configuration=$REMOTE_JOBSERVER_DIR/log4j-cluster.properties"
-```
-
-  - Cluster mode for Mesos
-```
-MANAGER_JAR_FILE="$appdir/spark-job-server.jar"
-MANAGER_CONF_FILE="$(basename $conffile)"
-MANAGER_EXTRA_JAVA_OPTIONS=
-MANAGER_EXTRA_SPARK_CONFS="spark.yarn.submit.waitAppCompletion=false|spark.files=$appdir/log4jcluster.properties,$conffile"
-MANAGER_LOGGING_OPTS="-Dlog4j.configuration=log4j-cluster.properties"
-```
-
-  - Cluster mode for YARN
-```
-MANAGER_JAR_FILE="$appdir/spark-job-server.jar"
-MANAGER_CONF_FILE="$(basename $conffile)"
-MANAGER_EXTRA_JAVA_OPTIONS=
-MANAGER_EXTRA_SPARK_CONFS="spark.yarn.submit.waitAppCompletion=false|spark.files=$appdir/log4jcluster.properties,$conffile"
-MANAGER_LOGGING_OPTS="-Dlog4j.configuration=log4j-cluster.properties"
-```
-
-3. Copy `config/shiro.ini.template` to `shiro.ini` and edit as appropriate. NOTE: only required when `authentication = on`
-4. Copy `config/local.conf.template` to `<environment>.conf` and edit as appropriate.
-5. `bin/server_deploy.sh <environment>` -- this packages the job server along with config files and pushes
+2. Copy `config/shiro.ini.template` to `shiro.ini` and edit as appropriate. NOTE: only required when `authentication = on`
+3. Copy `config/local.conf.template` to `<environment>.conf` and edit as appropriate.
+4. `bin/server_deploy.sh <environment>` -- this packages the job server along with config files and pushes
    it to the remotes you have configured in `<environment>.sh`
-6. On the remote server, start it in the deployed directory with `server_start.sh` and stop it with `server_stop.sh`
+5. On the remote server, start it in the deployed directory with `server_start.sh` and stop it with `server_stop.sh`
 
 The `server_start.sh` script uses `spark-submit` under the hood and may be passed any of the standard extra arguments from `spark-submit`.
 

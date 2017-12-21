@@ -57,6 +57,15 @@ Example job server config (replace `CLUSTER-IP` with the internal IP of the host
       }
     }
 
+- Required: Replace `MANAGER_*` variables with
+```
+MANAGER_JAR_FILE="$appdir/spark-job-server.jar"
+MANAGER_CONF_FILE="$(basename $conffile)"
+MANAGER_EXTRA_JAVA_OPTIONS=
+MANAGER_EXTRA_SPARK_CONFS="spark.yarn.submit.waitAppCompletion=false|spark.files=$appdir/log4jcluster.properties,$conffile"
+MANAGER_LOGGING_OPTS="-Dlog4j.configuration=log4j-cluster.properties"
+```
+
 - Optional: Add following config at the end of job-server's settings.sh file:
     
     ```
