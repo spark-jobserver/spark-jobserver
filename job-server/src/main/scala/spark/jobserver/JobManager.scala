@@ -49,19 +49,19 @@ object JobManager {
       val sqlDaoDir = Files.createTempDirectory("sqldao")
       val sqlDaoDirConfig = ConfigValueFactory.fromAnyRef(sqlDaoDir.toAbsolutePath.toString)
       systemConfig.withoutPath("akka.remote.netty.tcp.hostname")
-                  .withValue("spark.jobserver.sqldao.rootdir", sqlDaoDirConfig)
+                  .withValue("spark.jobserver.sqldao.rootdir", sqlDaoDirConfig).resolve()
     } else {
-      systemConfig
+      systemConfig.resolve()
     }
 
-    val system = makeSystem(config.resolve())
+    logger.info("Starting JobManager named " + managerName + " with config {}",
+      config.getConfig("spark").root.render())
+
+    val system = makeSystem(config)
     val clazz = Class.forName(config.getString("spark.jobserver.jobdao"))
     val ctor = clazz.getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
     val jobDAO = ctor.newInstance(config).asInstanceOf[JobDAO]
     val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO), "dao-manager-jobmanager")
-
-    logger.info("Starting JobManager named " + managerName + " with config {}",
-      config.getConfig("spark").root.render())
 
     val jobManager = system.actorOf(JobManagerActor.props(daoActor), managerName)
 
