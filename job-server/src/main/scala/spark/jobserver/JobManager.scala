@@ -3,6 +3,7 @@ package spark.jobserver
 import java.io.{File, IOException}
 import java.nio.charset.Charset
 import java.nio.file.{Files, Paths}
+import java.net.URL
 
 import akka.actor.{ActorSystem, Address, AddressFromURIString, Props}
 import akka.cluster.Cluster
@@ -13,6 +14,7 @@ import spark.jobserver.common.akka.actor.ProductionReaper
 import spark.jobserver.io.{JobDAO, JobDAOActor}
 import scala.collection.JavaConverters._
 import scala.util.Try
+import org.apache.hadoop.fs.FsUrlStreamHandlerFactory
 
 /**
  * The JobManager is the main entry point for the forked JVM process running an individual
@@ -77,6 +79,8 @@ object JobManager {
 
   def main(args: Array[String]) {
     import scala.collection.JavaConverters._
+
+    URL.setURLStreamHandlerFactory(new FsUrlStreamHandlerFactory())
 
     def makeManagerSystem(name: String)(config: Config): ActorSystem = {
       val configWithRole = config.withValue("akka.cluster.roles",
