@@ -14,7 +14,7 @@ get_abs_script_path
 . $appdir/setenv.sh
 
 # Override logging options to provide per-context logging
-LOGGING_OPTS="-Dlog4j.configuration=file:$appdir/log4j-server.properties
+LOGGING_OPTS="$LOGGING_OPTS_FILE
               -DLOG_DIR=$1"
 
 GC_OPTS="-XX:+UseConcMarkSweepGC
