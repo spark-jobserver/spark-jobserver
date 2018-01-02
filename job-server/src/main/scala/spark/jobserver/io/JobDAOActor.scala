@@ -74,7 +74,7 @@ class JobDAOActor(dao: JobDAO) extends InstrumentedActor {
       sender() ! BinaryPath(dao.retrieveBinaryFile(appName, binType, uploadTime))
 
     case SaveJobInfo(jobInfo) =>
-      dao.saveJobInfo(jobInfo)
+      sender ! dao.saveJobInfo(jobInfo)
 
     case GetJobInfos(limit) =>
       dao.getJobInfos(limit).map(JobInfos).pipeTo(sender)

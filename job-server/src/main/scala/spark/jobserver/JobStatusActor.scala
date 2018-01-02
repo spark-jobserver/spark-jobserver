@@ -2,7 +2,11 @@ package spark.jobserver
 
 import scala.collection.mutable
 import scala.util.Try
+import scala.concurrent.duration._
+import scala.concurrent.Await
 import akka.actor.{ActorRef, Props}
+import akka.util.Timeout;
+import akka.pattern.ask
 import com.yammer.metrics.core.Meter
 import org.joda.time.DateTime
 import spark.jobserver.JobManagerActor.JobKilledException
@@ -109,10 +113,12 @@ class JobStatusActor(jobDao: ActorRef) extends InstrumentedActor with YammerMetr
 
   private def processStatus[M <: StatusMessage](msg: M, logMessage: String, remove: Boolean = false)
                                                (infoModifier: (JobInfo, M) => JobInfo) {
+    implicit val timeout = new Timeout(Duration.create(60, "seconds"));
     if (infos.contains(msg.jobId)) {
       infos(msg.jobId) = infoModifier(infos(msg.jobId), msg)
       logger.info("Job {} {}", msg.jobId: Any, logMessage)
-      jobDao ! JobDAOActor.SaveJobInfo(infos(msg.jobId))
+      val future = jobDao ? JobDAOActor.SaveJobInfo(infos(msg.jobId))
+      Await.result(future, 60 seconds)
       publishMessage(msg.jobId, msg)
       updateMessageRate(msg)
       if (remove) infos.remove(msg.jobId)
