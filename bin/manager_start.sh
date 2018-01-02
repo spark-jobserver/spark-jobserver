@@ -13,6 +13,10 @@ get_abs_script_path
 
 . $appdir/setenv.sh
 
+# Override logging options to provide per-context logging
+LOGGING_OPTS="$LOGGING_OPTS_FILE
+              -DLOG_DIR=$5"
+
 GC_OPTS="-XX:+UseConcMarkSweepGC
          -verbose:gc -XX:+PrintGCTimeStamps
          -XX:MaxPermSize=512m
@@ -31,7 +35,6 @@ if [ $2 = "cluster" -a -z "$REMOTE_JOBSERVER_DIR" ]; then
     --files $appdir/log4j-cluster.properties,$conffile"
   JAR_FILE="$appdir/spark-job-server.jar"
   CONF_FILE=$(basename $conffile)
-  LOGGING_OPTS="-Dlog4j.configuration=log4j-cluster.properties"
 
 # use files in REMOTE_JOBSERVER_DIR
 elif [ $2 == "cluster" ]; then
@@ -40,13 +43,11 @@ elif [ $2 == "cluster" ]; then
     --conf spark.yarn.submit.waitAppCompletion=false"
   JAR_FILE="$REMOTE_JOBSERVER_DIR/spark-job-server.jar"
   CONF_FILE="$REMOTE_JOBSERVER_DIR/$(basename $conffile)"
-  LOGGING_OPTS="-Dlog4j.configuration=$REMOTE_JOBSERVER_DIR/log4j-cluster.properties"
 
 # client mode, use files from app dir
 else
   JAR_FILE="$appdir/spark-job-server.jar"
   CONF_FILE="$conffile"
-  LOGGING_OPTS="-Dlog4j.configuration=file:$appdir/log4j-server.properties -DLOG_DIR=$5"
   GC_OPTS="$GC_OPTS -Xloggc:$5/gc.out"
 fi
 
