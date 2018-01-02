@@ -248,7 +248,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
     }
 
     val contextLogger = LoggerFactory.getLogger("manager_start")
-    val process = Process(managerStartCommand, managerArgs)
+    val process = Process(managerStartCommand.split(" ") ++ managerArgs)
     process.run(ProcessLogger(out => contextLogger.info(out), err => contextLogger.warn(err)))
 
     contextInitInfos(contextActorName) = (mergedContextConfig, isAdHoc, successFunc, failureFunc)
