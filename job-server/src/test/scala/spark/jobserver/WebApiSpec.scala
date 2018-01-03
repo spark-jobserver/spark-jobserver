@@ -20,6 +20,7 @@ import scala.concurrent.{Await, Future}
 import scala.util.{Failure, Success}
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.Duration
+import spark.jobserver.util.NoSuchBinaryException
 
 // Tests web response codes and formatting
 // Does NOT test underlying Supervisor / JarManager functionality
@@ -136,6 +137,7 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
       case StoreBinary("daofail", _, _) => sender ! BinaryStorageFailure(new Exception("DAO failed to store"))
       case StoreBinary(_, _, _)         => sender ! BinaryStored
 
+      case DeleteBinary("badbinary") => sender ! NoSuchBinary
       case DeleteBinary(_) => sender ! BinaryDeleted
 
       case DataManagerActor.StoreData("errorfileToRemove", _) => sender ! DataManagerActor.Error

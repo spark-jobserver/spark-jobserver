@@ -9,6 +9,7 @@ test-reports/
 .idea*
 .vagrant
 *.pyc
+.DS_Store
 
 # ignore deployment configs
 config/*.conf
