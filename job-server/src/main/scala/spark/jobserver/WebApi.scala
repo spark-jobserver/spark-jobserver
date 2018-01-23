@@ -55,7 +55,8 @@ object WebApi {
   }
 
   def logAndComplete(ctx: RequestContext, errMsg: String, stcode: Int, e: Throwable) {
-    logger.info("StatusCode: " + stcode + ", ErrorMessage: " + errMsg + ", StackTrace: " + e.getStackTrace);
+    logger.info("StatusCode: " + stcode + ", ErrorMessage: " + errMsg + ", StackTrace: "
+        + ErrorData.getStackTrace(e));
     ctx.complete(stcode, errMap(e, errMsg))
   }
 
@@ -728,7 +729,7 @@ class WebApi(system: ActorSystem,
                           }
                         case JobErroredOut(jobId, _, ex) =>
                           logger.info("jobId: " + jobId
-                              + ", ErrorMessage: ERROR, StackTrace: " + ex.getStackTrace);
+                              + ", ErrorMessage: ERROR, StackTrace: " + ErrorData.getStackTrace(ex));
                           ctx.complete(Map[String, String]("jobId" -> jobId) ++ errMap(ex, "ERROR")
                         )
                         case JobStarted(_, jobInfo) =>
@@ -765,19 +766,19 @@ class WebApi(system: ActorSystem,
                       val stcode = StatusCodes.NotFound;
                       val errMes = "context " + contextOpt.get + " not found";
                       logger.info("StatusCode: " + stcode + ", ErrorMessage: " + errMes
-                            + ", StackTrace: " + e.getStackTrace);
+                            + ", StackTrace: " + ErrorData.getStackTrace(e));
                       complete(stcode, errMap(errMes))
                     case e: ConfigException =>
                       val stcode = StatusCodes.BadRequest;
                       val errMes = "Cannot parse config: " + e.getMessage;
                       logger.info("StatusCode: " + stcode + ", ErrorMessage: " + errMes
-                            + ", StackTrace: " + e.getStackTrace);
+                            + ", StackTrace: " + ErrorData.getStackTrace(e));
                       complete(stcode, errMap(errMes))
                     case e: Exception =>
                       val stcode = 500;
                       val errMes = "ERROR";
                       logger.info("StatusCode: " + stcode + ", ErrorMessage: " + errMes
-                          + ", StackTrace: " + e.getStackTrace);
+                          + ", StackTrace: " + ErrorData.getStackTrace(e));
                       complete(stcode, errMap(e, errMes))
                   }
               }
