@@ -107,14 +107,6 @@ JAVA_OPTS_SERVER="${JAVA_OPTS_BASE} \
           -Dcom.sun.management.jmxremote.authenticate=false \
           -Dcom.sun.management.jmxremote.ssl=false"
 
-if [ -z "$MANAGER_JAR_FILE" ]; then
-  MANAGER_JAR_FILE="$appdir/spark-job-server.jar"
-fi
-
-if [ -z "$MANAGER_CONF_FILE" ]; then
-  MANAGER_CONF_FILE="$conffile"
-fi
-
-if [ -z "$MANAGER_LOGGING_OPTS" ]; then
-  MANAGER_LOGGING_OPTS="-Dlog4j.configuration=file:$appdir/log4j-server.properties"
-fi
+: ${MANAGER_JAR_FILE:="$appdir/spark-job-server.jar"}
+: ${MANAGER_CONF_FILE:="$conffile"}
+: ${MANAGER_LOGGING_OPTS:="-Dlog4j.configuration=file:$appdir/log4j-server.properties"}

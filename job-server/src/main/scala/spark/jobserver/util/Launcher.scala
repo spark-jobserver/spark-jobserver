@@ -54,7 +54,6 @@ abstract class Launcher(config: Config) {
     private def initSparkLauncher() {
       logger.info("Initializing spark launcher")
       launcher.setSparkHome(getEnvironmentVariable("SPARK_HOME"))
-      launcher.setMaster(master)
       launcher.setDeployMode(deployMode)
       launcher.setAppResource(sjsJarPath)
       launcher.setVerbose((getEnvironmentVariable("SPARK_LAUNCHER_VERBOSE") == "1"))

@@ -1,6 +1,8 @@
 package spark.jobserver.util
 
 import java.io.File
+import scala.util.Try
+import collection.JavaConverters._
 import com.typesafe.config.Config
 import org.slf4j.LoggerFactory
 import org.apache.spark.launcher.SparkLauncher
@@ -24,15 +26,23 @@ final class ManagerLauncher(systemConfig: Config, contextConfig: Config,
         gcOPTS += s" -Xloggc:$gcFilePath"
       }
 
+      val contextSparkMaster = Try(contextConfig.getString("launcher.spark.master"))
+        .getOrElse(SparkMasterProvider.fromConfig(systemConfig).getSparkMaster(systemConfig))
+      launcher.setMaster(contextSparkMaster)
       launcher.setMainClass("spark.jobserver.JobManager")
       launcher.addAppArgs(masterAddress, contextActorName, getEnvironmentVariable("MANAGER_CONF_FILE"))
-      launcher.addSparkArg("--driver-memory", getEnvironmentVariable("JOBSERVER_MEMORY"))
       launcher.addSparkArg("--conf", s"spark.executor.extraJavaOptions=$loggingOpts")
       launcher.addSparkArg("--driver-java-options",
           s"$gcOPTS $baseJavaOPTS $loggingOpts $configOverloads $extraJavaOPTS")
 
       if (contextConfig.hasPath(SparkJobUtils.SPARK_PROXY_USER_PARAM)) {
          launcher.addSparkArg("--proxy-user", contextConfig.getString(SparkJobUtils.SPARK_PROXY_USER_PARAM))
+      }
+
+      for (e <- Try(contextConfig.getConfig("launcher"))) {
+         e.entrySet().asScala.map { c =>
+            launcher.addSparkArg("--conf", s"${c.getKey}=${c.getValue.unwrapped.toString}")
+         }
       }
 
       parseExtraSparkConfigurations() match {

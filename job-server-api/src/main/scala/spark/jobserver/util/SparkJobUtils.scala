@@ -5,14 +5,13 @@ import java.util.concurrent.TimeUnit
 import com.typesafe.config.Config
 import org.apache.spark.SparkConf
 
-import scala.util.Try
+import scala.util.{Try, Success}
 
 /**
  * Holds a few functions common to Job Server SparkJob's and SparkContext's
  */
 object SparkJobUtils {
   import collection.JavaConverters._
-
   val NameContextDelimiter = "~"
 
   /**
@@ -61,13 +60,15 @@ object SparkJobUtils {
    */
   def configToSparkConf(config: Config, contextConfig: Config,
                         contextName: String): SparkConf = {
-
-    val sparkMaster = SparkMasterProvider.fromConfig(config).getSparkMaster(config)
-
     val conf = new SparkConf()
-    conf
-      .setMaster(sparkMaster)
-      .setAppName(contextName)
+    conf.setAppName(contextName)
+
+    Try(conf.get("spark.master")) match {
+      case Success(value) => // If Launcher has already set the value then don't override
+      case _ =>
+        val sparkMaster = SparkMasterProvider.fromConfig(config).getSparkMaster(config)
+        conf.setMaster(sparkMaster)
+    }
 
     for (cores <- Try(contextConfig.getInt("num-cpu-cores"))) {
       conf.set("spark.cores.max", cores.toString)
