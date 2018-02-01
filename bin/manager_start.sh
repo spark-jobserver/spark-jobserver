@@ -40,5 +40,5 @@ else
   $appdir/spark-job-server.jar $1 $2 $conffile'
 fi
 
-eval $cmd > /dev/null 2>&1 &
+eval $cmd > /dev/null 2>&1
 # exec java -cp $CLASSPATH $GC_OPTS $JAVA_OPTS $LOGGING_OPTS $CONFIG_OVERRIDES $MAIN $1 $2 $conffile 2>&1 &
