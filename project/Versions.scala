@@ -5,7 +5,7 @@ object Versions {
   lazy val metrics = "2.2.0"
   lazy val jodaTime = "2.9.3"
   lazy val jodaConvert = "1.8.1"
-  lazy val spark = sys.env.getOrElse("SPARK_VERSION", "2.1.0")
+  lazy val spark = sys.env.getOrElse("SPARK_VERSION", "2.2.1")
 
   lazy val akka = "2.4.9"
   lazy val spray = "1.3.3"
