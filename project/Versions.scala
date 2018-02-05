@@ -11,7 +11,7 @@ object Versions {
   lazy val spray = "1.3.3"
   lazy val sprayJson = "1.3.2"
   lazy val mesos = sys.env.getOrElse("MESOS_VERSION", "1.0.0-2.0.89.ubuntu1404")
-  lazy val netty =  "4.0.44.Final"
+  lazy val netty =  "4.0.42.Final"
   lazy val slick = "3.1.1"
   lazy val h2 = "1.3.176"
   lazy val postgres = "9.4.1209"
@@ -19,7 +19,6 @@ object Versions {
   lazy val cassandra = "3.3.0"
   lazy val cassandraUnit = "2.2.2.1"
   lazy val commons = "1.4"
-  lazy val derby = "10.12.1.1"
   lazy val flyway = "3.2.1"
   lazy val hadoop = "2.7.3"
   lazy val java = sys.env.getOrElse("JAVA_VERSION", "8-jdk")
