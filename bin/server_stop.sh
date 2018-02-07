@@ -10,12 +10,7 @@ get_abs_script_path() {
 
 get_abs_script_path
 
-if [ -f "$appdir/settings.sh" ]; then
-  . "$appdir/settings.sh"
-else
-  echo "Missing $appdir/settings.sh, exiting"
-  exit 1
-fi
+. $appdir/setenv.sh
 
 pidFilePath=$appdir/$PIDFILE
 
@@ -37,4 +32,3 @@ else
     fi
   fi
 fi
-
