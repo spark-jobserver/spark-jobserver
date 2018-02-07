@@ -258,7 +258,9 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
       Map("is-adhoc" -> isAdHoc.toString, "context.name" -> name).asJava
     ).withFallback(contextConfig)
 
-    var managerArgs = Seq(master, deployMode, selfAddress.toString, contextActorName, contextDir.toString)
+    val conStr = mergedContextConfig.root.render(ConfigRenderOptions.concise())
+    var managerArgs = Seq(master, deployMode, selfAddress.toString,
+      contextActorName, contextDir.toString, conStr)
     // extract spark.proxy.user from contextConfig, if available and pass it to manager start command
     if (contextConfig.hasPath(SparkJobUtils.SPARK_PROXY_USER_PARAM)) {
       managerArgs = managerArgs :+ contextConfig.getString(SparkJobUtils.SPARK_PROXY_USER_PARAM)
