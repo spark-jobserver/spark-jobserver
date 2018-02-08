@@ -5,7 +5,7 @@ import akka.pattern.ask
 import akka.util.Timeout
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
-import spark.jobserver.JobManagerActor.{GetContextInfo, ContextInfo}
+import spark.jobserver.JobManagerActor.{GetSparkWebUIUrl, NoSparkWebUI, SparkWebUIUrl}
 import spark.jobserver.JobManagerActor.{SparkContextAlive, SparkContextDead, SparkContextStatus}
 import spark.jobserver.util.SparkJobUtils
 
@@ -27,7 +27,7 @@ object ContextSupervisor {
   case class GetContext(name: String) // returns JobManager, JobResultActor
   case class GetResultActor(name: String)  // returns JobResultActor
   case class StopContext(name: String)
-  case class GetSparkContextInfo(name: String)
+  case class GetSparkWebUI(name: String)
 
   // Errors/Responses
   case object ContextInitialized
@@ -36,7 +36,7 @@ object ContextSupervisor {
   case object ContextAlreadyExists
   case object NoSuchContext
   case object ContextStopped
-  case class SparkContextInfo(name: String, appId: String, url: Option[String])
+  case class WebUIForContext(name: String, url: Option[String])
 }
 
 /**
@@ -96,15 +96,14 @@ class LocalContextSupervisorActor(dao: ActorRef, dataManagerActor: ActorRef) ext
     case ListContexts =>
       sender ! contexts.keys.toSeq
 
-    case GetSparkContextInfo(name) =>
+    case GetSparkWebUI(name) =>
       contexts.get(name) match {
         case Some((actor, _)) =>
-          val future = (actor ? GetContextInfo)(contextTimeout.seconds)
+          val future = (actor ? GetSparkWebUIUrl)(contextTimeout.seconds)
           val originator = sender
           future.collect {
-            case ContextInfo(appId, Some(webUi)) =>
-              originator ! SparkContextInfo(name, appId, Some(webUi))
-            case ContextInfo(appId, None) => originator ! SparkContextInfo(name, appId, None)
+            case SparkWebUIUrl(webUi) => originator ! WebUIForContext(name, Some(webUi))
+            case NoSparkWebUI => originator ! WebUIForContext(name, None)
             case SparkContextDead =>
               logger.info("SparkContext {} is dead", name)
               originator ! NoSuchContext

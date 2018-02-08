@@ -378,16 +378,16 @@ class WebApi(system: ActorSystem,
       logger.info("User authentication");
       (get & path(Segment)) { (contextName) =>
         respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-          val future = supervisor ? GetSparkContextInfo(contextName)
+          val future = supervisor ? GetSparkWebUI(contextName)
           future.map {
-            case SparkContextInfo(name, appId, Some(url)) =>
+            case WebUIForContext(name, Some(url)) =>
               val stcode = 200;
-              val contextMap = Map("context" -> contextName, "applicationId" -> appId, "url" -> url)
+              val contextMap = Map("context" -> contextName, "url" -> url)
               logger.info("StatusCode: " + stcode + ", " + contextMap);
               ctx.complete(stcode, contextMap)
-            case SparkContextInfo(name, appId, None) =>
+            case WebUIForContext(name, None) =>
               val stcode = 200;
-              val contextMap = Map("context" -> contextName, "applicationId" -> appId)
+              val contextMap = Map("context" -> contextName)
               logger.info("StatusCode: " + stcode + ", " + contextMap);
               ctx.complete(stcode, contextMap)
             case NoSuchContext => notFound(ctx, s"can't find context with name $contextName")
