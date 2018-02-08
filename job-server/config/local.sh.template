@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 # Environment and deploy file
 # For use with bin/server_deploy, bin/server_package etc.
 DEPLOY_HOSTS="hostname1.net
@@ -30,3 +32,17 @@ SCALA_VERSION=2.10.4 # or 2.11.6
 
 # optional:
 # REMOTE_JOBSERVER_DIR=file://... or hdfs://...
+
+MANAGER_JAR_FILE="$appdir/spark-job-server.jar"
+MANAGER_CONF_FILE="$conffile"
+MANAGER_EXTRA_JAVA_OPTIONS=
+MANAGER_EXTRA_SPARK_CONFS=
+MANAGER_LOGGING_OPTS="-Dlog4j.configuration=file:$appdir/log4j-server.properties"
+SPARK_LAUNCHER_VERBOSE=0
+
+# For mesos/yarn use the following variables
+# MANAGER_JAR_FILE="$appdir/spark-job-server.jar"
+# MANAGER_CONF_FILE="$(basename $conffile)"
+# MANAGER_EXTRA_JAVA_OPTIONS=
+# MANAGER_EXTRA_SPARK_CONFS="spark.yarn.submit.waitAppCompletion=false|spark.files=$appdir/log4jcluster.properties,$conffile"
+# MANAGER_LOGGING_OPTS="-Dlog4j.configuration=log4j-cluster.properties"

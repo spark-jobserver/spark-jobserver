@@ -1,0 +1,6 @@
+#Scala #akka @ApacheSpark
+
+* feat(jobserver): Replace manager_start with SparkLauncher (@bsikander) - this is a pretty big deal to stabilize and extend SJS
+
+* Updated Python documentation to reference PythonSession (@rfrohock)
+* fix(webapi): repair context info route for mode context-per-jvm (@pk-work)

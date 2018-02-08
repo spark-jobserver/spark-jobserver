@@ -125,6 +125,16 @@ The _start-server.sh_ script does not contain a ```--master``` option. In some c
 --master yarn-client
 ```
 
+### Modifying the &lt;environment&gt;.sh script
+Replace `MANAGER_*` variables with
+```
+MANAGER_JAR_FILE="$appdir/spark-job-server.jar"
+MANAGER_CONF_FILE="$(basename $conffile)"
+MANAGER_EXTRA_JAVA_OPTIONS=
+MANAGER_EXTRA_SPARK_CONFS="spark.yarn.submit.waitAppCompletion=false|spark.files=$appdir/log4jcluster.properties,$conffile"
+MANAGER_LOGGING_OPTS="-Dlog4j.configuration=log4j-cluster.properties"
+```
+
 ### Important Context Settings for yarn
 
 I recently responded to a private question about configuring job-server AWS EMR running Spark and wanted to share with the group.

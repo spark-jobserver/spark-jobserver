@@ -137,7 +137,10 @@ lazy val dockerSettings = Seq(
     val sparkBuild = s"spark-${Versions.spark}"
     val sparkBuildCmd = scalaBinaryVersion.value match {
       case "2.11" =>
-        "./make-distribution.sh -Dscala-2.11 -Phadoop-2.6 -Phive" // TODO update hadoop version when we use 2.7
+        Versions.spark match {
+          case s if s.startsWith("1") => {"./make-distribution.sh -Dscala-2.11 -Phadoop-2.7 -Phive"}
+          case _ => {"./dev/make-distribution.sh -Dscala-2.11 -Phadoop-2.7 -Phive"}
+        }
       case other => throw new RuntimeException(s"Scala version $other is not supported!")
     }
 
@@ -167,7 +170,6 @@ lazy val dockerSettings = Seq(
       copy(artifact, artifactTargetPath)
       copy(baseDirectory(_ / "bin" / "server_start.sh").value, file("app/server_start.sh"))
       copy(baseDirectory(_ / "bin" / "server_stop.sh").value, file("app/server_stop.sh"))
-      copy(baseDirectory(_ / "bin" / "manager_start.sh").value, file("app/manager_start.sh"))
       copy(baseDirectory(_ / "bin" / "setenv.sh").value, file("app/setenv.sh"))
       copy(baseDirectory(_ / "config" / "log4j-stdout.properties").value, file("app/log4j-server.properties"))
       copy(baseDirectory(_ / "config" / "docker.conf").value, file("app/docker.conf"))

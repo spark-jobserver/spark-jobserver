@@ -123,7 +123,8 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 | 0.6.1       | 1.5.2         |
 | 0.6.2       | 1.6.1         |
 | 0.7.0       | 1.6.2         |
-| 0.8.0-SNAPSHOT | 2.2.0    |
+| 0.8.0       | 2.2.0    |
+| 0.8.1-SNAPSHOT | 2.2.0 |
 
 For release notes, look in the `notes/` directory.
 
@@ -308,11 +309,11 @@ In your `build.sbt`, add this to use the job server jar:
 
         resolvers += "Job Server Bintray" at "https://dl.bintray.com/spark-jobserver/maven"
 
-        libraryDependencies += "spark.jobserver" %% "job-server-api" % "0.7.0" % "provided"
+        libraryDependencies += "spark.jobserver" %% "job-server-api" % "0.8.0" % "provided"
 
 If a SQL or Hive job/context is desired, you also want to pull in `job-server-extras`:
 
-    libraryDependencies += "spark.jobserver" %% "job-server-extras" % "0.7.0" % "provided"
+    libraryDependencies += "spark.jobserver" %% "job-server-extras" % "0.8.0" % "provided"
 
 For most use cases it's better to have the dependencies be "provided" because you don't want SBT assembly to include the whole job server jar.
 
@@ -586,8 +587,8 @@ NOTE: Under the hood, the deploy scripts generate an assembly jar from the `job-
 
 ### Context per JVM
 
-Each context can be a separate process launched using spark-submit, via the included `manager_start.sh` script, if `context-per-jvm` is set to true.
-You may want to set `deploy.manager-start-cmd` to the correct path to your start script and customize the script.  This can be especially desirable when you want to run many contexts at once, or for certain types of contexts such as StreamingContexts which really need their own processes.
+Each context can be a separate process launched using SparkLauncher, if `context-per-jvm` is set to true.
+This can be especially desirable when you want to run many contexts at once, or for certain types of contexts such as StreamingContexts which really need their own processes.
 
 Also, the extra processes talk to the master HTTP process via random ports using the Akka Cluster gossip protocol.  If for some reason the separate processes causes issues, set `spark.jobserver.context-per-jvm` to `false`, which will cause the job server to use a single JVM for all contexts.
 

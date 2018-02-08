@@ -73,6 +73,11 @@ InstanceCount=10,BidPrice=2.99,Name=sparkSlave,InstanceGroupType=CORE,InstanceTy
  HADOOP_CONF_DIR=/etc/hadoop/conf
  YARN_CONF_DIR=/etc/hadoop/conf
  SCALA_VERSION=2.10.5
+ MANAGER_JAR_FILE="$appdir/spark-job-server.jar"
+ MANAGER_CONF_FILE="$(basename $conffile)"
+ MANAGER_EXTRA_JAVA_OPTIONS=
+ MANAGER_EXTRA_SPARK_CONFS="spark.yarn.submit.waitAppCompletion=false|spark.files=$appdir/log4jcluster.properties,$conffile"
+ MANAGER_LOGGING_OPTS="-Dlog4j.configuration=log4j-cluster.properties"
  ```
 
 6. Create config/emr.conf

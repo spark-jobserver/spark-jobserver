@@ -165,14 +165,14 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String,
           logger.info("Received supervisor's response for Identify message. Adding a watch.")
           context.watch(ref)
 
-          logger.info("ActorIdentity message received already. Stopping the timer. All good!")
+          logger.info("ActorIdentity message received from master, stopping the timer.")
           context.setReceiveTimeout(Duration.Undefined) // Deactivate receive timeout
         }
       }
 
     case Terminated(actorRef) =>
       if (actorRef.path.name == "context-supervisor") {
-        logger.warn(s"Supervisor actor (${actorRef.path.address.toString}) terminated!!" +
+        logger.warn(s"Supervisor actor (${actorRef.path.address.toString}) terminated!" +
             s" Killing myself (${self.path.address.toString})!")
         self ! PoisonPill
       }

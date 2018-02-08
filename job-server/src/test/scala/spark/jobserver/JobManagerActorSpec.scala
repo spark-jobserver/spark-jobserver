@@ -313,7 +313,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       expectNoMsg()
     }
 
-    it("manager should kill itself if the master is down") {
+    it("should kill itself if the master is down") {
         val dataManager = system.actorOf(Props.empty)
 
         supervisor = system.actorOf(
@@ -329,13 +329,12 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
         Thread.sleep(2000) // Wait for manager actor to initialize and add a watch
         supervisor ! akka.actor.PoisonPill
-
         supervisorProbe.expectTerminated(supervisor)
 
         managerProbe.expectTerminated(managerWithMasterAddress, 5.seconds.dilated)
     }
 
-    it("manager should kill itself if response to Identify message is not received") {
+    it("should kill itself if response to Identify message is not received") {
         val managerWithDummyMasterAddress = system.actorOf(JobManagerActor.props(
             daoActor, "fake-path", 2.seconds.dilated))
 
