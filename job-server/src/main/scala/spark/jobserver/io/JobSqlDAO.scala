@@ -79,6 +79,21 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
 
   val jobs = TableQuery[Jobs]
 
+  class Contexts(tag: Tag) extends Table[(String, String, String, Option[String], Timestamp,
+      Option[Timestamp], String, Option[String])](tag, "CONTEXTS") {
+    def id = column[String]("ID", O.PrimaryKey)
+    def name = column[String]("NAME")
+    def config = column[String]("CONFIG")
+    def actorAddress = column[Option[String]]("ACTOR_ADDRESS")
+    def startTime = column[Timestamp]("START_TIME")
+    def endTime = column[Option[Timestamp]]("END_TIME")
+    def state = column[String]("STATE")
+    def error = column[Option[String]]("ERROR")
+    def * = (id, name, config, actorAddress, startTime, endTime, state, error)
+  }
+
+  val contexts = TableQuery[Contexts]
+
   class Configs(tag: Tag) extends Table[(String, String)](tag, "CONFIGS") {
     def jobId = column[String]("JOB_ID", O.PrimaryKey)
     def jobConfig = column[String]("JOB_CONFIG")
@@ -265,7 +280,57 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
     db.run(query.head)
   }
 
+  override def saveContextInfo(contextInfo: ContextInfo): Unit = {
+    val startTime = convertDateJodaToSql(contextInfo.startTime)
+    val endTime = contextInfo.endTime.map(t => convertDateJodaToSql(t))
+    val errors = contextInfo.error.map(e => e.getMessage)
+    val row = (contextInfo.id, contextInfo.name, contextInfo.config,
+                contextInfo.actorAddress, startTime, endTime, contextInfo.state, errors)
+    if(Await.result(db.run(contexts.insertOrUpdate(row)), 60 seconds) == 0){
+      throw new SlickException(s"Could not update ${contextInfo.id} in the database")
+    }
+  }
 
+  override def getContextInfo(id: String): Future[Option[ContextInfo]] = {
+    val query = contexts.filter(_.id === id).result
+    db.run(query.headOption).map(r => r.map(contextInfoFromRow(_)))
+  }
+
+  override def getContextInfos(limit: Option[Int] = None, statusOpt: Option[String] = None):
+  Future[Seq[ContextInfo]] = {
+    val query = statusOpt match {
+      case Some(i) => contexts.filter(_.state === i)
+      case None => contexts
+    }
+    val sortQuery = query.sortBy(_.startTime.desc)
+    val limitQuery = limit match {
+        case Some(i) => sortQuery.take(i)
+        case None => sortQuery
+      }
+    for (r <- db.run(limitQuery.result)) yield {
+      r.map(contextInfoFromRow)
+    }
+  }
+
+  override def getContextInfoByName(name: String): Future[Option[ContextInfo]] = {
+    val query = contexts.filter(_.name === name).sortBy(_.startTime.desc).result
+    db.run(query.headOption).map(r => r.map(contextInfoFromRow(_)))
+  }
+
+  private def contextInfoFromRow(row: (String, String, String, Option[String],
+    Timestamp, Option[Timestamp], String, Option[String])): ContextInfo = row match {
+    case (id, name, config, actorAddress, start, end, state, error) =>
+    ContextInfo(
+      id,
+      name,
+      config,
+      actorAddress,
+      convertDateSqlToJoda(start),
+      end.map(convertDateSqlToJoda),
+      state,
+      error.map(new Throwable(_))
+    )
+  }
 
   // Convert from joda DateTime to java.sql.Timestamp
   private def convertDateJodaToSql(dateTime: DateTime): Timestamp = new Timestamp(dateTime.getMillis)

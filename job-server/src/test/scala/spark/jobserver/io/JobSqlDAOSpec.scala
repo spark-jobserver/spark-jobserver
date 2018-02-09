@@ -385,6 +385,114 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
     }
   }
 
+  describe("Test saveContextInfo(), getContextInfo(), getContextInfos() and getContextInfoByName()") {
+    it("should return None if context doesnot exist in Context table") {
+      None should equal (Await.result(dao.getContextInfo("dummy-id"), timeout))
+    }
+
+    it("should save a new ContextInfo and get the same ContextInfo") {
+      val dummyContext = ContextInfo("someId", "contextName", "", None, DateTime.now(), None,
+          ContextStatus.Started, None)
+      dao.saveContextInfo(dummyContext)
+
+      val context = Await.result(dao.getContextInfo("someId"), timeout)
+      context.head should equal (dummyContext)
+    }
+
+    it("should get the latest ContextInfo by name") {
+      val dummyContextOld = ContextInfo("someIdOld", "contextName", "", None, DateTime.now(), None,
+          ContextStatus.Finished, None)
+      dao.saveContextInfo(dummyContextOld)
+
+      val dummyContext = ContextInfo("someId", "contextName", "", None, DateTime.now(), None,
+          ContextStatus.Started, None)
+      dao.saveContextInfo(dummyContext)
+
+      val context = Await.result(dao.getContextInfoByName("contextName"), timeout)
+      context.head should equal (dummyContext)
+    }
+
+    it("should get all ContextInfos if no limit is given") {
+      val dummyContextOld = ContextInfo("someIdOld", "contextName", "", None, DateTime.now(), None,
+          ContextStatus.Finished, None)
+      dao.saveContextInfo(dummyContextOld)
+
+      val dummyContext = ContextInfo("someId", "contextName", "", None, DateTime.now(), None,
+          ContextStatus.Finished, None)
+      dao.saveContextInfo(dummyContext)
+
+      val dummyContextNew = ContextInfo("someIdNew", "contextNameNew", "", None, DateTime.now(), None,
+          ContextStatus.Started, None)
+      dao.saveContextInfo(dummyContextNew)
+
+      val contexts: Seq[ContextInfo] = Await.result(dao.getContextInfos(), timeout)
+      contexts.size should equal (3)
+      contexts should contain theSameElementsAs Seq(dummyContextOld, dummyContext, dummyContextNew)
+    }
+
+    it("should get the 2 latest ContextInfos for limit = 2") {
+      val dummyContextOld = ContextInfo("someIdOld", "contextName", "", None, DateTime.now(), None,
+          ContextStatus.Finished, None)
+      dao.saveContextInfo(dummyContextOld)
+
+      val dummyContext = ContextInfo("someId", "contextName", "", None, DateTime.now(), None,
+          ContextStatus.Finished, None)
+      dao.saveContextInfo(dummyContext)
+
+      val dummyContextNew = ContextInfo("someIdNew", "contextNameNew", "", None, DateTime.now(), None,
+          ContextStatus.Started, None)
+      dao.saveContextInfo(dummyContextNew)
+
+      val contexts: Seq[ContextInfo] = Await.result(dao.getContextInfos(Some(2)), timeout)
+      contexts.size should equal (2)
+      contexts should contain theSameElementsAs Seq(dummyContext, dummyContextNew)
+    }
+
+    it("should get ContextInfos all contexts with state FINISHED") {
+      val dummyContextOld = ContextInfo("someIdOld", "contextName", "", None, DateTime.now(), None,
+          ContextStatus.Finished, None)
+      dao.saveContextInfo(dummyContextOld)
+
+      val dummyContext = ContextInfo("someId", "contextName", "", None, DateTime.now(), None,
+          ContextStatus.Finished, None)
+      dao.saveContextInfo(dummyContext)
+
+      val dummyContextNew = ContextInfo("someIdNew", "contextNameNew", "", None, DateTime.now(), None,
+          ContextStatus.Started, None)
+      dao.saveContextInfo(dummyContextNew)
+
+      val contexts: Seq[ContextInfo] = Await.result(dao.getContextInfos(None, Some(ContextStatus.Finished)), timeout)
+      contexts.size should equal (2)
+      contexts should contain theSameElementsAs Seq(dummyContextOld, dummyContext)
+    }
+
+    it("should update the context, if id is the same for two saveContextInfo requests") {
+      val dummyContext = ContextInfo("context2", "dummy-name", "", None, DateTime.now(), None,
+          ContextStatus.Started, None)
+      dao.saveContextInfo(dummyContext)
+
+      val dummyContext2 = ContextInfo("context2", "new-name", "", Some("akka:tcp//test"),
+          DateTime.now(), None, ContextStatus.Running, None)
+      dao.saveContextInfo(dummyContext2)
+
+      val context = Await.result(dao.getContextInfo("context2"), timeout)
+      context.head should equal (dummyContext2)
+    }
+
+    it("ContextInfo should still exist after db restart") {
+      val dummyContext = ContextInfo("context3", "dummy-name", "", None, DateTime.now(), None,
+          ContextStatus.Started, None)
+      dao.saveContextInfo(dummyContext)
+
+      // Destroy and bring up the DB again
+      dao = null
+      dao = new JobSqlDAO(config)
+      val context = Await.result(dao.getContextInfo("context3"), timeout)
+
+      context.head should equal (dummyContext)
+    }
+  }
+
   describe("delete binaries") {
     it("should be able to delete jar file") {
       val existing = Await.result(dao.getApps, timeout)
