@@ -40,6 +40,15 @@ object JobDAOActorSpec {
     override def retrieveBinaryFile(appName: String,
                                     binaryType: BinaryType, uploadTime: DateTime): String = ???
 
+    override def saveContextInfo(contextInfo: ContextInfo): Unit = ???
+
+    override def getContextInfo(id: String): Future[Option[ContextInfo]] = ???
+
+    override def getContextInfos(limit: Option[Int] = None, statusOpt: Option[String] = None):
+      Future[Seq[ContextInfo]] = ???
+
+    override def getContextInfoByName(name: String): Future[Option[ContextInfo]] = ???
+
     override def saveJobConfig(jobId: String, jobConfig: Config): Unit = ???
 
     override def getJobInfos(limit: Int, status: Option[String]): Future[Seq[JobInfo]] =

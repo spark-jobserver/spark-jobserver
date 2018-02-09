@@ -43,6 +43,7 @@ object AkkaClusterSupervisorActorSpec {
       }
       jobserver.job-result-cache-size = 100
       jobserver.context-creation-timeout = 5 s
+      jobserver.dao-timeout = 3 s
       context-per-jvm = true
       contexts {
         config-context {

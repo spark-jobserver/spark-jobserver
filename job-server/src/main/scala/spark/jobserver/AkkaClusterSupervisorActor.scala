@@ -20,8 +20,9 @@ import scala.concurrent.Await
 import akka.pattern.gracefulStop
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
-import spark.jobserver.io.JobDAOActor.CleanContextJobInfos
 import spark.jobserver.JobManagerActor.{GetContexData, ContexData, SparkContextDead}
+import spark.jobserver.io.{JobDAOActor, ContextInfo, ContextStatus}
+
 
 /**
  * The AkkaClusterSupervisorActor launches Spark Contexts as external processes
@@ -45,6 +46,9 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
   val contextInitTimeout = config.getDuration("spark.context-settings.context-init-timeout",
                                                 TimeUnit.SECONDS)
   val contextDeletionTimeout = SparkJobUtils.getContextDeletionTimeout(config)
+  val daoAskTimeout = Timeout(config.getDuration("spark.jobserver.dao-timeout",
+                                                TimeUnit.SECONDS).second)
+
   import context.dispatcher
 
   //actor name -> (context isadhoc, success callback, failure callback)
@@ -59,6 +63,8 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
 
   private val cluster = Cluster(context.system)
   protected val selfAddress = cluster.selfAddress
+
+  private val MANAGER_ACTOR_PREFIX = "jobManager-"
 
   // This is for capturing results for ad-hoc jobs. Otherwise when ad-hoc job dies, resultActor also dies,
   // and there is no way to retrieve results.
@@ -188,7 +194,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
       logger.info("Actor terminated: {}", name)
       for ((name, _) <- contexts.find(_._2._1 == actorRef)) {
         contexts.remove(name)
-        daoActor ! CleanContextJobInfos(name, DateTime.now())
+        daoActor ! JobDAOActor.CleanContextJobInfos(name, DateTime.now())
       }
       cluster.down(actorRef.path.address)
   }
@@ -209,27 +215,68 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
         cluster.down(ref.path.address)
         ref ! PoisonPill
         failureFunc(e)
+        initContextHelp(actorName, Some(ref.path.address.toString), ContextStatus.Error, Some(e))
       case Success(JobManagerActor.InitError(t)) =>
         logger.info("Failed to initialize context " + ref, t)
         cluster.down(ref.path.address)
         ref ! PoisonPill
         failureFunc(t)
+        initContextHelp(actorName, Some(ref.path.address.toString), ContextStatus.Error, Some(t))
       case Success(JobManagerActor.Initialized(ctxName, resActor)) =>
         logger.info("SparkContext {} joined", ctxName)
         contexts(ctxName) = (ref, resActor)
         context.watch(ref)
-        successFunc(ref)
+        val optEx = initContextHelp(actorName, Some(ref.path.address.toString), ContextStatus.Running, None)
+        if (optEx.isEmpty) {
+          successFunc(ref)
+        } else {
+          ref ! PoisonPill
+          failureFunc(optEx.get)
+        }
       case _ => logger.info("Failed for unknown reason.")
         cluster.down(ref.path.address)
         ref ! PoisonPill
-        failureFunc(new RuntimeException("Failed for unknown reason."))
+        val e = new RuntimeException("Failed for unknown reason.")
+        failureFunc(e)
+        initContextHelp(actorName, Some(ref.path.address.toString), ContextStatus.Error, Some(e))
+    }
+  }
+
+  private def initContextHelp(actorName: String, clusterAddress: Option[String],
+      state: String, error: Option[Throwable]) : Option[Throwable] = {
+    import akka.pattern.ask
+    val managerActorName = actorName.replace(MANAGER_ACTOR_PREFIX, "")
+    val resp = Await.result(
+      (daoActor ? JobDAOActor.GetContextInfo(managerActorName))(daoAskTimeout).
+        mapTo[JobDAOActor.ContextResponse], daoAskTimeout.duration)
+    resp.contextInfo match {
+        case Some(context) =>
+          val endTime = error match {
+            case None => context.endTime
+            case _ => Some(DateTime.now())
+          }
+          daoActor ! JobDAOActor.SaveContextInfo(ContextInfo(context.id,
+                                                  context.name,
+                                                  context.config,
+                                                  clusterAddress,
+                                                  context.startTime,
+                                                  endTime,
+                                                  state,
+                                                  error))
+          None
+        case None =>
+          val e = new Throwable("Did not find context with id " + managerActorName)
+          logger.error(e.getMessage)
+          Some(e)
     }
   }
 
   private def startContext(name: String, contextConfig: Config, isAdHoc: Boolean)
                           (successFunc: ActorRef => Unit)(failureFunc: Throwable => Unit): Unit = {
     require(!(contexts contains name), "There is already a context named " + name)
-    val contextActorName = "jobManager-" + java.util.UUID.randomUUID().toString.substring(16)
+
+    val contextId = java.util.UUID.randomUUID().toString.substring(16)
+    val contextActorName = MANAGER_ACTOR_PREFIX + contextId
 
     logger.info("Starting context with actor name {}", contextActorName)
 
@@ -237,10 +284,16 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
     val mergedContextConfig = ConfigFactory.parseMap(
       Map("is-adhoc" -> isAdHoc.toString, "context.name" -> name).asJava
     ).withFallback(contextConfig)
+    val contextInfo = ContextInfo(contextId, name,
+        mergedContextConfig.root().render(ConfigRenderOptions.concise()), None,
+        DateTime.now(), None, _: String, _: Option[Throwable])
     launchDriver(name, contextConfig, contextActorName) match {
-      case (false, error) => failureFunc(new Exception(error))
+      case (false, error) => val e = new Exception(error)
+        failureFunc(e)
+        daoActor ! JobDAOActor.SaveContextInfo(contextInfo(ContextStatus.Error, Some(e)))
       case (true, _) =>
         contextInitInfos(contextActorName) = (mergedContextConfig, isAdHoc, successFunc, failureFunc)
+        daoActor ! JobDAOActor.SaveContextInfo(contextInfo(ContextStatus.Started, None))
     }
   }
 
