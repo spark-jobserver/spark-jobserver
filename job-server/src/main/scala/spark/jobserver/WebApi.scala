@@ -670,7 +670,7 @@ class WebApi(system: ActorSystem,
                 val jobReport = infos.map { info =>
                   getJobReport(info)
                 }
-                logger.info("JobReport: " + jobReport);
+                logger.info("Number of jobs in JobReport: " + jobReport.length);
                 ctx.complete(jobReport)
               }
             }
