@@ -32,6 +32,14 @@ object Metadata {
   val ChunkIndex = "chunk_index"
   val Binary = "binary"
 
+  val ContextsTable = "contexts"
+  val OrderedContextsByNameTable = "contexts_chronological_name"
+  val OrderedContextsByStateTable = "contexts_chronological_state"
+  val ContextId = "id"
+  val ContextConfig = "config"
+  val State = "state"
+  val ActorAddress = "actor_address"
+
   val JobsTable = "jobs"
   val JobsChronologicalTable = "jobs_chronological"
   val RunningJobsTable = "jobs_running"
@@ -150,6 +158,72 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
     }
   }
 
+  override def saveContextInfo(contextInfo: ContextInfo): Unit = {
+    def fillInsert(insert: Insert): Insert = {
+      insert.
+        value(ContextId, UUID.fromString(contextInfo.id)).
+        value(ContextName, contextInfo.name).
+        value(ContextConfig, contextInfo.config).
+        value(State, contextInfo.state).
+        value(StartTime, contextInfo.startTime.getMillis)
+        contextInfo.actorAddress.foreach { address => insert.value(ActorAddress, address) }
+        contextInfo.endTime.foreach{ endTime => insert.value(EndTime, endTime.getMillis) }
+        contextInfo.error.foreach { err =>
+          insert.value(Error, err.getMessage)
+        }
+      insert
+    }
+
+    session.execute(fillInsert(insertInto(ContextsTable)))
+    session.execute(fillInsert(insertInto(OrderedContextsByNameTable)))
+    session.execute(fillInsert(insertInto(OrderedContextsByStateTable)))
+  }
+
+  override def getContextInfo(id: String): Future[Option[ContextInfo]] = {
+    val query = QB.select(
+        ContextId, ContextName, ContextConfig, ActorAddress, StartTime, EndTime,
+        State, Error).
+      from(ContextsTable).
+      where(QB.eq(ContextId, UUID.fromString(id))).
+      limit(1)
+
+    session.executeAsync(query).map { rs =>
+      val row = rs.one()
+      Option(row).map(rowToContextInfo)
+    }
+  }
+
+  override def getContextInfos(limitOpt: Option[Int] = None, statusOpt: Option[String] = None):
+    Future[Seq[ContextInfo]] = {
+    val query = QB.select(ContextId, ContextName, ContextConfig, ActorAddress, StartTime, EndTime,
+            State, Error).
+        from(OrderedContextsByStateTable)
+    val filteredQuery = (limitOpt, statusOpt) match {
+       case (Some(limit), Some(status)) => query.where(QB.eq(State, status)).limit(limit)
+       case (Some(limit), None) =>
+         throw new UnsupportedOperationException("Current cassandra model doesnot support this operation")
+       case (None, Some(status)) => query.where(QB.eq(State, status))
+       case (None, None) =>
+         throw new UnsupportedOperationException("Current cassandra model doesnot support this operation")
+     }
+
+    session.executeAsync(filteredQuery).map { rs =>
+       JListWrapper(rs.all()).map(rowToContextInfo)
+    }
+  }
+
+  override def getContextInfoByName(name: String): Future[Option[ContextInfo]] = {
+    val query = QB.select(ContextId, ContextName, ContextConfig, ActorAddress, StartTime, EndTime,
+        State, Error).
+    from(OrderedContextsByNameTable).
+    where(QB.eq(ContextName, name))
+
+    session.executeAsync(query).map { rs =>
+      val allContexts = JListWrapper(rs.all()).map(rowToContextInfo)
+      allContexts.filter(_.name == name).headOption
+    }
+  }
+
   override def saveJobConfig(jobId: String, jobConfig: Config): Unit = {
     session.executeAsync(
       insertInto(JobsTable).
@@ -220,6 +294,19 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
       (row.getInt(ChunkIndex), row.getBytes(Binary).array())
     }
     tuples.map(_._2).foldLeft(Array[Byte]()) { _ ++ _ }
+  }
+
+  private def rowToContextInfo(row: Row): ContextInfo = {
+    ContextInfo(
+      row.getUUID(ContextId).toString,
+      row.getString(ContextName),
+      row.getString(ContextConfig),
+      Option(row.getString(ActorAddress)),
+      new DateTime(row.getTimestamp(StartTime)),
+      Option(row.getTimestamp(EndTime)).map(new DateTime(_)),
+      row.getString(State),
+      Option(row.getString("Error")).map(new Exception(_))
+    )
   }
 
   private def rowToJobInfo(row: Row): JobInfo = {
@@ -356,6 +443,47 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
       addColumn(UploadTime, DataType.timestamp())
 
     session.execute(binariesChronologicalTable)
+
+    val contextsTableStatement = SchemaBuilder.createTable(ContextsTable).ifNotExists.
+      addPartitionKey(ContextId, DataType.uuid).
+      addClusteringColumn(StartTime, DataType.timestamp).
+      addColumn(ContextName, DataType.text).
+      addColumn(ContextConfig, DataType.text).
+      addColumn(ActorAddress, DataType.text).
+      addColumn(EndTime, DataType.timestamp).
+      addColumn(State, DataType.text).
+      addColumn(Error, DataType.text).
+      withOptions().clusteringOrder(StartTime, Direction.DESC)
+
+    session.execute(contextsTableStatement)
+
+    val orderedContextsByNameTableStatement =
+      SchemaBuilder.createTable(OrderedContextsByNameTable).ifNotExists.
+      addPartitionKey(ContextName, DataType.text).
+      addClusteringColumn(StartTime, DataType.timestamp).
+      addClusteringColumn(ContextId, DataType.uuid).
+      addColumn(ContextConfig, DataType.text).
+      addColumn(ActorAddress, DataType.text).
+      addColumn(EndTime, DataType.timestamp).
+      addColumn(State, DataType.text).
+      addColumn(Error, DataType.text).
+      withOptions().clusteringOrder(StartTime, Direction.DESC)
+
+    session.execute(orderedContextsByNameTableStatement)
+
+    val orderedContextsByStateTableStateStatement =
+      SchemaBuilder.createTable(OrderedContextsByStateTable).ifNotExists.
+      addPartitionKey(State, DataType.text).
+      addClusteringColumn(StartTime, DataType.timestamp).
+      addClusteringColumn(ContextId, DataType.uuid).
+      addColumn(ContextName, DataType.text).
+      addColumn(ContextConfig, DataType.text).
+      addColumn(ActorAddress, DataType.text).
+      addColumn(EndTime, DataType.timestamp).
+      addColumn(Error, DataType.text).
+      withOptions().clusteringOrder(StartTime, Direction.DESC)
+
+    session.execute(orderedContextsByStateTableStateStatement)
 
     val jobsTableStatement = SchemaBuilder.createTable(JobsTable).ifNotExists.
       addPartitionKey(JobId, DataType.uuid).

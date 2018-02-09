@@ -348,6 +348,119 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
     }
   }
 
+  describe("Context table tests") {
+    it("should return None if context id does not exist in Contexts table") {
+      val context = Await.result(dao.getContextInfo(UUIDs.random().toString), timeout)
+      context.isDefined should equal (false)
+    }
+
+    it("should save a new ContextInfo and get the same ContextInfo") {
+      val uuid = UUIDs.random().toString
+      val contextInfo = ContextInfo(uuid, "test-context", "", None, DateTime.now(), None, ContextStatus.Started, None)
+      dao.saveContextInfo(contextInfo)
+
+      val context = Await.result(dao.getContextInfo(uuid), timeout)
+      context.get should equal (contextInfo)
+    }
+
+    it("should store context with actor address and endtime") {
+      val uuid = UUIDs.random().toString
+      val contextInfo = ContextInfo(uuid, "test-context1", "", Some("akka.tcp://"), DateTime.now(), Some(DateTime.now().plusDays(1)), ContextStatus.Started, None)
+
+      dao.saveContextInfo(contextInfo)
+
+      val context = Await.result(dao.getContextInfo(uuid), timeout)
+      context.get should be (contextInfo)
+    }
+
+    it("should update the context if id is the same for two saveContextInfo requests") {
+      val uuid = UUIDs.random().toString
+      val contextInfo = ContextInfo(uuid, _:String, "", None, DateTime.now(), None, ContextStatus.Started, None)
+      val contextInfo2 = contextInfo("test-context2")
+
+      dao.saveContextInfo(contextInfo("test-context3"))
+      dao.saveContextInfo(contextInfo2)
+
+      val context = Await.result(dao.getContextInfo(uuid), timeout)
+      context.get should be (contextInfo2)
+    }
+
+    it("should be able to save context with error") {
+      val uuid = UUIDs.random().toString
+      val contextInfo = ContextInfo(uuid, "test-context4", "", None, DateTime.now(), None, ContextStatus.Started, Some(new Exception("test")))
+
+      dao.saveContextInfo(contextInfo)
+
+      val context = Await.result(dao.getContextInfo(uuid), timeout)
+      context.get.error.get.getMessage should be ("test")
+    }
+
+    it("should get the latest contextInfo by name") {
+      val uuid = UUIDs.random().toString
+      val contextInfo = ContextInfo(uuid, "test-context5", "", None, DateTime.now(), None, ContextStatus.Started, None)
+
+      dao.saveContextInfo(contextInfo)
+
+      val context = Await.result(dao.getContextInfoByName("test-context5"), timeout)
+      context.get should be (contextInfo)
+    }
+
+    it("should get latest context if multiple contexts exist with the same name") {
+      val contextInfo = ContextInfo(UUIDs.random().toString, "test-context6", "", None, DateTime.now(), None, ContextStatus.Finished, None)
+      val contextInfo2 = ContextInfo(UUIDs.random().toString, "test-context6", "", None, DateTime.now().plusMillis(1), None, ContextStatus.Started, None)
+
+      dao.saveContextInfo(contextInfo)
+      dao.saveContextInfo(contextInfo2)
+
+      val context = Await.result(dao.getContextInfoByName("test-context6"), timeout)
+      context.get should be (contextInfo2)
+    }
+
+    it("should get latest contexts by status and limit") {
+      val contextInfo = ContextInfo(_:String, _:String, "", None, _:DateTime, None, _:String, None)
+      val contextInfo1 = contextInfo(UUIDs.random().toString, "test-context7", DateTime.now(), ContextStatus.Started)
+      val contextInfo2 = contextInfo(UUIDs.random().toString, "test-context8", DateTime.now(), ContextStatus.Running)
+      val contextInfo3 = contextInfo(UUIDs.random().toString, "test-context9", DateTime.now(), ContextStatus.Started)
+      val contextInfo4 = contextInfo(UUIDs.random().toString, "test-context10",DateTime.now(), ContextStatus.Started)
+
+      dao.saveContextInfo(contextInfo1)
+      dao.saveContextInfo(contextInfo2)
+      dao.saveContextInfo(contextInfo3)
+      dao.saveContextInfo(contextInfo4)
+
+      def Desc[T : Ordering] = implicitly[Ordering[T]].reverse
+      val orderedExpectedList = Seq(contextInfo4, contextInfo3, contextInfo1)
+                                    .sortBy(_.id)
+                                    .sortBy(_.startTime.getMillis)(Desc)
+
+      val contexts = Await.result(dao.getContextInfos(Some(3), Some(ContextStatus.Started)), timeout)
+      contexts should be (orderedExpectedList)
+    }
+
+    it("should get latest contexts by status only") {
+      val contextInfo = ContextInfo(_:String, _:String, "", None, _:DateTime, None, _:String, None)
+      val contextInfo1 = contextInfo(UUIDs.random().toString, "test-context11", DateTime.now(), ContextStatus.Started)
+      val contextInfo2 = contextInfo(UUIDs.random().toString, "test-context12", DateTime.now(), ContextStatus.Running)
+
+      dao.saveContextInfo(contextInfo1)
+      dao.saveContextInfo(contextInfo2)
+      val contexts = Await.result(dao.getContextInfos(None, Some(ContextStatus.Started)), timeout)
+      contexts.head should be (contextInfo1)
+    }
+
+    it("should get unsupported exception if all contexts are listed") {
+      assertThrows[UnsupportedOperationException] {
+        Await.result(dao.getContextInfos(None, None), timeout)
+      }
+    }
+
+    it("should get unsupported exception if only limit is provided") {
+      assertThrows[UnsupportedOperationException] {
+        Await.result(dao.getContextInfos(Some(5), None), timeout)
+      }
+    }
+  }
+
   describe("delete binaries") {
     it("should be able to delete jar file") {
       val existing = Await.result(dao.getApps, timeout)
