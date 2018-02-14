@@ -716,7 +716,7 @@ class WebApi(system: ActorSystem,
       }
     val future = (supervisor ? msg)(contextTimeout.seconds)
     Await.result(future, contextTimeout.seconds) match {
-      case (manager: ActorRef, resultActor: ActorRef) => Some(manager)
+      case (manager: ActorRef) => Some(manager)
       case NoSuchContext => None
       case ContextInitError(err) => throw new RuntimeException(err)
     }

@@ -2,17 +2,24 @@ package spark.jobserver
 
 import java.nio.charset.Charset
 
-import akka.actor.{ActorRef, ActorSystem}
+import scala.util.Try
+import akka.actor.{ActorRef, ActorSystem, Props, Actor}
+import akka.pattern.ask
 import akka.util.Timeout
-import akka.testkit.TestKit
+import akka.testkit.{TestKit, TestProbe}
 import org.scalatest.{BeforeAndAfterAll, FunSpecLike, Matchers}
 import java.nio.file.Files
 
 import scala.concurrent.duration._
 import spark.jobserver.JobServer.InvalidConfiguration
 import spark.jobserver.common.akka
+import spark.jobserver.io.{JobDAOActor, JobDAO, ContextInfo, ContextStatus}
 
 import scala.concurrent.Await
+import scala.concurrent.duration.TimeUnit;
+import java.util.UUID
+import org.joda.time.DateTime
+import java.util.concurrent.TimeUnit
 
 object JobServerSpec {
   val system = ActorSystem("test")
@@ -132,6 +139,42 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
       Await.result(system.actorSelection("/user/binary-manager").resolveOne, 2 seconds) shouldBe a[ActorRef]
       Await.result(system.actorSelection("/user/context-supervisor").resolveOne, 2 seconds) shouldBe a[ActorRef]
       Await.result(system.actorSelection("/user/job-info").resolveOne, 2 seconds) shouldBe a[ActorRef]
+    }
+
+    def createContext(name: String, status: String, genActor: Boolean): ContextInfo = {
+      val uuid = UUID.randomUUID().toString()
+      var address = "invalidAddress"
+      if(genActor) {
+        val actor = system.actorOf(Props.empty, name = AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX + uuid)
+        address = actor.path.address.toString
+      }
+      return ContextInfo(uuid, name, "", Some(address), DateTime.now(), None, status, None)
+    }
+
+    it("reconnect to actors after restart") {
+      val daoActor = system.actorOf(JobDAOActor.props(new InMemoryDAO))
+
+      // Add two contexts in Running mode into db, but only initialize one actor
+      val ctxRunning = createContext("ctxRunning", ContextStatus.Running, true)
+      val ctxTerminated = createContext("ctxTerminated", ContextStatus.Running, false)
+      daoActor ! JobDAOActor.SaveContextInfo(ctxRunning)
+      daoActor ! JobDAOActor.SaveContextInfo(ctxTerminated)
+
+      JobServer.updateContextStatus(daoActor, system)
+
+      val timeout = Timeout.apply(Duration.create(3, TimeUnit.SECONDS))
+      val resp = Await.result((daoActor ? JobDAOActor.GetContextInfos(None, None))(timeout).
+          mapTo[JobDAOActor.ContextInfos], timeout.duration)
+      // Expect that only the context with the initialized actor is in the running state
+      resp.contextInfos.size should equal (2)
+      resp.contextInfos.foreach(ci => {
+        if (ctxRunning.name.equals(ci.name)) {
+          ci.state should equal (ContextStatus.Running)
+        } else {
+          ci.state should equal (ContextStatus.Error)
+          ci.error.get.getMessage should be ("Reconnect failed after Jobserver restart")
+        }
+      })
     }
   }
 }

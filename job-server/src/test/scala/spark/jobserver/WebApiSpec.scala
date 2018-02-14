@@ -164,9 +164,9 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
       case AddContext(_, _)     => sender ! ContextInitialized
 
       case GetContext("no-context") => sender ! NoSuchContext
-      case GetContext(_)            => sender ! (self, self)
+      case GetContext(_)            => sender ! (self)
 
-      case StartAdHocContext(_, _) => sender ! (self, self)
+      case StartAdHocContext(_, _) => sender ! (self)
 
       // These routes are part of JobManagerActor
       case StartJob("no-app", _, _, _)   =>  sender ! NoSuchApplication
