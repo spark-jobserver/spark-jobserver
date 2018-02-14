@@ -142,7 +142,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
 
     supervisor ! ListContexts
     expectMsgPF(3.seconds.dilated) {
-      case contexts: ArrayBuffer[_] => contexts.foreach(stopContext(_))
+      case contexts: Seq[_] => contexts.foreach(stopContext(_))
       case _ =>
     }
   }
@@ -153,13 +153,13 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       expectMsg(contextInitTimeout, ContextInitialized)
     }
 
-    it("should return valid managerActorRef and resultActorRef if context exists") {
+    it("should return valid managerActorRef if context exists") {
       supervisor ! AddContext("test-context", contextConfig)
       expectMsg(contextInitTimeout, ContextInitialized)
 
       supervisor ! GetContext("test-context")
       val isValid = expectMsgPF(2.seconds.dilated) {
-        case (jobManagerActor: ActorRef, resultActor: ActorRef) => true
+        case (jobManagerActor: ActorRef) => true
         case _ => false
       }
 
@@ -196,7 +196,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       supervisor ! StartAdHocContext("test-adhoc-classpath", ConfigFactory.parseString(""))
 
       val isValid = expectMsgPF(contextInitTimeout, "manager and result actors") {
-        case (manager: ActorRef, resultActor: ActorRef) =>
+        case (manager: ActorRef) =>
           manager.path.name.startsWith("jobManager-")
       }
 
@@ -204,7 +204,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
 
       supervisor ! ListContexts
       val hasContext = expectMsgPF(3.seconds.dilated) {
-        case contexts: ArrayBuffer[_] =>
+        case contexts: Seq[_] =>
           contexts.head.toString().endsWith("test-adhoc-classpath")
         case _ => false
       }
@@ -232,7 +232,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       expectMsg(contextInitTimeout, ContextInitialized)
 
       supervisor ! ListContexts
-      expectMsgAnyOf(ArrayBuffer("test-context", "test-context2"), ArrayBuffer("test-context2", "test-context"))
+      expectMsgAnyOf(Seq("test-context", "test-context2"), Seq("test-context2", "test-context"))
     }
   }
 
