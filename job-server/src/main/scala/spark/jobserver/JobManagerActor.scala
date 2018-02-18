@@ -5,7 +5,7 @@ import java.net.{URI, URL}
 import java.util.concurrent.Executors._
 import java.util.concurrent.atomic.AtomicInteger
 
-import akka.actor.{ActorRef, PoisonPill, Props}
+import akka.actor.{ActorRef, PoisonPill, Props, ReceiveTimeout, Identify, ActorIdentity, Terminated}
 import com.typesafe.config.Config
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.{SparkConf, SparkEnv}
@@ -20,6 +20,7 @@ import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
+import scala.concurrent.duration._
 import spark.jobserver.common.akka.InstrumentedActor
 
 object JobManagerActor {
@@ -35,7 +36,7 @@ object JobManagerActor {
 
   case object GetContextConfig
   case object SparkContextStatus
-  case object GetSparkWebUIUrl
+  case object GetContexData
 
   case class DeleteData(name: String)
 
@@ -44,15 +45,16 @@ object JobManagerActor {
   case class Initialized(contextName: String, resultActor: ActorRef)
   case class InitError(t: Throwable)
   case class JobLoadingError(err: Throwable)
-  case class SparkWebUIUrl(url: String)
+  case class ContexData(appId: String, url: Option[String])
   case object SparkContextAlive
   case object SparkContextDead
-  case object NoSparkWebUI
 
 
 
   // Akka 2.2.x style actor props for actor creation
-  def props(daoActor: ActorRef): Props = Props(classOf[JobManagerActor], daoActor)
+  def props(daoActor: ActorRef, supervisorActorAddress: String = "",
+      initializationTimeout: FiniteDuration = 30.seconds): Props =
+      Props(classOf[JobManagerActor], daoActor, supervisorActorAddress, initializationTimeout)
 }
 
 /**
@@ -83,8 +85,8 @@ object JobManagerActor {
  *   }
  * }}}
  */
-class JobManagerActor(daoActor: ActorRef)
-  extends InstrumentedActor {
+class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String,
+    initializationTimeout: FiniteDuration) extends InstrumentedActor {
 
   import CommonMessages._
   import JobManagerActor._
@@ -123,6 +125,12 @@ class JobManagerActor(daoActor: ActorRef)
 
   private val jobServerNamedObjects = new JobServerNamedObjects(context.system)
 
+  if (!supervisorActorAddress.isEmpty()) {
+    logger.info(s"Sending identify message to supervisor at ${supervisorActorAddress}")
+    context.setReceiveTimeout(initializationTimeout)
+    context.actorSelection(supervisorActorAddress) ! Identify(1)
+  }
+
   private def getEnvironment(_jobId: String): JobEnvironment = {
     val _contextCfg = contextConfig
     new JobEnvironment with DataFileCache {
@@ -151,6 +159,30 @@ class JobManagerActor(daoActor: ActorRef)
   }
 
   def wrappedReceive: Receive = {
+    case ActorIdentity(memberActors, supervisorActorRef) =>
+      supervisorActorRef.foreach { ref =>
+        val actorName = ref.path.name
+        if (actorName == "context-supervisor") {
+          logger.info("Received supervisor's response for Identify message. Adding a watch.")
+          context.watch(ref)
+
+          logger.info("ActorIdentity message received from master, stopping the timer.")
+          context.setReceiveTimeout(Duration.Undefined) // Deactivate receive timeout
+        }
+      }
+
+    case Terminated(actorRef) =>
+      if (actorRef.path.name == "context-supervisor") {
+        logger.warn(s"Supervisor actor (${actorRef.path.address.toString}) terminated!" +
+            s" Killing myself (${self.path.address.toString})!")
+        self ! PoisonPill
+      }
+
+    case ReceiveTimeout =>
+        logger.warn("Did not receive ActorIdentity message from master." +
+           s"Killing myself (${self.path.address.toString})!")
+        self ! PoisonPill
+
     case Initialize(ctxConfig, resOpt, dataManagerActor) =>
       contextConfig = ctxConfig
       logger.info("Starting context with config:\n" + contextConfig.root.render)
@@ -232,16 +264,17 @@ class JobManagerActor(daoActor: ActorRef)
       }
     }
 
-    case GetSparkWebUIUrl => {
+    case GetContexData => {
       if (jobContext.sparkContext == null) {
         sender ! SparkContextDead
       } else {
         try {
+          val appId = jobContext.sparkContext.applicationId;
           val webUiUrl = jobContext.sparkContext.uiWebUrl
           val msg = if (webUiUrl.isDefined) {
-            SparkWebUIUrl(webUiUrl.get)
+            ContexData(appId, Some(webUiUrl.get))
           } else {
-            NoSparkWebUI
+            ContexData(appId, None)
           }
           sender ! msg
         } catch {
@@ -269,7 +302,6 @@ class JobManagerActor(daoActor: ActorRef)
     import spark.jobserver.context._
 
     import scala.concurrent.Await
-    import scala.concurrent.duration._
 
     def failed(msg: Any): Option[Future[Any]] = {
       sender ! msg

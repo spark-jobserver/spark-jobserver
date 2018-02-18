@@ -349,13 +349,13 @@ class WebApi(system: ActorSystem,
     authenticate(authenticator) { authInfo =>
       (get & path(Segment)) { (contextName) =>
         respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-          val future = supervisor ? GetSparkWebUI(contextName)
+          val future = supervisor ? GetSparkContexData(contextName)
           future.map {
-            case WebUIForContext(name, Some(url)) =>
-              ctx.complete(200, Map("context" -> contextName, "url" -> url))
-            case WebUIForContext(name, None) => ctx.complete(200, Map("context" -> contextName))
+            case SparkContexData(name, appId, Some(url)) =>
+              ctx.complete(200, Map("context" -> contextName, "applicationId" -> appId, "url" -> url))
+            case SparkContexData(name, appId, None) =>
+              ctx.complete(200, Map("context" -> contextName, "applicationId" -> appId))
             case NoSuchContext => notFound(ctx, s"can't find context with name $contextName")
-
           }.recover {
             case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
           }

@@ -65,7 +65,13 @@ object JobManager {
     val jobDAO = ctor.newInstance(config).asInstanceOf[JobDAO]
     val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO), "dao-manager-jobmanager")
 
-    val jobManager = system.actorOf(JobManagerActor.props(daoActor), managerName)
+    val masterAddress = if (config.getBoolean("spark.jobserver.kill-context-on-supervisor-down")) {
+      clusterAddress.toString + "/user/context-supervisor"
+    } else {
+      ""
+    }
+
+    val jobManager = system.actorOf(JobManagerActor.props(daoActor, masterAddress), managerName)
 
     //Join akka cluster
     logger.info("Joining cluster at address {}", clusterAddress)

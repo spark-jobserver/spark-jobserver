@@ -5,15 +5,15 @@ import java.nio.charset.Charset
 import java.util.concurrent.TimeUnit
 
 import akka.actor._
+import akka.pattern.ask
 import akka.cluster.Cluster
 import akka.cluster.ClusterEvent.{InitialStateAsEvents, MemberEvent, MemberUp}
 import akka.util.Timeout
 import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
-import spark.jobserver.util.SparkJobUtils
+import spark.jobserver.util.{SparkJobUtils, ManagerLauncher}
 
 import scala.collection.mutable
 import scala.util.{Failure, Success, Try}
-import scala.sys.process._
 import spark.jobserver.common.akka.InstrumentedActor
 
 import scala.concurrent.Await
@@ -21,6 +21,7 @@ import akka.pattern.gracefulStop
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import spark.jobserver.io.JobDAOActor.CleanContextJobInfos
+import spark.jobserver.JobManagerActor.{GetContexData, ContexData, SparkContextDead}
 
 /**
  * The AkkaClusterSupervisorActor launches Spark Contexts as external processes
@@ -30,15 +31,7 @@ import spark.jobserver.io.JobDAOActor.CleanContextJobInfos
  * it is assumed to be one starting up, and it will be asked to identify itself,
  * and then the Supervisor will try to initialize it.
  *
- * See the [[LocalContextSupervisorActor]] for normal config options.  Here are ones
- * specific to this class.
- *
- * ==Configuration==
- * {{{
- *   deploy {
- *     manager-start-cmd = "./manager_start.sh"
- *   }
- * }}}
+ * See the [[LocalContextSupervisorActor]] for normal config options.
  */
 class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
     extends InstrumentedActor {
@@ -52,7 +45,6 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
   val contextInitTimeout = config.getDuration("spark.context-settings.context-init-timeout",
                                                 TimeUnit.SECONDS)
   val contextDeletionTimeout = SparkJobUtils.getContextDeletionTimeout(config)
-  val managerStartCommand = config.getString("deploy.manager-start-cmd")
   import context.dispatcher
 
   //actor name -> (context isadhoc, success callback, failure callback)
@@ -113,6 +105,22 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
 
     case ListContexts =>
       sender ! contexts.keys.toSeq
+
+    case GetSparkContexData(name) =>
+      contexts.get(name) match {
+        case Some((actor, _)) =>
+          val future = (actor ? GetContexData)(30.seconds)
+          val originator = sender
+          future.collect {
+            case ContexData(appId, Some(webUi)) =>
+              originator ! SparkContexData(name, appId, Some(webUi))
+            case ContexData(appId, None) => originator ! SparkContexData(name, appId, None)
+            case SparkContextDead =>
+              logger.info("SparkContext {} is dead", name)
+              originator ! NoSuchContext
+          }
+        case _ => sender ! NoSuchContext
+      }
 
     case AddContext(name, contextConfig) =>
       val originator = sender()
@@ -226,9 +234,6 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
 
     logger.info("Starting context with actor name {}", contextActorName)
 
-    val master = Try(config.getString("spark.master")).toOption.getOrElse("local[4]")
-    val deployMode = Try(config.getString("spark.submit.deployMode")).toOption.getOrElse("client")
-
     // Create a temporary dir, preferably in the LOG_DIR
     val encodedContextName = java.net.URLEncoder.encode(name, "UTF-8")
     val contextDir = Option(System.getProperty("LOG_DIR")).map { logDir =>
@@ -241,17 +246,13 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
       Map("is-adhoc" -> isAdHoc.toString, "context.name" -> name).asJava
     ).withFallback(contextConfig)
 
-    var managerArgs = Seq(master, deployMode, selfAddress.toString, contextActorName, contextDir.toString)
-    // extract spark.proxy.user from contextConfig, if available and pass it to manager start command
-    if (contextConfig.hasPath(SparkJobUtils.SPARK_PROXY_USER_PARAM)) {
-      managerArgs = managerArgs :+ contextConfig.getString(SparkJobUtils.SPARK_PROXY_USER_PARAM)
+    val launcher = new ManagerLauncher(config, contextConfig,
+        selfAddress.toString, contextActorName, contextDir.toString)
+    if (!launcher.start()) {
+      failureFunc(new Exception("Failed to launch context JVM"))
+    } else {
+      contextInitInfos(contextActorName) = (mergedContextConfig, isAdHoc, successFunc, failureFunc)
     }
-
-    val contextLogger = LoggerFactory.getLogger("manager_start")
-    val process = Process(managerStartCommand, managerArgs)
-    process.run(ProcessLogger(out => contextLogger.info(out), err => contextLogger.warn(err)))
-
-    contextInitInfos(contextActorName) = (mergedContextConfig, isAdHoc, successFunc, failureFunc)
   }
 
   private def addContextsFromConfig(config: Config) {
