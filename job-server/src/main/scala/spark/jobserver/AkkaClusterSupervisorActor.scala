@@ -23,6 +23,7 @@ import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import spark.jobserver.JobManagerActor.{GetContexData, ContexData, SparkContextDead}
 import spark.jobserver.io.{JobDAOActor, ContextInfo, ContextStatus}
+import spark.jobserver.util.{InternalServerErrorException, NoCallbackFoundException}
 
 object AkkaClusterSupervisorActor {
   val MANAGER_ACTOR_PREFIX = "jobManager-"
@@ -55,12 +56,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
 
   import context.dispatcher
 
-  //actor name -> (context isadhoc, success callback, failure callback)
-  //TODO: try to pass this state to the jobManager at start instead of having to track
-  //extra state.  What happens if the WebApi process dies before the forked process
-  //starts up?  Then it never gets initialized, and this state disappears.
-  private val contextInitInfos = mutable.HashMap.empty[String,
-                                                      (Config, Boolean, ActorRef => Unit, Throwable => Unit)]
+  protected val contextInitInfos = mutable.HashMap.empty[String, (ActorRef => Unit, Throwable => Unit)]
 
   // actor name -> ResultActor ref
   private val resultActorRefs = mutable.HashMap.empty[String, ActorRef]
@@ -122,14 +118,38 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
         val actorName = actorRef.path.name
         if (actorName.startsWith("jobManager")) {
           logger.info("Received identify response, attempting to initialize context at {}", memberActors)
-          (for { (contextConfig, isAdHoc, successFunc, failureFunc) <- contextInitInfos.remove(actorName) }
-           yield {
-             initContext(contextConfig, actorName,
-                         actorRef, contextInitTimeout)(isAdHoc, successFunc, failureFunc)
-           }).getOrElse({
-            logger.warn("No initialization or callback found for jobManager actor {}", actorRef.path)
-            actorRef ! PoisonPill
-          })
+
+          val contextId = actorName.replace(MANAGER_ACTOR_PREFIX, "")
+          val contextFromDAO =
+            getDataFromDAO[JobDAOActor.ContextResponse](JobDAOActor.GetContextInfo(contextId))
+          val callbacks = contextInitInfos.remove(actorName)
+          (contextFromDAO, callbacks) match {
+            case (Some(JobDAOActor.ContextResponse(Some(contextInfo))),
+                Some((successCallback, failureCallback))) =>
+              val contextConfig = ConfigFactory.parseString(contextInfo.config)
+              val isAdhoc = contextConfig.getBoolean("is-adhoc")
+              initContext(contextConfig, actorName,
+                     actorRef, contextInitTimeout)(isAdhoc, successCallback, failureCallback)
+            case (Some(JobDAOActor.ContextResponse(None)), _) =>
+              logger.error(
+                 s"No such contextId ${contextId} was found in DB. Cannot initialize actor ${actorName}")
+              actorRef ! PoisonPill
+            case (Some(JobDAOActor.ContextResponse(Some(contextInfo))), None) =>
+              val exception = NoCallbackFoundException(contextInfo.id, actorRef.path.toSerializationFormat)
+              logger.error(exception.getMessage, exception)
+              actorRef ! PoisonPill // Since no watch was added, Terminated will not be fired
+              daoActor ! JobDAOActor.SaveContextInfo(contextInfo.copy(
+                  state = ContextStatus.Error, endTime = Some(DateTime.now()), error = Some(exception)))
+            case (None, Some((_, failureCallback))) =>
+              val exception = InternalServerErrorException(contextId)
+              logger.error(exception.getMessage, exception)
+              actorRef ! PoisonPill
+              failureCallback(exception)
+            case (None, None) =>
+              val errorMessage = s"Failed to create context ($contextId) due to internal error"
+              logger.error(errorMessage)
+              actorRef ! PoisonPill
+          }
         }
       }
 
@@ -354,7 +374,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
         failureFunc(e)
         daoActor ! JobDAOActor.SaveContextInfo(contextInfo(ContextStatus.Error, Some(e)))
       case (true, _) =>
-        contextInitInfos(contextActorName) = (mergedContextConfig, isAdHoc, successFunc, failureFunc)
+        contextInitInfos(contextActorName) = (successFunc, failureFunc)
         daoActor ! JobDAOActor.SaveContextInfo(contextInfo(ContextStatus.Started, None))
     }
   }

@@ -6,7 +6,7 @@ import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import akka.testkit._
 
 import spark.jobserver.common.akka.AkkaTestUtils
-import spark.jobserver.io.{JobDAO, JobDAOActor}
+import spark.jobserver.io.{JobDAO, JobDAOActor, ContextInfo, ContextStatus}
 import ContextSupervisor._
 
 import scala.collection.JavaConverters._
@@ -15,7 +15,8 @@ import scala.collection.mutable.ArrayBuffer
 import scala.util.Try
 import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import org.scalatest.{Matchers, FunSpec, BeforeAndAfter, BeforeAndAfterAll, FunSpecLike}
-
+import org.joda.time.DateTime
+import scala.concurrent.Await
 
 object AkkaClusterSupervisorActorSpec {
   // All the Actors System should have the same name otherwise they cannot form a cluster
@@ -67,6 +68,10 @@ object AkkaClusterSupervisorActorSpec {
   val system = ActorSystem(ACTOR_SYSTEM_NAME, config)
 }
 
+object StubbedAkkaClusterSupervisorActor {
+  case class AddContextToContextInitInfos(contextName: String)
+}
+
 class StubbedAkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef, managerProbe: TestProbe)
         extends AkkaClusterSupervisorActor(daoActor, dataManagerActor) {
 
@@ -80,17 +85,26 @@ class StubbedAkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: Ac
     (cluster, stubbedJobManagerRef)
   }
 
-    override protected def launchDriver(name: String, contextConfig: Config, contextActorName: String): (Boolean, String) = {
-      // Create probe and cluster and join back the master
-      Try(contextConfig.getBoolean("driver.fail")).getOrElse(false) match {
-        case true => (false, "")
-        case false =>
-          val managerActorAndCluster = createSlaveClusterWithJobManager(contextActorName, contextConfig)
-          managerActorAndCluster._1.join(selfAddress)
-          (true, "")
-      }
+  override protected def launchDriver(name: String, contextConfig: Config, contextActorName: String): (Boolean, String) = {
+    // Create probe and cluster and join back the master
+    Try(contextConfig.getBoolean("driver.fail")).getOrElse(false) match {
+      case true => (false, "")
+      case false =>
+        val managerActorAndCluster = createSlaveClusterWithJobManager(contextActorName, contextConfig)
+        managerActorAndCluster._1.join(selfAddress)
+        (true, "")
     }
   }
+
+  override def wrappedReceive: Receive = {
+    super.wrappedReceive orElse(stubbedWrappedReceive)
+  }
+
+  def stubbedWrappedReceive: Receive = {
+    case StubbedAkkaClusterSupervisorActor.AddContextToContextInitInfos(name) =>
+      contextInitInfos(name) = ({ref=>}, {ref=>})
+  }
+}
 
 class StubbedJobManagerActor(contextConfig: Config) extends Actor {
   def receive = {
@@ -121,7 +135,6 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
   // This is needed to help tests pass on some MBPs when working from home
   System.setProperty("spark.driver.host", "localhost")
 
-
   override def beforeAll() {
     dao = new InMemoryDAO
     daoActor = system.actorOf(JobDAOActor.props(dao))
@@ -145,6 +158,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       case contexts: Seq[_] => contexts.foreach(stopContext(_))
       case _ =>
     }
+    daoActor = system.actorOf(JobDAOActor.props(dao))
   }
 
   describe("Context create tests") {
@@ -234,6 +248,54 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       supervisor ! ListContexts
 
       expectMsgAnyOf(Seq("test-context6", "test-context7"), Seq("test-context7", "test-context6"))
+    }
+
+    it("should kill context JVM if nothing was found in the DB and no callback was available") {
+      val managerProbe = TestProbe("jobManager-dummy")
+      val deathWatch = TestProbe()
+      deathWatch.watch(managerProbe.ref)
+
+      supervisor ! ActorIdentity(1, Some(managerProbe.ref))
+
+      deathWatch.expectTerminated(managerProbe.ref)
+    }
+
+    it("should kill context JVM if context was found in DB but no callback was available") {
+      val managerProbe = TestProbe(AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX + "dummy")
+      val contextId = managerProbe.ref.path.name.replace(AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX, "")
+      val deathWatch = TestProbe()
+      deathWatch.watch(managerProbe.ref)
+      val dummyContext = ContextInfo(contextId, "contextName", "", None,
+          DateTime.now(), None, ContextStatus.Started, None)
+      dao.saveContextInfo(dummyContext)
+
+      supervisor ! ActorIdentity(1, Some(managerProbe.ref))
+
+      deathWatch.expectTerminated(managerProbe.ref)
+    }
+
+    it("should kill context JVM if DB call had an exception but callbacks are available") {
+      val managerProbe = TestProbe("jobManager-dummy")
+      val contextActorName = managerProbe.ref.path.name
+      val deathWatch = TestProbe()
+      deathWatch.watch(managerProbe.ref)
+
+      supervisor ! StubbedAkkaClusterSupervisorActor.AddContextToContextInitInfos(contextActorName)
+      daoActor ! PoisonPill // Simulate DAO failure
+      supervisor ! ActorIdentity(1, Some(managerProbe.ref))
+
+      deathWatch.expectTerminated(managerProbe.ref)
+    }
+
+    it("should kill context JVM if DB call had an exception and callbacks are not available") {
+      val managerProbe = TestProbe("jobManager-dummy")
+      val deathWatch = TestProbe()
+      deathWatch.watch(managerProbe.ref)
+
+      daoActor ! PoisonPill // Simulate DAO failure
+      supervisor ! ActorIdentity(1, Some(managerProbe.ref))
+
+      deathWatch.expectTerminated(managerProbe.ref)
     }
   }
 
