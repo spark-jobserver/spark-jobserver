@@ -605,7 +605,7 @@ By default, H2 database is used for storing Spark Jobserver related meta data.
 This can be overridden if you prefer to use PostgreSQL or MySQL.
 It is also important that any dependent jars are to be added to Job Server class path.
 
-To use embedded H2 as backend add the following configuration to local.conf.
+To use the embedded H2 db as a backend, add the following configuration to local.conf.
 
     spark {
       jobserver {
@@ -640,16 +640,28 @@ To use embedded H2 as backend add the following configuration to local.conf.
 If you are using `context-per-jvm = true`, be sure to add [AUTO_MIXED_MODE](http://h2database.com/html/features.html#auto_mixed_mode) to your
 H2 JDBC URL; this allows multiple processes to share the same H2 database using a lock file.
 
-In a yarn-client mode if using H2 the below is advised.
-- Run H2 in server mode (http://www.h2database.com/html/download.html, and follow docs.,)
-Jdbc configuration should be like below:
+In yarn-client mode, use H2 in server mode as described below instead of embedded mode.
+- Download the full H2 jar from http://www.h2database.com/html/download.html and follow docs.
+- Note that the version of H2 should match the H2 client version bundled with spark-jobserver, currently 1.3.176.
+
+
+A sample JDBC configuration is below:
 ```
 jdbc {
-        url = "jdbc:h2:tcp://localhost/db_host/spark_jobserver"
+        url = "jdbc:h2:tcp://localhost//ROOT/PARENT/DIRECTORIES/spark_jobserver"
         user = "secret"
         password = "secret"
       }
+
 ```
+Note: /ROOT/PARENT/DIRECTORIES/spark_jobserver is the absolute path to a directory to which H2 has write access.
+
+
+Example command line to launch H2 Server:
+```
+java -cp h2-1.3.176.jar org.h2.tools.Server -tcp
+```
+Use -? on command line to see other options.
 
 #### Configuring Spark Jobserver PostgreSQL Database backend
 Ensure that you have spark_jobserver database created with necessary rights
