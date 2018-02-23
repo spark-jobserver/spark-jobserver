@@ -58,7 +58,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
   private val contexts = mutable.HashMap.empty[String, (ActorRef, ActorRef)]
 
   private val cluster = Cluster(context.system)
-  private val selfAddress = cluster.selfAddress
+  protected val selfAddress = cluster.selfAddress
 
   // This is for capturing results for ad-hoc jobs. Otherwise when ad-hoc job dies, resultActor also dies,
   // and there is no way to retrieve results.
@@ -201,7 +201,6 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
                           successFunc: ActorRef => Unit,
                           failureFunc: Throwable => Unit): Unit = {
     import akka.pattern.ask
-
     val resultActor = if (isAdHoc) globalResultActor else context.actorOf(Props(classOf[JobResultActor]))
     (ref ? JobManagerActor.Initialize(
       contextConfig, Some(resultActor), dataManagerActor))(Timeout(timeoutSecs.second)).onComplete {
@@ -234,6 +233,18 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
 
     logger.info("Starting context with actor name {}", contextActorName)
 
+    // Now create the contextConfig merged with the values we need
+    val mergedContextConfig = ConfigFactory.parseMap(
+      Map("is-adhoc" -> isAdHoc.toString, "context.name" -> name).asJava
+    ).withFallback(contextConfig)
+    launchDriver(name, contextConfig, contextActorName) match {
+      case true =>
+        contextInitInfos(contextActorName) = (mergedContextConfig, isAdHoc, successFunc, failureFunc)
+      case false => failureFunc(new Exception("Failed to launch context JVM"))
+    }
+  }
+
+  protected def launchDriver(name: String, contextConfig: Config, contextActorName: String): Boolean = {
     // Create a temporary dir, preferably in the LOG_DIR
     val encodedContextName = java.net.URLEncoder.encode(name, "UTF-8")
     val contextDir = Option(System.getProperty("LOG_DIR")).map { logDir =>
@@ -241,18 +252,9 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
     }.getOrElse(Files.createTempDirectory("jobserver"))
     logger.info("Created working directory {} for context {}", contextDir: Any, name)
 
-    // Now create the contextConfig merged with the values we need
-    val mergedContextConfig = ConfigFactory.parseMap(
-      Map("is-adhoc" -> isAdHoc.toString, "context.name" -> name).asJava
-    ).withFallback(contextConfig)
-
     val launcher = new ManagerLauncher(config, contextConfig,
         selfAddress.toString, contextActorName, contextDir.toString)
-    if (!launcher.start()) {
-      failureFunc(new Exception("Failed to launch context JVM"))
-    } else {
-      contextInitInfos(contextActorName) = (mergedContextConfig, isAdHoc, successFunc, failureFunc)
-    }
+    launcher.start()
   }
 
   private def addContextsFromConfig(config: Config) {
