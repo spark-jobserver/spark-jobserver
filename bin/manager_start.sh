@@ -14,7 +14,7 @@ get_abs_script_path
 . $appdir/setenv.sh
 
 # Override logging options to provide per-context logging
-LOGGING_OPTS="-Dlog4j.configuration=file:$appdir/log4j-server.properties
+LOGGING_OPTS="$LOGGING_OPTS_FILE
               -DLOG_DIR=$1"
 
 GC_OPTS="-XX:+UseConcMarkSweepGC
@@ -40,5 +40,5 @@ else
   $appdir/spark-job-server.jar $1 $2 $conffile'
 fi
 
-eval $cmd > /dev/null 2>&1 &
+eval $cmd > /dev/null 2>&1
 # exec java -cp $CLASSPATH $GC_OPTS $JAVA_OPTS $LOGGING_OPTS $CONFIG_OVERRIDES $MAIN $1 $2 $conffile 2>&1 &
