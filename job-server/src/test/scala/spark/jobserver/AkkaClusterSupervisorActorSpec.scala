@@ -153,10 +153,10 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
     }
 
     it("should return valid managerActorRef and resultActorRef if context exists") {
-      supervisor ! AddContext("test-context", contextConfig)
+      supervisor ! AddContext("test-context1", contextConfig)
       expectMsg(contextInitTimeout, ContextInitialized)
 
-      supervisor ! GetContext("test-context")
+      supervisor ! GetContext("test-context1")
       val isValid = expectMsgPF(2.seconds.dilated) {
         case (jobManagerActor: ActorRef, resultActor: ActorRef) => true
         case _ => false
@@ -167,7 +167,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
 
     it("should not create context in case of error") {
       val wrongConfig = ConfigFactory.parseString("driver.fail=true").withFallback(contextConfig)
-      supervisor ! AddContext("test-context", wrongConfig)
+      supervisor ! AddContext("test-context2", wrongConfig)
       expectMsgClass(classOf[ContextInitError])
 
       supervisor ! ListContexts
@@ -175,10 +175,10 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
     }
 
     it("should not start two contexts with the same name") {
-      supervisor ! AddContext("test-context", contextConfig)
+      supervisor ! AddContext("test-context3", contextConfig)
       expectMsg(contextInitTimeout, ContextInitialized)
 
-      supervisor ! AddContext("test-context", contextConfig)
+      supervisor ! AddContext("test-context3", contextConfig)
       expectMsg(contextInitTimeout, ContextAlreadyExists)
     }
 
@@ -211,27 +211,27 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
     }
 
     it("should be able to stop a running context") {
-      supervisor ! AddContext("test-context", contextConfig)
+      supervisor ! AddContext("test-context4", contextConfig)
       expectMsg(contextInitTimeout, ContextInitialized)
 
-      supervisor ! StopContext("test-context")
+      supervisor ! StopContext("test-context4")
       expectMsg(ContextStopped)
     }
 
     it("context stop should be able to handle case when no context is present") {
-      supervisor ! StopContext("test-context")
+      supervisor ! StopContext("test-context5")
       expectMsg(NoSuchContext)
     }
 
     it("should be able to start multiple contexts") {
-      supervisor ! AddContext("test-context", contextConfig)
+      supervisor ! AddContext("test-context6", contextConfig)
       expectMsg(contextInitTimeout, ContextInitialized)
 
-      supervisor ! AddContext("test-context2", contextConfig)
+      supervisor ! AddContext("test-context7", contextConfig)
       expectMsg(contextInitTimeout, ContextInitialized)
 
       supervisor ! ListContexts
-      expectMsgAnyOf(ArrayBuffer("test-context", "test-context2"), ArrayBuffer("test-context2", "test-context"))
+      expectMsgAnyOf(ArrayBuffer("test-context6", "test-context7"), ArrayBuffer("test-context7", "test-context6"))
     }
   }
 
@@ -247,18 +247,18 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
     }
 
     it("should be able to list all the started contexts") {
-      supervisor ! AddContext("test-context", contextConfig)
+      supervisor ! AddContext("test-context8", contextConfig)
       expectMsg(contextInitTimeout, ContextInitialized)
 
       supervisor ! ListContexts
-      expectMsg(Seq("test-context"))
+      expectMsg(Seq("test-context8"))
     }
 
     it("should return valid result actor") {
-      supervisor ! AddContext("test-context", contextConfig)
+      supervisor ! AddContext("test-context9", contextConfig)
       expectMsg(contextInitTimeout, ContextInitialized)
 
-      supervisor ! GetResultActor("test-context")
+      supervisor ! GetResultActor("test-context9")
       expectMsgClass(classOf[ActorRef])
     }
 
@@ -270,18 +270,18 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
     it("should return valid appId and webUiUrl if context is running") {
       val configWithContextInfo = ConfigFactory.parseString("manager.context.webUiUrl=dummy-url,manager.context.appId=appId-dummy")
                 .withFallback(contextConfig)
-      supervisor ! AddContext("test-context", configWithContextInfo)
+      supervisor ! AddContext("test-context10", configWithContextInfo)
       expectMsg(contextInitTimeout, ContextInitialized)
 
-      supervisor ! GetSparkContexData("test-context")
-      expectMsg(SparkContexData("test-context", "appId-dummy", Some("dummy-url")))
+      supervisor ! GetSparkContexData("test-context10")
+      expectMsg(SparkContexData("test-context10", "appId-dummy", Some("dummy-url")))
     }
 
     it("should return NoSuchContext if the context is dead") {
-      supervisor ! AddContext("test-context", contextConfig)
+      supervisor ! AddContext("test-context11", contextConfig)
       expectMsg(contextInitTimeout, ContextInitialized)
 
-      supervisor ! GetSparkContexData("test-context")
+      supervisor ! GetSparkContexData("test-context11")
       // JobManagerActor Stub by default return NoSuchContext
       expectMsg(NoSuchContext)
     }
