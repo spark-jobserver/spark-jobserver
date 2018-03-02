@@ -238,13 +238,14 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
       Map("is-adhoc" -> isAdHoc.toString, "context.name" -> name).asJava
     ).withFallback(contextConfig)
     launchDriver(name, contextConfig, contextActorName) match {
-      case true =>
+      case (false, error) => failureFunc(new Exception(error))
+      case (true, _) =>
         contextInitInfos(contextActorName) = (mergedContextConfig, isAdHoc, successFunc, failureFunc)
-      case false => failureFunc(new Exception("Failed to launch context JVM"))
     }
   }
 
-  protected def launchDriver(name: String, contextConfig: Config, contextActorName: String): Boolean = {
+  protected def launchDriver(name: String, contextConfig: Config, contextActorName: String):
+        (Boolean, String) = {
     // Create a temporary dir, preferably in the LOG_DIR
     val encodedContextName = java.net.URLEncoder.encode(name, "UTF-8")
     val contextDir = Option(System.getProperty("LOG_DIR")).map { logDir =>
@@ -254,6 +255,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
 
     val launcher = new ManagerLauncher(config, contextConfig,
         selfAddress.toString, contextActorName, contextDir.toString)
+
     launcher.start()
   }
 

@@ -17,7 +17,7 @@ import org.apache.spark.launcher.SparkAppHandle
  * environment. Launcher uses those environment variables to
  * start context JVMs using SparkLauncher class.
  */
-abstract class Launcher(config: Config) {
+abstract class Launcher(config: Config, sparkLauncher: SparkLauncher, enviornment: Environment) {
     private val logger = LoggerFactory.getLogger("spark-launcher")
     private var handler: SparkAppHandle = null
 
@@ -26,12 +26,15 @@ abstract class Launcher(config: Config) {
     protected final val sjsJarPath = getEnvironmentVariable("MANAGER_JAR_FILE")
     protected final val baseGCOPTS = getEnvironmentVariable("GC_OPTS_BASE")
     protected final val baseJavaOPTS = getEnvironmentVariable("JAVA_OPTS_BASE")
-    protected val launcher = new SparkLauncher()
+    protected val launcher = sparkLauncher
 
     protected def addCustomArguments()
 
-    final def start(): Boolean = {
-      if (!validate()) return false
+    final def start(): (Boolean, String) = {
+      validate() match {
+        case (false, error) => return (false, error)
+        case _ =>
+      }
 
       initSparkLauncher()
 
@@ -41,14 +44,16 @@ abstract class Launcher(config: Config) {
 
         logger.info("Start launcher application")
         handler = launcher.startApplication()
-        true
+        (true, "")
       } catch {
-        case err: Exception => logger.error("Failed to launch", err); false
+        case err: Exception =>
+          logger.error("Failed to launch", err);
+          (false, err.getMessage)
       }
     }
 
-    protected final def getEnvironmentVariable(name: String, default: String = ""): String = {
-      sys.env.get(name).getOrElse(default)
+    protected def getEnvironmentVariable(name: String, default: String = ""): String = {
+      enviornment.get(name, default)
     }
 
     private def initSparkLauncher() {
@@ -59,11 +64,13 @@ abstract class Launcher(config: Config) {
       launcher.setVerbose((getEnvironmentVariable("SPARK_LAUNCHER_VERBOSE") == "1"))
     }
 
-    private def validate(): Boolean = {
+    protected def validate(): (Boolean, String) = {
       if (!new File(sjsJarPath).isFile()) {
-        logger.error(s"job-server jar file doesn't exist. Path is $sjsJarPath")
-        return false
+        val errorMsg =
+          s"Environment error: job-server jar file doesn't exist. Path is $sjsJarPath"
+        logger.error(errorMsg)
+        return (false, errorMsg)
       }
-      return true
+      return (true, "")
     }
 }

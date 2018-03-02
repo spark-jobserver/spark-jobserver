@@ -79,14 +79,14 @@ class StubbedAkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: Ac
     (cluster, stubbedJobManagerRef)
   }
 
-    override protected def launchDriver(name: String, contextConfig: Config, contextActorName: String): Boolean = {
+    override protected def launchDriver(name: String, contextConfig: Config, contextActorName: String): (Boolean, String) = {
       // Create probe and cluster and join back the master
       Try(contextConfig.getBoolean("driver.fail")).getOrElse(false) match {
-        case true => false
+        case true => (false, "")
         case false =>
           val managerActorAndCluster = createSlaveClusterWithJobManager(contextActorName, contextConfig)
           managerActorAndCluster._1.join(selfAddress)
-          true
+          (true, "")
       }
     }
   }
