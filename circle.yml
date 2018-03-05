@@ -70,8 +70,19 @@ jobs:
           command: |
             docker login -u ${DOCKERHUB_USERNAME} -p ${DOCKERHUB_PASSWORD}
             docker push hyperanna1/${CIRCLE_PROJECT_REPONAME}:${JOBSEVER_BRANCH}
+
+            docker login dockerhub.hyperanna.com -u ${DOCKERHUB_USERNAME} -p ${DOCKERHUB_PASSWORD}
+            docker tag hyperanna1/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_BRANCH} dockerhub.hyperanna.com/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_BRANCH}
+            docker push dockerhub.hyperanna.com/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_BRANCH}
+            
             if [ "${CIRCLE_BRANCH}" == "master" ]; then
-              docker tag hyperanna1/${CIRCLE_PROJECT_REPONAME}:${JOBSEVER_BRANCH} hyperanna1/${CIRCLE_PROJECT_REPONAME}:latest
-              docker push hyperanna1/${CIRCLE_PROJECT_REPONAME}:${JOBSEVER_BRANCH}
+              docker tag hyperanna1/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_BRANCH} hyperanna1/${CIRCLE_PROJECT_REPONAME}:latest
+              docker tag hyperanna1/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_BRANCH} hyperanna1/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_BUILD_NUM}
               docker push hyperanna1/${CIRCLE_PROJECT_REPONAME}:latest
+              docker push hyperanna1/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_BUILD_NUM}
+
+              docker tag hyperanna1/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_BRANCH} dockerhub.hyperanna.com/${CIRCLE_PROJECT_REPONAME}:latest
+              docker tag hyperanna1/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_BRANCH} dockerhub.hyperanna.com/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_BUILD_NUM}
+              docker push dockerhub.hyperanna.com/${CIRCLE_PROJECT_REPONAME}:latest
+              docker push dockerhub.hyperanna.com/${CIRCLE_PROJECT_REPONAME}:${CIRCLE_BUILD_NUM}
             fi
