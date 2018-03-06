@@ -23,6 +23,9 @@ import org.slf4j.LoggerFactory
 import spark.jobserver.JobManagerActor.{GetContexData, ContexData, SparkContextDead}
 import spark.jobserver.io.{JobDAOActor, ContextInfo, ContextStatus}
 
+object AkkaClusterSupervisorActor {
+  val MANAGER_ACTOR_PREFIX = "jobManager-"
+}
 
 /**
  * The AkkaClusterSupervisorActor launches Spark Contexts as external processes
@@ -65,8 +68,6 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
   private val cluster = Cluster(context.system)
   protected val selfAddress = cluster.selfAddress
 
-  private val MANAGER_ACTOR_PREFIX = "jobManager-"
-
   // This is for capturing results for ad-hoc jobs. Otherwise when ad-hoc job dies, resultActor also dies,
   // and there is no way to retrieve results.
   val globalResultActor = context.actorOf(Props[JobResultActor], "global-result-actor")
@@ -78,7 +79,8 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
       Some(jobManagerActorRefs(contextInfo.id))
     } else if (contextInfo.actorAddress.nonEmpty) {
       val finiteDuration = FiniteDuration(3, SECONDS)
-      val address = contextInfo.actorAddress.get + "/user/" + MANAGER_ACTOR_PREFIX + contextInfo.id
+      val address = contextInfo.actorAddress.get + "/user/" +
+          AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX + contextInfo.id
       try {
         val contextActorRefFuture = context.actorSelection(address).resolveOne(finiteDuration)
         jobManagerActorRefs(contextInfo.id) = Await.result(contextActorRefFuture, finiteDuration)
@@ -241,7 +243,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
     case Terminated(actorRef) =>
       val name: String = actorRef.path.name
       logger.info("Actor terminated: {}", name)
-      val contextId = name.split(MANAGER_ACTOR_PREFIX).apply(1)
+      val contextId = name.split(AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX).apply(1)
       val resp = Await.result(
       (daoActor ? JobDAOActor.GetContextInfo(contextId))(daoAskTimeout).
         mapTo[JobDAOActor.ContextResponse], daoAskTimeout.duration)
@@ -304,7 +306,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
   private def initContextHelp(actorName: String, clusterAddress: Option[String],
       state: String, error: Option[Throwable]) : Option[Throwable] = {
     import akka.pattern.ask
-    val managerActorName = actorName.replace(MANAGER_ACTOR_PREFIX, "")
+    val managerActorName = actorName.replace(AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX, "")
     val resp = Await.result(
       (daoActor ? JobDAOActor.GetContextInfo(managerActorName))(daoAskTimeout).
         mapTo[JobDAOActor.ContextResponse], daoAskTimeout.duration)
@@ -335,7 +337,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
                           (successFunc: ActorRef => Unit)(failureFunc: Throwable => Unit): Unit = {
 
     val contextId = java.util.UUID.randomUUID().toString.substring(16)
-    val contextActorName = MANAGER_ACTOR_PREFIX + contextId
+    val contextActorName = AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX + contextId
 
     logger.info("Starting context with actor name {}", contextActorName)
 
