@@ -81,7 +81,7 @@ class ManagerLauncher(systemConfig: Config, contextConfig: Config,
 
   private def validateMemory(providedMemory: String): Boolean = {
     import scala.util.matching.Regex
-    val pattern = "^[0-9]+[kmgt]?$".r
+    val pattern = "^[0-9]+[kmgtKMGT]?$".r
 
     pattern.findFirstIn(providedMemory).isDefined
   }

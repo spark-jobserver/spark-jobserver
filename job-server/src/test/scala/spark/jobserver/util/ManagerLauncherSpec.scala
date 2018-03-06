@@ -60,6 +60,24 @@ class ManagerLauncherSpec extends FunSpec with Matchers with BeforeAndAfter {
        stubbedSparkLauncher.getLauncherConfig().containsValue("--conf", "spark.driver.memory=1gb") should be (false)
      }
 
+     it("should accept if driver memory is provided with capital letters") {
+       val contextConfMap = Map("launcher.spark.driver.memory" -> "1G")
+
+       val launcher = managerLauncherFunc(buildConfig(contextConfMap))
+       launcher.start()._1 should be (true)
+
+       stubbedSparkLauncher.getLauncherConfig().containsValue("--conf", "spark.driver.memory=1G") should be (true)
+     }
+
+     it("should fail if wrong driver memory is provided (in capital letters)") {
+       val contextConfMap = Map("launcher.spark.driver.memory" -> "1MB")
+
+       val launcher = managerLauncherFunc(buildConfig(contextConfMap))
+       launcher.start()._1 should be (false)
+
+       stubbedSparkLauncher.getLauncherConfig().containsValue("--conf", "spark.driver.memory=1MB") should be (false)
+     }
+
      it("should pass if memory is provided without unit (for bytes)") {
        val contextConfMap = Map("launcher.spark.driver.memory" -> "1000000")
        val launcher = managerLauncherFunc(buildConfig(contextConfMap))
