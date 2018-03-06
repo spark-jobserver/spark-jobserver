@@ -226,12 +226,10 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
         logger.info("SparkContext {} joined", ctxName)
         contexts(ctxName) = (ref, resActor)
         context.watch(ref)
-        val optEx = initContextHelp(actorName, Some(ref.path.address.toString), ContextStatus.Running, None)
-        if (optEx.isEmpty) {
-          successFunc(ref)
-        } else {
-          ref ! PoisonPill
-          failureFunc(optEx.get)
+        initContextHelp(actorName, Some(ref.path.address.toString), ContextStatus.Running, None) match {
+          case None => successFunc(ref)
+          case Some(e) => ref ! PoisonPill
+            failureFunc(e)
         }
       case _ => logger.info("Failed for unknown reason.")
         cluster.down(ref.path.address)
