@@ -56,7 +56,7 @@ object JobManager {
       systemConfig.resolve()
     }
 
-    logger.info("Starting JobManager named {} with config {}", managerName, 
+    logger.info("Starting JobManager named {} with config {}", managerName,
       config.getConfig("spark").root.render())
 
     val system = makeSystem(config)
