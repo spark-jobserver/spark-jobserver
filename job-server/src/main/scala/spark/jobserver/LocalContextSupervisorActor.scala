@@ -37,7 +37,7 @@ object ContextSupervisor {
   case object ContextAlreadyExists
   case object NoSuchContext
   case object ContextStopped
-  case class SparkContexData(name: String, appId: String, url: Option[String])
+  case class SparkContexData[T](context: T, appId: Option[String], url: Option[String])
   case object UnexpectedError
 }
 
@@ -105,8 +105,8 @@ class LocalContextSupervisorActor(dao: ActorRef, dataManagerActor: ActorRef) ext
           val originator = sender
           future.collect {
             case ContexData(appId, Some(webUi)) =>
-              originator ! SparkContexData(name, appId, Some(webUi))
-            case ContexData(appId, None) => originator ! SparkContexData(name, appId, None)
+              originator ! SparkContexData(name, Some(appId), Some(webUi))
+            case ContexData(appId, None) => originator ! SparkContexData(name, Some(appId), None)
             case SparkContextDead =>
               logger.info("SparkContext {} is dead", name)
               originator ! NoSuchContext

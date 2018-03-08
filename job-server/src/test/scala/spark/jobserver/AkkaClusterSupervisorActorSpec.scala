@@ -364,15 +364,14 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       supervisor ! AddContext("test-context10", configWithContextInfo)
       expectMsg(contextInitTimeout, ContextInitialized)
 
+      val cont = Await.result(dao.getContextInfoByName("test-context10"), (3 seconds)).get
+
       supervisor ! GetSparkContexData("test-context10")
-      expectMsg(SparkContexData("test-context10", "appId-dummy", Some("dummy-url")))
+      expectMsg(SparkContexData(cont, Some("appId-dummy"), Some("dummy-url")))
     }
 
-    it("should return NoSuchContext if the context is dead") {
-      supervisor ! AddContext("test-context11", contextConfig)
-      expectMsg(contextInitTimeout, ContextInitialized)
-
-      supervisor ! GetSparkContexData("test-context11")
+    it("should return NoSuchContext if the context does not exist") {
+      supervisor ! GetSparkContexData("test-context-does-not-exist")
       // JobManagerActor Stub by default return NoSuchContext
       expectMsg(NoSuchContext)
     }

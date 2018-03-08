@@ -213,8 +213,8 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
       case StoreJobConfig(_, _) => sender ! JobConfigStored
       case KillJob(jobId) => sender ! JobKilled(jobId, DateTime.now())
 
-      case GetSparkContexData("context1") => sender ! SparkContexData("context1", "local-1337", Some("http://spark:4040"))
-      case GetSparkContexData("context2") => sender ! SparkContexData("context2", "local-1337", None)
+      case GetSparkContexData("context1") => sender ! SparkContexData("context1", Some("local-1337"), Some("http://spark:4040"))
+      case GetSparkContexData("context2") => sender ! SparkContexData("context2", Some("local-1337"), None)
       case GetSparkContexData("unexp-err") => sender ! UnexpectedError
     }
   }
