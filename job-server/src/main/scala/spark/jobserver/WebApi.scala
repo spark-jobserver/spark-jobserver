@@ -16,7 +16,7 @@ import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import spark.jobserver.JobManagerActor.JobKilledException
 import spark.jobserver.auth._
-import spark.jobserver.io.{BinaryType, ErrorData, JobInfo, JobStatus}
+import spark.jobserver.io.{BinaryType, ErrorData, JobInfo, ContextInfo, JobStatus}
 import spark.jobserver.routes.DataRoutes
 import spark.jobserver.util.{SSLContextFactory, SparkJobUtils}
 import spray.http.HttpHeaders.`Content-Type`
@@ -115,6 +115,31 @@ object WebApi {
       "context" -> (if (jobInfo.contextName.isEmpty) "<<ad-hoc>>" else jobInfo.contextName),
       "contextId" -> jobInfo.contextId,
       "duration" -> getJobDurationString(jobInfo)) ++ statusMap
+  }
+
+  def getContextReport(context: Any, appId: Option[String], url: Option[String]): Map[String, String] = {
+    import scala.collection.mutable
+    val map = mutable.Map.empty[String, String]
+    context match {
+      case contextInfo: ContextInfo =>
+        map("id") = contextInfo.id
+        map("name") = contextInfo.name
+        map("startTime") = contextInfo.startTime.toString()
+        map("endTime") = if (contextInfo.endTime.isDefined) contextInfo.endTime.get.toString else "Empty"
+        map("state") = contextInfo.state
+      case name: String =>
+        map("name") = name
+      case _ =>
+    }
+    (appId, url) match {
+      case (Some(id), Some(u)) =>
+        map("applicationId") = id
+        map("url") = u
+      case (Some(id), None) =>
+        map("applicationId") = id
+      case _ =>
+    }
+    map.toMap
   }
 }
 
@@ -376,17 +401,12 @@ class WebApi(system: ActorSystem,
       logger.info("User authentication");
       (get & path(Segment)) { (contextName) =>
         respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-          val future = supervisor ? GetSparkContexData(contextName)
+          val future = (supervisor ? GetSparkContexData(contextName))
           future.map {
-            case SparkContexData(name, appId, Some(url)) =>
+            case SparkContexData(context, appId, url) =>
               val stcode = 200;
-              val contextMap = Map("context" -> contextName, "applicationId" -> appId, "url" -> url)
-              logger.info("StatusCode: " + stcode + ", " + contextMap);
-              ctx.complete(stcode, contextMap)
-            case SparkContexData(name, appId, None) =>
-              val stcode = 200;
-              val contextMap = Map("context" -> contextName, "applicationId" -> appId)
-              logger.info("StatusCode: " + stcode + ", " + contextMap);
+              val contextMap = getContextReport(context, appId, url)
+              logger.info("StatusCode: " + stcode + ", " + contextMap)
               ctx.complete(stcode, contextMap)
             case NoSuchContext => notFound(ctx, s"can't find context with name $contextName")
             case UnexpectedError => logAndComplete(ctx, "UNEXPECTED ERROR OCCURRED", 500)

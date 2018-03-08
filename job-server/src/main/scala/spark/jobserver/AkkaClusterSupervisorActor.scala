@@ -207,23 +207,24 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
       val originator = sender
       val resp = getContextByName(name)
       resp match {
-        case Some(JobDAOActor.ContextResponse(Some(c))) =>
-          val contextActorRef = getActorRef(c)
+        case Some(JobDAOActor.ContextResponse(Some(contextInfo))) =>
+          val contextActorRef = getActorRef(contextInfo)
           contextActorRef match {
             case Some(ref) => val future = (ref ? GetContexData)(30.seconds)
               future.collect {
                 case ContexData(appId, Some(webUi)) =>
-                  originator ! SparkContexData(name, appId, Some(webUi))
+                  originator ! SparkContexData(contextInfo, Some(appId), Some(webUi))
                 case ContexData(appId, None) =>
-                  originator ! SparkContexData(name, appId, None)
+                  originator ! SparkContexData(contextInfo, Some(appId), None)
                 case SparkContextDead =>
-                  logger.info("SparkContext {} is dead", name)
-                  originator ! NoSuchContext
+                  originator ! SparkContexData(contextInfo, None, None)
+              }.recover {
+                case e: Exception => originator ! SparkContexData(contextInfo, None, None)
               }
-            case None => sender ! NoSuchContext
+            case None => originator ! SparkContexData(contextInfo, None, None)
           }
-        case Some(JobDAOActor.ContextResponse(None)) => sender ! NoSuchContext
-        case None => sender ! UnexpectedError
+        case Some(JobDAOActor.ContextResponse(None)) => originator ! NoSuchContext
+        case None => originator ! UnexpectedError
       }
 
     case AddContext(name, contextConfig) =>

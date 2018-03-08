@@ -515,7 +515,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       Get("/contexts/context1") ~> sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, String]] should be (Map(
-            "context" -> "context1",
+            "name" -> "context1",
             "applicationId" -> "local-1337",
             "url" -> "http://spark:4040"))
       }
@@ -523,7 +523,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
     it("should return context information if context/id is called (without context UI url)") {
       Get("/contexts/context2") ~> sealRoute(routes) ~> check {
         status should be (OK)
-        responseAs[Map[String, String]] should be (Map("context" -> "context2", "applicationId" -> "local-1337"))
+        responseAs[Map[String, String]] should be (Map("name" -> "context2", "applicationId" -> "local-1337"))
       }
     }
   }
