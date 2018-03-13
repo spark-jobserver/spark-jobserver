@@ -68,7 +68,8 @@ object JobManager {
       case false => ""
     }
 
-    val jobManager = system.actorOf(JobManagerActor.props(daoActor, masterAddress), managerName)
+    val contextId = managerName.replace(AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX, "")
+    val jobManager = system.actorOf(JobManagerActor.props(daoActor, masterAddress, contextId), managerName)
 
     //Join akka cluster
     logger.info("Joining cluster at address {}", clusterAddress)

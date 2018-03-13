@@ -92,8 +92,8 @@ class FlywayMigrationSpec extends FunSpec with Matchers {
       val descJobsIt = ResultSetIterator(descJobs){ r: ResultSet =>
         r.getString("FIELD")
       }
-      descJobsIt.toList should be (List(
-        "JOB_ID", "CONTEXT_NAME", "BIN_ID", "CLASSPATH", "START_TIME", "END_TIME", "ERROR", "ERROR_CLASS", "ERROR_STACK_TRACE"))
+      descJobsIt.toList should be (List("JOB_ID", "CONTEXT_NAME", "BIN_ID", "CLASSPATH", "START_TIME", "END_TIME",
+          "ERROR", "ERROR_CLASS","ERROR_STACK_TRACE", "CONTEXT_ID", "STATE"))
 
       val descConfigs = sqlConn.createStatement().executeQuery("SHOW COLUMNS FROM CONFIGS")
       val descConfigsIt = ResultSetIterator(descConfigs){ r: ResultSet =>
@@ -180,7 +180,7 @@ class FlywayMigrationSpec extends FunSpec with Matchers {
         r.getString("COLUMN_NAME")
       }
       descJobsIt.toList should be (List(
-        "JOB_ID", "CONTEXT_NAME", "BIN_ID", "CLASSPATH", "START_TIME", "END_TIME", "ERROR"))
+        "JOB_ID", "CONTEXT_NAME", "BIN_ID", "CLASSPATH", "START_TIME", "END_TIME", "ERROR", "CONTEXT_ID", "STATE"))
 
       val descConfigs = sqlConn.getMetaData.getColumns(null, null, "CONFIGS", null)
       val descConfigsIt = ResultSetIterator(descConfigs){ r: ResultSet =>

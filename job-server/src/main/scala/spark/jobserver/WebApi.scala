@@ -103,19 +103,17 @@ object WebApi {
 
   def getJobReport(jobInfo: JobInfo, jobStarted: Boolean = false): Map[String, Any] = {
 
-    val statusMap = if (jobStarted) Map(StatusKey -> JobStatus.Started) else jobInfo match {
-      case JobInfo(_, _, _, _, _, None, _) => Map(StatusKey -> JobStatus.Running)
-      case JobInfo(_, _, _, _, _, _, Some(err))
-        if err.errorClass == classOf[JobKilledException].getName =>
-        Map(StatusKey -> JobStatus.Killed, ResultKey -> formatException(err))
-      case JobInfo(_, _, _, _, _, _, Some(err)) =>
-        Map(StatusKey -> JobStatus.Error, ResultKey -> formatException(err))
-      case JobInfo(_, _, _, _, _, Some(e), None) => Map(StatusKey -> "FINISHED")
+    val statusMap = jobInfo match {
+      case JobInfo(_, _, _, _, _, state, _, _, Some(err)) =>
+        Map(StatusKey -> state, ResultKey -> formatException(err))
+      case JobInfo(_, _, _, _, _, _, _, _, None) if jobStarted => Map(StatusKey -> JobStatus.Started)
+      case JobInfo(_, _, _, _, _, state, _, _, None) => Map(StatusKey -> state)
     }
     Map("jobId" -> jobInfo.jobId,
       "startTime" -> jobInfo.startTime.toString(),
       "classPath" -> jobInfo.classPath,
       "context" -> (if (jobInfo.contextName.isEmpty) "<<ad-hoc>>" else jobInfo.contextName),
+      "contextId" -> jobInfo.contextId,
       "duration" -> getJobDurationString(jobInfo)) ++ statusMap
   }
 }
@@ -632,7 +630,7 @@ class WebApi(system: ActorSystem,
             future.map {
               case NoSuchJobId =>
                 notFound(ctx, "No such job ID " + jobId)
-              case JobInfo(_, contextName, _, classPath, _, None, _) =>
+              case JobInfo(_, _, contextName, _, _, classPath, _, None, _) =>
                 val jobManager = getJobManagerForContext(Some(contextName), config, classPath)
                 val future = jobManager.get ? KillJob(jobId)
                 future.map {
@@ -642,12 +640,14 @@ class WebApi(system: ActorSystem,
                 }.recover {
                   case e: Exception => logAndComplete(ctx, "ERROR", 500, e);
                 }
-              case JobInfo(_, _, _, _, _, _, Some(ex)) =>
+              case JobInfo(_, _, _, _, _, state, _, _, Some(ex)) if state.equals(JobStatus.Error) =>
                 logger.info("JobStatus: " + JobStatus.Error + ", ErrorMessage: " + ex.message
                     + ", StackTrace: " + ex.stackTrace);
                 ctx.complete(Map(StatusKey -> JobStatus.Error, "ERROR" -> formatException(ex)))
-              case JobInfo(_, _, _, _, _, Some(e), None) =>
+              case JobInfo(_, _, _, _, _, state, _, _, _)
+                if (state.equals(JobStatus.Finished) || state.equals(JobStatus.Killed)) =>
                 notFound(ctx, "No running job with ID " + jobId)
+              case _ => logAndComplete(ctx, "Received an unexpected message", 500);
             }
           }
         } ~

@@ -174,8 +174,7 @@ class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.syst
       val (jobManager: ActorRef) = expectMsgType[ActorRef]
 
       jobManager ! PoisonPill
-      val msg = daoProbe.expectMsgType[CleanContextJobInfos]
-      msg.contextName shouldBe "c1"
+      daoProbe.expectMsgType[CleanContextJobInfos]
     }
   }
 }

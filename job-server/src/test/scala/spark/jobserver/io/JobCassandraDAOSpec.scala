@@ -15,7 +15,6 @@ import scala.concurrent.duration._
 import scala.concurrent.Await
 import org.scalatest._
 
-@Ignore
 class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers with BeforeAndAfter
   with BeforeAndAfterAll {
 
@@ -36,11 +35,10 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
   )
 
   // jobInfo test data; order is important
-  val jobInfoNoEndNoErr:JobInfo = genJobInfo(jarInfo, false, false, false)
+  val jobInfoNoEndNoErr:JobInfo = genJobInfo(jarInfo, false, JobStatus.Running)
   val expectedJobInfo = jobInfoNoEndNoErr
-  val jobInfoNoEndSomeErr: JobInfo = genJobInfo(jarInfo, false, true, false)
-  val jobInfoSomeEndNoErr: JobInfo = genJobInfo(jarInfo, true, false, false)
-  val jobInfoSomeEndSomeErr: JobInfo = genJobInfo(jarInfo, true, true, false)
+  val jobInfoSomeEndNoErr: JobInfo = genJobInfo(jarInfo, true, JobStatus.Finished)
+  val jobInfoSomeEndSomeErr: JobInfo = genJobInfo(jarInfo, true, JobStatus.Error)
 
   // job config test data
   val jobId: String = jobInfoNoEndNoErr.jobId
@@ -69,7 +67,8 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
   case class GenJobInfoClosure() {
     var count: Int = 0
 
-    def apply(jarInfo: BinaryInfo, hasEndTime: Boolean, hasError: Boolean, isNew:Boolean, contextName: String = "test-context"):JobInfo ={
+    def apply(jarInfo: BinaryInfo, isNew:Boolean, state: String, contextName: String = "test-context",
+        contextId: String = UUIDs.random().toString):JobInfo ={
       count = count + (if (isNew) 1 else 0)
 
       val id: String = UUIDs.random().toString
@@ -80,11 +79,15 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
       val someEndTime: Option[DateTime] = Some(startTime.plusSeconds(5)) // Any DateTime Option is fine
       val someError = Some(ErrorData(throwable))
 
-      val endTime: Option[DateTime] = if (hasEndTime) someEndTime else noEndTime
-      val error = if (hasError) someError else None
+      val endTimeAndError = state match {
+        case JobStatus.Started | JobStatus.Running => (None, None)
+        case JobStatus.Finished => (someEndTime, None)
+        case JobStatus.Error | JobStatus.Killed => (someEndTime, someError)
+      }
 
       Thread.sleep(2) // hack to guarantee order
-      JobInfo(id, contextName, jarInfo, classPath, startTime, endTime, error)
+      JobInfo(id, contextId, contextName, jarInfo, classPath, state, startTime,
+          endTimeAndError._1, endTimeAndError._2)
     }
 
   }
@@ -168,7 +171,7 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
     }
 
     it("Save a new config, bring down DB, bring up DB, should get configs from DB") {
-      val jobId2: String = genJobInfo(genJarInfo(false, false), false, false, true).jobId
+      val jobId2: String = genJobInfo(genJarInfo(false, false), true, JobStatus.Running).jobId
       val jobConfig2: Config = ConfigFactory.parseString("{merry=xmas}")
       val expectedConfig2 = ConfigFactory.empty().withValue("merry", ConfigValueFactory.fromAnyRef("xmas"))
       // config previously saved
@@ -219,7 +222,7 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
     }
 
     it("Save another new jobInfo, bring down DB, bring up DB, should JobInfos from DB") {
-      val jobInfo2 = genJobInfo(jarInfo, false, false, true)
+      val jobInfo2 = genJobInfo(jarInfo, true, JobStatus.Running)
       val jobId2 = jobInfo2.jobId
       val expectedJobInfo2 = jobInfo2
       // jobInfo previously saved
@@ -241,7 +244,7 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
     }
 
     it("saving a JobInfo with the same jobId should update the JOBS table") {
-      val expectedNoEndSomeErr = jobInfoNoEndSomeErr
+      val expectedNoEndNoErr = jobInfoNoEndNoErr
       val expectedSomeEndNoErr = jobInfoSomeEndNoErr
       val expectedSomeEndSomeErr = jobInfoSomeEndSomeErr
       val exJobId = jobInfoNoEndNoErr.jobId
@@ -259,15 +262,11 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
       // Second Test
       // Cannot compare JobInfos directly if error is a Some(Throwable) because
       // Throwable uses referential equality
-      dao.saveJobInfo(jobInfoNoEndSomeErr)
+      dao.saveJobInfo(expectedNoEndNoErr)
       val jobs2 = Await.result(dao.getJobInfos(2), timeout)
       jobs2.size should equal (2)
       jobs2.last.endTime should equal (None)
-      jobs2.last.error.isDefined should equal (true)
-      jobs2.last.error shouldBe defined
-      jobs2.last.error.get.message should equal (throwable.getMessage)
-      jobs2.last.error.get.errorClass should equal (throwable.getClass.getName)
-      jobs2.last.error.get.stackTrace should not be empty
+      jobs2.last.error should equal (None)
 
       // Third Test
       dao.saveJobInfo(jobInfoSomeEndNoErr)
@@ -294,12 +293,12 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
       val dt1 = DateTime.now()
       val dt2 = Some(DateTime.now())
       val someError = Some(ErrorData("test-error", "", ""))
-      val finishedJob: JobInfo =
-        JobInfo(UUID.randomUUID.toString, "test", jarInfo, "test-class", dt1, dt2, None)
-      val errorJob: JobInfo =
-        JobInfo(UUID.randomUUID.toString, "test", jarInfo, "test-class", dt1, dt2, someError)
-      val runningJob: JobInfo =
-        JobInfo(UUID.randomUUID.toString, "test", jarInfo, "test-class", dt1, None, None)
+      val finishedJob: JobInfo = JobInfo(UUID.randomUUID.toString, UUID.randomUUID.toString,
+          "test", jarInfo, "test-class", JobStatus.Finished, dt1, dt2, None)
+      val errorJob: JobInfo = JobInfo(UUID.randomUUID.toString, UUID.randomUUID.toString,
+          "test", jarInfo, "test-class", JobStatus.Error, dt1, dt2, someError)
+      val runningJob: JobInfo = JobInfo(UUID.randomUUID.toString, UUID.randomUUID.toString,
+          "test", jarInfo, "test-class", JobStatus.Running, dt1, None, None)
       dao.saveJobInfo(finishedJob)
       dao.saveJobInfo(runningJob)
       dao.saveJobInfo(errorJob)
@@ -329,20 +328,52 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
       retrieved.error.isDefined should equal (true)
     }
 
-    it("retrieve running jobs by context name") {
-      val jobInfo = genJobInfo(jarInfo, false, false, true, "context")
+    it("should retrieve jobs by context id") {
+      val jobInfo = genJobInfo(jarInfo, true, JobStatus.Running, "context")
       dao.saveJobInfo(jobInfo)
 
-      val results = Await.result(dao.getRunningJobInfosForContextName("context"), timeout)
+      val results = Await.result(dao.getJobInfosByContextId(jobInfo.contextId), timeout)
+
       results should have size 1
       results.head.jobId shouldBe jobInfo.jobId
     }
 
-    it("should clean jobs for given context") {
-      val jobInfo = genJobInfo(jarInfo, false, false, false, "context")
+    it("should retrieve multiple jobs if they have the same context id") {
+      val contextId = UUIDs.random().toString
+      val finishedJob = genJobInfo(jarInfo, true, JobStatus.Finished, "context", contextId)
+      val jobWithDifferentContextId = genJobInfo(jarInfo, true, JobStatus.Error)
+      val runningJob = genJobInfo(jarInfo, true, JobStatus.Running, "context", contextId)
+      val finishedJob2 = genJobInfo(jarInfo, true, JobStatus.Finished, "context", contextId)
+      dao.saveJobInfo(finishedJob)
+      dao.saveJobInfo(jobWithDifferentContextId)
+      dao.saveJobInfo(runningJob)
+      dao.saveJobInfo(finishedJob2)
+
+      val results = Await.result(dao.getJobInfosByContextId(contextId), timeout)
+
+      results should have size 3
+      results.filter(_.contextId == contextId).size shouldBe 3
+      results.map(_.jobId) should contain allOf(finishedJob.jobId, runningJob.jobId, finishedJob2.jobId)
+    }
+
+    it("retrieve finished jobs by context id") {
+      val contextId = UUIDs.random().toString
+      val finishedJob = genJobInfo(jarInfo, true, JobStatus.Finished, "context", contextId)
+      val runningJob = genJobInfo(jarInfo, true, JobStatus.Running, "context", contextId)
+      dao.saveJobInfo(finishedJob)
+      dao.saveJobInfo(runningJob)
+
+      val results = Await.result(dao.getJobInfosByContextId(contextId, Some(JobStatus.Finished)), timeout)
+      results should have size 1
+      results.head.jobId shouldBe finishedJob.jobId //Jobid is unique
+    }
+
+    it("should clean jobs for given context id") {
+      val jobInfo = genJobInfo(jarInfo, false, JobStatus.Running, "context")
       dao.saveJobInfo(jobInfo)
 
-      Await.result(dao.cleanRunningJobInfosForContext("context", DateTime.now()), timeout)
+      Await.result(dao.cleanRunningJobInfosForContext(jobInfo.contextId, DateTime.now()), timeout)
+
       val updatedJobInfo = Await.result(dao.getJobInfo(jobInfo.jobId), timeout)
       updatedJobInfo shouldBe defined
       updatedJobInfo.get.endTime shouldBe defined
