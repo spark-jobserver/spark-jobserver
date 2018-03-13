@@ -34,7 +34,7 @@ object JobDAOActor {
 
   case class SaveJobConfig(jobId: String, jobConfig: Config) extends JobDAORequest
   case class GetJobConfig(jobId: String) extends JobDAORequest
-  case class CleanContextJobInfos(contextName: String, endTime: DateTime)
+  case class CleanContextJobInfos(contextId: String, endTime: DateTime)
 
   case class GetLastUploadTimeAndType(appName: String) extends JobDAORequest
   case class SaveContextInfo(contextInfo: ContextInfo) extends JobDAORequest
@@ -107,7 +107,7 @@ class JobDAOActor(dao: JobDAO) extends InstrumentedActor {
     case GetLastUploadTimeAndType(appName) =>
       sender() ! LastUploadTimeAndType(dao.getLastUploadTimeAndType(appName))
 
-    case CleanContextJobInfos(contextName, endTime) =>
-      dao.cleanRunningJobInfosForContext(contextName, endTime)
+    case CleanContextJobInfos(contextId, endTime) =>
+      dao.cleanRunningJobInfosForContext(contextId, endTime)
   }
 }

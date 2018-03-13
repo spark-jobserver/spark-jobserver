@@ -5,7 +5,7 @@ import akka.pattern._
 import scala.concurrent.Await
 import com.typesafe.config.ConfigFactory
 import spark.jobserver.context.StreamingContextFactory
-import spark.jobserver.io.{JobDAOActor, JobInfo}
+import spark.jobserver.io.{JobDAOActor, JobInfo, JobStatus}
 
 /**
  * Test for Streaming Jobs.
@@ -58,7 +58,7 @@ class StreamingJobSpec extends JobSpecBase(StreamingJobSpec.getNewSystem) {
       Thread sleep 1000
       val jobInfo = Await.result(dao.getJobInfo(jobId), 60 seconds)
       jobInfo.get match  {
-        case JobInfo(_, _, _, _, _, None, _) => {  }
+        case JobInfo(_, _, _, _, _, state, _, _, _) if state == JobStatus.Running => {  }
         case e => fail("Unexpected JobInfo" + e)
       }
     }
