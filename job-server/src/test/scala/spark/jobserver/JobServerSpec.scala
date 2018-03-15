@@ -14,7 +14,6 @@ import scala.concurrent.duration._
 import spark.jobserver.JobServer.InvalidConfiguration
 import spark.jobserver.common.akka
 import spark.jobserver.io.{JobDAOActor, JobDAO, ContextInfo, ContextStatus}
-import spark.jobserver.util.ReconnectFailedException
 
 import scala.concurrent.Await
 import scala.concurrent.duration.TimeUnit;
@@ -173,7 +172,7 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
           ci.state should equal (ContextStatus.Running)
         } else {
           ci.state should equal (ContextStatus.Error)
-          ci.error.get.getClass should be (classOf[ReconnectFailedException])
+          ci.error.get.getMessage should be ("Reconnect faliled after Jobserver restart")
         }
       })
     }

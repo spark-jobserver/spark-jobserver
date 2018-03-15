@@ -68,6 +68,8 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
   private val cluster = Cluster(context.system)
   protected val selfAddress = cluster.selfAddress
 
+  private val MANAGER_ACTOR_PREFIX = "jobManager-"
+
   // This is for capturing results for ad-hoc jobs. Otherwise when ad-hoc job dies, resultActor also dies,
   // and there is no way to retrieve results.
   val globalResultActor = context.actorOf(Props[JobResultActor], "global-result-actor")
@@ -336,6 +338,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
   private def startContext(name: String, contextConfig: Config, isAdHoc: Boolean)
                           (successFunc: ActorRef => Unit)(failureFunc: Throwable => Unit): Unit = {
 
+
     val contextId = java.util.UUID.randomUUID().toString.substring(16)
     val contextActorName = AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX + contextId
 
@@ -349,16 +352,17 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
         mergedContextConfig.root().render(ConfigRenderOptions.concise()), None,
         DateTime.now(), None, _: String, _: Option[Throwable])
     launchDriver(name, contextConfig, contextActorName) match {
-      case true =>
+      case (false, error) => val e = new Exception(error)
+        failureFunc(e)
+        daoActor ! JobDAOActor.SaveContextInfo(contextInfo(ContextStatus.Error, Some(e)))
+      case (true, _) =>
         contextInitInfos(contextActorName) = (mergedContextConfig, isAdHoc, successFunc, failureFunc)
         daoActor ! JobDAOActor.SaveContextInfo(contextInfo(ContextStatus.Started, None))
-      case false => val e = new Exception("Failed to launch context JVM");
-        failureFunc(e);
-        daoActor ! JobDAOActor.SaveContextInfo(contextInfo(ContextStatus.Error, Some(e)))
     }
   }
 
-  protected def launchDriver(name: String, contextConfig: Config, contextActorName: String): Boolean = {
+  protected def launchDriver(name: String, contextConfig: Config, contextActorName: String):
+        (Boolean, String) = {
     // Create a temporary dir, preferably in the LOG_DIR
     val encodedContextName = java.net.URLEncoder.encode(name, "UTF-8")
     val contextDir = Option(System.getProperty("LOG_DIR")).map { logDir =>
@@ -368,6 +372,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
 
     val launcher = new ManagerLauncher(config, contextConfig,
         selfAddress.toString, contextActorName, contextDir.toString)
+
     launcher.start()
   }
 

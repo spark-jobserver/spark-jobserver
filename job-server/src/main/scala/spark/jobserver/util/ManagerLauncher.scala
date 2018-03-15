@@ -7,9 +7,11 @@ import com.typesafe.config.Config
 import org.slf4j.LoggerFactory
 import org.apache.spark.launcher.SparkLauncher
 
-final class ManagerLauncher(systemConfig: Config, contextConfig: Config,
-                            masterAddress: String, contextActorName: String, contextDir: String)
-                            extends Launcher(systemConfig) {
+class ManagerLauncher(systemConfig: Config, contextConfig: Config,
+                      masterAddress: String, contextActorName: String, contextDir: String,
+                      sparkLauncher: SparkLauncher = new SparkLauncher,
+                      environment: Environment = new SystemEnvironment)
+                      extends Launcher(systemConfig, sparkLauncher, environment) {
   val logger = LoggerFactory.getLogger("spark-context-launcher")
 
   var loggingOpts = getEnvironmentVariable("MANAGER_LOGGING_OPTS")
@@ -58,10 +60,29 @@ final class ManagerLauncher(systemConfig: Config, contextConfig: Config,
       launcher.redirectError(submitOutputFile)
     }
 
+  override def validate(): (Boolean, String) = {
+     super.validate() match {
+       case (true, _) =>
+         validateMemory(contextConfig.getString("launcher.spark.driver.memory")) match {
+           case true => (true, "")
+           case false => (false,
+             "Context error: spark.driver.memory has invalid value. Accepted formats 1024k, 2g, 512m")
+         }
+       case (false, error) => (false, error)
+     }
+  }
+
   private def parseExtraSparkConfigurations(): Option[Array[String]] = {
     if (!extraSparkConfigurations.isEmpty()) {
       return Some(extraSparkConfigurations.trim().split('|'))
     }
     None
+  }
+
+  private def validateMemory(providedMemory: String): Boolean = {
+    import scala.util.matching.Regex
+    val pattern = "^[0-9]+[kmgt]?$".r
+
+    pattern.findFirstIn(providedMemory).isDefined
   }
 }
