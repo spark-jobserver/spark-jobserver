@@ -37,6 +37,7 @@ object ContextSupervisor {
   case object NoSuchContext
   case object ContextStopped
   case class SparkContexData(name: String, appId: String, url: Option[String])
+  case object UnexpectedError
 }
 
 /**

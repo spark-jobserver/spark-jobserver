@@ -13,6 +13,7 @@ import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
 import spark.jobserver.util.{SparkJobUtils, ManagerLauncher}
 
 import scala.collection.mutable
+import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Try}
 import spark.jobserver.common.akka.InstrumentedActor
 
@@ -134,17 +135,18 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
       addContextsFromConfig(config)
 
     case ListContexts =>
-      val resp = Await.result(
-      (daoActor ? JobDAOActor.GetContextInfos(None, Some(ContextStatus.Running)))(daoAskTimeout).
-        mapTo[JobDAOActor.ContextInfos], daoAskTimeout.duration)
-      val names = resp.contextInfos.map(_.name)
-      sender ! names
+      val resp = getDataFromDAO[JobDAOActor.ContextInfos](
+          JobDAOActor.GetContextInfos(None, Some(ContextStatus.Running)))
+      resp match {
+        case Some(JobDAOActor.ContextInfos(contextInfos)) => sender ! contextInfos.map(_.name)
+        case None => sender ! UnexpectedError
+      }
 
     case GetSparkContexData(name) =>
       val originator = sender
       val resp = getContextByName(name)
-      resp.contextInfo match {
-        case Some(c) =>
+      resp match {
+        case Some(JobDAOActor.ContextResponse(Some(c))) =>
           val contextActorRef = getActorRef(c)
           contextActorRef match {
             case Some(ref) => val future = (ref ? GetContexData)(30.seconds)
@@ -159,7 +161,8 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
               }
             case None => sender ! NoSuchContext
           }
-        case None => sender ! NoSuchContext
+        case Some(JobDAOActor.ContextResponse(None)) => sender ! NoSuchContext
+        case None => sender ! UnexpectedError
       }
 
     case AddContext(name, contextConfig) =>
@@ -168,14 +171,15 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
       // TODO(velvia): This check is not atomic because contexts is only populated
       // after SparkContext successfully created!  See
       // https://github.com/spark-jobserver/spark-jobserver/issues/349
-      val contextInfo = getActiveContextByName(name)
-      contextInfo match {
-        case Some(c) => originator ! ContextAlreadyExists
-        case _ => startContext(name, mergedConfig, false) { ref =>
+      val resp = getActiveContextByName(name)
+      (resp._1, resp._2) match {
+        case (true, Some(c)) => originator ! ContextAlreadyExists
+        case (true, None) => startContext(name, mergedConfig, false) { ref =>
             originator ! ContextInitialized
           } { err =>
             originator ! ContextInitError(err)
           }
+        case (false, _) => sender ! UnexpectedError
       }
 
     case StartAdHocContext(classPath, contextConfig) =>
@@ -183,18 +187,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
       val mergedConfig = contextConfig.withFallback(defaultContextConfig)
       val userNamePrefix = Try(mergedConfig.getString(SparkJobUtils.SPARK_PROXY_USER_PARAM))
         .map(SparkJobUtils.userNamePrefix(_)).getOrElse("")
-      var contextName = ""
-      do {
-        contextName = userNamePrefix + java.util.UUID.randomUUID().toString().take(8) + "-" + classPath
-        val contextInfo = getActiveContextByName(contextName)
-        contextInfo match {
-          case Some(c) => contextName = ""
-          case None =>
-        }
-      } while (contextName == "")
-      // TODO(velvia): Make the check above atomic.  See
-      // https://github.com/spark-jobserver/spark-jobserver/issues/349
-
+      var contextName = userNamePrefix + java.util.UUID.randomUUID().toString() + "-" + classPath
       startContext(contextName, mergedConfig, true) { ref =>
         originator ! ref
       } { err =>
@@ -206,55 +199,60 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
 
     case GetContext(name) =>
       val resp = getContextByName(name)
-      resp.contextInfo match {
-        case Some(c) =>
+      resp match {
+        case Some(JobDAOActor.ContextResponse(Some(c))) =>
           val contextActorRef = getActorRef(c)
           contextActorRef match {
             case Some(ref) => sender ! ref
             case None => sender ! NoSuchContext
           }
-        case None => sender ! NoSuchContext
+        case Some(JobDAOActor.ContextResponse(None)) => sender ! NoSuchContext
+        case None => sender ! UnexpectedError
       }
 
     case StopContext(name) =>
       val resp = getContextByName(name)
-      resp.contextInfo match {
-        case Some(c) => logger.info("Shutting down context {}", name)
+      resp match {
+        case Some(JobDAOActor.ContextResponse(Some(c))) =>
+          logger.info("Shutting down context {}", name)
           val contextInfo = ContextInfo(c.id, c.name, c.config, c.actorAddress, c.startTime,
             c.endTime, ContextStatus.Stopping, c.error)
           daoActor ! JobDAOActor.SaveContextInfo(contextInfo)
           val contextActorRef = getActorRef(c)
           contextActorRef match {
-          case Some(ref) =>
-            val address = AddressFromURIString(c.actorAddress.get)
-            cluster.down(address)
-            try {
-              val stoppedCtx = gracefulStop(ref, contextDeletionTimeout seconds)
-              Await.result(stoppedCtx, contextDeletionTimeout + 1 seconds)
-              sender ! ContextStopped
-            } catch {
-              case err: Exception => sender ! ContextStopError(err)
-            }
-          case None => sender ! NoSuchContext
+            case Some(ref) =>
+              val address = AddressFromURIString(c.actorAddress.get)
+              cluster.down(address)
+              try {
+                val stoppedCtx = gracefulStop(ref, contextDeletionTimeout seconds)
+                Await.result(stoppedCtx, contextDeletionTimeout + 1 seconds)
+                sender ! ContextStopped
+              } catch {
+                case err: Exception => sender ! ContextStopError(err)
+              }
+            case None => sender ! NoSuchContext
           }
-        case None => sender ! NoSuchContext
+        case Some(JobDAOActor.ContextResponse(None)) => sender ! NoSuchContext
+        case None => sender ! UnexpectedError
       }
 
     case Terminated(actorRef) =>
       val name: String = actorRef.path.name
       logger.info("Actor terminated: {}", name)
       val contextId = name.split(AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX).apply(1)
-      val resp = Await.result(
-      (daoActor ? JobDAOActor.GetContextInfo(contextId))(daoAskTimeout).
-        mapTo[JobDAOActor.ContextResponse], daoAskTimeout.duration)
-      resp.contextInfo match {
-        case Some(c) =>
-          val state = if (c.state == ContextStatus.Stopping) ContextStatus.Finished else ContextStatus.Killed
+      val resp = getDataFromDAO[JobDAOActor.ContextResponse](JobDAOActor.GetContextInfo(contextId))
+      resp match {
+        case Some(JobDAOActor.ContextResponse(Some(c))) =>
+          val state =
+            if (c.state == ContextStatus.Stopping) ContextStatus.Finished else ContextStatus.Killed
           val contextInfo = ContextInfo(c.id, c.name, c.config, c.actorAddress, c.startTime,
                 Option(DateTime.now()), state, c.error)
           daoActor ! JobDAOActor.SaveContextInfo(contextInfo)
           daoActor ! JobDAOActor.CleanContextJobInfos(c.name, DateTime.now())
-        case None => logger.error("No context for delition is found in the DB.")
+        case Some(JobDAOActor.ContextResponse(None)) =>
+          logger.error("No context for deletion is found in the DB")
+        case None =>
+          logger.error("Error occurred after Terminated message was recieved")
       }
       cluster.down(actorRef.path.address)
       jobManagerActorRefs.remove(contextId)
@@ -305,12 +303,11 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
       state: String, error: Option[Throwable]) : Option[Throwable] = {
     import akka.pattern.ask
     val managerActorName = actorName.replace(AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX, "")
-    val resp = Await.result(
-      (daoActor ? JobDAOActor.GetContextInfo(managerActorName))(daoAskTimeout).
-        mapTo[JobDAOActor.ContextResponse], daoAskTimeout.duration)
-    resp.contextInfo match {
-        case Some(context) =>
-          val endTime = error match {
+
+    val resp = getDataFromDAO[JobDAOActor.ContextResponse](JobDAOActor.GetContextInfo(managerActorName))
+    resp match {
+      case Some(JobDAOActor.ContextResponse(Some(context))) =>
+                    val endTime = error match {
             case None => context.endTime
             case _ => Some(DateTime.now())
           }
@@ -323,18 +320,21 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
                                                   state,
                                                   error))
           None
-        case None =>
+      case Some(JobDAOActor.ContextResponse(None)) =>
           val e = new Throwable("Did not find context in the DB")
           logger.error("Could not find context with id: " + managerActorName
-              + ", resieved following error message: " + e.getMessage)
+              + ", received following error message: " + e.getMessage)
           Some(e)
+      case None =>
+        logger.error("Error occurred while fetching data from DAO.")
+        Some(new Exception("Internal server error"))
     }
   }
 
   private def startContext(name: String, contextConfig: Config, isAdHoc: Boolean)
                           (successFunc: ActorRef => Unit)(failureFunc: Throwable => Unit): Unit = {
 
-    val contextId = java.util.UUID.randomUUID().toString.substring(16)
+    val contextId = java.util.UUID.randomUUID().toString
     val contextActorName = AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX + contextId
 
     logger.info("Starting context with actor name {}", contextActorName)
@@ -374,14 +374,14 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
   private def addContextsFromConfig(config: Config) {
     for (contexts <- Try(config.getObject("spark.contexts"))) {
       contexts.keySet().asScala.foreach { contextName =>
-        val contextInfo = getActiveContextByName(contextName)
-        contextInfo match {
-          case Some(c) =>
+        val resp = getActiveContextByName(contextName)
+        (resp._1, resp._2) match {
+          case (true, Some(c)) =>
             val contextInfo = ContextInfo(c.id, c.name, c.config, c.actorAddress, c.startTime,
               Some(DateTime.now()), ContextStatus.Error,
               Some(new Throwable("Context was not finished properly")))
             daoActor ! JobDAOActor.SaveContextInfo(contextInfo)
-          case None =>
+          case (_, _) =>
         }
         val contextConfig = config.getConfig("spark.contexts." + contextName)
           .withFallback(defaultContextConfig)
@@ -392,19 +392,21 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
     }
   }
 
-  private def getContextByName(name: String): JobDAOActor.ContextResponse = {
-    Await.result(
-      (daoActor ? JobDAOActor.GetContextInfoByName(name))(daoAskTimeout).
-        mapTo[JobDAOActor.ContextResponse], daoAskTimeout.duration)
+  private def getDataFromDAO[T: ClassTag](msg: JobDAOActor.JobDAORequest): Option[T] = {
+    Try(Some(Await.result((daoActor ? msg)(daoAskTimeout).mapTo[T], daoAskTimeout.duration))).getOrElse(None)
   }
 
-  private def getActiveContextByName(name: String): Option[ContextInfo] = {
+  private def getContextByName(name: String): Option[JobDAOActor.ContextResponse] = {
+      getDataFromDAO[JobDAOActor.ContextResponse](JobDAOActor.GetContextInfoByName(name))
+  }
+
+  private def getActiveContextByName(name: String): (Boolean, Option[ContextInfo]) = {
     val resp = getContextByName(name)
-    resp.contextInfo match {
-          case Some(c) if (c.state == ContextStatus.Running || c.state == ContextStatus.Started) =>
-              Some(c)
-          case _ => None
+    resp match {
+      case None => (false, None)
+      case Some(JobDAOActor.ContextResponse(Some(c)))
+        if c.state == ContextStatus.Running || c.state == ContextStatus.Started => (true, Some(c))
+      case Some(_) => (true, None)
     }
   }
-
 }
