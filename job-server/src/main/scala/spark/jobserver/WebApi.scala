@@ -391,6 +391,7 @@ class WebApi(system: ActorSystem,
               logger.info("StatusCode: " + stcode + ", " + contextMap);
               ctx.complete(stcode, contextMap)
             case NoSuchContext => notFound(ctx, s"can't find context with name $contextName")
+            case UnexpectedError => logAndComplete(ctx, "UNEXPECTED ERROR OCCURRED", 500)
           }.recover {
             case e: Exception =>
               logAndComplete(ctx, "ERROR", 500, e);
@@ -399,13 +400,19 @@ class WebApi(system: ActorSystem,
       } ~
       get { ctx =>
         logger.info("GET /contexts");
-        (supervisor ? ListContexts).mapTo[Seq[String]]
-          .map { contexts =>
+        val future = (supervisor ? ListContexts)
+        future.map {
+          case UnexpectedError => logAndComplete(ctx, "UNEXPECTED ERROR OCCURRED", 500)
+          case contexts =>
             val getContexts = SparkJobUtils.removeProxyUserPrefix(
-              authInfo.toString, contexts,
+              authInfo.toString, contexts.asInstanceOf[Seq[String]],
               config.getBoolean("shiro.authentication") && config.getBoolean("shiro.use-as-proxy-user"))
             logger.info(getContexts.toString());
-            ctx.complete(getContexts) }
+            ctx.complete(getContexts)
+        }.recover {
+          case e: Exception =>
+            logAndComplete(ctx, "ERROR", 500, e);
+        }
       } ~
       post {
         /**
@@ -446,6 +453,7 @@ class WebApi(system: ActorSystem,
                       ctx.complete(stcode, successMap(mes))
                     case ContextAlreadyExists => badRequest(ctx, "context " + contextName + " exists")
                     case ContextInitError(e) => logAndComplete(ctx, "CONTEXT INIT ERROR", 500, e);
+                    case UnexpectedError => logAndComplete(ctx, "UNEXPECTED ERROR OCCURRED", 500)
                   }
                 }
               }
@@ -470,6 +478,7 @@ class WebApi(system: ActorSystem,
                   ctx.complete(stcode, successMap(mes))
                 case NoSuchContext => notFound(ctx, "context " + contextName + " not found")
                 case ContextStopError(e) => logAndComplete(ctx, "CONTEXT DELETE ERROR", 500, e);
+                case UnexpectedError => logAndComplete(ctx, "UNEXPECTED ERROR OCCURRED", 500)
               }
             }
           }
