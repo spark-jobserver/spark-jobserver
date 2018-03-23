@@ -49,6 +49,7 @@ Note:
 - YARN transfers the files provided via `--files` submit option into the cluster / container. Spark standalone does not support this in cluster mode and you have to transfer them manual.
 - Instead of running a H2 DB instance you can also run a real DB reachable inside your cluster. You can't use the default (host only) H2 configuration in a cluster setup.
 - Akka binds by [default](../job-server/src/main/resources/application.conf) to the local host interface and is not reachable from the cluster. You need to configure the akka hostname to the cluster internal address.
+- At least one slave node needs to be attached to the master for contexts to be successfully created in Cluster Mode.
 
 ### Reading files uploaded via frontend
 
