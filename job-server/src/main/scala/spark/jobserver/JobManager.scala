@@ -63,10 +63,9 @@ object JobManager {
     logger.info("Starting JobManager named " + managerName + " with config {}",
       config.getConfig("spark").root.render())
 
-    val masterAddress = if (systemConfig.getBoolean("spark.jobserver.kill-context-on-supervisor-down")) {
-      clusterAddress.toString + "/user/context-supervisor"
-    } else {
-      ""
+    val masterAddress = systemConfig.getBoolean("spark.jobserver.kill-context-on-supervisor-down") match {
+      case true => clusterAddress.toString + "/user/context-supervisor"
+      case false => ""
     }
 
     val jobManager = system.actorOf(JobManagerActor.props(daoActor, masterAddress), managerName)
