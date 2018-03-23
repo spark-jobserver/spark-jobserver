@@ -1,3 +1,11 @@
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
+
+- [JMX](#jmx)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 #### JMX
 To read JMX metrics, you can use [jconsole](http://docs.oracle.com/javase/7/docs/technotes/guides/management/jconsole.html) if you have an option of GUI. Otherwise you can use a cli utility named `jmxcli`. Here are the steps
 

@@ -1,3 +1,11 @@
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
+
+- [Logging Details and Configurations](#logging-details-and-configurations)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 ## Logging Details and Configurations
 ###Client Mode
 The Jobserver creates 1 application log file in `LOG_DIR` and 3 more log files for each context in `${LOG_DIR}/jobserver-<context name + hash>/`. Example:  

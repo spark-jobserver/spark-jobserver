@@ -1,3 +1,13 @@
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
+
+- [Configuring Job Server for YARN cluster mode](#configuring-job-server-for-yarn-cluster-mode)
+  - [Job Server configuration](#job-server-configuration)
+  - [Reading files uploaded via frontend](#reading-files-uploaded-via-frontend)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 ## Configuring Job Server for YARN cluster mode
 
 See also running [YARN in client mode](yarn.md), running [YARN on EMR](EMR.md) and running on [Mesos](mesos.md).

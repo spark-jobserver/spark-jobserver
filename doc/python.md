@@ -1,3 +1,18 @@
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
+
+- [Python Support](#python-support)
+  - [Setting up Spark Job Server with Python support](#setting-up-spark-job-server-with-python-support)
+  - [Writing a Python job](#writing-a-python-job)
+    - [Return types](#return-types)
+    - [Packaging a job](#packaging-a-job)
+  - [Running a job](#running-a-job)
+  - [PythonSessionContext](#pythonsessioncontext)
+  - [CustomContexts](#customcontexts)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 # Python Support
 
 Spark Job Server supports Python jobs through a Python specific context factory
