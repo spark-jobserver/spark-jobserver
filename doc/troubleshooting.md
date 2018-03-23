@@ -1,3 +1,25 @@
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
+
+- [Troubleshooting](#troubleshooting)
+  - [Tests don't pass or have timeouts](#tests-dont-pass-or-have-timeouts)
+  - [Requests are timing out](#requests-are-timing-out)
+  - [Timeout getting large job results](#timeout-getting-large-job-results)
+  - [Job with status finished has no result](#job-with-status-finished-has-no-result)
+  - [AskTimeout when starting job server or contexts](#asktimeout-when-starting-job-server-or-contexts)
+  - [Job server won't start / cannot bind to 0.0.0.0:8090](#job-server-wont-start--cannot-bind-to-00008090)
+  - [Job Server Doesn't Connect to Spark Cluster](#job-server-doesnt-connect-to-spark-cluster)
+  - [Exception in thread "main" java.lang.NoSuchMethodError: akka.actor.ActorRefFactory.dispatcher()Lscala/concurrent/ExecutionContextExecutor;](#exception-in-thread-main-javalangnosuchmethoderror-akkaactoractorreffactorydispatcherlscalaconcurrentexecutioncontextexecutor)
+  - [java.lang.NoSuchMethodError: org.joda.time.DateTime.now()](#javalangnosuchmethoderror-orgjodatimedatetimenow)
+  - [I am running CDH 5.3 and Job Server doesn't work](#i-am-running-cdh-53-and-job-server-doesnt-work)
+  - [I want to run job-server on Windows](#i-want-to-run-job-server-on-windows)
+  - [Akka Deadletters / Workers disconnect from Job Server](#akka-deadletters--workers-disconnect-from-job-server)
+  - [java.lang.ClassNotFoundException when staring spark-jobserver from sbt](#javalangclassnotfoundexception-when-staring-spark-jobserver-from-sbt)
+  - [Accessing a config file in my job jar](#accessing-a-config-file-in-my-job-jar)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 # Troubleshooting
 
 ## Tests don't pass or have timeouts

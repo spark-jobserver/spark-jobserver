@@ -1,3 +1,17 @@
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
+
+- [Custom Contexts and Context-specific Jobs](#custom-contexts-and-context-specific-jobs)
+- [Example](#example)
+- [Initializing a Hive/SQLContext Automatically](#initializing-a-hivesqlcontext-automatically)
+- [Extending Job Server for Custom Contexts](#extending-job-server-for-custom-contexts)
+- [Jars](#jars)
+- [StreamingContext](#streamingcontext)
+  - [Running Multiple HiveContexts (Thanks cgeorge-rms)](#running-multiple-hivecontexts-thanks-cgeorge-rms)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 ## Custom Contexts and Context-specific Jobs
 
 With Spark Jobserver 0.5.0, jobs no longer have to share just a plain

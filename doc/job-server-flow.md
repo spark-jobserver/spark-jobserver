@@ -1,3 +1,13 @@
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
+
+- [Jar routes](#jar-routes)
+- [Context routes](#context-routes)
+- [Job routes](#job-routes)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 (use http://websequencediagrams.com/ to visualize sequence diagrams)
 
 Jar routes
