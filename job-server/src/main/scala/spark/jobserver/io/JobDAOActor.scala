@@ -31,6 +31,7 @@ object JobDAOActor {
 
   case class SaveJobInfo(jobInfo: JobInfo) extends JobDAORequest
   case class GetJobInfos(limit: Int) extends JobDAORequest
+  case class GetJobInfosByContextId(contextId: String, jobStatuses: Option[Seq[String]]) extends JobDAORequest
 
   case class SaveJobConfig(jobId: String, jobConfig: Config) extends JobDAORequest
   case class GetJobConfig(jobId: String) extends JobDAORequest
@@ -109,5 +110,8 @@ class JobDAOActor(dao: JobDAO) extends InstrumentedActor {
 
     case CleanContextJobInfos(contextId, endTime) =>
       dao.cleanRunningJobInfosForContext(contextId, endTime)
+
+    case GetJobInfosByContextId(contextId, jobStatuses) =>
+      dao.getJobInfosByContextId(contextId, jobStatuses).map(JobInfos).pipeTo(sender)
   }
 }

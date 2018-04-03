@@ -55,7 +55,7 @@ object JobDAOActorSpec {
       Future.successful(Seq())
 
     override def getJobInfosByContextId(
-        contextId: String, jobStatus: Option[String] = None): Future[Seq[JobInfo]] = ???
+        contextId: String, jobStatuses: Option[Seq[String]] = None): Future[Seq[JobInfo]] = ???
 
     override def getJobInfo(jobId: String): Future[Option[JobInfo]] = ???
 

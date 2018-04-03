@@ -7,6 +7,19 @@ import com.typesafe.config.Config
 import org.slf4j.LoggerFactory
 import org.apache.spark.launcher.SparkLauncher
 
+object ManagerLauncher {
+  final val SJS_SUPERVISE_MODE_KEY = "spark.driver.supervise"
+  final val CONTEXT_SUPERVISE_MODE_KEY = "launcher.spark.driver.supervise"
+
+  def shouldSuperviseModeBeEnabled(sjsSupervisorMode: Boolean,
+      contextSupervisorMode: Option[Boolean]): Boolean = {
+    (sjsSupervisorMode, contextSupervisorMode) match {
+      case (_, Some(contextSupervisorMode)) => contextSupervisorMode
+      case (_, None) => sjsSupervisorMode
+    }
+  }
+}
+
 class ManagerLauncher(systemConfig: Config, contextConfig: Config,
                       masterAddress: String, contextActorName: String, contextDir: String,
                       sparkLauncher: SparkLauncher = new SparkLauncher,
@@ -19,6 +32,10 @@ class ManagerLauncher(systemConfig: Config, contextConfig: Config,
   val extraSparkConfigurations = getEnvironmentVariable("MANAGER_EXTRA_SPARK_CONFS")
   val extraJavaOPTS = getEnvironmentVariable("MANAGER_EXTRA_JAVA_OPTIONS")
   var gcOPTS = baseGCOPTS
+  lazy val contextSuperviseModeEnabled: Option[Boolean] = Try(Some(
+    contextConfig.getBoolean(ManagerLauncher.CONTEXT_SUPERVISE_MODE_KEY))).getOrElse(None)
+  lazy val useSuperviseMode = ManagerLauncher.shouldSuperviseModeBeEnabled(
+      defaultSuperviseModeEnabled, contextSuperviseModeEnabled)
 
   override def addCustomArguments() {
       if (deployMode == "client") {
@@ -37,13 +54,20 @@ class ManagerLauncher(systemConfig: Config, contextConfig: Config,
       launcher.addSparkArg("--driver-java-options",
           s"$gcOPTS $baseJavaOPTS $loggingOpts $configOverloads $extraJavaOPTS")
 
+      if (useSuperviseMode) {
+        launcher.addSparkArg("--supervise")
+      }
+
       if (contextConfig.hasPath(SparkJobUtils.SPARK_PROXY_USER_PARAM)) {
          launcher.addSparkArg("--proxy-user", contextConfig.getString(SparkJobUtils.SPARK_PROXY_USER_PARAM))
       }
 
       for (e <- Try(contextConfig.getConfig("launcher"))) {
          e.entrySet().asScala.map { c =>
+           // Supervise mode was already handled above, no need to do it here again
+           if (c.getKey != "spark.driver.supervise") {
             launcher.addSparkArg("--conf", s"${c.getKey}=${c.getValue.unwrapped.toString}")
+           }
          }
       }
 
@@ -63,10 +87,15 @@ class ManagerLauncher(systemConfig: Config, contextConfig: Config,
   override def validate(): (Boolean, String) = {
      super.validate() match {
        case (true, _) =>
-         validateMemory(contextConfig.getString("launcher.spark.driver.memory")) match {
-           case true => (true, "")
-           case false => (false,
+         if (!validateMemory(contextConfig.getString("launcher.spark.driver.memory"))) {
+           (false,
              "Context error: spark.driver.memory has invalid value. Accepted formats 1024k, 2g, 512m")
+         } else if (deployMode == "client" && useSuperviseMode) {
+           (false, "Supervise mode can only be used with cluster mode")
+         } else if (master.startsWith("yarn") && useSuperviseMode) {
+           (false, "Supervise mode is only supported with spark standalone or Mesos")
+         } else {
+           (true, "")
          }
        case (false, error) => (false, error)
      }

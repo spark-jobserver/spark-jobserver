@@ -4,6 +4,7 @@ import java.io.File
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.util.UUID
+import collection.JavaConverters._
 
 import scala.collection.convert.WrapAsJava
 import scala.collection.convert.Wrappers.JListWrapper
@@ -253,14 +254,14 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
   }
 
   override def getJobInfosByContextId(
-      contextId: String, jobStatus: Option[String] = None): Future[Seq[JobInfo]] = {
+      contextId: String, jobStatuses: Option[Seq[String]] = None): Future[Seq[JobInfo]] = {
     var query = QB.select(
       JobId, ContextId, ContextName, AppName, BType, UploadTime, Classpath, State, StartTime, EndTime,
       Error, ErrorClass, ErrorStackTrace
     ).from(JobsByContextIdTable).where(QB.eq(ContextId, UUID.fromString(contextId)))
 
-    query = jobStatus match {
-      case Some(status) => query.and(QB.eq(State, status))
+    query = jobStatuses match {
+      case Some(statuses) => query.and(QB.in(State, statuses.toList.asJava))
       case _ => query
     }
     session.executeAsync(query).map { rs =>

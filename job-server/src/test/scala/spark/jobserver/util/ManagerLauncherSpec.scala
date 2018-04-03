@@ -12,7 +12,8 @@ class ManagerLauncherSpec extends FunSpec with Matchers with BeforeAndAfter {
     val stubbedSparkLauncher = new StubbedSparkLauncher()
     val environment = new InMemoryEnvironment
 
-    lazy val baseSystemConf = buildConfig(Map("spark.master" -> "local[*]", "spark.submit.deployMode" -> "client"))
+    lazy val baseSystemConfMap = Map("spark.master" -> "local[*]", "spark.submit.deployMode" -> "client")
+    lazy val baseSystemConf = buildConfig(baseSystemConfMap)
     lazy val baseContextMap = Map("launcher.spark.driver.memory" -> "1g")
     lazy val baseContextConf = buildConfig(baseContextMap)
     lazy val managerLauncherFunc = new ManagerLauncher(baseSystemConf, _:Config, "", "", "", stubbedSparkLauncher, environment)
@@ -132,6 +133,101 @@ class ManagerLauncherSpec extends FunSpec with Matchers with BeforeAndAfter {
 
        stubbedSparkLauncher.getLauncherConfig().containsValue(StubbedSparkLauncher.APP_ARGS, "master-address,actor-name,conf-file") should be (true)
      }
+
+     it("should fail if supervise mode is specified with client mode") {
+       val baseConfWithSuperviseMode = baseSystemConfMap + ("spark.driver.supervise" -> "true")
+       val launcher = new ManagerLauncher(buildConfig(baseConfWithSuperviseMode), baseContextConf, "", "", "", stubbedSparkLauncher, environment)
+
+       launcher.start() should be (false, "Supervise mode can only be used with cluster mode")
+     }
+
+      it("should fail if supervise mode is specified (in context config) with client mode") {
+       val contextConfMap = baseContextMap + ("launcher.spark.driver.supervise" -> "true")
+
+       val launcher = managerLauncherFunc(buildConfig(contextConfMap))
+
+       launcher.start() should be (false, "Supervise mode can only be used with cluster mode")
+     }
+
+     it("should fail if supervise mode is specified with yarn") {
+       val systemConfMap = Map("spark.master" -> "yarn", "spark.submit.deployMode" -> "cluster", "spark.driver.supervise" -> "true")
+
+       val launcher = new ManagerLauncher(buildConfig(systemConfMap), baseContextConf, "", "", "", stubbedSparkLauncher, environment)
+
+       launcher.start() should be (false, "Supervise mode is only supported with spark standalone or Mesos")
+     }
+
+     it("should fail if supervise mode is specified (in context config) with yarn") {
+       val systemConfMap = Map("spark.master" -> "yarn", "spark.submit.deployMode" -> "cluster")
+       val contextConfMap = baseContextMap + (ManagerLauncher.CONTEXT_SUPERVISE_MODE_KEY -> "true")
+       val launcher = new ManagerLauncher(buildConfig(systemConfMap), buildConfig(contextConfMap), "", "", "", stubbedSparkLauncher, environment)
+
+       launcher.start() should be (false, "Supervise mode is only supported with spark standalone or Mesos")
+     }
+
+     it("should set supervise flag if system config and context config have supervise mode enabled") {
+       val systemConfMap = Map("spark.master" -> "local[4]", "spark.submit.deployMode" -> "cluster", "spark.driver.supervise" -> "true")
+       val contextConfMap = baseContextMap + (ManagerLauncher.CONTEXT_SUPERVISE_MODE_KEY -> "true")
+       val launcher = new ManagerLauncher(buildConfig(systemConfMap), buildConfig(contextConfMap), "", "", "", stubbedSparkLauncher, environment)
+
+       launcher.start()
+
+       stubbedSparkLauncher.getLauncherConfig().containsValue(StubbedSparkLauncher.SPARK_DRIVER_SUPERVISE, "--supervise") should be (true)
+       // The supervise mode should not be added again while processing the launcher section
+       stubbedSparkLauncher.getLauncherConfig().containsValue("--conf", "spark.driver.supervise=true") should be (false)
+     }
+
+     it("should set supervise flag if only context config has supervise mode enabled") {
+       val systemConfMap = Map("spark.master" -> "local[4]", "spark.submit.deployMode" -> "cluster")
+       val contextConfMap = baseContextMap + (ManagerLauncher.CONTEXT_SUPERVISE_MODE_KEY -> "true")
+       val launcher = new ManagerLauncher(buildConfig(systemConfMap), buildConfig(contextConfMap), "", "", "", stubbedSparkLauncher, environment)
+
+       launcher.start()
+
+       stubbedSparkLauncher.getLauncherConfig().containsValue(StubbedSparkLauncher.SPARK_DRIVER_SUPERVISE, "--supervise") should be (true)
+       stubbedSparkLauncher.getLauncherConfig().containsValue("--conf", "spark.driver.supervise=true") should be (false)
+     }
+
+     it("should not set supervise flag if supervise mode is enabled in system config but context config doesn't have a value defined") {
+       val systemConfMap = Map("spark.master" -> "local[4]", "spark.submit.deployMode" -> "cluster", ManagerLauncher.SJS_SUPERVISE_MODE_KEY -> "true")
+       val contextConfMap = baseContextMap
+       val launcher = new ManagerLauncher(buildConfig(systemConfMap), buildConfig(contextConfMap), "", "", "", stubbedSparkLauncher, environment)
+
+       launcher.start()
+
+       stubbedSparkLauncher.getLauncherConfig().containsValue(StubbedSparkLauncher.SPARK_DRIVER_SUPERVISE, "--supervise") should be (true)
+       stubbedSparkLauncher.getLauncherConfig().containsValue("--conf", "spark.driver.supervise=true") should be (false)
+     }
+
+     it("should not set supervise flag if supervise mode is disabled in system config and context config doesn't have a value defined") {
+       val systemConfMap = Map("spark.master" -> "local[4]", "spark.submit.deployMode" -> "cluster", ManagerLauncher.SJS_SUPERVISE_MODE_KEY -> "false")
+       val contextConfMap = baseContextMap
+       val launcher = new ManagerLauncher(buildConfig(systemConfMap), buildConfig(contextConfMap), "", "", "", stubbedSparkLauncher, environment)
+
+       launcher.start()
+
+       stubbedSparkLauncher.getLauncherConfig().containsValue(StubbedSparkLauncher.SPARK_DRIVER_SUPERVISE, "--supervise") should be (false)
+       stubbedSparkLauncher.getLauncherConfig().containsValue("--conf", "spark.driver.supervise=true") should be (false)
+     }
+
+     it("should not set supervise flag if supervise mode is enabled in system config but disabled in context config") {
+       val systemConfMap = Map("spark.master" -> "local[4]", "spark.submit.deployMode" -> "cluster", ManagerLauncher.SJS_SUPERVISE_MODE_KEY -> "true")
+       val contextConfMap = baseContextMap + (ManagerLauncher.CONTEXT_SUPERVISE_MODE_KEY -> "false")
+       val launcher = new ManagerLauncher(buildConfig(systemConfMap), buildConfig(contextConfMap), "", "", "", stubbedSparkLauncher, environment)
+
+       launcher.start()
+
+       stubbedSparkLauncher.getLauncherConfig().containsValue(StubbedSparkLauncher.SPARK_DRIVER_SUPERVISE, "--supervise") should be (false)
+       stubbedSparkLauncher.getLauncherConfig().containsValue("--conf", "spark.driver.supervise=true") should be (false)
+     }
+
+     it("should not set supervise flag if both configs don't have supervise mode enabled") {
+       val launcher = managerLauncherFunc(buildConfig(baseContextMap))
+
+       launcher.start()
+
+       stubbedSparkLauncher.getLauncherConfig().containsValue(StubbedSparkLauncher.SPARK_DRIVER_SUPERVISE, "--supervise") should be (false)
+     }
    }
 }
 
@@ -159,6 +255,7 @@ object StubbedSparkLauncher {
     final val MAIN_CLASS = "fake.spark.main.class"
     final val APP_ARGS = "fake.spark.app.args"
     final val SPARK_ARGS = "fake.spark.conf"
+    final val SPARK_DRIVER_SUPERVISE = "fake.spark.driver.supervise"
 }
 
 class StubbedSparkLauncher extends SparkLauncher {
@@ -204,6 +301,11 @@ class StubbedSparkLauncher extends SparkLauncher {
 
       override def addSparkArg(key: String, value: String): SparkLauncher = {
         launcherConfig.put(key, value)
+        null
+      }
+
+      override def addSparkArg(value: String): SparkLauncher = {
+        launcherConfig.put(StubbedSparkLauncher.SPARK_DRIVER_SUPERVISE, value)
         null
       }
 
