@@ -11,7 +11,7 @@ import spark.jobserver.io._
 import spray.client.pipelining._
 import JobServerSprayProtocol._
 import org.scalatest.time.{Seconds, Span}
-import spray.http.{ContentType, HttpHeader, HttpHeaders, MediaTypes}
+import spray.http.{ContentType, HttpHeader, HttpHeaders, MediaTypes, HttpRequest}
 import spray.httpx.{SprayJsonSupport, UnsuccessfulResponseException}
 import spray.routing.HttpService
 import spray.testkit.ScalatestRouteTest
@@ -151,6 +151,7 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
       case ListContexts =>  sender ! Seq("context1", "context2")
       case StopContext("none") => sender ! NoSuchContext
       case StopContext("timeout-ctx") => sender ! ContextStopError(new Throwable)
+      case StopContext("unexp-err") => sender ! UnexpectedError
       case StopContext(_)      => sender ! ContextStopped
       case AddContext("one", _) => sender ! ContextAlreadyExists
       case AddContext("custom-ctx", c) =>
@@ -161,12 +162,13 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
         c.getInt("override_me") should be(3)
         sender ! ContextInitialized
       case AddContext("initError-ctx", _) => sender ! ContextInitError(new Throwable)
+      case AddContext("unexp-err", _) => sender ! UnexpectedError
       case AddContext(_, _)     => sender ! ContextInitialized
 
       case GetContext("no-context") => sender ! NoSuchContext
-      case GetContext(_)            => sender ! (self, self)
+      case GetContext(_)            => sender ! (self)
 
-      case StartAdHocContext(_, _) => sender ! (self, self)
+      case StartAdHocContext(_, _) => sender ! (self)
 
       // These routes are part of JobManagerActor
       case StartJob("no-app", _, _, _)   =>  sender ! NoSuchApplication
@@ -202,7 +204,20 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
 
       case GetSparkContexData("context1") => sender ! SparkContexData("context1", "local-1337", Some("http://spark:4040"))
       case GetSparkContexData("context2") => sender ! SparkContexData("context2", "local-1337", None)
+      case GetSparkContexData("unexp-err") => sender ! UnexpectedError
     }
+  }
+
+  private def unexpectedErrorHelpFunction(curlCommand: HttpRequest) {
+    val p = sendReceive ~> unmarshal[JobServerResponse]
+      val valid:Future[JobServerResponse] = p(curlCommand)
+      Await.ready(valid, Duration.create(1, TimeUnit.SECONDS)).value.get match {
+        case Success(_) => fail("Should return an exception")
+        case Failure(r: UnsuccessfulResponseException) =>
+          r.response.status.intValue shouldBe 500
+          r.response.status.isFailure shouldBe true
+        case Failure(_) => fail("Should return an UnsuccessfulResponseException")
+      }
   }
 
   implicit override val patienceConfig =
@@ -282,6 +297,18 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
         r.status shouldBe "SUCCESS"
         r.result shouldBe "Context reset"
       }
+    }
+
+    it ("Should return an error when unexpected error occures at adding context") {
+      unexpectedErrorHelpFunction(Post("http://127.0.0.1:9999/contexts/unexp-err"))
+    }
+
+    it ("Should return an error when unexpected error occures at deleting context") {
+      unexpectedErrorHelpFunction(Delete("http://127.0.0.1:9999/contexts/unexp-err"))
+    }
+
+    it ("Should return an error when unexpected error occures at getting context") {
+      unexpectedErrorHelpFunction(Get("http://127.0.0.1:9999/contexts/unexp-err"))
     }
   }
 }
