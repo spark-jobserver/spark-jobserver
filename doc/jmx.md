@@ -17,4 +17,14 @@ To read JMX metrics, you can use [jconsole](http://docs.oracle.com/javase/7/docs
 - Connect with JVM using `connect pid:<pid_id>`
 - Use `list` to see all the possible mbeans
 - To get the current value of a metric use for example
-```exec bean:"\"spark.jobserver\":name=\"job-cache-size\",type=\"JobCacheImpl\"" get:Value```
+```
+exec bean:"\"spark.jobserver\":name=\"job-cache-size\",type=\"JobCacheImpl\"" get:Value
+```
+- To check the status of Akka Cluster, following commands are helpful. You can connect to master pid or slave pid.
+
+```
+desc bean:"akka:type=Cluster"
+exec bean:"akka:type=Cluster" get:Members
+exec bean:"akka:type=Cluster" get:Leader
+exec bean:"akka:type=Cluster" get:ClusterStatus
+```
