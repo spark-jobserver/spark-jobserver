@@ -81,3 +81,7 @@ MANAGER_LOGGING_OPTS="-Dlog4j.configuration=log4j-cluster.properties"
     ```
     REMOTE_JOBSERVER_DIR=<path to job-server directory> # copy of job-server directory on all mesos agent nodes 
     ```
+
+## Configuring Job Server for supervised cluster mode
+
+* Add the option akka.remote.netty.tcp.port to the related Jobserver configuration file (e.g. local.conf).

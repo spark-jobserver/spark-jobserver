@@ -97,6 +97,24 @@ class JobManagerSpec extends FunSpecLike with Matchers with BeforeAndAfter {
         makeSystem, waitForTerminationDummy)
     }
 
+    it ("shouldn't have a configuration for akka remote port") {
+      val tmpDir = Files.createTempDirectory("job-manager-sqldao").toString
+      val configFileName = writeConfigFile(Map(
+        "spark.submit.deployMode" -> "cluster",
+        "akka.remote.netty.tcp.hostname" -> "localhost",
+        "akka.remote.netty.tcp.port" -> "1337",
+        "spark.jobserver.sqldao.rootdir" -> tmpDir
+      ))
+
+      def makeSystem(config: Config): ActorSystem = {
+        config.getInt("akka.remote.netty.tcp.port") should be (0)
+        system
+      }
+
+      JobManager.start(Seq(clusterAddr, "test-manager", configFileName).toArray,
+        makeSystem, waitForTerminationDummy)
+    }
+
     it ("starts dao-manager and job manager actor") {
       val configFileName = writeConfigFile(Map(
         "spark.submit.deployMode" -> "cluster"
