@@ -50,6 +50,8 @@ object JobManager {
       val sqlDaoDirConfig = ConfigValueFactory.fromAnyRef(sqlDaoDir.toAbsolutePath.toString)
       systemConfig.withoutPath("akka.remote.netty.tcp.hostname")
                   .withValue("spark.jobserver.sqldao.rootdir", sqlDaoDirConfig)
+                  .withoutPath("akka.remote.netty.tcp.port")
+                  .withValue("akka.remote.netty.tcp.port", ConfigValueFactory.fromAnyRef(0))
     } else {
       systemConfig
     }
