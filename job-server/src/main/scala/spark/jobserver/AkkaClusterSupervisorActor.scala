@@ -74,25 +74,28 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
   logger.info("AkkaClusterSupervisor initialized on {}", selfAddress)
 
   def getActorRef(contextInfo: ContextInfo) : Option[ActorRef] = {
-    if (jobManagerActorRefs.exists(_._1 == contextInfo.id)) {
-      Some(jobManagerActorRefs(contextInfo.id))
-    } else if (contextInfo.actorAddress.nonEmpty) {
-      val finiteDuration = FiniteDuration(3, SECONDS)
-      val address = contextInfo.actorAddress.get + "/user/" +
+    contextInfo.actorAddress match {
+      case Some(address) =>
+        val actorPath = contextInfo.actorAddress.get + "/user/" +
           AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX + contextInfo.id
-      try {
-        val contextActorRefFuture = context.actorSelection(address).resolveOne(finiteDuration)
-        jobManagerActorRefs(contextInfo.id) = Await.result(contextActorRefFuture, finiteDuration)
-        Some(jobManagerActorRefs(contextInfo.id))
-      } catch {
-        case e: Exception =>
-          logger.error("Failed to resolve reference for context " + contextInfo.name
-              + " with exception " + e.getMessage)
-          None
-      }
-    } else {
-      logger.error("Reference for context " + contextInfo.name + " does not exist")
-      None
+        jobManagerActorRefs.exists(_._1 == actorPath) match {
+          case true => Some(jobManagerActorRefs(actorPath))
+          case false =>
+            val finiteDuration = FiniteDuration(3, SECONDS)
+            try {
+              val contextActorRefFuture = context.actorSelection(actorPath).resolveOne(finiteDuration)
+              jobManagerActorRefs(actorPath) = Await.result(contextActorRefFuture, finiteDuration)
+              Some(jobManagerActorRefs(actorPath))
+            } catch {
+              case e: Exception =>
+                logger.error("Failed to resolve reference for context " + contextInfo.name
+                    + " with exception " + e.getMessage)
+                None
+            }
+          }
+      case None =>
+        logger.error("Reference for context " + contextInfo.name + " does not exist")
+        None
     }
   }
 
@@ -288,7 +291,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
           logger.error("Error occurred after Terminated message was recieved")
       }
       cluster.down(actorRef.path.address)
-      jobManagerActorRefs.remove(contextId)
+      jobManagerActorRefs.remove(actorRef.path.toString())
   }
 
   private def initContext(contextConfig: Config,
