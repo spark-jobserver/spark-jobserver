@@ -49,14 +49,32 @@ class JobManagerSpec extends FunSpecLike with Matchers with BeforeAndAfter {
   implicit val timeout: Timeout = 3 seconds
 
   describe("starting job manager") {
-    it ("removes akka.remote.netty.tcp.hostname from config cluster mode") {
+    it ("removes akka.remote.netty.tcp.hostname when cluster mode is enabled and ignore-akka-hostname is true") {
       val configFileName = writeConfigFile(Map(
         "spark.submit.deployMode" -> "cluster",
+        "spark.jobserver.ignore-akka-hostname" -> "true",
         "akka.remote.netty.tcp.hostname" -> "test"
       ))
 
       def makeSystem(config: Config): ActorSystem = {
         config.hasPath("akka.remote.netty.tcp.hostname") should be(false)
+        system
+      }
+
+      JobManager.start(Seq(clusterAddr, "test-manager", configFileName).toArray,
+        makeSystem, waitForTerminationDummy)
+    }
+
+    it ("leave akka.remote.netty.tcp.hostname when cluster mode is enabled and ignore-akka-hostname is false") {
+      val configFileName = writeConfigFile(Map(
+        "spark.submit.deployMode" -> "cluster",
+        "spark.jobserver.ignore-akka-hostname" -> "false",
+        "akka.remote.netty.tcp.hostname" -> "test"
+      ))
+
+      def makeSystem(config: Config): ActorSystem = {
+        config.hasPath("akka.remote.netty.tcp.hostname") should be(true)
+        config.getString("akka.remote.netty.tcp.hostname") should be ("test")
         system
       }
 
