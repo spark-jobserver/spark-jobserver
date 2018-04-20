@@ -34,8 +34,6 @@ fi
 DEPLOY_HOSTS="localhost"
 
 INSTALL_DIR="$DSE_COMPONENTS_ROOT/spark/spark-jobserver"
-LOG_DIR=/var/log/spark/job-server
+LOG_DIR="${LOG_DIR:-"$HOME/.spark-jobserver"}"
 
 PIDFILE=spark-jobserver.pid
-
-SPARK_CONF_DIR=${SPARK_CONF_DIR:-"$SPARK_HOME/conf"}
