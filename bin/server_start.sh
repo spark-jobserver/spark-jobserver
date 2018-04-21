@@ -20,10 +20,7 @@ get_abs_script_path
 
 . $appdir/setenv.sh
 
-GC_OPTS="-XX:+UseConcMarkSweepGC
-         -verbose:gc -XX:+PrintGCTimeStamps -Xloggc:$appdir/gc.out
-         -XX:MaxPermSize=512m
-         -XX:+CMSClassUnloadingEnabled "
+GC_OPTS="-XX:+UseG1GC -verbose:gc -XX:+PrintGCTimeStamps -Xloggc:$appdir/gc.out"
 
 # To truly enable JMX in AWS and other containerized environments, also need to set
 # -Djava.rmi.server.hostname equal to the hostname in that environment.  This is specific

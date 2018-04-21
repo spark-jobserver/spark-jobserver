@@ -13,10 +13,7 @@ get_abs_script_path
 
 . $appdir/setenv.sh
 
-GC_OPTS="-XX:+UseConcMarkSweepGC
-         -verbose:gc -XX:+PrintGCTimeStamps
-         -XX:MaxPermSize=512m
-         -XX:+CMSClassUnloadingEnabled "
+GC_OPTS="-XX:+UseG1GC -verbose:gc -XX:+PrintGCDateStamps"
 
 JAVA_OPTS="-XX:MaxDirectMemorySize=$MAX_DIRECT_MEMORY
            -XX:+HeapDumpOnOutOfMemoryError -Djava.net.preferIPv4Stack=true"
