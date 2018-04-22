@@ -3,6 +3,7 @@ package spark.jobserver
 import java.io.{File, IOException}
 import java.nio.charset.Charset
 import java.nio.file.{Files, Paths}
+import java.util.concurrent.TimeUnit
 
 import akka.actor.{ActorSystem, Address, AddressFromURIString, Props}
 import akka.cluster.Cluster
@@ -13,6 +14,7 @@ import spark.jobserver.common.akka.actor.ProductionReaper
 import spark.jobserver.io.{JobDAO, JobDAOActor}
 import scala.collection.JavaConverters._
 import scala.util.Try
+import scala.concurrent.duration.FiniteDuration
 
 /**
  * The JobManager is the main entry point for the forked JVM process running an individual
@@ -63,13 +65,13 @@ object JobManager {
     logger.info("Starting JobManager named " + managerName + " with config {}",
       config.getConfig("spark").root.render())
 
-    val masterAddress = if (systemConfig.getBoolean("spark.jobserver.kill-context-on-supervisor-down")) {
-      clusterAddress.toString + "/user/context-supervisor"
-    } else {
-      ""
+    val masterAddress = systemConfig.getBoolean("spark.jobserver.kill-context-on-supervisor-down") match {
+      case true => clusterAddress.toString + "/user/context-supervisor"
+      case false => ""
     }
 
-    val jobManager = system.actorOf(JobManagerActor.props(daoActor, masterAddress), managerName)
+    val jobManager = system.actorOf(JobManagerActor.props(daoActor, masterAddress,
+        getManagerInitializationTimeout(systemConfig)), managerName)
 
     //Join akka cluster
     logger.info("Joining cluster at address {}", clusterAddress)
@@ -107,6 +109,11 @@ object JobManager {
     }
 
     start(args, makeManagerSystem("JobServer"), waitForTermination)
+  }
+
+   private def getManagerInitializationTimeout(config: Config): FiniteDuration = {
+    FiniteDuration(config.getDuration("spark.jobserver.manager-initialization-timeout",
+        TimeUnit.MILLISECONDS), TimeUnit.MILLISECONDS)
   }
 }
 

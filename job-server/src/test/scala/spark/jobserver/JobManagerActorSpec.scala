@@ -2,13 +2,14 @@ package spark.jobserver
 
 import java.io.File
 import java.nio.file.{Files, StandardOpenOption}
-import akka.actor.{Props, ActorRef}
+import akka.actor.{Props, ActorRef, ActorIdentity, ReceiveTimeout, PoisonPill}
 
 import com.typesafe.config.{Config, ConfigFactory}
 import spark.jobserver.DataManagerActor.RetrieveData
 import spark.jobserver.JobManagerActor.KillJob
 import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.io.{BinaryType, JobDAOActor}
+import spark.jobserver.ContextSupervisor.{AddContext, ContextInitialized}
 
 import scala.collection.mutable
 
@@ -43,6 +44,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
   after {
     AkkaTestUtils.shutdownAndWait(manager)
+    Option(supervisor).foreach(AkkaTestUtils.shutdownAndWait(_))
   }
 
   describe("starting jobs") {
@@ -312,35 +314,81 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       expectMsgClass(startJobWait, classOf[CommonMessages.JobValidationFailed])
       expectNoMsg()
     }
+  }
 
-    it("should kill itself if the master is down") {
-        val dataManager = system.actorOf(Props.empty)
+  describe("kill-context-on-supervisor-down feature tests") {
+    it("should not kill itself if kill-context-on-supervisor-down is disabled") {
+      manager = system.actorOf(JobManagerActor.props(daoActor, "", 1.seconds.dilated))
+      val managerProbe = TestProbe()
+      managerProbe.watch(manager)
 
-        supervisor = system.actorOf(
-            Props(classOf[LocalContextSupervisorActor], TestProbe().ref, dataManager), "context-supervisor")
-        val managerWithMasterAddress = system.actorOf(JobManagerActor.props(daoActor,
-            s"${supervisor.path.address.toString}${supervisor.path.toStringWithoutAddress}"))
-
-        val supervisorProbe = TestProbe()
-        supervisorProbe.watch(supervisor)
-
-        val managerProbe = TestProbe()
-        managerProbe.watch(managerWithMasterAddress)
-
-        Thread.sleep(2000) // Wait for manager actor to initialize and add a watch
-        supervisor ! akka.actor.PoisonPill
-        supervisorProbe.expectTerminated(supervisor)
-
-        managerProbe.expectTerminated(managerWithMasterAddress, 5.seconds.dilated)
+      managerProbe.expectNoMsg(2.seconds.dilated)
     }
 
-    it("should kill itself if response to Identify message is not received") {
-        val managerWithDummyMasterAddress = system.actorOf(JobManagerActor.props(
-            daoActor, "fake-path", 2.seconds.dilated))
+    it("should kill itself if response to Identify message is not received when kill-context-on-supervisor-down is enabled") {
+      manager = system.actorOf(JobManagerActor.props(daoActor, "fake-path", 1.seconds.dilated))
+      val managerProbe = TestProbe()
+      managerProbe.watch(manager)
 
-        val managerProbe = TestProbe()
-        managerProbe.watch(managerWithDummyMasterAddress)
-        managerProbe.expectTerminated(managerWithDummyMasterAddress, 3.seconds.dilated)
+      managerProbe.expectTerminated(manager, 2.seconds.dilated)
+    }
+
+    it("should kill itself if the master is down") {
+      val dataManagerActor = system.actorOf(Props.empty)
+
+      // A valid actor which responds to Identify message sent by JobManagerActor
+      supervisor = system.actorOf(
+          Props(classOf[LocalContextSupervisorActor], TestProbe().ref, dataManagerActor), "context-supervisor")
+      manager = system.actorOf(JobManagerActor.props(daoActor,
+          s"${supervisor.path.address.toString}${supervisor.path.toStringWithoutAddress}", 3.seconds.dilated))
+
+      val supervisorProbe = TestProbe()
+      supervisorProbe.watch(supervisor)
+
+      val managerProbe = TestProbe()
+      managerProbe.watch(manager)
+
+      Thread.sleep(2000) // Wait for manager actor to initialize and add a watch
+      supervisor ! PoisonPill
+
+      supervisorProbe.expectTerminated(supervisor)
+      managerProbe.expectTerminated(manager, 4.seconds.dilated)
+    }
+
+    it("should kill itself if Initialize message is not received") {
+      val dataManagerActor = system.actorOf(Props.empty)
+
+      supervisor = system.actorOf(
+          Props(classOf[LocalContextSupervisorActor], TestProbe().ref, dataManagerActor), "context-supervisor")
+      manager = system.actorOf(JobManagerActor.props(daoActor,
+          s"${supervisor.path.address.toString}${supervisor.path.toStringWithoutAddress}", 2.seconds.dilated))
+
+      val managerProbe = TestProbe()
+      managerProbe.watch(manager)
+
+      // supervisor not sending a message is equal to message not received in manager
+
+      // Since, ReceiveTimeout and ActorIdentity are internal messages, there is no
+      // direct way to verify them. We can only verify the effect that it gets killed.
+      managerProbe.expectTerminated(manager, 3.seconds.dilated)
+    }
+
+    it("should not kill itself if Initialize message is received") {
+      val dataManagerActor = system.actorOf(Props.empty)
+
+      supervisor = system.actorOf(
+          Props(classOf[LocalContextSupervisorActor], TestProbe().ref, dataManagerActor), "context-supervisor")
+      manager = system.actorOf(JobManagerActor.props(daoActor,
+          s"${supervisor.path.address.toString}${supervisor.path.toStringWithoutAddress}", 3.seconds.dilated))
+      // Wait for Identify/ActorIdentify message exchange
+      Thread.sleep(2000)
+      val managerProbe = TestProbe()
+      managerProbe.watch(manager)
+
+      manager ! JobManagerActor.Initialize(contextConfig, None, TestProbe().ref)
+
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+      managerProbe.expectNoMsg(4.seconds.dilated)
     }
   }
 
