@@ -111,6 +111,12 @@ lazy val jobServerTestJarSettings = Seq(
   exportJars := true        // use the jar instead of target/classes
 )
 
+lazy val noPublishSettings = Seq(
+  publishTo := Some(Resolver.file("Unused repo", file("target/unusedrepo"))),
+  publishArtifact := false,
+  publish := {}
+)
+
 lazy val dockerSettings = Seq(
   // Make the docker task depend on the assembly task, which generates a fat JAR file
   docker <<= (docker dependsOn (assembly in jobServerExtras)),
