@@ -19,6 +19,7 @@ import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory, ConfigRen
 import org.scalatest.{Matchers, FunSpec, BeforeAndAfter, BeforeAndAfterAll, FunSpecLike}
 import org.joda.time.DateTime
 import scala.concurrent.Await
+import scala.reflect.ClassTag
 
 object AkkaClusterSupervisorActorSpec {
   // All the Actors System should have the same name otherwise they cannot form a cluster
@@ -73,11 +74,14 @@ object AkkaClusterSupervisorActorSpec {
 
 object StubbedAkkaClusterSupervisorActor {
   case class AddContextToContextInitInfos(contextName: String)
+  case object DisableDAOCommunication
+  case object EnableDAOCommunication
 }
 
 class StubbedAkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef, managerProbe: TestProbe)
         extends AkkaClusterSupervisorActor(daoActor, dataManagerActor) {
 
+  var daoCommunicationDisabled = false
   def createSlaveClusterWithJobManager(contextName: String, contextConfig: Config): (Cluster, ActorRef) = {
     val managerConfig = ConfigFactory.parseString("akka.cluster.roles=[manager],akka.remote.netty.tcp.port=0").withFallback(config)
     val managerSystem = ActorSystem(AkkaClusterSupervisorActorSpec.ACTOR_SYSTEM_NAME, managerConfig)
@@ -106,6 +110,17 @@ class StubbedAkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: Ac
   def stubbedWrappedReceive: Receive = {
     case StubbedAkkaClusterSupervisorActor.AddContextToContextInitInfos(name) =>
       contextInitInfos(name) = ({ref=>}, {ref=>})
+    case StubbedAkkaClusterSupervisorActor.DisableDAOCommunication =>
+      daoCommunicationDisabled = true
+    case StubbedAkkaClusterSupervisorActor.EnableDAOCommunication =>
+      daoCommunicationDisabled = false
+  }
+
+  override def getDataFromDAO[T: ClassTag](msg: JobDAOActor.JobDAORequest): Option[T] = {
+    daoCommunicationDisabled match {
+      case true => None
+      case false => super.getDataFromDAO[T](msg)
+    }
   }
 }
 
@@ -163,7 +178,6 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       case contexts: Seq[_] => contexts.foreach(stopContext(_))
       case _ =>
     }
-    daoActor = system.actorOf(JobDAOActor.props(dao))
   }
 
   describe("Context create tests") {
@@ -288,21 +302,24 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       deathWatch.watch(managerProbe.ref)
 
       supervisor ! StubbedAkkaClusterSupervisorActor.AddContextToContextInitInfos(contextActorName)
-      daoActor ! PoisonPill // Simulate DAO failure
-      supervisor ! ActorIdentity(unusedDummyInput, Some(managerProbe.ref))
+      supervisor ! StubbedAkkaClusterSupervisorActor.DisableDAOCommunication // Simulate DAO failure
 
+      supervisor ! ActorIdentity(unusedDummyInput, Some(managerProbe.ref))
       deathWatch.expectTerminated(managerProbe.ref)
+
+      supervisor ! StubbedAkkaClusterSupervisorActor.EnableDAOCommunication
     }
 
     it("should kill context JVM if DB call had an exception and callbacks are not available") {
       val managerProbe = TestProbe("jobManager-dummy")
       val deathWatch = TestProbe()
       deathWatch.watch(managerProbe.ref)
+      supervisor ! StubbedAkkaClusterSupervisorActor.DisableDAOCommunication // Simulate DAO failure
 
-      daoActor ! PoisonPill // Simulate DAO failure
       supervisor ! ActorIdentity(unusedDummyInput, Some(managerProbe.ref))
-
       deathWatch.expectTerminated(managerProbe.ref)
+
+      supervisor ! StubbedAkkaClusterSupervisorActor.EnableDAOCommunication
     }
   }
 
