@@ -6,7 +6,7 @@ import akka.testkit._
 import com.typesafe.config.ConfigFactory
 import spark.jobserver.CommonMessages._
 import spark.jobserver.context.JavaStreamingContextFactory
-import spark.jobserver.io.{JobDAOActor, JobInfo}
+import spark.jobserver.io.{JobDAOActor, JobInfo, JobStatus}
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -50,7 +50,7 @@ class JavaStreamingSpec extends ExtrasJobSpecBase(JavaStreamingSpec.getNewSystem
       Thread.sleep(1000)
       val info = Await.result(dao.getJobInfo(id), 60 seconds)
       info.get match {
-        case JobInfo(_, _, _, _, _, None, _) => {}
+        case JobInfo(_, _, _, _, _, state, _, _, _) if state == JobStatus.Running => {}
         case e => fail(s":-( No worky work $e")
       }
     }

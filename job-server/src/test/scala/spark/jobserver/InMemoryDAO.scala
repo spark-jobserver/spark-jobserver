@@ -99,8 +99,14 @@ class InMemoryDAO extends JobDAO {
     filterJobs.take(limit)
   }
 
-  override def getRunningJobInfosForContextName(contextName: String): Future[Seq[JobInfo]] = Future {
-    jobInfos.values.toSeq.filter(j => j.endTime.isEmpty && j.error.isEmpty && j.contextName == contextName)
+  override def getJobInfosByContextId(
+      contextId: String, jobStatus: Option[String] = None): Future[Seq[JobInfo]] = Future {
+    jobInfos.values.toSeq.filter(j => {
+      (contextId, jobStatus) match {
+        case (contextId, Some(status)) => contextId == j.contextId && status == j.state
+        case _ => contextId == j.contextId
+      }
+    })
   }
 
   override def getJobInfo(jobId: String): Future[Option[JobInfo]] = Future {

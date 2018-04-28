@@ -268,7 +268,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
           val contextInfo = ContextInfo(c.id, c.name, c.config, c.actorAddress, c.startTime,
                 Option(DateTime.now()), state, c.error)
           daoActor ! JobDAOActor.SaveContextInfo(contextInfo)
-          daoActor ! JobDAOActor.CleanContextJobInfos(c.name, DateTime.now())
+          daoActor ! JobDAOActor.CleanContextJobInfos(c.id, DateTime.now())
         case Some(JobDAOActor.ContextResponse(None)) =>
           logger.error("No context for deletion is found in the DB")
         case None =>

@@ -15,7 +15,7 @@ import org.joda.time.DateTime
 import org.scalactic._
 import spark.jobserver.api.{JobEnvironment, DataFileCache}
 import spark.jobserver.context.{JobContainer, SparkContextFactory}
-import spark.jobserver.io.{BinaryInfo, JobDAOActor, JobInfo, RemoteFileCache}
+import spark.jobserver.io.{BinaryInfo, JobDAOActor, JobInfo, RemoteFileCache, JobStatus}
 import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -52,9 +52,9 @@ object JobManagerActor {
 
 
   // Akka 2.2.x style actor props for actor creation
-  def props(daoActor: ActorRef, supervisorActorAddress: String = "",
+  def props(daoActor: ActorRef, supervisorActorAddress: String = "", contextId: String = "",
       initializationTimeout: FiniteDuration = 40.seconds): Props =
-      Props(classOf[JobManagerActor], daoActor, supervisorActorAddress, initializationTimeout)
+      Props(classOf[JobManagerActor], daoActor, supervisorActorAddress, contextId, initializationTimeout)
 }
 
 /**
@@ -85,7 +85,7 @@ object JobManagerActor {
  *   }
  * }}}
  */
-class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String,
+class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contextId: String,
     initializationTimeout: FiniteDuration) extends InstrumentedActor {
 
   import CommonMessages._
@@ -342,7 +342,8 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String,
     statusActor ! Subscribe(jobId, sender, events)
 
     val binInfo = BinaryInfo(appName, binaryType, lastUploadTime)
-    val jobInfo = JobInfo(jobId, contextName, binInfo, classPath, DateTime.now(), None, None)
+    val jobInfo = JobInfo(jobId, contextId, contextName, binInfo, classPath,
+        JobStatus.Running, DateTime.now(), None, None)
 
     Some(getJobFuture(jobContainer, jobInfo, jobConfig, sender, jobContext, sparkEnv))
   }

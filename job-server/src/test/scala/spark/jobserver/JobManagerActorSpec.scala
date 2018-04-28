@@ -29,6 +29,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
   val counts = sentence.split(" ").groupBy(x => x).mapValues(_.length)
   protected val stringConfig = ConfigFactory.parseString(s"input.string = $sentence")
   protected val emptyConfig = ConfigFactory.parseString("spark.master = bar")
+  val contextId = java.util.UUID.randomUUID().toString()
 
   val initMsgWait = 10.seconds.dilated
   val startJobWait = 5.seconds.dilated
@@ -39,7 +40,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
     dao = new InMemoryDAO
     daoActor = system.actorOf(JobDAOActor.props(dao))
     contextConfig = JobManagerActorSpec.getContextConfig(adhoc = false)
-    manager = system.actorOf(JobManagerActor.props(daoActor))
+    manager = system.actorOf(JobManagerActor.props(daoActor, "", contextId, 40.seconds))
   }
 
   after {
@@ -119,6 +120,26 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       uploadTestJar()
       manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, errorEvents ++ asyncEvents)
       expectMsgClass(startJobWait, classOf[JobStarted])
+      expectNoMsg()
+    }
+
+    it("should start job, return JobStarted (async) and write context id and status to DAO") {
+      import scala.concurrent.Await
+      import spark.jobserver.io.JobStatus
+
+      val configWithCtxId = ConfigFactory.parseString(s"context.id=$contextId").withFallback(contextConfig)
+      manager ! JobManagerActor.Initialize(configWithCtxId, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+      uploadTestJar()
+
+      manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, errorEvents ++ asyncEvents)
+
+      expectMsgClass(startJobWait, classOf[JobStarted])
+      val jobInfo = Await.result(dao.getJobInfosByContextId(contextId), 5.seconds)
+      jobInfo should not be (None)
+      jobInfo.length should be (1)
+      jobInfo.head.contextId should be (contextId)
+      jobInfo.head.state should be (JobStatus.Running)
       expectNoMsg()
     }
 
@@ -318,7 +339,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
   describe("kill-context-on-supervisor-down feature tests") {
     it("should not kill itself if kill-context-on-supervisor-down is disabled") {
-      manager = system.actorOf(JobManagerActor.props(daoActor, "", 1.seconds.dilated))
+      manager = system.actorOf(JobManagerActor.props(daoActor, "", contextId, 1.seconds.dilated))
       val managerProbe = TestProbe()
       managerProbe.watch(manager)
 
@@ -326,7 +347,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
     }
 
     it("should kill itself if response to Identify message is not received when kill-context-on-supervisor-down is enabled") {
-      manager = system.actorOf(JobManagerActor.props(daoActor, "fake-path", 1.seconds.dilated))
+      manager = system.actorOf(JobManagerActor.props(daoActor, "fake-path", contextId, 1.seconds.dilated))
       val managerProbe = TestProbe()
       managerProbe.watch(manager)
 
@@ -340,7 +361,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       supervisor = system.actorOf(
           Props(classOf[LocalContextSupervisorActor], TestProbe().ref, dataManagerActor), "context-supervisor")
       manager = system.actorOf(JobManagerActor.props(daoActor,
-          s"${supervisor.path.address.toString}${supervisor.path.toStringWithoutAddress}", 3.seconds.dilated))
+          s"${supervisor.path.address.toString}${supervisor.path.toStringWithoutAddress}", contextId, 3.seconds.dilated))
 
       val supervisorProbe = TestProbe()
       supervisorProbe.watch(supervisor)
@@ -361,7 +382,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       supervisor = system.actorOf(
           Props(classOf[LocalContextSupervisorActor], TestProbe().ref, dataManagerActor), "context-supervisor")
       manager = system.actorOf(JobManagerActor.props(daoActor,
-          s"${supervisor.path.address.toString}${supervisor.path.toStringWithoutAddress}", 2.seconds.dilated))
+          s"${supervisor.path.address.toString}${supervisor.path.toStringWithoutAddress}", contextId, 2.seconds.dilated))
 
       val managerProbe = TestProbe()
       managerProbe.watch(manager)
@@ -379,7 +400,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       supervisor = system.actorOf(
           Props(classOf[LocalContextSupervisorActor], TestProbe().ref, dataManagerActor), "context-supervisor")
       manager = system.actorOf(JobManagerActor.props(daoActor,
-          s"${supervisor.path.address.toString}${supervisor.path.toStringWithoutAddress}", 3.seconds.dilated))
+          s"${supervisor.path.address.toString}${supervisor.path.toStringWithoutAddress}", contextId, 3.seconds.dilated))
       // Wait for Identify/ActorIdentify message exchange
       Thread.sleep(2000)
       val managerProbe = TestProbe()

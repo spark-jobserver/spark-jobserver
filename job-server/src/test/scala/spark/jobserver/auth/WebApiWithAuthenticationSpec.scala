@@ -5,7 +5,7 @@ import akka.testkit.TestKit
 import com.typesafe.config.{ ConfigFactory, ConfigValueFactory }
 import spark.jobserver._
 import spark.jobserver.util.SparkJobUtils
-import spark.jobserver.io.{BinaryType, BinaryInfo, JobInfo}
+import spark.jobserver.io.{BinaryType, BinaryInfo, JobInfo, JobStatus}
 import org.joda.time.DateTime
 import org.scalatest.{ Matchers, FunSpec, BeforeAndAfterAll }
 import spray.http.StatusCodes._
@@ -125,8 +125,8 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
   private val authorizationInvalidPassword = new Authorization(new BasicHttpCredentials(USER_NAME, "xxx"))
   private val authorizationUnknownUser = new Authorization(new BasicHttpCredentials("whoami", "xxx"))
   private val dt = DateTime.parse("2013-05-29T00Z")
-  private val jobInfo =
-    JobInfo("foo-1", "context", BinaryInfo("demo", BinaryType.Jar, dt), "com.abc.meme", dt, None, None)
+  private val jobInfo = JobInfo("foo-1", "cid", "context", BinaryInfo("demo", BinaryType.Jar, dt), "com.abc.meme",
+      JobStatus.Running, dt, None, None)
   private val ResultKey = "result"
 
   private val addedContexts = new scala.collection.mutable.HashSet[String] with SynchronizedSet[String]

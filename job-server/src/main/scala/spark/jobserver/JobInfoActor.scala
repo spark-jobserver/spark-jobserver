@@ -5,7 +5,7 @@ import akka.pattern.ask
 import akka.util.Timeout
 import com.typesafe.config.Config
 import spark.jobserver.common.akka.InstrumentedActor
-import spark.jobserver.io.JobDAO
+import spark.jobserver.io.{JobDAO, JobStatus}
 
 object JobInfoActor {
   // Requests
@@ -47,7 +47,7 @@ class JobInfoActor(jobDao: JobDAO, contextSupervisor: ActorRef) extends Instrume
 
       jobDao.getJobInfo(jobId).collect {
         case Some(jobInfo) =>
-          if (jobInfo.isRunning || jobInfo.isErroredOut) {
+          if (jobInfo.state != JobStatus.Finished) {
             originator ! jobInfo
           } else {
             // get the context from jobInfo
