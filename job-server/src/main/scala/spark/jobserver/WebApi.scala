@@ -241,7 +241,7 @@ class WebApi(system: ActorSystem,
             case (app, (binType, dt)) =>
               (app, Map("binary-type" -> binType.name, "upload-time" -> dt.toString()))
           }.toMap
-          logger.info(stringTimeMap.toString());
+          logger.info(s"Total number of binaries available: ${stringTimeMap.size}")
           ctx.complete(stringTimeMap)
         }.recover {
           case e: Exception => logAndComplete(ctx, "ERROR", 500, e);
@@ -681,6 +681,8 @@ class WebApi(system: ActorSystem,
                 }
                 logger.info("Number of jobs in JobReport: " + jobReport.length);
                 ctx.complete(jobReport)
+              }.recover {
+                case e: Exception => logAndComplete(ctx, "ERROR", 500, e)
               }
             }
           }
@@ -774,14 +776,12 @@ class WebApi(system: ActorSystem,
                     case e: NoSuchElementException =>
                       val stcode = StatusCodes.NotFound;
                       val errMes = "context " + contextOpt.get + " not found";
-                      logger.info("StatusCode: " + stcode + ", ErrorMessage: " + errMes
-                            + ", StackTrace: " + ErrorData.getStackTrace(e));
+                      logger.info(s"StatusCode: $stcode, ErrorMessage: $errMes, Message: ${e.getMessage}")
                       complete(stcode, errMap(errMes))
                     case e: ConfigException =>
                       val stcode = StatusCodes.BadRequest;
                       val errMes = "Cannot parse config: " + e.getMessage;
-                      logger.info("StatusCode: " + stcode + ", ErrorMessage: " + errMes
-                            + ", StackTrace: " + ErrorData.getStackTrace(e));
+                      logger.info(s"StatusCode: $stcode, ErrorMessage: $errMes, Message: ${e.getMessage}")
                       complete(stcode, errMap(errMes))
                     case e: Exception =>
                       val stcode = 500;
