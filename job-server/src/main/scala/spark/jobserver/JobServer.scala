@@ -65,6 +65,8 @@ object JobServer {
     val driverMode = config.getString("spark.submit.deployMode")
     val contextPerJvm = config.getBoolean("spark.jobserver.context-per-jvm")
     val jobDaoClass = Class.forName(config.getString("spark.jobserver.jobdao"))
+    val superviseModeEnabled = config.getBoolean("spark.driver.supervise")
+    val akkaTcpPort = config.getInt("akka.remote.netty.tcp.port")
 
     // ensure context-per-jvm is enabled
     if (sparkMaster.startsWith("yarn") && !contextPerJvm) {
@@ -74,6 +76,9 @@ object JobServer {
     } else if (driverMode == "cluster" && !contextPerJvm) {
       throw new InvalidConfiguration("Cluster mode requires context-per-jvm")
     }
+
+    // TODO: This should be removed once auto-discovery is introduced in SJS
+    checkIfAkkaTcpPortSpecifiedForSuperviseMode(driverMode, superviseModeEnabled, akkaTcpPort)
 
     // Check if we are using correct DB backend when context-per-jvm is enabled.
     // JobFileDAO and H2 mem is not supported.
@@ -215,6 +220,13 @@ object JobServer {
           sys.error(s"Failed to store initial binaries: ${ex.getMessage}")
         case _ =>
       }
+    }
+  }
+
+  private def checkIfAkkaTcpPortSpecifiedForSuperviseMode(driverMode: String,
+      superviseModeEnabled: Boolean, akkaTcpPort: Int) {
+    if (driverMode == "cluster" && superviseModeEnabled == true && akkaTcpPort == 0) {
+      throw new InvalidConfiguration("Supervise mode requires akka.remote.netty.tcp.port to be hardcoded")
     }
   }
 

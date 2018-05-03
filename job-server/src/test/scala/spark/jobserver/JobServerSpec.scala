@@ -60,6 +60,20 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
       }
     }
 
+   it("requires akka.remote.netty.tcp.port in supervise mode") {
+      val configFileName = writeConfigFile(Map(
+        "spark.submit.deployMode" -> "cluster",
+        "spark.jobserver.context-per-jvm" -> true,
+        "spark.driver.supervise" -> true,
+        "akka.remote.netty.tcp.port" -> 0))
+
+      val invalidConfException = intercept[InvalidConfiguration] {
+        JobServer.start(Seq(configFileName).toArray, makeSupervisorSystem(_))
+      }
+      invalidConfException.getMessage should
+        be("Supervise mode requires akka.remote.netty.tcp.port to be hardcoded")
+    }
+
     it("requires context-per-jvm in Mesos mode") {
       val configFileName = writeConfigFile(Map(
         "spark.master " -> "mesos://test:123",
