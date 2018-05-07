@@ -9,3 +9,9 @@ final case class InternalServerErrorException(id: String) extends
 
 final case class NoCallbackFoundException(id: String, actorPath: String) extends
   Exception(s"Callback methods not found for actor with id=$id, path=$actorPath")
+
+final case class NoJobConfigFoundException(jobId: String) extends
+  Exception(s"Failed to load config for job with id: $jobId")
+
+final case class UnexpectedMessageReceivedException(jobId: String) extends
+  Exception(s"Received unexpected message for job $jobId")

@@ -28,6 +28,7 @@ object ContextSupervisor {
   case class GetResultActor(name: String)  // returns JobResultActor
   case class StopContext(name: String)
   case class GetSparkContexData(name: String)
+  case class RestartOfTerminatedJobsFailed(contextId: String)
 
   // Errors/Responses
   case object ContextInitialized

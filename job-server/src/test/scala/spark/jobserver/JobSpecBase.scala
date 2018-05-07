@@ -27,6 +27,7 @@ trait JobSpecConfig {
   lazy val config = {
     val ConfigMap = Map(
       "spark.jobserver.job-result-cache-size" -> JobResultCacheSize,
+      "spark.jobserver.dao-timeout" -> "3s",
       "num-cpu-cores" -> NumCpuCores,
       "memory-per-node" -> MemoryPerNode,
       "spark.jobserver.max-jobs-per-context" -> MaxJobsPerContext,
