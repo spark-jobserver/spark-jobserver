@@ -362,9 +362,35 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
       dao.saveJobInfo(finishedJob)
       dao.saveJobInfo(runningJob)
 
-      val results = Await.result(dao.getJobInfosByContextId(contextId, Some(JobStatus.Finished)), timeout)
+      val results = Await.result(dao.getJobInfosByContextId(contextId, Some(Seq(JobStatus.Finished))), timeout)
       results should have size 1
       results.head.jobId shouldBe finishedJob.jobId //Jobid is unique
+    }
+
+    it("retrieve finished and running jobs by context id") {
+      val contextId = UUIDs.random().toString
+      val finishedJob = genJobInfo(jarInfo, true, JobStatus.Finished, "context", contextId)
+      val runningJob = genJobInfo(jarInfo, true, JobStatus.Running, "context", contextId)
+      val errorJob = genJobInfo(jarInfo, true, JobStatus.Error, "context", contextId)
+      dao.saveJobInfo(finishedJob)
+      dao.saveJobInfo(runningJob)
+      dao.saveJobInfo(errorJob)
+
+      val results = Await.result(dao.getJobInfosByContextId(
+          contextId, Some(Seq(JobStatus.Finished, JobStatus.Running))), timeout)
+      results should have size 2
+      results should contain allElementsOf(List(runningJob, finishedJob))
+    }
+
+    it("should retrieve nothing if no job with the specified status exist") {
+      val contextId = UUID.randomUUID().toString()
+      val runningJob = genJobInfo(jarInfo, true, JobStatus.Running, "context", contextId)
+      dao.saveJobInfo(runningJob)
+
+      val results = Await.result(
+          dao.getJobInfosByContextId(contextId, Some(Seq(JobStatus.Killed, JobStatus.Finished))), timeout)
+
+      results shouldBe empty
     }
 
     it("should clean jobs for given context id") {
