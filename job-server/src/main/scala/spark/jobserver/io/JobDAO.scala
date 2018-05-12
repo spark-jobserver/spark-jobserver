@@ -64,19 +64,30 @@ object ErrorData {
 
 // Both a response and used to track job progress
 // NOTE: if endTime is not None, then the job has finished.
-case class JobInfo(jobId: String, contextName: String,
-                   binaryInfo: BinaryInfo, classPath: String,
+case class JobInfo(jobId: String, contextId: String, contextName: String,
+                   binaryInfo: BinaryInfo, classPath: String, state: String,
                    startTime: DateTime, endTime: Option[DateTime],
                    error: Option[ErrorData]) {
   def jobLengthMillis: Option[Long] = endTime.map { end => new Duration(startTime, end).getMillis }
-
-  def isRunning: Boolean = endTime.isEmpty
-  def isErroredOut: Boolean = endTime.isDefined && error.isDefined
 }
+
+case class ContextInfo(id: String, name: String,
+                   config: String, actorAddress: Option[String],
+                   startTime: DateTime, endTime: Option[DateTime],
+                   state: String, error: Option[Throwable])
 
 object JobStatus {
   val Running = "RUNNING"
   val Error = "ERROR"
+  val Finished = "FINISHED"
+  val Started = "STARTED"
+  val Killed = "KILLED"
+}
+
+object ContextStatus {
+  val Running = "RUNNING"
+  val Error = "ERROR"
+  val Stopping = "STOPPING"
   val Finished = "FINISHED"
   val Started = "STARTED"
   val Killed = "KILLED"
@@ -122,6 +133,35 @@ trait JobDAO {
   def retrieveBinaryFile(appName: String, binaryType: BinaryType, uploadTime: DateTime): String
 
   /**
+   * Persist a context info.
+   *
+   * @param contextInfo
+   */
+  def saveContextInfo(contextInfo: ContextInfo)
+
+  /**
+   * Return context info for a specific context id.
+   *
+   * @return
+   */
+  def getContextInfo(id: String): Future[Option[ContextInfo]]
+
+   /**
+   * Return context info for a specific context name.
+   *
+   * @return
+   */
+  def getContextInfoByName(name: String): Future[Option[ContextInfo]]
+
+  /**
+   * Return context info for a "limit" number of contexts.
+   *
+   * @return
+   */
+  def getContextInfos(limit: Option[Int] = None, statusOpt: Option[String] = None):
+    Future[Seq[ContextInfo]]
+
+  /**
    * Persist a job info.
    *
    * @param jobInfo
@@ -145,7 +185,7 @@ trait JobDAO {
   /**
     * Return all job ids to their job info.
     */
-  def getRunningJobInfosForContextName(contextName: String): Future[Seq[JobInfo]]
+  def getJobInfosByContextId(contextId: String, jobStatus: Option[String] = None): Future[Seq[JobInfo]]
 
   /**
     * Move all jobs running on context with given name to error state
@@ -153,9 +193,9 @@ trait JobDAO {
     * @param contextName name of the context
     * @param endTime time to put into job infos end time column
     */
-  def cleanRunningJobInfosForContext(contextName: String, endTime: DateTime): Future[Unit] = {
-    getRunningJobInfosForContextName(contextName).map { infos =>
-      JobDAO.logger.info("cleaning {} running jobs for {}", infos.size, contextName)
+  def cleanRunningJobInfosForContext(contextId: String, endTime: DateTime): Future[Unit] = {
+    getJobInfosByContextId(contextId, Some(JobStatus.Running)).map { infos =>
+      JobDAO.logger.info("Cleaning {} running jobs for {}", infos.size, contextId)
       for (info <- infos) {
         val updatedInfo = info.copy(
           endTime = Some(endTime),

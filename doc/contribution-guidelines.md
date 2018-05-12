@@ -1,3 +1,20 @@
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
+
+- [Contribution guidelines](#contribution-guidelines)
+  - [<a name="pullrequest"></a> Pull Requests Guidelines](#a-namepullrequesta-pull-requests-guidelines)
+  - [<a name="commit"></a> Git Commit Guidelines](#a-namecommita-git-commit-guidelines)
+    - [Commit Message Format](#commit-message-format)
+      - [Type](#type)
+      - [Scope](#scope)
+      - [Subject](#subject)
+      - [Body](#body)
+      - [Footer](#footer)
+      - [Examples](#examples)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 # Contribution guidelines
 
 - [Pull Requests](#pullrequest)

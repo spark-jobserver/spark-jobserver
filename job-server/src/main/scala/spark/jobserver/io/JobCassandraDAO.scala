@@ -32,9 +32,17 @@ object Metadata {
   val ChunkIndex = "chunk_index"
   val Binary = "binary"
 
+  val ContextsTable = "contexts"
+  val OrderedContextsByNameTable = "contexts_chronological_name"
+  val OrderedContextsByStateTable = "contexts_chronological_state"
+  val ContextId = "id"
+  val ContextConfig = "config"
+  val State = "state"
+  val ActorAddress = "actor_address"
+
   val JobsTable = "jobs"
   val JobsChronologicalTable = "jobs_chronological"
-  val RunningJobsTable = "jobs_running"
+  val JobsByContextIdTable = "jobs_context_id"
   val JobId = "job_id"
   val ContextName = "context_name"
   val JobConfig = "job_config"
@@ -150,6 +158,72 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
     }
   }
 
+  override def saveContextInfo(contextInfo: ContextInfo): Unit = {
+    def fillInsert(insert: Insert): Insert = {
+      insert.
+        value(ContextId, UUID.fromString(contextInfo.id)).
+        value(ContextName, contextInfo.name).
+        value(ContextConfig, contextInfo.config).
+        value(State, contextInfo.state).
+        value(StartTime, contextInfo.startTime.getMillis)
+        contextInfo.actorAddress.foreach { address => insert.value(ActorAddress, address) }
+        contextInfo.endTime.foreach{ endTime => insert.value(EndTime, endTime.getMillis) }
+        contextInfo.error.foreach { err =>
+          insert.value(Error, err.getMessage)
+        }
+      insert
+    }
+
+    session.execute(fillInsert(insertInto(ContextsTable)))
+    session.execute(fillInsert(insertInto(OrderedContextsByNameTable)))
+    session.execute(fillInsert(insertInto(OrderedContextsByStateTable)))
+  }
+
+  override def getContextInfo(id: String): Future[Option[ContextInfo]] = {
+    val query = QB.select(
+        ContextId, ContextName, ContextConfig, ActorAddress, StartTime, EndTime,
+        State, Error).
+      from(ContextsTable).
+      where(QB.eq(ContextId, UUID.fromString(id))).
+      limit(1)
+
+    session.executeAsync(query).map { rs =>
+      val row = rs.one()
+      Option(row).map(rowToContextInfo)
+    }
+  }
+
+  override def getContextInfos(limitOpt: Option[Int] = None, statusOpt: Option[String] = None):
+    Future[Seq[ContextInfo]] = {
+    val query = QB.select(ContextId, ContextName, ContextConfig, ActorAddress, StartTime, EndTime,
+            State, Error).
+        from(OrderedContextsByStateTable)
+    val filteredQuery = (limitOpt, statusOpt) match {
+       case (Some(limit), Some(status)) => query.where(QB.eq(State, status)).limit(limit)
+       case (Some(limit), None) =>
+         throw new UnsupportedOperationException("Current cassandra model doesnot support this operation")
+       case (None, Some(status)) => query.where(QB.eq(State, status))
+       case (None, None) =>
+         throw new UnsupportedOperationException("Current cassandra model doesnot support this operation")
+     }
+
+    session.executeAsync(filteredQuery).map { rs =>
+       JListWrapper(rs.all()).map(rowToContextInfo)
+    }
+  }
+
+  override def getContextInfoByName(name: String): Future[Option[ContextInfo]] = {
+    val query = QB.select(ContextId, ContextName, ContextConfig, ActorAddress, StartTime, EndTime,
+        State, Error).
+    from(OrderedContextsByNameTable).
+    where(QB.eq(ContextName, name))
+
+    session.executeAsync(query).map { rs =>
+      val allContexts = JListWrapper(rs.all()).map(rowToContextInfo)
+      allContexts.filter(_.name == name).headOption
+    }
+  }
+
   override def saveJobConfig(jobId: String, jobConfig: Config): Unit = {
     session.executeAsync(
       insertInto(JobsTable).
@@ -160,7 +234,7 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
 
   override def getJobInfos(limit: Int, status: Option[String] = None): Future[Seq[JobInfo]] = {
     val query = QB.select(
-      JobId, ContextName, AppName, BType, UploadTime, Classpath, StartTime, EndTime,
+      JobId, ContextId, ContextName, AppName, BType, UploadTime, Classpath, State, StartTime, EndTime,
       Error, ErrorClass, ErrorStackTrace
     ).from(JobsChronologicalTable).where(QB.eq(StartDate, today())).limit(limit)
 
@@ -178,12 +252,17 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
     }
   }
 
-  override def getRunningJobInfosForContextName(contextName: String): Future[Seq[JobInfo]] = {
-    val query = QB.select(
-      JobId, ContextName, AppName, BType, UploadTime, Classpath, StartTime, EndTime,
+  override def getJobInfosByContextId(
+      contextId: String, jobStatus: Option[String] = None): Future[Seq[JobInfo]] = {
+    var query = QB.select(
+      JobId, ContextId, ContextName, AppName, BType, UploadTime, Classpath, State, StartTime, EndTime,
       Error, ErrorClass, ErrorStackTrace
-    ).from(RunningJobsTable).where(QB.eq(ContextName, contextName))
+    ).from(JobsByContextIdTable).where(QB.eq(ContextId, UUID.fromString(contextId)))
 
+    query = jobStatus match {
+      case Some(status) => query.and(QB.eq(State, status))
+      case _ => query
+    }
     session.executeAsync(query).map { rs =>
       JListWrapper(rs.all()).map(rowToJobInfo)
     }
@@ -222,6 +301,19 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
     tuples.map(_._2).foldLeft(Array[Byte]()) { _ ++ _ }
   }
 
+  private def rowToContextInfo(row: Row): ContextInfo = {
+    ContextInfo(
+      row.getUUID(ContextId).toString,
+      row.getString(ContextName),
+      row.getString(ContextConfig),
+      Option(row.getString(ActorAddress)),
+      new DateTime(row.getTimestamp(StartTime)),
+      Option(row.getTimestamp(EndTime)).map(new DateTime(_)),
+      row.getString(State),
+      Option(row.getString("Error")).map(new Exception(_))
+    )
+  }
+
   private def rowToJobInfo(row: Row): JobInfo = {
     val errorData = Option(row.getString(Error)).map { error =>
       val errorClass = if (row.isNull(ErrorClass)) "" else row.getString(ErrorClass)
@@ -230,6 +322,7 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
     }
     JobInfo(
       row.getUUID(Metadata.JobId).toString,
+      row.getUUID(ContextId).toString(),
       row.getString(ContextName),
       BinaryInfo(
         row.getString(AppName),
@@ -237,6 +330,7 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
         new DateTime(row.getTimestamp(UploadTime))
       ),
       row.getString(Classpath),
+      row.getString(State),
       new DateTime(row.getTimestamp(StartTime)),
       Option(row.getTimestamp(EndTime)).map(new DateTime(_)),
       errorData
@@ -245,7 +339,7 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
 
   override def getJobInfo(jobId: String): Future[Option[JobInfo]] = {
     val query = QB.select(
-      JobId, ContextName, AppName, BType, UploadTime, Classpath, StartTime, EndTime,
+      JobId, ContextId, ContextName, AppName, BType, UploadTime, Classpath, State, StartTime, EndTime,
       Error, ErrorClass, ErrorStackTrace
     ).from(JobsTable).
       where(QB.eq(JobId, UUID.fromString(jobId))).
@@ -258,18 +352,21 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
   }
 
   override def saveJobInfo(jobInfo: JobInfo): Unit = {
-    val JobInfo(jobId, contextName, binaryInfo, classPath, startTime, endTime, error) = jobInfo
+    val JobInfo(jobId, contextId, contextName, binaryInfo, classPath, state,
+        startTime, endTime, error) = jobInfo
 
     val localDate: LocalDate = LocalDate.fromMillisSinceEpoch(jobInfo.startTime.getMillis)
 
     def fillInsert(insert: Insert): Insert = {
       insert.
         value(JobId, UUID.fromString(jobId)).
+        value(ContextId, UUID.fromString(contextId)).
         value(ContextName, contextName).
         value(AppName, binaryInfo.appName).
         value(BType, binaryInfo.binaryType.name).
         value(UploadTime, binaryInfo.uploadTime.getMillis).
         value(Classpath, classPath).
+        value(State, state).
         value(StartTime, startTime.getMillis).
         value(StartDate, localDate)
 
@@ -284,15 +381,7 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
 
     session.execute(fillInsert(insertInto(JobsTable)))
     session.execute(fillInsert(insertInto(JobsChronologicalTable)))
-
-    if (!endTime.isDefined && !error.isDefined) {
-      session.execute(fillInsert(insertInto(RunningJobsTable)))
-    } else {
-      val deleteQuery = delete().from(RunningJobsTable)
-        .where(QB.eq(ContextName, contextName))
-        .and(QB.eq(JobId, UUID.fromString(jobId)))
-      session.execute(deleteQuery)
-    }
+    session.execute(fillInsert(insertInto(JobsByContextIdTable)))
   }
 
   override def getJobConfig(jobId: String): Future[Option[Config]] = {
@@ -357,14 +446,57 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
 
     session.execute(binariesChronologicalTable)
 
+    val contextsTableStatement = SchemaBuilder.createTable(ContextsTable).ifNotExists.
+      addPartitionKey(ContextId, DataType.uuid).
+      addClusteringColumn(StartTime, DataType.timestamp).
+      addColumn(ContextName, DataType.text).
+      addColumn(ContextConfig, DataType.text).
+      addColumn(ActorAddress, DataType.text).
+      addColumn(EndTime, DataType.timestamp).
+      addColumn(State, DataType.text).
+      addColumn(Error, DataType.text).
+      withOptions().clusteringOrder(StartTime, Direction.DESC)
+
+    session.execute(contextsTableStatement)
+
+    val orderedContextsByNameTableStatement =
+      SchemaBuilder.createTable(OrderedContextsByNameTable).ifNotExists.
+      addPartitionKey(ContextName, DataType.text).
+      addClusteringColumn(StartTime, DataType.timestamp).
+      addClusteringColumn(ContextId, DataType.uuid).
+      addColumn(ContextConfig, DataType.text).
+      addColumn(ActorAddress, DataType.text).
+      addColumn(EndTime, DataType.timestamp).
+      addColumn(State, DataType.text).
+      addColumn(Error, DataType.text).
+      withOptions().clusteringOrder(StartTime, Direction.DESC)
+
+    session.execute(orderedContextsByNameTableStatement)
+
+    val orderedContextsByStateTableStateStatement =
+      SchemaBuilder.createTable(OrderedContextsByStateTable).ifNotExists.
+      addPartitionKey(State, DataType.text).
+      addClusteringColumn(StartTime, DataType.timestamp).
+      addClusteringColumn(ContextId, DataType.uuid).
+      addColumn(ContextName, DataType.text).
+      addColumn(ContextConfig, DataType.text).
+      addColumn(ActorAddress, DataType.text).
+      addColumn(EndTime, DataType.timestamp).
+      addColumn(Error, DataType.text).
+      withOptions().clusteringOrder(StartTime, Direction.DESC)
+
+    session.execute(orderedContextsByStateTableStateStatement)
+
     val jobsTableStatement = SchemaBuilder.createTable(JobsTable).ifNotExists.
       addPartitionKey(JobId, DataType.uuid).
+      addColumn(ContextId, DataType.uuid).
       addColumn(ContextName, DataType.text).
       addColumn(AppName, DataType.text).
       addColumn(BType, DataType.text).
       addColumn(UploadTime, DataType.timestamp).
       addColumn(JobConfig, DataType.text).
       addColumn(Classpath, DataType.text).
+      addColumn(State, DataType.text).
       addColumn(StartTime, DataType.timestamp).
       addColumn(StartDate, DataType.date).
       addColumn(EndTime, DataType.timestamp).
@@ -378,12 +510,14 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
       addPartitionKey(StartDate, DataType.date).
       addClusteringColumn(StartTime, DataType.timestamp()).
       addClusteringColumn(JobId, DataType.uuid()).
+      addColumn(ContextId, DataType.uuid).
       addColumn(ContextName, DataType.text).
       addColumn(AppName, DataType.text).
       addColumn(BType, DataType.text).
       addColumn(UploadTime, DataType.timestamp).
       addColumn(JobConfig, DataType.text).
       addColumn(Classpath, DataType.text).
+      addColumn(State, DataType.text).
       addColumn(EndTime, DataType.timestamp).
       addColumn(Error, DataType.text).
       addColumn(ErrorClass, DataType.text).
@@ -392,9 +526,11 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
 
     session.execute(jobsChronologicalView)
 
-    val runningJobsView = SchemaBuilder.createTable(RunningJobsTable).ifNotExists().
-      addPartitionKey(ContextName, DataType.text).
+    val jobsByContextIdView = SchemaBuilder.createTable(JobsByContextIdTable).ifNotExists().
+      addPartitionKey(ContextId, DataType.uuid).
+      addClusteringColumn(State, DataType.text).
       addClusteringColumn(JobId, DataType.uuid).
+      addColumn(ContextName, DataType.text).
       addColumn(AppName, DataType.text).
       addColumn(BType, DataType.text).
       addColumn(UploadTime, DataType.timestamp).
@@ -407,6 +543,6 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
       addColumn(ErrorClass, DataType.text).
       addColumn(ErrorStackTrace, DataType.text)
 
-    session.execute(runningJobsView)
+    session.execute(jobsByContextIdView)
   }
 }

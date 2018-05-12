@@ -15,7 +15,7 @@ import org.joda.time.DateTime
 import org.scalactic._
 import spark.jobserver.api.{JobEnvironment, DataFileCache}
 import spark.jobserver.context.{JobContainer, SparkContextFactory}
-import spark.jobserver.io.{BinaryInfo, JobDAOActor, JobInfo, RemoteFileCache}
+import spark.jobserver.io.{BinaryInfo, JobDAOActor, JobInfo, RemoteFileCache, JobStatus}
 import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils}
 
 import scala.concurrent.{ExecutionContext, Future}
@@ -52,9 +52,9 @@ object JobManagerActor {
 
 
   // Akka 2.2.x style actor props for actor creation
-  def props(daoActor: ActorRef, supervisorActorAddress: String = "",
-      initializationTimeout: FiniteDuration = 30.seconds): Props =
-      Props(classOf[JobManagerActor], daoActor, supervisorActorAddress, initializationTimeout)
+  def props(daoActor: ActorRef, supervisorActorAddress: String = "", contextId: String = "",
+      initializationTimeout: FiniteDuration = 40.seconds): Props =
+      Props(classOf[JobManagerActor], daoActor, supervisorActorAddress, contextId, initializationTimeout)
 }
 
 /**
@@ -85,7 +85,7 @@ object JobManagerActor {
  *   }
  * }}}
  */
-class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String,
+class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contextId: String,
     initializationTimeout: FiniteDuration) extends InstrumentedActor {
 
   import CommonMessages._
@@ -125,7 +125,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String,
 
   private val jobServerNamedObjects = new JobServerNamedObjects(context.system)
 
-  if (!supervisorActorAddress.isEmpty()) {
+  if (isKillingContextOnUnresponsiveSupervisorEnabled()) {
     logger.info(s"Sending identify message to supervisor at ${supervisorActorAddress}")
     context.setReceiveTimeout(initializationTimeout)
     context.actorSelection(supervisorActorAddress) ! Identify(1)
@@ -158,6 +158,10 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String,
     }
   }
 
+  private def isKillingContextOnUnresponsiveSupervisorEnabled(): Boolean = {
+    !supervisorActorAddress.isEmpty()
+  }
+
   def wrappedReceive: Receive = {
     case ActorIdentity(memberActors, supervisorActorRef) =>
       supervisorActorRef.foreach { ref =>
@@ -166,8 +170,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String,
           logger.info("Received supervisor's response for Identify message. Adding a watch.")
           context.watch(ref)
 
-          logger.info("ActorIdentity message received from master, stopping the timer.")
-          context.setReceiveTimeout(Duration.Undefined) // Deactivate receive timeout
+          logger.info("Waiting for Initialize message from master.")
         }
       }
 
@@ -179,11 +182,16 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String,
       }
 
     case ReceiveTimeout =>
-        logger.warn("Did not receive ActorIdentity message from master." +
-           s"Killing myself (${self.path.address.toString})!")
+        logger.warn("Did not receive ActorIdentity/Initialized message from master." +
+           s" Killing myself (${self.path.address.toString})!")
         self ! PoisonPill
 
     case Initialize(ctxConfig, resOpt, dataManagerActor) =>
+      if (isKillingContextOnUnresponsiveSupervisorEnabled()) {
+        logger.info("Initialize message received from master, stopping the timer.")
+        context.setReceiveTimeout(Duration.Undefined) // Deactivate receive timeout
+      }
+
       contextConfig = ctxConfig
       logger.info("Starting context with config:\n" + contextConfig.root.render)
       contextName = contextConfig.getString("context.name")
@@ -334,7 +342,8 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String,
     statusActor ! Subscribe(jobId, sender, events)
 
     val binInfo = BinaryInfo(appName, binaryType, lastUploadTime)
-    val jobInfo = JobInfo(jobId, contextName, binInfo, classPath, DateTime.now(), None, None)
+    val jobInfo = JobInfo(jobId, contextId, contextName, binInfo, classPath,
+        JobStatus.Running, DateTime.now(), None, None)
 
     Some(getJobFuture(jobContainer, jobInfo, jobConfig, sender, jobContext, sparkEnv))
   }

@@ -8,7 +8,7 @@ import org.joda.time.DateTime
 import spark.jobserver.JobManagerActor.JobKilledException
 import spark.jobserver.common.akka.InstrumentedActor
 import spark.jobserver.common.akka.metrics.YammerMetrics
-import spark.jobserver.io.{ErrorData, JobDAOActor, JobInfo}
+import spark.jobserver.io.{ErrorData, JobDAOActor, JobInfo, JobStatus}
 
 object JobStatusActor {
   case class JobInit(jobInfo: JobInfo)
@@ -78,31 +78,33 @@ class JobStatusActor(jobDao: ActorRef) extends InstrumentedActor with YammerMetr
     case msg: JobStarted =>
       processStatus(msg, "started") {
         case (info, msg: JobStarted) =>
-          info.copy(startTime = msg.jobInfo.startTime)
+          info.copy(state = JobStatus.Running, startTime = msg.jobInfo.startTime)
       }
 
     case msg: JobFinished =>
       processStatus(msg, "finished OK", remove = true) {
         case (info, msg: JobFinished) =>
-          info.copy(endTime = Some(msg.endTime))
+          info.copy(state = JobStatus.Finished, endTime = Some(msg.endTime))
       }
 
     case msg: JobValidationFailed =>
       processStatus(msg, "validation failed", remove = true) {
         case (info, msg: JobValidationFailed) =>
-          info.copy(endTime = Some(msg.endTime), error = Some(ErrorData(msg.err)))
+          info.copy(state = JobStatus.Error, endTime = Some(msg.endTime),
+              error = Some(ErrorData(msg.err)))
       }
 
     case msg: JobErroredOut =>
       processStatus(msg, "finished with an error", remove = true) {
         case (info, msg: JobErroredOut) =>
-          info.copy(endTime = Some(msg.endTime), error = Some(ErrorData(msg.err)))
+          info.copy(state = JobStatus.Error, endTime = Some(msg.endTime),
+              error = Some(ErrorData(msg.err)))
       }
 
     case msg: JobKilled =>
       processStatus(msg, "killed", remove = true) {
         case (info, msg: JobKilled) =>
-          info.copy(endTime = Some(msg.endTime),
+          info.copy(state = JobStatus.Killed, endTime = Some(msg.endTime),
             error = Some(ErrorData(JobKilledException(info.jobId))))
       }
   }

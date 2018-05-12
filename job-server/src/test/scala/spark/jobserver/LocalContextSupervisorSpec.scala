@@ -132,7 +132,7 @@ class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.syst
       expectMsg(ContextInitialized)
       supervisor ! GetContext("c1")
       expectMsgPF(5 seconds, "I can't find that context :'-(") {
-        case (contextActor: ActorRef, resultActor: ActorRef) =>
+        case (contextActor: ActorRef) =>
           contextActor ! GetContextConfig
           val cc = expectMsgClass(classOf[ContextConfig])
           cc.contextName shouldBe "c1"
@@ -171,11 +171,10 @@ class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.syst
       supervisor ! AddContext("c1", contextConfig)
       expectMsg(ContextInitialized)
       supervisor ! GetContext("c1")
-      val (jobManager: ActorRef, _) = expectMsgType[(_, _)]
+      val (jobManager: ActorRef) = expectMsgType[ActorRef]
 
       jobManager ! PoisonPill
-      val msg = daoProbe.expectMsgType[CleanContextJobInfos]
-      msg.contextName shouldBe "c1"
+      daoProbe.expectMsgType[CleanContextJobInfos]
     }
   }
 }

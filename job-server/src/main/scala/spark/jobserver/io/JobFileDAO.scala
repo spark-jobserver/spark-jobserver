@@ -157,6 +157,24 @@ class JobFileDAO(config: Config) extends JobDAO {
   private def createJarName(appName: String, uploadTime: DateTime): String =
     appName + "-" + uploadTime.toString().replace(':', '_')
 
+  override def saveContextInfo(contextInfo: ContextInfo): Unit = {
+    throw new NotImplementedError
+  }
+
+  override def getContextInfo(id: String): Future[Option[ContextInfo]] = {
+    throw new NotImplementedError;
+  }
+
+  override def getContextInfos(limit: Option[Int] = None, statusOpt: Option[String] = None):
+    Future[Seq[ContextInfo]] = {
+    throw new NotImplementedError;
+  }
+
+  override def getContextInfoByName(name: String): Future[Option[ContextInfo]] = {
+    throw new NotImplementedError;
+  }
+
+
   override def saveJobInfo(jobInfo: JobInfo) {
     writeJobInfo(jobsOutputStream, jobInfo)
     jobs(jobInfo.jobId) = jobInfo
@@ -164,9 +182,11 @@ class JobFileDAO(config: Config) extends JobDAO {
 
   private def writeJobInfo(out: DataOutputStream, jobInfo: JobInfo) {
     out.writeUTF(jobInfo.jobId)
+    out.writeUTF(jobInfo.contextId)
     out.writeUTF(jobInfo.contextName)
     writeJarInfo(out, jobInfo.binaryInfo)
     out.writeUTF(jobInfo.classPath)
+    out.writeUTF(jobInfo.state)
     out.writeLong(jobInfo.startTime.getMillis)
     val time = if (jobInfo.endTime.isEmpty) jobInfo.startTime.getMillis else jobInfo.endTime.get.getMillis
     out.writeLong(time)
@@ -185,7 +205,9 @@ class JobFileDAO(config: Config) extends JobDAO {
   private def readJobInfo(in: DataInputStream) = JobInfo(
     in.readUTF,
     in.readUTF,
+    in.readUTF,
     readJarInfo(in),
+    in.readUTF,
     in.readUTF,
     new DateTime(in.readLong),
     Some(new DateTime(in.readLong)),
@@ -198,20 +220,20 @@ class JobFileDAO(config: Config) extends JobDAO {
   override def getJobInfos(limit: Int, statusOpt: Option[String] = None): Future[Seq[JobInfo]] = Future {
     val allJobs = jobs.values.toSeq.sortBy(-_.startTime.getMillis)
     val filterJobs = statusOpt match {
-      case Some(JobStatus.Running) => {
-        allJobs.filter(jobInfo => !jobInfo.endTime.isDefined && !jobInfo.error.isDefined)
-      }
-      case Some(JobStatus.Error) => allJobs.filter(_.error.isDefined)
-      case Some(JobStatus.Finished) => {
-        allJobs.filter(jobInfo => jobInfo.endTime.isDefined && !jobInfo.error.isDefined)
-      }
+      case Some(state) => allJobs.filter(_.state.equals(state))
       case _ => allJobs
     }
     filterJobs.take(limit)
   }
 
-  override def getRunningJobInfosForContextName(contextName: String): Future[Seq[JobInfo]] = Future {
-    jobs.values.toSeq.filter(j => j.endTime.isEmpty && j.error.isEmpty && j.contextName == contextName)
+  override def getJobInfosByContextId(
+      contextId: String, jobStatus: Option[String] = None): Future[Seq[JobInfo]] = Future {
+    jobs.values.toSeq.filter(j => {
+      (contextId, jobStatus) match {
+        case (contextId, Some(status)) => contextId == j.contextId && status == j.state
+        case _ => contextId == j.contextId
+      }
+    })
   }
 
   override def saveJobConfig(jobId: String, jobConfig: Config) {

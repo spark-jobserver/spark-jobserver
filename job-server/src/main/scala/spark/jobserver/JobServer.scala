@@ -1,18 +1,24 @@
 package spark.jobserver
 
-import akka.actor.{ActorSystem, ActorRef}
-import akka.actor.Props
+import akka.actor.{ActorSystem, ActorRef, ActorContext, Props}
+
+import akka.util.Timeout
 import akka.pattern.ask
 import com.typesafe.config.{ConfigValueFactory, Config, ConfigFactory}
 
 import java.io.File
-import spark.jobserver.io.{BinaryType, JobDAOActor, JobDAO, DataFileDAO}
+import java.util.concurrent.TimeUnit
+import spark.jobserver.io.{BinaryType, JobDAOActor, JobDAO, DataFileDAO, ContextStatus, ContextInfo}
+import org.joda.time.DateTime
+
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
 import scala.concurrent.{Await, ExecutionContext}
 import scala.concurrent.duration._
-import scala.util.Try
+import scala.util.{Try, Success, Failure}
+
+import com.google.common.annotations.VisibleForTesting
 
 /**
  * The Spark Job Server is a web service that allows users to submit and run Spark jobs, check status,
@@ -117,9 +123,43 @@ object JobServer {
     // Add initial job JARs, if specified in configuration.
     storeInitialBinaries(config, binManager)
 
+    // Check if all contexts marked as running are still available
+    updateContextStatus(daoActor, system);
+
     // Create initial contexts
     supervisor ! ContextSupervisor.AddContextsFromConfig
     new WebApi(system, config, port, binManager, dataManager, supervisor, jobInfo).start()
+  }
+
+  def validateContext(
+      contextInfo: ContextInfo, system: ActorSystem, jobDaoActor: ActorRef)(implicit e: ExecutionContext) {
+    val finiteDuration = FiniteDuration(3, SECONDS)
+    val address = contextInfo.actorAddress.get + "/user/" + AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX +
+        contextInfo.id
+    val actorFut = Await.ready(system.actorSelection(address).resolveOne(finiteDuration), finiteDuration)
+    actorFut.value.get match {
+      case Success(actorRef) => logger.info(s"Found context ${contextInfo.name} -> reconnect is possible")
+      case Failure(ex) => {
+        val c = contextInfo
+        val ctxName = c.name
+        logger.info(s"Reconnecting to context $ctxName failed -> update status of context $ctxName to error");
+        val error = Some(new Throwable("Reconnect failed after Jobserver restart"))
+        val updatedContextInfo = ContextInfo(c.id, c.name, c.config, c.actorAddress, c.startTime,
+            Option(DateTime.now()), ContextStatus.Error, error)
+        jobDaoActor ! JobDAOActor.SaveContextInfo(updatedContextInfo)
+      }
+    }
+  }
+
+  val ec = scala.concurrent.ExecutionContext.Implicits.global
+  @VisibleForTesting
+  def updateContextStatus(jobDaoActor: ActorRef, system: ActorSystem) {
+    val config = system.settings.config
+    val daoAskTimeout = Timeout(config.getDuration("spark.jobserver.dao-timeout", TimeUnit.SECONDS).second)
+    val resp = Await.result(
+        (jobDaoActor ? JobDAOActor.GetContextInfos(None, Some(ContextStatus.Running)))(daoAskTimeout).
+        mapTo[JobDAOActor.ContextInfos], daoAskTimeout.duration)
+    resp.contextInfos.foreach(ci => validateContext(ci, system, jobDaoActor)(ec))
   }
 
   private def parseInitialBinaryConfig(key: String, config: Config): Map[String, String] = {

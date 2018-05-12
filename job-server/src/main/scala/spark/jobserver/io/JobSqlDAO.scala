@@ -62,22 +62,39 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
 
   // Explicitly avoiding to label 'jarId' as a foreign key to avoid dealing with
   // referential integrity constraint violations.
-  class Jobs(tag: Tag) extends Table[(String, String, Int, String, Timestamp,
+  class Jobs(tag: Tag) extends Table[(String, String, String, Int, String, String, Timestamp,
     Option[Timestamp], Option[String], Option[String], Option[String])](tag, "JOBS") {
     def jobId = column[String]("JOB_ID", O.PrimaryKey)
+    def contextId = column[String]("CONTEXT_ID")
     def contextName = column[String]("CONTEXT_NAME")
     def binId = column[Int]("BIN_ID")
     // FK to JARS table
     def classPath = column[String]("CLASSPATH")
+    def state = column[String]("STATE")
     def startTime = column[Timestamp]("START_TIME")
     def endTime = column[Option[Timestamp]]("END_TIME")
     def error = column[Option[String]]("ERROR")
     def errorClass = column[Option[String]]("ERROR_CLASS")
     def errorStackTrace = column[Option[String]]("ERROR_STACK_TRACE")
-    def * = (jobId, contextName, binId, classPath, startTime, endTime, error, errorClass, errorStackTrace)
+    def * = (jobId, contextId, contextName, binId, classPath, state, startTime, endTime, error, errorClass, errorStackTrace)
   }
 
   val jobs = TableQuery[Jobs]
+
+  class Contexts(tag: Tag) extends Table[(String, String, String, Option[String], Timestamp,
+      Option[Timestamp], String, Option[String])](tag, "CONTEXTS") {
+    def id = column[String]("ID", O.PrimaryKey)
+    def name = column[String]("NAME")
+    def config = column[String]("CONFIG")
+    def actorAddress = column[Option[String]]("ACTOR_ADDRESS")
+    def startTime = column[Timestamp]("START_TIME")
+    def endTime = column[Option[Timestamp]]("END_TIME")
+    def state = column[String]("STATE")
+    def error = column[Option[String]]("ERROR")
+    def * = (id, name, config, actorAddress, startTime, endTime, state, error)
+  }
+
+  val contexts = TableQuery[Contexts]
 
   class Configs(tag: Tag) extends Table[(String, String)](tag, "CONFIGS") {
     def jobId = column[String]("JOB_ID", O.PrimaryKey)
@@ -265,7 +282,57 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
     db.run(query.head)
   }
 
+  override def saveContextInfo(contextInfo: ContextInfo): Unit = {
+    val startTime = convertDateJodaToSql(contextInfo.startTime)
+    val endTime = contextInfo.endTime.map(t => convertDateJodaToSql(t))
+    val errors = contextInfo.error.map(e => e.getMessage)
+    val row = (contextInfo.id, contextInfo.name, contextInfo.config,
+                contextInfo.actorAddress, startTime, endTime, contextInfo.state, errors)
+    if(Await.result(db.run(contexts.insertOrUpdate(row)), 60 seconds) == 0){
+      throw new SlickException(s"Could not update ${contextInfo.id} in the database")
+    }
+  }
 
+  override def getContextInfo(id: String): Future[Option[ContextInfo]] = {
+    val query = contexts.filter(_.id === id).result
+    db.run(query.headOption).map(r => r.map(contextInfoFromRow(_)))
+  }
+
+  override def getContextInfos(limit: Option[Int] = None, statusOpt: Option[String] = None):
+  Future[Seq[ContextInfo]] = {
+    val query = statusOpt match {
+      case Some(i) => contexts.filter(_.state === i)
+      case None => contexts
+    }
+    val sortQuery = query.sortBy(_.startTime.desc)
+    val limitQuery = limit match {
+        case Some(i) => sortQuery.take(i)
+        case None => sortQuery
+      }
+    for (r <- db.run(limitQuery.result)) yield {
+      r.map(contextInfoFromRow)
+    }
+  }
+
+  override def getContextInfoByName(name: String): Future[Option[ContextInfo]] = {
+    val query = contexts.filter(_.name === name).sortBy(_.startTime.desc).result
+    db.run(query.headOption).map(r => r.map(contextInfoFromRow(_)))
+  }
+
+  private def contextInfoFromRow(row: (String, String, String, Option[String],
+    Timestamp, Option[Timestamp], String, Option[String])): ContextInfo = row match {
+    case (id, name, config, actorAddress, start, end, state, error) =>
+    ContextInfo(
+      id,
+      name,
+      config,
+      actorAddress,
+      convertDateSqlToJoda(start),
+      end.map(convertDateSqlToJoda),
+      state,
+      error.map(new Throwable(_))
+    )
+  }
 
   // Convert from joda DateTime to java.sql.Timestamp
   private def convertDateJodaToSql(dateTime: DateTime): Timestamp = new Timestamp(dateTime.getMillis)
@@ -300,23 +367,26 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
     val error = jobInfo.error.map(e => e.message)
     val errorClass = jobInfo.error.map(e => e.errorClass)
     val errorStackTrace = jobInfo.error.map(e => e.stackTrace)
-    val row = (jobInfo.jobId, jobInfo.contextName, jarId, jobInfo.classPath,
-      startTime, endTime, error, errorClass, errorStackTrace)
+    val row = (jobInfo.jobId, jobInfo.contextId, jobInfo.contextName, jarId, jobInfo.classPath,
+      jobInfo.state, startTime, endTime, error, errorClass, errorStackTrace)
     if(Await.result(db.run(jobs.insertOrUpdate(row)), 60 seconds) == 0){
       throw new SlickException(s"Could not update ${jobInfo.jobId} in the database")
     }
   }
 
-  private def jobInfoFromRow(row: (String, String, String, String,
-    Timestamp, String, Timestamp, Option[Timestamp],
+  private def jobInfoFromRow(row: (String, String, String, String, String,
+    Timestamp, String, String, Timestamp, Option[Timestamp],
     Option[String], Option[String], Option[String])): JobInfo = row match {
-    case (id, context, app, binType, upload, classpath, start, end, err, errCls, errStTr) =>
+    case (id, contextId, contextName, app, binType, upload, classpath,
+        state, start, end, err, errCls, errStTr) =>
       val errorInfo = err.map(ErrorData(_, errCls.getOrElse(""), errStTr.getOrElse("")))
       JobInfo(
         id,
-        context,
+        contextId,
+        contextName,
         BinaryInfo(app, BinaryType.fromString(binType), convertDateSqlToJoda(upload)),
         classpath,
+        state,
         convertDateSqlToJoda(start),
         end.map(convertDateSqlToJoda),
         errorInfo
@@ -327,20 +397,15 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
 
     val joinQuery = for {
       bin <- binaries
-      j <- jobs if j.binId === bin.binId && (statusOpt match {
-                          // !endTime.isDefined
-                          case Some(JobStatus.Running) => !j.endTime.isDefined && !j.error.isDefined
-                          // endTime.isDefined && error.isDefined
-                          case Some(JobStatus.Error) => j.error.isDefined
-                          // not RUNNING AND NOT ERROR
-                          case Some(JobStatus.Finished) => j.endTime.isDefined && !j.error.isDefined
-                          case _ => true
+      j <- jobs if (statusOpt match {
+                          case Some(state) => j.binId === bin.binId && j.state === state
+                          case None => j.binId === bin.binId
                 })
     } yield {
-      (j.jobId, j.contextName, bin.appName, bin.binaryType,
-        bin.uploadTime, j.classPath, j.startTime, j.endTime, j.error, j.errorClass, j.errorStackTrace)
+      (j.jobId, j.contextId, j.contextName, bin.appName, bin.binaryType, bin.uploadTime, j.classPath,
+          j.state, j.startTime, j.endTime, j.error, j.errorClass, j.errorStackTrace)
     }
-    val sortQuery = joinQuery.sortBy(_._7.desc)
+    val sortQuery = joinQuery.sortBy(_._9.desc)
     val limitQuery = sortQuery.take(limit)
     // Transform the each row of the table into a map of JobInfo values
     for (r <- db.run(limitQuery.result)) yield {
@@ -353,29 +418,30 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
     *
     * @return
     */
-  override def getRunningJobInfosForContextName(contextName: String): Future[Seq[JobInfo]] = {
+  override def getJobInfosByContextId(
+      contextId: String, jobStatus: Option[String] = None): Future[Seq[JobInfo]] = {
     val joinQuery = for {
       bin <- binaries
-      j <- jobs if (j.binId === bin.binId
-        && !j.endTime.isDefined && !j.error.isDefined
-        && j.contextName === contextName)
+      j <- jobs if ((contextId, jobStatus) match {
+                          case (contextId, Some(jobStatus)) => j.binId === bin.binId &&
+                              j.contextId === contextId && j.state === jobStatus
+                          case _ => j.binId === bin.binId && j.contextId === contextId
+                })
     } yield {
-      (j.jobId, j.contextName, bin.appName, bin.binaryType,
-        bin.uploadTime, j.classPath, j.startTime, j.endTime, j.error, j.errorClass, j.errorStackTrace)
+      (j.jobId, j.contextId, j.contextName, bin.appName, bin.binaryType, bin.uploadTime, j.classPath,
+          j.state, j.startTime, j.endTime, j.error, j.errorClass, j.errorStackTrace)
     }
     db.run(joinQuery.result).map(_.map(jobInfoFromRow))
   }
 
 
-  override def cleanRunningJobInfosForContext(contextName: String, endTime: DateTime): Future[Unit] = {
+  override def cleanRunningJobInfosForContext(contextId: String, endTime: DateTime): Future[Unit] = {
     val sqlEndTime = Some(convertDateJodaToSql(endTime))
-    val error = Some(new ContextTerminatedException(contextName).getMessage())
+    val error = Some(new ContextTerminatedException(contextId).getMessage())
     val selectQuery = for {
-      j <- jobs if (!j.endTime.isDefined
-        && !j.error.isDefined
-        && j.contextName === contextName)
-    } yield (j.endTime, j.error)
-    val updateQuery = selectQuery.update((sqlEndTime, error))
+      j <- jobs if (j.contextId === contextId && j.state === JobStatus.Running)
+    } yield (j.endTime, j.error, j.state)
+    val updateQuery = selectQuery.update((sqlEndTime, error, JobStatus.Error))
     db.run(updateQuery).map(_ => ())
   }
 
@@ -386,8 +452,8 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
       bin <- binaries
       j <- jobs if j.binId === bin.binId && j.jobId === jobId
     } yield {
-      (j.jobId, j.contextName, bin.appName, bin.binaryType, bin.uploadTime, j.classPath, j.startTime,
-        j.endTime, j.error, j.errorClass, j.errorStackTrace)
+      (j.jobId, j.contextId, j.contextName, bin.appName, bin.binaryType, bin.uploadTime, j.classPath,
+         j.state, j.startTime, j.endTime, j.error, j.errorClass, j.errorStackTrace)
     }
     for (r <- db.run(joinQuery.result)) yield {
       r.map(jobInfoFromRow).headOption

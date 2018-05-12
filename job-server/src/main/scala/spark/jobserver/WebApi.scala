@@ -88,19 +88,17 @@ object WebApi {
 
   def getJobReport(jobInfo: JobInfo, jobStarted: Boolean = false): Map[String, Any] = {
 
-    val statusMap = if (jobStarted) Map(StatusKey -> JobStatus.Started) else jobInfo match {
-      case JobInfo(_, _, _, _, _, None, _) => Map(StatusKey -> JobStatus.Running)
-      case JobInfo(_, _, _, _, _, _, Some(err))
-        if err.errorClass == classOf[JobKilledException].getName =>
-        Map(StatusKey -> JobStatus.Killed, ResultKey -> formatException(err))
-      case JobInfo(_, _, _, _, _, _, Some(err)) =>
-        Map(StatusKey -> JobStatus.Error, ResultKey -> formatException(err))
-      case JobInfo(_, _, _, _, _, Some(e), None) => Map(StatusKey -> "FINISHED")
+    val statusMap = jobInfo match {
+      case JobInfo(_, _, _, _, _, state, _, _, Some(err)) =>
+        Map(StatusKey -> state, ResultKey -> formatException(err))
+      case JobInfo(_, _, _, _, _, _, _, _, None) if jobStarted => Map(StatusKey -> JobStatus.Started)
+      case JobInfo(_, _, _, _, _, state, _, _, None) => Map(StatusKey -> state)
     }
     Map("jobId" -> jobInfo.jobId,
       "startTime" -> jobInfo.startTime.toString(),
       "classPath" -> jobInfo.classPath,
       "context" -> (if (jobInfo.contextName.isEmpty) "<<ad-hoc>>" else jobInfo.contextName),
+      "contextId" -> jobInfo.contextId,
       "duration" -> getJobDurationString(jobInfo)) ++ statusMap
   }
 }
@@ -356,17 +354,25 @@ class WebApi(system: ActorSystem,
             case SparkContexData(name, appId, None) =>
               ctx.complete(200, Map("context" -> contextName, "applicationId" -> appId))
             case NoSuchContext => notFound(ctx, s"can't find context with name $contextName")
+            case UnexpectedError => ctx.complete(500, errMap("UNEXPECTED ERROR OCCURRED"))
           }.recover {
             case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
           }
         }
       } ~
       get { ctx =>
-        (supervisor ? ListContexts).mapTo[Seq[String]]
-          .map { contexts =>
-            ctx.complete(SparkJobUtils.removeProxyUserPrefix(
-              authInfo.toString, contexts,
-              config.getBoolean("shiro.authentication") && config.getBoolean("shiro.use-as-proxy-user"))) }
+        logger.info("GET /contexts");
+        val future = (supervisor ? ListContexts)
+        future.map {
+          case UnexpectedError => ctx.complete(500, errMap("UNEXPECTED ERROR OCCURRED"))
+          case contexts =>
+            val getContexts = SparkJobUtils.removeProxyUserPrefix(
+              authInfo.toString, contexts.asInstanceOf[Seq[String]],
+              config.getBoolean("shiro.authentication") && config.getBoolean("shiro.use-as-proxy-user"))
+            ctx.complete(getContexts)
+        }.recover {
+          case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+        }
       } ~
       post {
         /**
@@ -398,7 +404,8 @@ class WebApi(system: ActorSystem,
                     case ContextInitialized => ctx.complete(StatusCodes.OK,
                       successMap("Context initialized"))
                     case ContextAlreadyExists => badRequest(ctx, "context " + contextName + " exists")
-                    case ContextInitError(e) => ctx.complete(500, errMap(e, "CONTEXT INIT ERROR"))
+                    case ContextInitError(e) => ctx.complete(500, errMap(e, "CONTEXT INIT ERROR"));
+                    case UnexpectedError => ctx.complete(500, errMap("UNEXPECTED ERROR OCCURRED"))
                   }
                 }
               }
@@ -418,6 +425,7 @@ class WebApi(system: ActorSystem,
                 case ContextStopped => ctx.complete(StatusCodes.OK, successMap("Context stopped"))
                 case NoSuchContext => notFound(ctx, "context " + contextName + " not found")
                 case ContextStopError(e) => ctx.complete(500, errMap(e, "CONTEXT DELETE ERROR"))
+                case UnexpectedError => ctx.complete(500, errMap("UNEXPECTED ERROR OCCURRED"))
               }
             }
           }
@@ -550,7 +558,7 @@ class WebApi(system: ActorSystem,
             future.map {
               case NoSuchJobId =>
                 notFound(ctx, "No such job ID " + jobId)
-              case JobInfo(_, contextName, _, classPath, _, None, _) =>
+              case JobInfo(_, _, contextName, _, _, classPath, _, None, _) =>
                 val jobManager = getJobManagerForContext(Some(contextName), config, classPath)
                 val future = jobManager.get ? KillJob(jobId)
                 future.map {
@@ -558,10 +566,12 @@ class WebApi(system: ActorSystem,
                 }.recover {
                   case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
                 }
-              case JobInfo(_, _, _, _, _, _, Some(ex)) =>
+              case JobInfo(_, _, _, _, _, state, _, _, Some(ex)) if state.equals(JobStatus.Error) =>
                 ctx.complete(Map(StatusKey -> JobStatus.Error, "ERROR" -> formatException(ex)))
-              case JobInfo(_, _, _, _, _, Some(e), None) =>
+              case JobInfo(_, _, _, _, _, state, _, _, _)
+                if (state.equals(JobStatus.Finished) || state.equals(JobStatus.Killed)) =>
                 notFound(ctx, "No running job with ID " + jobId)
+              case _ => ctx.complete(500, errMap("Received an unexpected message"))
             }
           }
         } ~
@@ -716,7 +726,7 @@ class WebApi(system: ActorSystem,
       }
     val future = (supervisor ? msg)(contextTimeout.seconds)
     Await.result(future, contextTimeout.seconds) match {
-      case (manager: ActorRef, resultActor: ActorRef) => Some(manager)
+      case (manager: ActorRef) => Some(manager)
       case NoSuchContext => None
       case ContextInitError(err) => throw new RuntimeException(err)
     }
