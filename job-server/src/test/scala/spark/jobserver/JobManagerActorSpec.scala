@@ -596,7 +596,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       daoProbe.expectMsgClass(classOf[JobDAOActor.GetJobInfosByContextId])
       // Not replying to GetJobInfosByContextId will result in a timeout
       // and failure will occur
-      managerWatcher.expectTerminated(manager)
+      managerWatcher.expectTerminated(manager, 5.seconds)
     }
 
     it("should kill itself if an unexpected message is received from DAO") {
@@ -669,7 +669,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
       daoProbe.expectMsgClass(classOf[JobDAOActor.GetJobConfig])
 
-      daoProbe.expectMsgPF(3.seconds.dilated, "store error in DAO since config not found") {
+      daoProbe.expectMsgPF(5.seconds.dilated, "store error in DAO since config not found") {
         case jobInfo: JobDAOActor.SaveJobInfo =>
           jobInfo.jobInfo.state should be(JobStatus.Error)
       }
