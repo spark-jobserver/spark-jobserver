@@ -76,6 +76,7 @@ object StubbedAkkaClusterSupervisorActor {
   case class AddContextToContextInitInfos(contextName: String)
   case object DisableDAOCommunication
   case object EnableDAOCommunication
+  case class DummyTerminated(actorRef: ActorRef)
 }
 
 class StubbedAkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef, managerProbe: TestProbe)
@@ -114,6 +115,8 @@ class StubbedAkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: Ac
       daoCommunicationDisabled = true
     case StubbedAkkaClusterSupervisorActor.EnableDAOCommunication =>
       daoCommunicationDisabled = false
+    case StubbedAkkaClusterSupervisorActor.DummyTerminated(actorRef) =>
+      handleTerminatedEvent(actorRef)
   }
 
   override def getDataFromDAO[T: ClassTag](msg: JobDAOActor.JobDAORequest): Option[T] = {
@@ -435,6 +438,44 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       // TestProbe it's address doesn't get resolved so, it cannot be stopped. So, we change
       // the status to finish to cleanup.
       dao.saveContextInfo(restartedContext.copy(state = ContextStatus.Finished))
+    }
+
+    it("should set state restarting for context which was terminated unexpectedly and had supervise mode enabled") {
+      val contextId = "testid"
+      val configWithSuperviseMode = ConfigFactory.parseString(
+          s"${ManagerLauncher.CONTEXT_SUPERVISE_MODE_KEY}=true").withFallback(contextConfig)
+      val convertedContextConfig = configWithSuperviseMode.root().render(ConfigRenderOptions.concise())
+
+      val runningContext = ContextInfo(contextId, "c", convertedContextConfig, None, DateTime.now(), None, ContextStatus.Running, None)
+      dao.saveContextInfo(runningContext)
+      val managerProbe = system.actorOf(Props.empty, s"jobManager-$contextId")
+      val daoProbe = TestProbe()
+
+      supervisor ! StubbedAkkaClusterSupervisorActor.DummyTerminated(managerProbe)
+
+      Thread.sleep(3000)
+      val updatedContextInfo = Await.result(dao.getContextInfo(contextId), daoTimeout)
+      updatedContextInfo.get.state should be(ContextStatus.Restarting)
+
+      dao.saveContextInfo(updatedContextInfo.get.copy(state = ContextStatus.Finished)) //cleanup
+    }
+
+    it("should set state killed for context which was terminated unexpectedly and supervise mode disabled") {
+      val contextId = "testid2"
+      val convertedContextConfig = contextConfig.root().render(ConfigRenderOptions.concise())
+
+      val runningContext = ContextInfo(contextId, "c", convertedContextConfig, None, DateTime.now(), None, ContextStatus.Running, None)
+      dao.saveContextInfo(runningContext)
+      val managerProbe = system.actorOf(Props.empty, s"jobManager-$contextId")
+      val daoProbe = TestProbe()
+
+      supervisor ! StubbedAkkaClusterSupervisorActor.DummyTerminated(managerProbe)
+
+      Thread.sleep(3000)
+      val updatedContextInfo = Await.result(dao.getContextInfo(contextId), daoTimeout)
+      updatedContextInfo.get.state should be(ContextStatus.Killed)
+
+      dao.saveContextInfo(updatedContextInfo.get.copy(state = ContextStatus.Finished)) //cleanup
     }
   }
 }
