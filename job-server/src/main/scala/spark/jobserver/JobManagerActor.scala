@@ -575,7 +575,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
    * This function is responsible for restarting terminated jobs. It selects jobs based on the
    * following criteria
    * a) The job is in Running state
-   * b) The job is in Error state with ContextTerminatedException in the message
+   * b) The job is in Restarting state
    * c) The job is async. Sync jobs are normally short lived and user is waiting on
    *    the other side to receive the response immediately. So, restart feature currently
    *    is only for long running jobs. There is no direct way to check if the job was
@@ -584,7 +584,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
    */
   private def restartTerminatedJobs(contextId: String, senderRef: ActorRef): Unit = {
     (daoActor ? JobDAOActor.GetJobInfosByContextId(
-        contextId, Some(Seq(JobStatus.Running, JobStatus.Error))))(daoAskTimeout).onComplete {
+        contextId, Some(Seq(JobStatus.Running, JobStatus.Restarting))))(daoAskTimeout).onComplete {
       case Success(JobDAOActor.JobInfos(Seq())) =>
         logger.info(s"No job found for context ${contextName} which was terminated unexpectedly." +
             " Not restarting any job.")
@@ -645,10 +645,8 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
 
   private def getRestartCandidates(jobInfos: Seq[JobInfo]): Seq[JobInfo] = {
     jobInfos.filter { jobInfo =>
-      (jobInfo.state, jobInfo.error) match {
-        case (JobStatus.Running, _) => true
-        case (JobStatus.Error, Some(error)) =>
-            error.message.equals(ContextTerminatedException(contextId).getMessage)
+      (jobInfo.state) match {
+        case JobStatus.Running | JobStatus.Restarting => true
         case _ => false
       }
     }

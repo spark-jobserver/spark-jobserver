@@ -22,7 +22,8 @@ import akka.pattern.gracefulStop
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import spark.jobserver.JobManagerActor.{GetContexData, ContexData, SparkContextDead, RestartExistingJobs}
-import spark.jobserver.io.{JobDAOActor, ContextInfo, ContextStatus}
+import spark.jobserver.JobManagerActor.ContextTerminatedException
+import spark.jobserver.io.{JobDAOActor, ContextInfo, ContextStatus, JobStatus, ErrorData}
 import spark.jobserver.util.{InternalServerErrorException, NoCallbackFoundException}
 
 object AkkaClusterSupervisorActor {
@@ -271,25 +272,60 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
       }
 
     case Terminated(actorRef) =>
-      val name: String = actorRef.path.name
-      logger.info("Actor terminated: {}", name)
-      val contextId = name.split(AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX).apply(1)
-      val resp = getDataFromDAO[JobDAOActor.ContextResponse](JobDAOActor.GetContextInfo(contextId))
-      resp match {
-        case Some(JobDAOActor.ContextResponse(Some(c))) =>
-          val state =
-            if (c.state == ContextStatus.Stopping) ContextStatus.Finished else ContextStatus.Killed
-          val contextInfo = ContextInfo(c.id, c.name, c.config, c.actorAddress, c.startTime,
-                Option(DateTime.now()), state, c.error)
-          daoActor ! JobDAOActor.SaveContextInfo(contextInfo)
-          daoActor ! JobDAOActor.CleanContextJobInfos(c.id, DateTime.now())
-        case Some(JobDAOActor.ContextResponse(None)) =>
-          logger.error("No context for deletion is found in the DB")
-        case None =>
-          logger.error("Error occurred after Terminated message was recieved")
-      }
-      cluster.down(actorRef.path.address)
-      jobManagerActorRefs.remove(actorRef.path.toString())
+      handleTerminatedEvent(actorRef)
+  }
+
+  protected def handleTerminatedEvent(actorRef: ActorRef) {
+    val name: String = actorRef.path.name
+    logger.info("Actor terminated: {}", name)
+    val contextId = name.split(AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX).apply(1)
+    val resp = getDataFromDAO[JobDAOActor.ContextResponse](JobDAOActor.GetContextInfo(contextId))
+    resp match {
+      case Some(JobDAOActor.ContextResponse(Some(c))) =>
+        val state =
+                if (c.state == ContextStatus.Stopping) ContextStatus.Finished else ContextStatus.Killed
+        (isSuperviseModeEnabled(config, ConfigFactory.parseString(c.config)), state) match {
+            case (true, ContextStatus.Killed) =>
+              setRestartingStateForContextAndJobs(c)
+            case _ =>
+              val contextInfo = c.copy(endTime = Option(DateTime.now()), state = state)
+              daoActor ! JobDAOActor.SaveContextInfo(contextInfo)
+              daoActor ! JobDAOActor.CleanContextJobInfos(c.id, DateTime.now())
+         }
+      case Some(JobDAOActor.ContextResponse(None)) =>
+        logger.error("No context for deletion is found in the DB")
+      case None =>
+        logger.error("Error occurred after Terminated message was recieved")
+    }
+    cluster.down(actorRef.path.address)
+    jobManagerActorRefs.remove(actorRef.path.toString())
+  }
+
+  private def setRestartingStateForContextAndJobs(contextInfo: ContextInfo) {
+    val restartingContext = contextInfo.copy(endTime = Option(DateTime.now()),
+        state = ContextStatus.Restarting)
+    logger.info(s"Updating the status to Restarting for context ${contextInfo.id} and jobs within")
+    daoActor ! JobDAOActor.SaveContextInfo(restartingContext)
+    setRestartingStateForRunningJobs(contextInfo)
+  }
+
+  private def setRestartingStateForRunningJobs(contextInfo: ContextInfo) {
+    (daoActor ? JobDAOActor.GetJobInfosByContextId(
+        contextInfo.id, Some(Seq(JobStatus.Running))))(daoAskTimeout).onComplete {
+      case Success(JobDAOActor.JobInfos(Seq())) =>
+        logger.info(s"No jobs found for context ${contextInfo.name}, not updating status")
+      case Success(JobDAOActor.JobInfos(jobInfos)) =>
+        val error = ErrorData(JobManagerActor.ContextTerminatedException(contextInfo.id))
+        jobInfos.foreach { jobInfo =>
+          logger.info(s"Found job ${jobInfo.jobId} for context. Setting state to Restarting.")
+          daoActor ! JobDAOActor.SaveJobInfo(jobInfo.copy(state = JobStatus.Restarting,
+              endTime = Some(DateTime.now()), error = Some(error)))
+        }
+      case Failure(e: Exception) =>
+        logger.error(s"Exception occured while fetching jobs for context (${contextInfo.id})", e)
+      case unexpectedMsg @ _ =>
+        logger.error(s"$unexpectedMsg message received while fetching jobs for context (${contextInfo.id})")
+    }
   }
 
   private def initContext(contextConfig: Config,
