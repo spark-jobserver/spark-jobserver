@@ -82,6 +82,7 @@ object JobStatus {
   val Finished = "FINISHED"
   val Started = "STARTED"
   val Killed = "KILLED"
+  val Restarting = "RESTARTING"
 }
 
 object ContextStatus {
@@ -91,6 +92,7 @@ object ContextStatus {
   val Finished = "FINISHED"
   val Started = "STARTED"
   val Killed = "KILLED"
+  val Restarting = "RESTARTING"
 }
 
 object JobDAO {
