@@ -298,10 +298,10 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
     db.run(query.headOption).map(r => r.map(contextInfoFromRow(_)))
   }
 
-  override def getContextInfos(limit: Option[Int] = None, statusOpt: Option[String] = None):
+  override def getContextInfos(limit: Option[Int] = None, statuses: Option[Seq[String]] = None):
   Future[Seq[ContextInfo]] = {
-    val query = statusOpt match {
-      case Some(i) => contexts.filter(_.state === i)
+    val query = statuses match {
+      case Some(statuses) => contexts.filter(_.state.inSet(statuses))
       case None => contexts
     }
     val sortQuery = query.sortBy(_.startTime.desc)

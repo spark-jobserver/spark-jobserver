@@ -508,7 +508,7 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
       contexts should contain theSameElementsAs Seq(dummyContext, dummyContextNew)
     }
 
-    it("should get ContextInfos all contexts with state FINISHED") {
+    it("should get ContextInfos of all contexts with state FINISHED") {
       val dummyContextOld = ContextInfo("someIdOld", "contextName", "", None, DateTime.now(), None,
           ContextStatus.Finished, None)
       dao.saveContextInfo(dummyContextOld)
@@ -521,9 +521,33 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
           ContextStatus.Started, None)
       dao.saveContextInfo(dummyContextNew)
 
-      val contexts: Seq[ContextInfo] = Await.result(dao.getContextInfos(None, Some(ContextStatus.Finished)), timeout)
+      val contexts: Seq[ContextInfo] = Await.result(dao.getContextInfos(
+          None, Some(Seq(ContextStatus.Finished))), timeout)
       contexts.size should equal (2)
       contexts should contain theSameElementsAs Seq(dummyContextOld, dummyContext)
+    }
+
+    it("should get ContextInfos of all contexts with state Finished OR Running") {
+      val dummyContextOld = ContextInfo("someIdOld", "contextName", "", None, DateTime.now(), None,
+          ContextStatus.Finished, None)
+      dao.saveContextInfo(dummyContextOld)
+
+      val dummyContext = ContextInfo("someId", "contextName", "", None, DateTime.now(), None,
+          ContextStatus.Finished, None)
+      dao.saveContextInfo(dummyContext)
+
+      val dummyContextNew = ContextInfo("someIdNew", "contextNameNew", "", None, DateTime.now(), None,
+          ContextStatus.Started, None)
+      dao.saveContextInfo(dummyContextNew)
+
+      val dummyContextRestarting = ContextInfo("someIdRestarting", "contextNameRestarting", "", None, DateTime.now(), None,
+          ContextStatus.Restarting, None)
+      dao.saveContextInfo(dummyContextRestarting)
+
+      val contexts: Seq[ContextInfo] = Await.result(dao.getContextInfos(
+          None, Some(Seq(ContextStatus.Restarting, ContextStatus.Started))), timeout)
+      contexts.size should equal (2)
+      contexts should contain theSameElementsAs Seq(dummyContextRestarting, dummyContextNew)
     }
 
     it("should update the context, if id is the same for two saveContextInfo requests") {

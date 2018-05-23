@@ -165,7 +165,7 @@ class JobFileDAO(config: Config) extends JobDAO {
     throw new NotImplementedError;
   }
 
-  override def getContextInfos(limit: Option[Int] = None, statusOpt: Option[String] = None):
+  override def getContextInfos(limit: Option[Int] = None, statuses: Option[Seq[String]] = None):
     Future[Seq[ContextInfo]] = {
     throw new NotImplementedError;
   }

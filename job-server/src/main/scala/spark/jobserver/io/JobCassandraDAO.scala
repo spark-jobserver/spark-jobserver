@@ -194,16 +194,16 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
     }
   }
 
-  override def getContextInfos(limitOpt: Option[Int] = None, statusOpt: Option[String] = None):
+  override def getContextInfos(limitOpt: Option[Int] = None, statuses: Option[Seq[String]] = None):
     Future[Seq[ContextInfo]] = {
     val query = QB.select(ContextId, ContextName, ContextConfig, ActorAddress, StartTime, EndTime,
             State, Error).
         from(OrderedContextsByStateTable)
-    val filteredQuery = (limitOpt, statusOpt) match {
-       case (Some(limit), Some(status)) => query.where(QB.eq(State, status)).limit(limit)
+    val filteredQuery = (limitOpt, statuses) match {
+       case (Some(limit), Some(statuses)) => query.where(QB.in(State, statuses.toList.asJava)).limit(limit)
        case (Some(limit), None) =>
          throw new UnsupportedOperationException("Current cassandra model doesnot support this operation")
-       case (None, Some(status)) => query.where(QB.eq(State, status))
+       case (None, Some(statuses)) => query.where(QB.in(State, statuses.toList.asJava))
        case (None, None) =>
          throw new UnsupportedOperationException("Current cassandra model doesnot support this operation")
      }

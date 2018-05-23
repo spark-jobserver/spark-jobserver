@@ -481,18 +481,28 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
       val contextInfo2 = contextInfo(UUIDs.random().toString, "test-context8", DateTime.now(), ContextStatus.Running)
       val contextInfo3 = contextInfo(UUIDs.random().toString, "test-context9", DateTime.now(), ContextStatus.Started)
       val contextInfo4 = contextInfo(UUIDs.random().toString, "test-context10",DateTime.now(), ContextStatus.Started)
+      val contextInfo5 = contextInfo(UUIDs.random().toString, "test-context11",DateTime.now(), ContextStatus.Restarting)
 
       dao.saveContextInfo(contextInfo1)
       dao.saveContextInfo(contextInfo2)
       dao.saveContextInfo(contextInfo3)
       dao.saveContextInfo(contextInfo4)
+      dao.saveContextInfo(contextInfo5)
 
       def Desc[T : Ordering] = implicitly[Ordering[T]].reverse
-      val orderedExpectedList = Seq(contextInfo4, contextInfo3, contextInfo1)
+      var orderedExpectedList = Seq(contextInfo4, contextInfo3, contextInfo1)
                                     .sortBy(_.id)
                                     .sortBy(_.startTime.getMillis)(Desc)
 
-      val contexts = Await.result(dao.getContextInfos(Some(3), Some(ContextStatus.Started)), timeout)
+      var contexts = Await.result(dao.getContextInfos(Some(3), Some(Seq(ContextStatus.Started))), timeout)
+      contexts should be (orderedExpectedList)
+
+      orderedExpectedList = Seq(contextInfo5, contextInfo2)
+      .sortBy(_.id)
+      .sortBy(_.startTime.getMillis)(Desc)
+
+      contexts = Await.result(
+          dao.getContextInfos(Some(2), Some(Seq(ContextStatus.Running, ContextStatus.Restarting))), timeout)
       contexts should be (orderedExpectedList)
     }
 
@@ -503,7 +513,7 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
 
       dao.saveContextInfo(contextInfo1)
       dao.saveContextInfo(contextInfo2)
-      val contexts = Await.result(dao.getContextInfos(None, Some(ContextStatus.Started)), timeout)
+      val contexts = Await.result(dao.getContextInfos(None, Some(Seq(ContextStatus.Started))), timeout)
       contexts.head should be (contextInfo1)
     }
 
