@@ -481,10 +481,12 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
 
   private def getActiveContextByName(name: String): (Boolean, Option[ContextInfo]) = {
     val resp = getContextByName(name)
+    val statesInWhichContextCanBeActive =
+      List(ContextStatus.Started, ContextStatus.Running, ContextStatus.Restarting)
     resp match {
       case None => (false, None)
       case Some(JobDAOActor.ContextResponse(Some(c)))
-        if c.state == ContextStatus.Running || c.state == ContextStatus.Started => (true, Some(c))
+        if statesInWhichContextCanBeActive.contains(c.state) => (true, Some(c))
       case Some(_) => (true, None)
     }
   }

@@ -376,6 +376,22 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       // JobManagerActor Stub by default return NoSuchContext
       expectMsg(NoSuchContext)
     }
+
+    it("should not allow to create the same context if in restarting state") {
+      val contextId = "restartingContextId"
+      val contextName = "restartingContextName"
+      val convertedContextConfig = contextConfig.root().render(ConfigRenderOptions.concise())
+
+      val contextInfoPF = ContextInfo(contextId, contextName, convertedContextConfig, None, DateTime.now(),
+          None, _: String, None)
+      val restartingContext = contextInfoPF(ContextStatus.Restarting)
+      dao.saveContextInfo(restartingContext)
+
+      supervisor ! AddContext(contextName, contextConfig)
+      expectMsg(contextInitTimeout, ContextAlreadyExists)
+
+      dao.saveContextInfo(contextInfoPF(ContextStatus.Finished)) // cleanup
+    }
   }
 
   describe("Supervise mode tests") {
