@@ -42,7 +42,7 @@ object JobDAOActor {
   case class GetContextInfo(id: String) extends JobDAORequest
   case class GetContextInfoByName(name: String) extends JobDAORequest
   case class GetContextInfos(limit: Option[Int] = None,
-      statusOpt: Option[String] = None) extends JobDAORequest
+      statuses: Option[Seq[String]] = None) extends JobDAORequest
 
   //Responses
   sealed trait JobDAOResponse
@@ -90,8 +90,8 @@ class JobDAOActor(dao: JobDAO) extends InstrumentedActor {
     case GetContextInfoByName(name) =>
       dao.getContextInfoByName(name).map(ContextResponse).pipeTo(sender)
 
-    case GetContextInfos(limit, statusOpt) =>
-      dao.getContextInfos(limit, statusOpt).map(ContextInfos).pipeTo(sender)
+    case GetContextInfos(limit, statuses) =>
+      dao.getContextInfos(limit, statuses).map(ContextInfos).pipeTo(sender)
 
     case SaveJobInfo(jobInfo) =>
       dao.saveJobInfo(jobInfo)
