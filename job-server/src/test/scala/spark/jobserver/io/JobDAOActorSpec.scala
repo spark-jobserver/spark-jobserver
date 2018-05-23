@@ -44,7 +44,7 @@ object JobDAOActorSpec {
 
     override def getContextInfo(id: String): Future[Option[ContextInfo]] = ???
 
-    override def getContextInfos(limit: Option[Int] = None, statusOpt: Option[String] = None):
+    override def getContextInfos(limit: Option[Int] = None, statuses: Option[Seq[String]] = None):
       Future[Seq[ContextInfo]] = ???
 
     override def getContextInfoByName(name: String): Future[Option[ContextInfo]] = ???

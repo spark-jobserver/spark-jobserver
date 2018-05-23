@@ -160,7 +160,7 @@ trait JobDAO {
    *
    * @return
    */
-  def getContextInfos(limit: Option[Int] = None, statusOpt: Option[String] = None):
+  def getContextInfos(limit: Option[Int] = None, statuses: Option[Seq[String]] = None):
     Future[Seq[ContextInfo]]
 
   /**

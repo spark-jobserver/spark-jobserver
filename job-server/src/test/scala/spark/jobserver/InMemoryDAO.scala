@@ -61,12 +61,12 @@ class InMemoryDAO extends JobDAO {
       c1.startTime.isAfter(c2.startTime)
   }
 
-  override def getContextInfos(limit: Option[Int] = None, statusOpt: Option[String] = None):
+  override def getContextInfos(limit: Option[Int] = None, statuses: Option[Seq[String]] = None):
         Future[Seq[ContextInfo]] = Future {
     val allContexts = contextInfos.values.toSeq.sortWith(sortTime)
-    val filteredContexts = statusOpt match {
-      case Some(state) =>
-        allContexts.filter(_.state == state)
+    val filteredContexts = statuses match {
+      case Some(statuses) =>
+        allContexts.filter(j => statuses.contains(j.state))
       case _ => allContexts
     }
 
