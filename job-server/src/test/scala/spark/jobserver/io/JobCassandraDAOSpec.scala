@@ -498,8 +498,7 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
       contexts should be (orderedExpectedList)
 
       orderedExpectedList = Seq(contextInfo5, contextInfo2)
-      .sortBy(_.id)
-      .sortBy(_.startTime.getMillis)(Desc)
+          .sortBy(_.startTime.getMillis)(Desc)
 
       contexts = Await.result(
           dao.getContextInfos(Some(2), Some(Seq(ContextStatus.Running, ContextStatus.Restarting))), timeout)
