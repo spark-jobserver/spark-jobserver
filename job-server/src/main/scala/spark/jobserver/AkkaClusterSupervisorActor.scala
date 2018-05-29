@@ -7,7 +7,7 @@ import java.util.concurrent.TimeUnit
 import akka.actor._
 import akka.pattern.ask
 import akka.cluster.Cluster
-import akka.cluster.ClusterEvent.{InitialStateAsEvents, MemberEvent, MemberUp}
+import akka.cluster.ClusterEvent.{MemberUp, CurrentClusterState}
 import akka.util.Timeout
 import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
 import spark.jobserver.util.{SparkJobUtils, ManagerLauncher}
@@ -40,8 +40,8 @@ object AkkaClusterSupervisorActor {
  *
  * See the [[LocalContextSupervisorActor]] for normal config options.
  */
-class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
-    extends InstrumentedActor {
+class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
+    cluster: Cluster) extends InstrumentedActor {
 
   import ContextSupervisor._
   import scala.collection.JavaConverters._
@@ -63,7 +63,6 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
   private val resultActorRefs = mutable.HashMap.empty[String, ActorRef]
   private val jobManagerActorRefs = mutable.HashMap.empty[String, ActorRef]
 
-  private val cluster = Cluster(context.system)
   protected val selfAddress = cluster.selfAddress
 
   private val FINAL_STATES = Set(ContextStatus.Error, ContextStatus.Finished, ContextStatus.Killed)
@@ -71,8 +70,6 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
   // This is for capturing results for ad-hoc jobs. Otherwise when ad-hoc job dies, resultActor also dies,
   // and there is no way to retrieve results.
   val globalResultActor = context.actorOf(Props[JobResultActor], "global-result-actor")
-
-  logger.info("AkkaClusterSupervisor initialized on {}", selfAddress)
 
   def getActorRef(contextInfo: ContextInfo) : Option[ActorRef] = {
     contextInfo.actorAddress match {
@@ -101,16 +98,31 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
   }
 
   override def preStart(): Unit = {
-    cluster.join(selfAddress)
-    cluster.subscribe(self, initialStateMode = InitialStateAsEvents, classOf[MemberEvent])
+    logger.info("AkkaClusterSupervisor initialized on {}", selfAddress)
   }
 
   override def postStop(): Unit = {
     cluster.unsubscribe(self)
     cluster.leave(selfAddress)
+    logger.warn(s"Unsubscribing and leaving cluster with address ${selfAddress}")
   }
 
   def wrappedReceive: Receive = {
+    case state: CurrentClusterState =>
+      lazy val members = StringBuilder.newBuilder
+      state.members.foreach(m => members.append(m.address.toString).append(" "))
+      logger.info(s"Current Akka cluster has members ${members.toString()}")
+
+      state.leader match {
+        case None => logger.warn("No leader for current Akka cluster!")
+        case Some(address) => logger.info(s"Current Akka leader has address ${address.toString}")
+      }
+
+      state.roleLeaderMap.foreach {
+        case (key, Some(address)) => logger.info(s"Role/Address entry: $key/${address.toString}")
+        case (key, None) => logger.info(s"Role/Address entry: $key/")
+      }
+
     case MemberUp(member) =>
       if (member.hasRole("manager")) {
         val memberActors = RootActorPath(member.address) / "user" / "*"

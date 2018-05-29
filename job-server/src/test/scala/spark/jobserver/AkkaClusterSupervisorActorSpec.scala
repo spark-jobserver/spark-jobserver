@@ -4,6 +4,7 @@ import akka.actor._
 import akka.cluster.Cluster
 import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import akka.testkit._
+import akka.cluster.ClusterEvent.MemberEvent
 
 import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.io.{JobDAO, JobDAOActor, ContextInfo, ContextStatus, JobInfo, JobStatus, BinaryInfo, BinaryType}
@@ -80,8 +81,13 @@ object StubbedAkkaClusterSupervisorActor {
   case class DummyTerminated(actorRef: ActorRef)
 }
 
-class StubbedAkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef, managerProbe: TestProbe)
-        extends AkkaClusterSupervisorActor(daoActor, dataManagerActor) {
+class StubbedAkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef, managerProbe: TestProbe, cluster: Cluster)
+        extends AkkaClusterSupervisorActor(daoActor, dataManagerActor, cluster) {
+
+  override def preStart(): Unit = {
+    cluster.join(selfAddress)
+    cluster.subscribe(self, classOf[MemberEvent])
+  }
 
   var daoCommunicationDisabled = false
   def createSlaveClusterWithJobManager(contextName: String, contextConfig: Config): (Cluster, ActorRef) = {
@@ -163,7 +169,8 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
   override def beforeAll() {
     dao = new InMemoryDAO
     daoActor = system.actorOf(JobDAOActor.props(dao))
-    supervisor = system.actorOf(Props(classOf[StubbedAkkaClusterSupervisorActor], daoActor, TestProbe().ref, managerProbe), "supervisor")
+    val cluster = Cluster(system)
+    supervisor = system.actorOf(Props(classOf[StubbedAkkaClusterSupervisorActor], daoActor, TestProbe().ref, managerProbe, cluster), "supervisor")
   }
 
   override def afterAll() = {
