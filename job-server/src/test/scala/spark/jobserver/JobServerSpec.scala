@@ -212,5 +212,24 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
       jobTerminated.state should be(JobStatus.Error)
       jobTerminated.error.get.message should be(ContextReconnectFailedException().getMessage)
     }
+
+    it("should return None if no context is available to reconnect") {
+      val daoActor = system.actorOf(JobDAOActor.props(new InMemoryDAO))
+
+      val existingClusterAddress = JobServer.updateContextStatus(system, daoActor)
+      existingClusterAddress should be(None)
+    }
+
+    it("should return actor address (only 1) for actors state running during reconnect") {
+      val daoActor = system.actorOf(JobDAOActor.props(new InMemoryDAO))
+      val ctxRunning = createContext("ctxRunning", ContextStatus.Running, true)
+      val ctxRunning2 = createContext("ctxRunning2", ContextStatus.Running, true)
+
+      daoActor ! JobDAOActor.SaveContextInfo(ctxRunning)
+      daoActor ! JobDAOActor.SaveContextInfo(ctxRunning2)
+
+      val existingClusterAddress = JobServer.updateContextStatus(system, daoActor)
+      existingClusterAddress.get should be(ctxRunning.actorAddress.get)
+    }
   }
 }
