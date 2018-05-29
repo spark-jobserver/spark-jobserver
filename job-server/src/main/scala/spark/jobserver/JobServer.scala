@@ -4,6 +4,10 @@ import akka.actor.{ActorSystem, ActorRef, ActorContext, Props}
 
 import akka.util.Timeout
 import akka.pattern.ask
+import akka.cluster.Cluster
+import akka.cluster.ClusterEvent.{InitialStateAsEvents, MemberEvent}
+import akka.actor.AddressFromURIString
+
 import com.typesafe.config.{ConfigValueFactory, Config, ConfigFactory}
 
 import java.io.File
@@ -115,35 +119,68 @@ object JobServer {
     val dataFileDAO = new DataFileDAO(config)
     val dataManager = system.actorOf(Props(classOf[DataManagerActor], dataFileDAO), "data-manager")
     val binManager = system.actorOf(Props(classOf[BinaryManager], daoActor), "binary-manager")
-    val supervisor =
-      system.actorOf(Props(
-        if (contextPerJvm) {
-          classOf[AkkaClusterSupervisorActor]
-        } else {
-          classOf[LocalContextSupervisorActor]
-        },
-        daoActor, dataManager), "context-supervisor")
-    val jobInfo = system.actorOf(Props(classOf[JobInfoActor], jobDAO, supervisor), "job-info")
 
     // Add initial job JARs, if specified in configuration.
     storeInitialBinaries(config, binManager)
 
-    // Check if all contexts marked as running are still available
-    updateContextStatus(daoActor, system);
+    val webApiPF = new WebApi(system, config, port, binManager, dataManager, _: ActorRef, _: ActorRef)
+    contextPerJvm match {
+      case false =>
+        val supervisor = system.actorOf(Props(classOf[LocalContextSupervisorActor],
+            daoActor, dataManager), "context-supervisor")
+        supervisor ! ContextSupervisor.AddContextsFromConfig  // Create initial contexts
+        startWebApi(system, supervisor, jobDAO, webApiPF)
+      case true =>
+        val cluster = Cluster(system)
 
-    // Create initial contexts
-    supervisor ! ContextSupervisor.AddContextsFromConfig
-    new WebApi(system, config, port, binManager, dataManager, supervisor, jobInfo).start()
+        // Check if all contexts marked as running are still available and get the Akka address of
+        // one of the nodes which is already part of Akka cluster
+        val initialSeedNode = updateContextStatus(system, daoActor)
+        joinAkkaCluster(cluster, initialSeedNode)
+        // We don't want to read all the old events that happened in the cluster
+        // So, we remove the initialStateMode parameter
+        cluster.registerOnMemberUp {
+          val supervisor = system.actorOf(Props(classOf[AkkaClusterSupervisorActor],
+            daoActor, dataManager, cluster), "context-supervisor")
+
+          logger.info("Subscribing to MemberUp event")
+          cluster.subscribe(supervisor, classOf[MemberEvent])
+
+          supervisor ! ContextSupervisor.AddContextsFromConfig  // Create initial contexts
+          startWebApi(system, supervisor, jobDAO, webApiPF)
+        }
+    }
   }
 
-  def validateContext(
-      contextInfo: ContextInfo, system: ActorSystem, jobDaoActor: ActorRef)(implicit e: ExecutionContext) {
+  def startWebApi(system: ActorSystem, supervisor: ActorRef, jobDAO: JobDAO,
+      webApiPF: (ActorRef, ActorRef) => WebApi) {
+    val jobInfo = system.actorOf(Props(classOf[JobInfoActor], jobDAO, supervisor), "job-info")
+    webApiPF(supervisor, jobInfo).start()
+  }
+
+  def joinAkkaCluster(cluster: Cluster, initialSeedNode: Option[String]) {
+    initialSeedNode match {
+      case None =>
+        val selfAddress = cluster.selfAddress
+        logger.info(s"Joining newly created cluster at ${selfAddress}")
+        cluster.join(selfAddress)
+      case Some(address) =>
+        logger.info(s"Joining existing cluster at ${address}")
+        cluster.join(AddressFromURIString(address))
+    }
+  }
+
+  def validateContext(contextInfo: ContextInfo, system: ActorSystem,
+      jobDaoActor: ActorRef)(implicit e: ExecutionContext): Option[String] = {
     val finiteDuration = FiniteDuration(3, SECONDS)
-    val address = contextInfo.actorAddress.get + "/user/" + AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX +
+    val clusterAddress = contextInfo.actorAddress.get
+    val address = clusterAddress + "/user/" + AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX +
         contextInfo.id
     val actorFut = Await.ready(system.actorSelection(address).resolveOne(finiteDuration), finiteDuration)
     actorFut.value.get match {
-      case Success(actorRef) => logger.info(s"Found context ${contextInfo.name} -> reconnect is possible")
+      case Success(actorRef) =>
+        logger.info(s"Found context ${contextInfo.name} -> reconnect is possible")
+        Some(clusterAddress)
       case Failure(ex) => {
         val c = contextInfo
         val ctxName = c.name
@@ -152,19 +189,25 @@ object JobServer {
         val updatedContextInfo = ContextInfo(c.id, c.name, c.config, c.actorAddress, c.startTime,
             Option(DateTime.now()), ContextStatus.Error, error)
         jobDaoActor ! JobDAOActor.SaveContextInfo(updatedContextInfo)
+        None
       }
     }
   }
 
   val ec = scala.concurrent.ExecutionContext.Implicits.global
   @VisibleForTesting
-  def updateContextStatus(jobDaoActor: ActorRef, system: ActorSystem) {
+  def updateContextStatus(system: ActorSystem, jobDaoActor: ActorRef): Option[String] = {
     val config = system.settings.config
     val daoAskTimeout = Timeout(config.getDuration("spark.jobserver.dao-timeout", TimeUnit.SECONDS).second)
     val resp = Await.result(
         (jobDaoActor ? JobDAOActor.GetContextInfos(None, Some(Seq(ContextStatus.Running))))(daoAskTimeout).
         mapTo[JobDAOActor.ContextInfos], daoAskTimeout.duration)
-    resp.contextInfos.foreach(ci => validateContext(ci, system, jobDaoActor)(ec))
+    val initialSeedNode = resp.contextInfos.map(ci =>
+      validateContext(ci, system, jobDaoActor)(ec)).find(_ != None)
+    initialSeedNode match {
+      case None => None
+      case Some(seedNodeAddress) => seedNodeAddress
+    }
   }
 
   private def parseInitialBinaryConfig(key: String, config: Config): Map[String, String] = {
