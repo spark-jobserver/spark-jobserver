@@ -635,8 +635,6 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
     respMsg = respMsg + s"contextName=${existingJobInfo.contextName})"
     logger.info(respMsg)
     val fullJobConfig = existingJobConfig.withFallback(config).resolve()
-    val contextConfig = Try(existingJobConfig.getConfig("spark.context-settings"))
-      .getOrElse(ConfigFactory.empty).resolve()
     val events: Set[Class[_]] = Set(classOf[JobStarted]) ++ Set(classOf[JobValidationFailed])
 
     sendStartJobMessage(self, StartJob(existingJobInfo.binaryInfo.appName,
