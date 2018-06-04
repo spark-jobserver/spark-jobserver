@@ -44,7 +44,7 @@ class JobStatusActor(jobDao: ActorRef) extends InstrumentedActor with YammerMetr
     val stopTime = DateTime.now()
     val stoppedInfos = infos.values.map { info =>
       val errorData = ErrorData(s"Context (${info.contextName}) for this job was terminated", "", "")
-      info.copy(endTime = Some(stopTime), error = Some(errorData))
+      info.copy(endTime = Some(stopTime), error = Some(errorData), state = JobStatus.Error)
     }
     stoppedInfos.foreach({info => jobDao ! JobDAOActor.SaveJobInfo(info)})
   }

@@ -1,6 +1,6 @@
 package spark.jobserver
 
-import akka.actor.{ActorRef, ActorSystem, Props}
+import akka.actor.{ActorRef, ActorSystem, Props, PoisonPill}
 import akka.testkit.{ImplicitSender, TestKit, TestProbe, TestActor}
 import spark.jobserver.io._
 import org.joda.time.DateTime
@@ -227,6 +227,25 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
       actor ! GetRunningJobStatus
       daoMsgReceiverProbe.expectNoMsg()
       expectMsg(Seq.empty)
+    }
+
+    it("should update status in postStop correctly") {
+      import scala.concurrent.duration._
+
+      actor ! JobInit(jobInfo)
+
+      actor ! JobStarted(jobId, jobInfo)
+      daoMsgReceiverProbe.expectMsg(JobDAOActor.SaveJobInfo(jobInfo))
+
+      actor ! PoisonPill
+      val id = daoMsgReceiverProbe.expectMsgPF(3 seconds) {
+        case JobDAOActor.SaveJobInfo(receivedJobInfo) =>
+          receivedJobInfo.jobId should be (jobId)
+          receivedJobInfo.state should be (JobStatus.Error)
+          receivedJobInfo.error.get.message should be (s"Context (${contextName}) for this job was terminated")
+      }
+
+      daoMsgReceiverProbe.expectNoMsg()
     }
   }
 }
