@@ -406,6 +406,9 @@ class WebApi(system: ActorSystem,
                     case ContextAlreadyExists => badRequest(ctx, "context " + contextName + " exists")
                     case ContextInitError(e) => ctx.complete(500, errMap(e, "CONTEXT INIT ERROR"));
                     case UnexpectedError => ctx.complete(500, errMap("UNEXPECTED ERROR OCCURRED"))
+                  }.recover {
+                    case e: Exception =>
+                      ctx.complete(500, errMap(e, "ERROR"));
                   }
                 }
               }
@@ -426,6 +429,9 @@ class WebApi(system: ActorSystem,
                 case NoSuchContext => notFound(ctx, "context " + contextName + " not found")
                 case ContextStopError(e) => ctx.complete(500, errMap(e, "CONTEXT DELETE ERROR"))
                 case UnexpectedError => ctx.complete(500, errMap("UNEXPECTED ERROR OCCURRED"))
+              }.recover {
+                case e: Exception =>
+                  ctx.complete(500, errMap(e, "ERROR"));
               }
             }
           }
@@ -519,6 +525,9 @@ class WebApi(system: ActorSystem,
               notFound(ctx, "No such job ID " + jobId)
             case cnf: Config =>
               ctx.complete(cnf.root().render(renderOptions))
+          }.recover {
+            case e: Exception =>
+              ctx.complete(500, errMap(e, "ERROR"));
           }
         }
       } ~
@@ -545,7 +554,13 @@ class WebApi(system: ActorSystem,
                     }
                   case _ =>
                     ctx.complete(jobReport)
+                }.recover {
+                  case e: Exception =>
+                    ctx.complete(500, errMap(e, "ERROR"));
                 }
+            }.recover {
+              case e: Exception =>
+                ctx.complete(500, errMap(e, "ERROR"));
             }
           }
         } ~
@@ -572,6 +587,9 @@ class WebApi(system: ActorSystem,
                 if (state.equals(JobStatus.Finished) || state.equals(JobStatus.Killed)) =>
                 notFound(ctx, "No running job with ID " + jobId)
               case _ => ctx.complete(500, errMap("Received an unexpected message"))
+            }.recover {
+              case e: Exception =>
+                ctx.complete(500, errMap(e, "ERROR"));
             }
           }
         } ~
