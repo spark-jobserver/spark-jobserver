@@ -452,6 +452,9 @@ class WebApi(system: ActorSystem,
                     case ContextAlreadyExists => badRequest(ctx, "context " + contextName + " exists")
                     case ContextInitError(e) => logAndComplete(ctx, "CONTEXT INIT ERROR", 500, e);
                     case UnexpectedError => logAndComplete(ctx, "UNEXPECTED ERROR OCCURRED", 500)
+                  }.recover {
+                    case e: Exception =>
+                      logAndComplete(ctx, "ERROR", 500, e);
                   }
                 }
               }
@@ -477,6 +480,9 @@ class WebApi(system: ActorSystem,
                 case NoSuchContext => notFound(ctx, "context " + contextName + " not found")
                 case ContextStopError(e) => logAndComplete(ctx, "CONTEXT DELETE ERROR", 500, e);
                 case UnexpectedError => logAndComplete(ctx, "UNEXPECTED ERROR OCCURRED", 500)
+              }.recover {
+                case e: Exception =>
+                  logAndComplete(ctx, "ERROR", 500, e);
               }
             }
           }
@@ -586,6 +592,9 @@ class WebApi(system: ActorSystem,
               val getConfig = cnf.root().render(renderOptions)
               logger.info(getConfig);
               ctx.complete(getConfig)
+          }.recover {
+            case e: Exception =>
+              logAndComplete(ctx, "ERROR", 500, e);
           }
         }
       } ~
@@ -616,7 +625,13 @@ class WebApi(system: ActorSystem,
                   case _ =>
                     logger.info(jobReport.toString());
                     ctx.complete(jobReport)
+                }.recover {
+                  case e: Exception =>
+                    logAndComplete(ctx, "ERROR", 500, e);
                 }
+            }.recover {
+              case e: Exception =>
+                logAndComplete(ctx, "ERROR", 500, e);
             }
           }
         } ~
@@ -648,6 +663,9 @@ class WebApi(system: ActorSystem,
                 if (state.equals(JobStatus.Finished) || state.equals(JobStatus.Killed)) =>
                 notFound(ctx, "No running job with ID " + jobId)
               case _ => logAndComplete(ctx, "Received an unexpected message", 500);
+            }.recover {
+              case e: Exception =>
+                logAndComplete(ctx, "ERROR", 500, e);
             }
           }
         } ~
