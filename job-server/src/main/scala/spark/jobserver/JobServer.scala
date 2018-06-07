@@ -8,7 +8,8 @@ import com.typesafe.config.{ConfigValueFactory, Config, ConfigFactory}
 
 import java.io.File
 import java.util.concurrent.TimeUnit
-import spark.jobserver.io.{BinaryType, JobDAOActor, JobDAO, DataFileDAO, ContextStatus, ContextInfo}
+import spark.jobserver.io.{
+  BinaryType, JobDAOActor, JobDAO, DataFileDAO, ContextStatus, ContextInfo, JobStatus, ErrorData}
 import org.joda.time.DateTime
 
 import org.slf4j.LoggerFactory
@@ -129,7 +130,7 @@ object JobServer {
     storeInitialBinaries(config, binManager)
 
     // Check if all contexts marked as running are still available
-    updateContextStatus(daoActor, system);
+    updateContextStatus(system, daoActor);
 
     // Create initial contexts
     supervisor ! ContextSupervisor.AddContextsFromConfig
@@ -147,18 +148,34 @@ object JobServer {
       case Failure(ex) => {
         val c = contextInfo
         val ctxName = c.name
-        logger.info(s"Reconnecting to context $ctxName failed -> update status of context $ctxName to error");
-        val error = Some(new Throwable("Reconnect failed after Jobserver restart"))
+        val logMsg = s"Reconnecting to context $ctxName failed ->" +
+          s"updating status of context $ctxName and related jobs to error"
+        logger.info(logMsg);
+        val error = new Throwable("Reconnect faliled after Jobserver restart")
         val updatedContextInfo = ContextInfo(c.id, c.name, c.config, c.actorAddress, c.startTime,
-            Option(DateTime.now()), ContextStatus.Error, error)
+            Option(DateTime.now()), ContextStatus.Error, Some(error))
         jobDaoActor ! JobDAOActor.SaveContextInfo(updatedContextInfo)
+        (jobDaoActor ? JobDAOActor.GetJobInfosByContextId(contextInfo.id, None))(finiteDuration).onComplete {
+          case Success(JobDAOActor.JobInfos(jobInfos)) =>
+            val nonFinalStates = Seq(JobStatus.Started, JobStatus.Running, JobStatus.Restarting)
+            jobInfos.filter(j => nonFinalStates.contains(j.state)).foreach(jobInfo => {
+            jobDaoActor ! JobDAOActor.SaveJobInfo(jobInfo.copy(state = JobStatus.Error,
+                endTime = Some(DateTime.now()), error = Some(ErrorData(error))))
+            })
+          case Failure(e: Exception) =>
+            logger.error(s"Exception occurred while fetching jobs for context (${contextInfo.id})", e)
+          case unexpectedMsg @ _ =>
+            logger.error(
+                s"$unexpectedMsg message received while fetching jobs for context (${contextInfo.id})")
+        }
+        None
       }
     }
   }
 
   val ec = scala.concurrent.ExecutionContext.Implicits.global
   @VisibleForTesting
-  def updateContextStatus(jobDaoActor: ActorRef, system: ActorSystem) {
+  def updateContextStatus(system: ActorSystem, jobDaoActor: ActorRef) {
     val config = system.settings.config
     val daoAskTimeout = Timeout(config.getDuration("spark.jobserver.dao-timeout", TimeUnit.SECONDS).second)
     val resp = Await.result(

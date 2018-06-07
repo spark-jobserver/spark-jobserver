@@ -13,7 +13,8 @@ import java.nio.file.Files
 import scala.concurrent.duration._
 import spark.jobserver.JobServer.InvalidConfiguration
 import spark.jobserver.common.akka
-import spark.jobserver.io.{JobDAOActor, JobDAO, ContextInfo, ContextStatus}
+import spark.jobserver.io.{
+  JobDAOActor, JobDAO, ContextInfo, ContextStatus, JobInfo, BinaryInfo, BinaryType, JobStatus}
 
 import scala.concurrent.Await
 import scala.concurrent.duration.TimeUnit;
@@ -174,19 +175,44 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
       daoActor ! JobDAOActor.SaveContextInfo(ctxRunning)
       daoActor ! JobDAOActor.SaveContextInfo(ctxTerminated)
 
-      JobServer.updateContextStatus(daoActor, system)
+      def genJob(jobId: String, ctx: ContextInfo, status: String) = {
+        val dt = DateTime.parse("2013-05-29T00Z")
+        JobInfo(jobId, ctx.id, ctx.name, BinaryInfo("demo", BinaryType.Jar, dt), "com.abc.meme",
+            status, dt, None, None)
+      }
+
+      val jobRunning = genJob("jid1", ctxRunning, JobStatus.Running)
+      val jobTerminated = genJob("jid2", ctxTerminated, JobStatus.Running)
+      val jobFinsihed = genJob("jid3", ctxTerminated, JobStatus.Finished)
+      daoActor ! JobDAOActor.SaveJobInfo(jobRunning)
+      daoActor ! JobDAOActor.SaveJobInfo(jobTerminated)
+      daoActor ! JobDAOActor.SaveJobInfo(jobFinsihed)
+
+      JobServer.updateContextStatus(system, daoActor)
+
+      Thread.sleep(2000)
 
       val timeout = Timeout.apply(Duration.create(3, TimeUnit.SECONDS))
       val resp = Await.result((daoActor ? JobDAOActor.GetContextInfos(None, None))(timeout).
           mapTo[JobDAOActor.ContextInfos], timeout.duration)
+      val jobInfos = Await.result((daoActor ? JobDAOActor.GetJobInfos(100))(timeout).
+          mapTo[JobDAOActor.JobInfos], timeout.duration)
       // Expect that only the context with the initialized actor is in the running state
       resp.contextInfos.size should equal (2)
       resp.contextInfos.foreach(ci => {
+        val jobs = jobInfos.jobInfos.filter(j => j.contextId.equals(ci.id));
         if (ctxRunning.name.equals(ci.name)) {
           ci.state should equal (ContextStatus.Running)
+          jobs.head.state should equal (JobStatus.Running)
+          jobs.head.error should be (None)
         } else {
           ci.state should equal (ContextStatus.Error)
           ci.error.get.getMessage should be ("Reconnect failed after Jobserver restart")
+          var job = jobs.find(j => j.jobId.equals("jid2")).head;
+          job.state should equal (JobStatus.Error)
+          job.error.get.message should be ("Reconnect failed after Jobserver restart")
+          job = jobs.find(j => j.jobId.equals("jid3")).head;
+          job should equal (jobFinsihed)
         }
       })
     }
