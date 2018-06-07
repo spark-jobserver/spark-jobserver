@@ -9,7 +9,7 @@ import akka.cluster.ClusterEvent.MemberEvent
 import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.io.{JobDAO, JobDAOActor, ContextInfo, ContextStatus, JobInfo, JobStatus, BinaryInfo, BinaryType}
 import ContextSupervisor._
-import spark.jobserver.util.ManagerLauncher
+import spark.jobserver.util.{ManagerLauncher, ContextJVMInitializationTimeout, SparkJobUtils}
 import spark.jobserver.JobManagerActor._
 
 import scala.collection.JavaConverters._
@@ -22,6 +22,8 @@ import org.joda.time.DateTime
 import scala.concurrent.Await
 import scala.reflect.ClassTag
 import java.util.concurrent.CountDownLatch
+
+import java.util.concurrent.TimeUnit
 
 object AkkaClusterSupervisorActorSpec {
   // All the Actors System should have the same name otherwise they cannot form a cluster
@@ -62,6 +64,7 @@ object AkkaClusterSupervisorActorSpec {
         num-cpu-cores = 2
         memory-per-node = 512m
         context-init-timeout = 2 s
+        forked-jvm-init-timeout = 5s
         context-factory = spark.jobserver.context.DefaultSparkContextFactory
         passthrough {
           spark.driver.allowMultipleContexts = true
@@ -102,9 +105,12 @@ class StubbedAkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: Ac
 
   override protected def launchDriver(name: String, contextConfig: Config, contextActorName: String): (Boolean, String) = {
     // Create probe and cluster and join back the master
-    Try(contextConfig.getBoolean("driver.fail")).getOrElse(false) match {
-      case true => (false, "")
-      case false =>
+    val shouldDriverLaunchFail = Try(contextConfig.getBoolean("driver.fail")).getOrElse(false)
+    val shouldDriverFailToJoinCluster = Try(contextConfig.getBoolean("driver.cluster.join.fail")).getOrElse(false)
+    (shouldDriverLaunchFail, shouldDriverFailToJoinCluster) match {
+      case (true, false) | (true, true) => (false, "")
+      case (false, true) => (true, "")
+      case (false, false) =>
         val managerActorAndCluster = createSlaveClusterWithJobManager(contextActorName, contextConfig)
         managerActorAndCluster._1.join(selfAddress)
         (true, "")
@@ -117,7 +123,10 @@ class StubbedAkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: Ac
 
   def stubbedWrappedReceive: Receive = {
     case StubbedAkkaClusterSupervisorActor.AddContextToContextInitInfos(name) =>
-      contextInitInfos(name) = ({ref=>}, {ref=>})
+      contextInitInfos(name) = ({ref=>}, {ref=>}, new Cancellable {
+        def cancel(): Boolean = { return false }
+        def isCancelled: Boolean = { return false }
+      })
     case StubbedAkkaClusterSupervisorActor.DisableDAOCommunication =>
       daoCommunicationDisabled = true
     case StubbedAkkaClusterSupervisorActor.EnableDAOCommunication =>
@@ -316,6 +325,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
 
       supervisor ! ActorIdentity(unusedDummyInput, Some(managerProbe.ref))
       deathWatch.expectTerminated(managerProbe.ref)
+      expectNoMsg((SparkJobUtils.getForkedJVMInitTimeout(system.settings.config) + 1).second)
 
       supervisor ! StubbedAkkaClusterSupervisorActor.EnableDAOCommunication
     }
@@ -330,6 +340,56 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       deathWatch.expectTerminated(managerProbe.ref)
 
       supervisor ! StubbedAkkaClusterSupervisorActor.EnableDAOCommunication
+    }
+
+    /**
+     * This is a common case in cluster-mode. If you submit a context to Spark cluster
+     * and it does not have enough resources then context will be put to "SUBMITTED"
+     * state by Spark. Since JVM was never initialized, no cluster was joined and user
+     * received ERROR but later at some point when Spark cluster has resources, it will
+     * move context to RUNNING state. At this point, this JVM will try to join the
+     * Akka cluster but we don't need it anymore because user does not know about it.
+     */
+    it("should kill context if JVM creation timed out already and context is trying to join/initialize") {
+      val timedOutRejoiningManagerProbe = TestProbe("jobManager-timedOutManager")
+      val deathWatch = TestProbe()
+      deathWatch.watch(timedOutRejoiningManagerProbe.ref)
+
+      val contextActorName = timedOutRejoiningManagerProbe.ref.path.name
+      supervisor ! StubbedAkkaClusterSupervisorActor.AddContextToContextInitInfos(contextActorName)
+
+      val timedOutContextId = timedOutRejoiningManagerProbe.ref.path.name.replace(AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX, "")
+      val timedOutContext = ContextInfo(timedOutContextId, "contextName", "", None, DateTime.now(),
+          Some(DateTime.now().plusHours(1)), ContextStatus.Error, Some(ContextJVMInitializationTimeout()))
+      dao.saveContextInfo(timedOutContext)
+
+      supervisor ! ActorIdentity(unusedDummyInput, Some(timedOutRejoiningManagerProbe.ref))
+
+      deathWatch.expectTerminated(timedOutRejoiningManagerProbe.ref)
+    }
+
+    it("should kill context if it was marked as error in DAO and it is trying to join/initialize") {
+      val erroredOutRejoiningManagerProbe = TestProbe("jobManager-erroredOutManager")
+      val deathWatch = TestProbe()
+      deathWatch.watch(erroredOutRejoiningManagerProbe.ref)
+
+      val contextActorName = erroredOutRejoiningManagerProbe.ref.path.name
+      supervisor ! StubbedAkkaClusterSupervisorActor.AddContextToContextInitInfos(contextActorName)
+
+      val erroredOutContextId = erroredOutRejoiningManagerProbe.ref.path.name.replace(AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX, "")
+      val erroredOutContext = ContextInfo(erroredOutContextId, "contextName", "", None, DateTime.now(),
+          Some(DateTime.now().plusHours(1)), ContextStatus.Error, Some(new Exception("random error")))
+      dao.saveContextInfo(erroredOutContext)
+
+      supervisor ! ActorIdentity(unusedDummyInput, Some(erroredOutRejoiningManagerProbe.ref))
+
+      deathWatch.expectTerminated(erroredOutRejoiningManagerProbe.ref)
+    }
+
+    it("should not receive JVM creation timed out error if context was intialized properly") {
+      supervisor ! AddContext("test-context-proper-init", contextConfig)
+      expectMsg(contextInitTimeout, ContextInitialized)
+      expectNoMsg((SparkJobUtils.getForkedJVMInitTimeout(system.settings.config) + 1).second)
     }
   }
 
@@ -458,6 +518,22 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
 
       contextToTest.state should be(ContextStatus.Stopping)
       expectMsg(contextInitTimeout, NoSuchContext)
+    }
+
+    it("should return JVM initialization timeout if context JVM doesn't join cluster within timout") {
+      val failingContextName = "test-context-cluster-fail-join"
+      val wrongConfig = ConfigFactory.parseString("driver.cluster.join.fail=true").withFallback(contextConfig)
+
+      supervisor ! AddContext(failingContextName, wrongConfig)
+
+      val timeoutExceptionMessage = ContextJVMInitializationTimeout().getMessage
+      val msg = expectMsgClass((SparkJobUtils.getForkedJVMInitTimeout(system.settings.config) + 1).seconds,
+          classOf[ContextInitError])
+      msg.t.getMessage should be(timeoutExceptionMessage)
+
+      val timedOutContext = Await.result(dao.getContextInfoByName(failingContextName), daoTimeout)
+      timedOutContext.get.state should be(ContextStatus.Error)
+      timedOutContext.get.error.get.getMessage should be(timeoutExceptionMessage)
     }
   }
 

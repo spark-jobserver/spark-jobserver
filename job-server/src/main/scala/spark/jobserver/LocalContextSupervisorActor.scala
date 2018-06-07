@@ -16,6 +16,7 @@ import spark.jobserver.common.akka.InstrumentedActor
 import akka.pattern.gracefulStop
 import org.joda.time.DateTime
 import spark.jobserver.io.JobDAOActor.CleanContextJobInfos
+import spark.jobserver.io.ContextInfo
 
 /** Messages common to all ContextSupervisors */
 object ContextSupervisor {
@@ -29,6 +30,7 @@ object ContextSupervisor {
   case class StopContext(name: String)
   case class GetSparkContexData(name: String)
   case class RestartOfTerminatedJobsFailed(contextId: String)
+  case class ForkedJVMInitTimeout(contextActorName: String, contextInfo: ContextInfo)
 
   // Errors/Responses
   case object ContextInitialized
