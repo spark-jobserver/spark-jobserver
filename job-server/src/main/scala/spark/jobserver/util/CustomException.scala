@@ -21,3 +21,4 @@ final case class ContextJVMInitializationTimeout() extends
 
 final case class ContextReconnectFailedException() extends
   Exception("Reconnect failed after Jobserver restart")
+
