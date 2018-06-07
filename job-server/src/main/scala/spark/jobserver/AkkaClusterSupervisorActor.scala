@@ -9,6 +9,7 @@ import akka.pattern.ask
 import akka.cluster.Cluster
 import akka.cluster.ClusterEvent.{MemberUp, CurrentClusterState}
 import akka.util.Timeout
+
 import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
 import spark.jobserver.util.{SparkJobUtils, ManagerLauncher}
 
@@ -24,7 +25,8 @@ import org.slf4j.LoggerFactory
 import spark.jobserver.JobManagerActor.{GetContexData, ContexData, SparkContextDead, RestartExistingJobs}
 import spark.jobserver.JobManagerActor.ContextTerminatedException
 import spark.jobserver.io.{JobDAOActor, ContextInfo, ContextStatus, JobStatus, ErrorData}
-import spark.jobserver.util.{InternalServerErrorException, NoCallbackFoundException}
+import spark.jobserver.util.{InternalServerErrorException, NoCallbackFoundException,
+  ContextJVMInitializationTimeout}
 
 object AkkaClusterSupervisorActor {
   val MANAGER_ACTOR_PREFIX = "jobManager-"
@@ -51,13 +53,15 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
   val defaultContextConfig = config.getConfig("spark.context-settings")
   val contextInitTimeout = config.getDuration("spark.context-settings.context-init-timeout",
                                                 TimeUnit.SECONDS)
+  val forkedJVMInitTimeout = SparkJobUtils.getForkedJVMInitTimeout(config)
   val contextDeletionTimeout = SparkJobUtils.getContextDeletionTimeout(config)
   val daoAskTimeout = Timeout(config.getDuration("spark.jobserver.dao-timeout",
                                                 TimeUnit.SECONDS).second)
 
   import context.dispatcher
 
-  protected val contextInitInfos = mutable.HashMap.empty[String, (ActorRef => Unit, Throwable => Unit)]
+  protected val contextInitInfos = mutable.HashMap.empty[String,
+    (ActorRef => Unit, Throwable => Unit, Cancellable)]
 
   // actor name -> ResultActor ref
   private val resultActorRefs = mutable.HashMap.empty[String, ActorRef]
@@ -140,8 +144,13 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
             getDataFromDAO[JobDAOActor.ContextResponse](JobDAOActor.GetContextInfo(contextId))
           val callbacks = contextInitInfos.remove(actorName)
           (contextFromDAO, callbacks) match {
+            case (Some(JobDAOActor.ContextResponse(Some(contextInfo))), Some((_, _, _)))
+                if isContextErroredOut(contextInfo) =>
+              logger.info(s"Context forked JVM (${contextInfo.name}) already errored out. Killing it.")
+              actorRef ! PoisonPill
             case (Some(JobDAOActor.ContextResponse(Some(contextInfo))),
-                Some((successCallback, failureCallback))) =>
+                Some((successCallback, failureCallback, timeoutMsgCancelHandler))) =>
+              cancelScheduledMessage(timeoutMsgCancelHandler)
               initContext(contextInfo, actorName, actorRef, false)(successCallback, failureCallback)
             case (Some(JobDAOActor.ContextResponse(None)), _) =>
               logger.error(
@@ -167,7 +176,8 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
                   daoActor ! JobDAOActor.SaveContextInfo(contextInfo.copy(
                       state = ContextStatus.Error, endTime = Some(DateTime.now()), error = Some(exception)))
               }
-            case (None, Some((_, failureCallback))) =>
+            case (None, Some((_, failureCallback, timeoutMsgCancelHandler))) =>
+              cancelScheduledMessage(timeoutMsgCancelHandler)
               val exception = InternalServerErrorException(contextId)
               logger.error(exception.getMessage, exception)
               actorRef ! PoisonPill
@@ -288,6 +298,16 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
 
     case Terminated(actorRef) =>
       handleTerminatedEvent(actorRef)
+
+    case ForkedJVMInitTimeout(contextActorName, contextInfo: ContextInfo) => {
+      contextInitInfos.get(contextActorName) match {
+        case Some((successFunc, failureFunc, _)) =>
+          logger.warn(s"Context forked JVM failed to initialize for actor $contextActorName")
+          daoActor ! JobDAOActor.SaveContextInfo(contextInfo)
+          failureFunc(ContextJVMInitializationTimeout())
+        case None =>
+      }
+    }
   }
 
   protected def handleTerminatedEvent(actorRef: ActorRef) {
@@ -443,8 +463,23 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
         failureFunc(e)
         daoActor ! JobDAOActor.SaveContextInfo(contextInfo(ContextStatus.Error, Some(e)))
       case (true, _) =>
-        contextInitInfos(contextActorName) = (successFunc, failureFunc)
-        daoActor ! JobDAOActor.SaveContextInfo(contextInfo(ContextStatus.Started, None))
+        val timeoutMsg = ForkedJVMInitTimeout(contextActorName,
+             contextInfo(ContextStatus.Error, Some(ContextJVMInitializationTimeout())))
+        // Scheduler can throw IllegalStateException
+        Try(context.system.scheduler.scheduleOnce(forkedJVMInitTimeout.seconds, self, timeoutMsg)) match {
+          case Success(timeoutMsgCancelHandler) =>
+            logger.info("Scheduling a time out message for forked JVM")
+            daoActor ! JobDAOActor.SaveContextInfo(contextInfo(ContextStatus.Started, None))
+            contextInitInfos(contextActorName) = (successFunc, failureFunc, timeoutMsgCancelHandler)
+          case Failure(e) =>
+            logger.error("Failed to schedule a time out message for forked JVM", e)
+            daoActor ! JobDAOActor.SaveContextInfo(contextInfo(ContextStatus.Error, Some(e)))
+            val unusedCancellable = new Cancellable {
+              def cancel(): Boolean = { return false }
+              def isCancelled: Boolean = { return false }
+            }
+            contextInitInfos(contextActorName) = (successFunc, failureFunc, unusedCancellable)
+        }
     }
   }
 
@@ -518,5 +553,17 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
     val isAdhoc = contextConfig.getBoolean("is-adhoc")
     initContext(contextConfig, actorName,
            actorRef, contextInitTimeout, isRestartScenario)(isAdhoc, successCallback, failureCallback)
+  }
+
+  private def cancelScheduledMessage(cancelHandler: Cancellable) {
+    cancelHandler.cancel()
+    logger.info(s"Scheduled message has been cancelled: ${cancelHandler.isCancelled.toString()}")
+  }
+
+  private def isContextErroredOut(contextInfo: ContextInfo): Boolean = {
+    contextInfo.state match {
+      case ContextStatus.Error => true
+      case _ => false
+    }
   }
 }

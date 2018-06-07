@@ -150,4 +150,8 @@ object SparkJobUtils {
     getContextTimeout(config, "spark.jobserver.yarn-context-deletion-timeout",
       "spark.jobserver.context-deletion-timeout")
   }
+
+  def getForkedJVMInitTimeout(config: Config): Long = {
+    config.getDuration("spark.context-settings.forked-jvm-init-timeout", TimeUnit.SECONDS)
+  }
 }
