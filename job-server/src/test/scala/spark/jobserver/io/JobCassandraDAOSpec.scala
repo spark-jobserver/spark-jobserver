@@ -15,6 +15,7 @@ import scala.concurrent.duration._
 import scala.concurrent.Await
 import org.scalatest._
 
+@Ignore
 class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers with BeforeAndAfter
   with BeforeAndAfterAll {
 
