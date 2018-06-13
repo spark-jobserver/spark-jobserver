@@ -419,12 +419,12 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
     * @return
     */
   override def getJobInfosByContextId(
-      contextId: String, jobStatus: Option[String] = None): Future[Seq[JobInfo]] = {
+      contextId: String, jobStatuses: Option[Seq[String]] = None): Future[Seq[JobInfo]] = {
     val joinQuery = for {
       bin <- binaries
-      j <- jobs if ((contextId, jobStatus) match {
-                          case (contextId, Some(jobStatus)) => j.binId === bin.binId &&
-                              j.contextId === contextId && j.state === jobStatus
+      j <- jobs if ((contextId, jobStatuses) match {
+                          case (contextId, Some(statuses)) => j.binId === bin.binId &&
+                              j.contextId === contextId && j.state.inSet(statuses)
                           case _ => j.binId === bin.binId && j.contextId === contextId
                 })
     } yield {
@@ -437,7 +437,7 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
 
   override def cleanRunningJobInfosForContext(contextId: String, endTime: DateTime): Future[Unit] = {
     val sqlEndTime = Some(convertDateJodaToSql(endTime))
-    val error = Some(new ContextTerminatedException(contextId).getMessage())
+    val error = Some(ContextTerminatedException(contextId).getMessage())
     val selectQuery = for {
       j <- jobs if (j.contextId === contextId && j.state === JobStatus.Running)
     } yield (j.endTime, j.error, j.state)

@@ -40,7 +40,7 @@ object JobManager {
     }
 
     val defaultConfig = ConfigFactory.load()
-    val systemConfig = ConfigFactory.parseFile(systemConfigFile).withFallback(defaultConfig)
+    var systemConfig = ConfigFactory.parseFile(systemConfigFile).withFallback(defaultConfig)
     val master = Try(systemConfig.getString("spark.master")).toOption
       .getOrElse("local[4]").toLowerCase()
     val deployMode = Try(systemConfig.getString("spark.submit.deployMode")).toOption
@@ -50,8 +50,13 @@ object JobManager {
       logger.info("Cluster mode: Replacing spark.jobserver.sqldao.rootdir with container tmp dir.")
       val sqlDaoDir = Files.createTempDirectory("sqldao")
       val sqlDaoDirConfig = ConfigValueFactory.fromAnyRef(sqlDaoDir.toAbsolutePath.toString)
-      systemConfig.withoutPath("akka.remote.netty.tcp.hostname")
-                  .withValue("spark.jobserver.sqldao.rootdir", sqlDaoDirConfig)
+      val ignoreAkkaHostname = systemConfig.getBoolean("spark.jobserver.ignore-akka-hostname")
+      if (ignoreAkkaHostname) {
+        systemConfig = systemConfig.withoutPath("akka.remote.netty.tcp.hostname")
+      }
+      systemConfig.withValue("spark.jobserver.sqldao.rootdir", sqlDaoDirConfig)
+                  .withoutPath("akka.remote.netty.tcp.port")
+                  .withValue("akka.remote.netty.tcp.port", ConfigValueFactory.fromAnyRef(0))
     } else {
       systemConfig
     }

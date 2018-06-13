@@ -108,6 +108,7 @@ Spark Job Server is now included in Datastax Enterprise 4.8!
 - Job and jar info is persisted via a pluggable DAO interface
 - Named Objects (such as RDDs or DataFrames) to cache and retrieve RDDs or DataFrames by name, improving object sharing and reuse among jobs.
 - Supports Scala 2.10 and 2.11
+- Support for supervise mode of Spark (EXPERIMENTAL)
 
 ## Version Information
 

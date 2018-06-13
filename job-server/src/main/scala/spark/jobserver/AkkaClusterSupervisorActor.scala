@@ -21,7 +21,7 @@ import scala.concurrent.Await
 import akka.pattern.gracefulStop
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
-import spark.jobserver.JobManagerActor.{GetContexData, ContexData, SparkContextDead}
+import spark.jobserver.JobManagerActor.{GetContexData, ContexData, SparkContextDead, RestartExistingJobs}
 import spark.jobserver.io.{JobDAOActor, ContextInfo, ContextStatus}
 import spark.jobserver.util.{InternalServerErrorException, NoCallbackFoundException}
 
@@ -72,25 +72,28 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
   logger.info("AkkaClusterSupervisor initialized on {}", selfAddress)
 
   def getActorRef(contextInfo: ContextInfo) : Option[ActorRef] = {
-    if (jobManagerActorRefs.exists(_._1 == contextInfo.id)) {
-      Some(jobManagerActorRefs(contextInfo.id))
-    } else if (contextInfo.actorAddress.nonEmpty) {
-      val finiteDuration = FiniteDuration(3, SECONDS)
-      val address = contextInfo.actorAddress.get + "/user/" +
+    contextInfo.actorAddress match {
+      case Some(address) =>
+        val actorPath = contextInfo.actorAddress.get + "/user/" +
           AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX + contextInfo.id
-      try {
-        val contextActorRefFuture = context.actorSelection(address).resolveOne(finiteDuration)
-        jobManagerActorRefs(contextInfo.id) = Await.result(contextActorRefFuture, finiteDuration)
-        Some(jobManagerActorRefs(contextInfo.id))
-      } catch {
-        case e: Exception =>
-          logger.error("Failed to resolve reference for context " + contextInfo.name
-              + " with exception " + e.getMessage)
-          None
-      }
-    } else {
-      logger.error("Reference for context " + contextInfo.name + " does not exist")
-      None
+        jobManagerActorRefs.exists(_._1 == actorPath) match {
+          case true => Some(jobManagerActorRefs(actorPath))
+          case false =>
+            val finiteDuration = FiniteDuration(3, SECONDS)
+            try {
+              val contextActorRefFuture = context.actorSelection(actorPath).resolveOne(finiteDuration)
+              jobManagerActorRefs(actorPath) = Await.result(contextActorRefFuture, finiteDuration)
+              Some(jobManagerActorRefs(actorPath))
+            } catch {
+              case e: Exception =>
+                logger.error("Failed to resolve reference for context " + contextInfo.name
+                    + " with exception " + e.getMessage)
+                None
+            }
+          }
+      case None =>
+        logger.error("Reference for context " + contextInfo.name + " does not exist")
+        None
     }
   }
 
@@ -124,20 +127,31 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
           (contextFromDAO, callbacks) match {
             case (Some(JobDAOActor.ContextResponse(Some(contextInfo))),
                 Some((successCallback, failureCallback))) =>
-              val contextConfig = ConfigFactory.parseString(contextInfo.config)
-              val isAdhoc = contextConfig.getBoolean("is-adhoc")
-              initContext(contextConfig, actorName,
-                     actorRef, contextInitTimeout)(isAdhoc, successCallback, failureCallback)
+              initContext(contextInfo, actorName, actorRef, false)(successCallback, failureCallback)
             case (Some(JobDAOActor.ContextResponse(None)), _) =>
               logger.error(
                  s"No such contextId ${contextId} was found in DB. Cannot initialize actor ${actorName}")
               actorRef ! PoisonPill
             case (Some(JobDAOActor.ContextResponse(Some(contextInfo))), None) =>
-              val exception = NoCallbackFoundException(contextInfo.id, actorRef.path.toSerializationFormat)
-              logger.error(exception.getMessage, exception)
-              actorRef ! PoisonPill // Since no watch was added, Terminated will not be fired
-              daoActor ! JobDAOActor.SaveContextInfo(contextInfo.copy(
-                  state = ContextStatus.Error, endTime = Some(DateTime.now()), error = Some(exception)))
+              isSuperviseModeEnabled(config, ConfigFactory.parseString(contextInfo.config)) match {
+                case isRestartScenario @ true =>
+                  logger.info(
+                     s"Restart request for context (${contextId}) received, probably due to supervise mode")
+                  initContext(contextInfo, actorName, actorRef, isRestartScenario)(
+                     { ref =>
+                       logger.info(s"Successfully reinitialized context (${contextId}) under supervise mode")
+                     },
+                     { ref =>
+                         logger.error(s"Failed to reinitialize context (${contextId}) under supervise mode")
+                     })
+                case false =>
+                  val exception =
+                    NoCallbackFoundException(contextInfo.id, actorRef.path.toSerializationFormat)
+                  logger.error(exception.getMessage, exception)
+                  actorRef ! PoisonPill // Since no watch was added, Terminated will not be fired
+                  daoActor ! JobDAOActor.SaveContextInfo(contextInfo.copy(
+                      state = ContextStatus.Error, endTime = Some(DateTime.now()), error = Some(exception)))
+              }
             case (None, Some((_, failureCallback))) =>
               val exception = InternalServerErrorException(contextId)
               logger.error(exception.getMessage, exception)
@@ -275,13 +289,14 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
           logger.error("Error occurred after Terminated message was recieved")
       }
       cluster.down(actorRef.path.address)
-      jobManagerActorRefs.remove(contextId)
+      jobManagerActorRefs.remove(actorRef.path.toString())
   }
 
   private def initContext(contextConfig: Config,
                           actorName: String,
                           ref: ActorRef,
-                          timeoutSecs: Long = 1)
+                          timeoutSecs: Long = 1,
+                          isRestartScenario: Boolean)
                          (isAdHoc: Boolean,
                           successFunc: ActorRef => Unit,
                           failureFunc: Throwable => Unit): Unit = {
@@ -305,9 +320,14 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
         logger.info("SparkContext {} joined", ctxName)
         resultActorRefs(ctxName) = resActor
         context.watch(ref)
-        initContextHelp(actorName, Some(ref.path.address.toString), ContextStatus.Running, None) match {
-          case None => successFunc(ref)
-          case Some(e) => ref ! PoisonPill
+        (initContextHelp(actorName, Some(ref.path.address.toString), ContextStatus.Running, None),
+            isRestartScenario) match {
+          case (None, false) => successFunc(ref)
+          case (None, true) =>
+            logger.info("Context initialized, trying to restart existing jobs.")
+            ref ! RestartExistingJobs
+          case (Some(e), _) =>
+            ref ! PoisonPill
             failureFunc(e)
         }
       case _ => logger.info("Failed for unknown reason.")
@@ -327,7 +347,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
     val resp = getDataFromDAO[JobDAOActor.ContextResponse](JobDAOActor.GetContextInfo(managerActorName))
     resp match {
       case Some(JobDAOActor.ContextResponse(Some(context))) =>
-                    val endTime = error match {
+          val endTime = error match {
             case None => context.endTime
             case _ => Some(DateTime.now())
           }
@@ -428,5 +448,21 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef)
         if c.state == ContextStatus.Running || c.state == ContextStatus.Started => (true, Some(c))
       case Some(_) => (true, None)
     }
+  }
+
+  private def isSuperviseModeEnabled(config: Config, contextConfig: Config): Boolean = {
+    val defaultSuperviseMode = config.getBoolean(ManagerLauncher.SJS_SUPERVISE_MODE_KEY)
+    val contextSuperviseMode = Try(
+        Some(contextConfig.getBoolean(ManagerLauncher.CONTEXT_SUPERVISE_MODE_KEY))).getOrElse(None)
+    ManagerLauncher.shouldSuperviseModeBeEnabled(defaultSuperviseMode, contextSuperviseMode)
+  }
+
+  private def initContext(contextInfo: ContextInfo, actorName: String, actorRef: ActorRef,
+      isRestartScenario: Boolean)
+      (successCallback: ActorRef => Unit, failureCallback: Throwable => Unit): Unit = {
+    val contextConfig = ConfigFactory.parseString(contextInfo.config)
+    val isAdhoc = contextConfig.getBoolean("is-adhoc")
+    initContext(contextConfig, actorName,
+           actorRef, contextInitTimeout, isRestartScenario)(isAdhoc, successCallback, failureCallback)
   }
 }

@@ -49,14 +49,32 @@ class JobManagerSpec extends FunSpecLike with Matchers with BeforeAndAfter {
   implicit val timeout: Timeout = 3 seconds
 
   describe("starting job manager") {
-    it ("removes akka.remote.netty.tcp.hostname from config cluster mode") {
+    it ("removes akka.remote.netty.tcp.hostname when cluster mode is enabled and ignore-akka-hostname is true") {
       val configFileName = writeConfigFile(Map(
         "spark.submit.deployMode" -> "cluster",
+        "spark.jobserver.ignore-akka-hostname" -> "true",
         "akka.remote.netty.tcp.hostname" -> "test"
       ))
 
       def makeSystem(config: Config): ActorSystem = {
         config.hasPath("akka.remote.netty.tcp.hostname") should be(false)
+        system
+      }
+
+      JobManager.start(Seq(clusterAddr, "test-manager", configFileName).toArray,
+        makeSystem, waitForTerminationDummy)
+    }
+
+    it ("leave akka.remote.netty.tcp.hostname when cluster mode is enabled and ignore-akka-hostname is false") {
+      val configFileName = writeConfigFile(Map(
+        "spark.submit.deployMode" -> "cluster",
+        "spark.jobserver.ignore-akka-hostname" -> "false",
+        "akka.remote.netty.tcp.hostname" -> "test"
+      ))
+
+      def makeSystem(config: Config): ActorSystem = {
+        config.hasPath("akka.remote.netty.tcp.hostname") should be(true)
+        config.getString("akka.remote.netty.tcp.hostname") should be ("test")
         system
       }
 
@@ -90,6 +108,24 @@ class JobManagerSpec extends FunSpecLike with Matchers with BeforeAndAfter {
       def makeSystem(config: Config): ActorSystem = {
         config.getString("akka.remote.netty.tcp.hostname") should equal ("localhost")
         config.getString("spark.jobserver.sqldao.rootdir") should equal (tmpDir)
+        system
+      }
+
+      JobManager.start(Seq(clusterAddr, "test-manager", configFileName).toArray,
+        makeSystem, waitForTerminationDummy)
+    }
+
+    it ("shouldn't have a configuration for akka remote port") {
+      val tmpDir = Files.createTempDirectory("job-manager-sqldao").toString
+      val configFileName = writeConfigFile(Map(
+        "spark.submit.deployMode" -> "cluster",
+        "akka.remote.netty.tcp.hostname" -> "localhost",
+        "akka.remote.netty.tcp.port" -> "1337",
+        "spark.jobserver.sqldao.rootdir" -> tmpDir
+      ))
+
+      def makeSystem(config: Config): ActorSystem = {
+        config.getInt("akka.remote.netty.tcp.port") should be (0)
         system
       }
 
