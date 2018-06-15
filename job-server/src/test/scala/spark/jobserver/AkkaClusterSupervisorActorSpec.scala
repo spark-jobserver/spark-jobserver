@@ -391,6 +391,42 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
 
       dao.saveContextInfo(contextInfoPF(ContextStatus.Finished)) // cleanup
     }
+
+    it("should not change final state to STOPPING state") {
+      val contextId = "erroredOutContextId"
+      val contextName = "erroredOutContextName"
+      supervisor ! AddContext(contextName, contextConfig)
+      expectMsg(contextInitTimeout, ContextInitialized)
+
+      val c = Await.result(dao.getContextInfoByName(contextName), daoTimeout).get
+      val contextInfo = ContextInfo(c.id, contextName, c.config, c.actorAddress, c.startTime,
+            Some(DateTime.now()), "ERROR", Some(new Throwable))
+      dao.saveContextInfo(contextInfo)
+
+      supervisor ! StopContext(contextName)
+      expectMsg(contextInitTimeout, ContextStopped)
+
+      val c_new = Await.result(dao.getContextInfoByName(contextName), daoTimeout).get
+      c_new.state should be("ERROR")
+    }
+
+    it("should change non final state to STOPPING state") {
+      val contextId = "runningContextId"
+      val contextName = "runningContextName"
+      supervisor ! AddContext(contextName, contextConfig)
+      expectMsg(contextInitTimeout, ContextInitialized)
+
+      val c = Await.result(dao.getContextInfoByName(contextName), daoTimeout).get
+      val contextInfo = ContextInfo(c.id, contextName, c.config, c.actorAddress, c.startTime,
+            Some(DateTime.now()), "RUNNING", Some(new Throwable))
+      dao.saveContextInfo(contextInfo)
+
+      supervisor ! StopContext(contextName)
+      expectMsg(contextInitTimeout, ContextStopped)
+
+      val c_new = Await.result(dao.getContextInfoByName(contextName), daoTimeout).get
+      c_new.state should be("STOPPING")
+    }
   }
 
   describe("Supervise mode tests") {
