@@ -70,6 +70,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
   protected val selfAddress = cluster.selfAddress
 
   private val MANAGER_ACTOR_PREFIX = "jobManager-"
+  private val FINAL_STATES = Set(ContextStatus.Error, ContextStatus.Finished, ContextStatus.Killed)
 
   // This is for capturing results for ad-hoc jobs. Otherwise when ad-hoc job dies, resultActor also dies,
   // and there is no way to retrieve results.
@@ -275,8 +276,9 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
       resp match {
         case Some(JobDAOActor.ContextResponse(Some(c))) =>
           logger.info("Shutting down context {}", name)
+          val state = if (FINAL_STATES contains c.state) c.state else ContextStatus.Stopping
           val contextInfo = ContextInfo(c.id, c.name, c.config, c.actorAddress, c.startTime,
-            c.endTime, ContextStatus.Stopping, c.error)
+            c.endTime, state, c.error)
           daoActor ! JobDAOActor.SaveContextInfo(contextInfo)
           val contextActorRef = getActorRef(c)
           contextActorRef match {
