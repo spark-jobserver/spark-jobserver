@@ -283,12 +283,19 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
   }
 
   override def saveContextInfo(contextInfo: ContextInfo): Unit = {
+    logger.info(s"Config for context is: ${contextInfo.config}")
     val startTime = convertDateJodaToSql(contextInfo.startTime)
     val endTime = contextInfo.endTime.map(t => convertDateJodaToSql(t))
     val errors = contextInfo.error.map(e => e.getMessage)
     val row = (contextInfo.id, contextInfo.name, contextInfo.config,
                 contextInfo.actorAddress, startTime, endTime, contextInfo.state, errors)
-    if(Await.result(db.run(contexts.insertOrUpdate(row)), 60 seconds) == 0){
+
+    val insertStatement = contexts.insertOrUpdate(row)
+    insertStatement.statements.foreach{ q =>
+      logger.info(s"Query for context (${contextInfo.name}) is $q")
+    }
+
+    if(Await.result(db.run(insertStatement), 60 seconds) == 0){
       throw new SlickException(s"Could not update ${contextInfo.id} in the database")
     }
   }
