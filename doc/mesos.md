@@ -74,4 +74,4 @@ MANAGER_LOGGING_OPTS="-Dlog4j.configuration=log4j-cluster.properties"
 
 ## Configuring Job Server for supervised cluster mode
 
-* Add the option akka.remote.netty.tcp.port to the related Jobserver configuration file (e.g. local.conf).
+* See the [supervise-mode document](https://github.com/spark-jobserver/spark-jobserver/blob/master/doc/supervise-mode.md)
