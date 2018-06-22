@@ -78,4 +78,4 @@ Note: Files uploaded via the JAR or binary API are stored and transfered via the
 
 ## Configuring Job Server for supervised cluster mode
 
-* Add the option akka.remote.netty.tcp.port to the related Jobserver configuration file (e.g. local.conf).
+* See the [supervise-mode document](https://github.com/spark-jobserver/spark-jobserver/blob/master/doc/supervise-mode.md)

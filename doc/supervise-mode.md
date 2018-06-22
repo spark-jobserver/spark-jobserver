@@ -43,9 +43,7 @@ Here are all the possible cases:
 Curently, this mode is tested with streaming/batch jobs.
 A few things to note
 - The criteria for a restart:
-    * Job is either in RUNNING state, or
-    * Job is in ERROR state with Context Terminated
-        exception as error message.
+    * Job is either in RUNNING or RESTARTING state, or
     * The job is async
 - The jobs for restart are selected based on unique context Id. So, we won't get jobs from any other context.
 - On master we detect a supervise scenario based on contextInitInfos hashmap. If the hashmap has an entry, it is a normal initialize of context but if it doesn't then it is a restart scenario. This approach is safe because contextInitInfos's key is the slaves job manager actor name, this name is a combination of jobManager-<uuid>. If the context was initialized properly then this entry will be removed for sure. If the initialization failed, then contextInitInfos might have the entry but it is useless because context was never initialized and restart is not possible.
