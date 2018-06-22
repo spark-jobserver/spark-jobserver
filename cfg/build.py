@@ -51,8 +51,10 @@ class build(BuildPlugin):
     def buildSJS(self):
         log.info("TRACE", "entering", "buildSJS")
         log.info("INFO: building SJS")
-
-        return self.executeSbtCommand('clean test job-server-extras/assembly')
+        if os.environ['V_TEMPLATE_TYPE'] == "OD-upstream":
+            return self.executeSbtCommand('clean job-server-extras/assembly')
+        else:
+            return self.executeSbtCommand('clean test job-server-extras/assembly')
 
     def executeSbtCommand(self, sbtCommand):
         log.info("TRACE", "entering", "executeSbtCommand")
