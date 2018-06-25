@@ -1,6 +1,29 @@
 #Scala #akka @ApacheSpark
 
 * feat(jobserver): Replace manager_start with SparkLauncher (@bsikander) - this is a pretty big deal to stabilize and extend SJS
+* feat(jobserver): Create context table (@ecandreev)
+* feat(jobserver): move data from contexts hash to db (@ecandreev)
+* feat(jobserver): Add CONTEXT_ID and STATE to the JOBS table (@ecandreev)
+* feat(jobserver): Introduce supervise mode (@bsikander)
+    - feat(jobserver): Filter jobs by contextId and multiple statuses
+    - feat(jobserver): Introduce supervise mode for contexts
+    - feat(jobserver): Make ActorSystem remote port configurable in Jobserver
+    - fix(jobserver): Improve resolution of JobManagerActor addresses
+    - feat(jobserver): Add parameter to ignore akka.remote.netty.tcp.hostname
+    - feat(jobserver): Make sure akka tcp port is not random
+    - fix(jobserver): Add timeout for DAO failure testcases
+    - fix(jobserver): Add documentation and remove unused variable
 
 * Updated Python documentation to reference PythonSession (@rfrohock)
 * fix(webapi): repair context info route for mode context-per-jvm (@pk-work)
+* feat(webapi): Add application id to route /contexts/<context> (@pk-work)
+* test(jobserver): Add testcases for AkkaClusterSupervisor (@bsikander)
+* fix(jobserver): Fix randomly failing testcase in AkkaClusterSupervisorSpec (@bsikander)
+* feat(jobserver): Allow valid memory value and add testcases (@bsikander)
+* feat(jobserver): Remove extra states from contextInitInfos (@bsikander)
+* feat(jobserver): Extend zombie killing logic to add Initialize msg (@bsikander)
+* fix(jobserver): Fix testcases which simulate DAO failure (@bsikander)
+* feat(jobserver): Remove extra states from contextInitInfos (@bsikander)
+* Improved documentation in readme for H2 db (@ericraymond)
+* docs(jobserver): Add new logging doc and a line to cluster doc (@LXXIII73)
+* docs(jobserver): Update JMX documentation for Akka Cluster (@bsikander)
