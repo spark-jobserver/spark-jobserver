@@ -38,11 +38,13 @@ class ManagerLauncher(systemConfig: Config, contextConfig: Config,
       defaultSuperviseModeEnabled, contextSuperviseModeEnabled)
 
   override def addCustomArguments() {
+      val gcFileName = getEnvironmentVariable("GC_OUT_FILE_NAME", "gc.out")
       if (deployMode == "client") {
-        val gcFilePath = new File(contextDir,
-            getEnvironmentVariable("GC_OUT_FILE_NAME", "gc.out")).toString()
+        val gcFilePath = new File(contextDir, gcFileName).toString()
         loggingOpts += s" -DLOG_DIR=$contextDir"
         gcOPTS += s" -Xloggc:$gcFilePath"
+      } else {
+        gcOPTS += s" -Xloggc:$gcFileName"
       }
 
       val contextSparkMaster = Try(contextConfig.getString("launcher.spark.master"))

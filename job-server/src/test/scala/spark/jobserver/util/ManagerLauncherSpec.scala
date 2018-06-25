@@ -228,6 +228,26 @@ class ManagerLauncherSpec extends FunSpec with Matchers with BeforeAndAfter {
 
        stubbedSparkLauncher.getLauncherConfig().containsValue(StubbedSparkLauncher.SPARK_DRIVER_SUPERVISE, "--supervise") should be (false)
      }
+
+     it("should write gc logs to current execution directory in cluster/supervise mode") {
+       val systemConfMap = Map("spark.master" -> "yarn", "spark.submit.deployMode" -> "cluster")
+       val launcher = new ManagerLauncher(buildConfig(systemConfMap), baseContextConf, "", "", "", stubbedSparkLauncher, environment)
+
+       launcher.start()
+
+       val driverOptions = stubbedSparkLauncher.getLauncherConfig().get("--driver-java-options").asInstanceOf[java.util.ArrayList[String]]
+       driverOptions.get(0).trim() should be("-Xloggc:gc.out")
+     }
+
+     it("should write gc logs to directory passed as argument (client mode scenario)") {
+       val systemConfMap = Map("spark.master" -> "yarn", "spark.submit.deployMode" -> "client")
+       val launcher = new ManagerLauncher(buildConfig(systemConfMap), baseContextConf, "", "", "/test/directory", stubbedSparkLauncher, environment)
+
+       launcher.start()
+
+       val driverOptions = stubbedSparkLauncher.getLauncherConfig().get("--driver-java-options").asInstanceOf[java.util.ArrayList[String]]
+       driverOptions.get(0).trim() should be("-Xloggc:/test/directory/gc.out   -DLOG_DIR=/test/directory")
+     }
    }
 }
 
