@@ -330,7 +330,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
                 if (c.state == ContextStatus.Stopping) ContextStatus.Finished else ContextStatus.Killed
         (isSuperviseModeEnabled(config, ConfigFactory.parseString(c.config)), state) match {
             case (true, ContextStatus.Killed) =>
-              setRestartingStateForContextAndJobs(c)
+              setStateForContextAndJobs(c, ContextStatus.Restarting)
             case _ =>
               val contextInfo = c.copy(endTime = Option(DateTime.now()), state = state)
               daoActor ! JobDAOActor.SaveContextInfo(contextInfo)
@@ -345,15 +345,15 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
     jobManagerActorRefs.remove(actorRef.path.toString())
   }
 
-  private def setRestartingStateForContextAndJobs(contextInfo: ContextInfo) {
-    val restartingContext = contextInfo.copy(endTime = Option(DateTime.now()),
-        state = ContextStatus.Restarting)
-    logger.info(s"Updating the status to Restarting for context ${contextInfo.id} and jobs within")
-    daoActor ! JobDAOActor.SaveContextInfo(restartingContext)
-    setRestartingStateForRunningJobs(contextInfo)
+  private def setStateForContextAndJobs(contextInfo: ContextInfo, state: String) {
+    val newContextInfo = contextInfo.copy(endTime = Option(DateTime.now()),
+        state = state)
+    logger.info(s"Updating the status to ${state} for context ${contextInfo.id} and jobs within")
+    daoActor ! JobDAOActor.SaveContextInfo(newContextInfo)
+    setStateForRunningJobs(contextInfo, state)
   }
 
-  private def setRestartingStateForRunningJobs(contextInfo: ContextInfo) {
+  private def setStateForRunningJobs(contextInfo: ContextInfo, state: String) {
     (daoActor ? JobDAOActor.GetJobInfosByContextId(
         contextInfo.id, Some(Seq(JobStatus.Running))))(daoAskTimeout).onComplete {
       case Success(JobDAOActor.JobInfos(Seq())) =>
@@ -361,8 +361,8 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
       case Success(JobDAOActor.JobInfos(jobInfos)) =>
         val error = ErrorData(JobManagerActor.ContextTerminatedException(contextInfo.id))
         jobInfos.foreach { jobInfo =>
-          logger.info(s"Found job ${jobInfo.jobId} for context. Setting state to Restarting.")
-          daoActor ! JobDAOActor.SaveJobInfo(jobInfo.copy(state = JobStatus.Restarting,
+          logger.info(s"Found job ${jobInfo.jobId} for context. Setting state to ${state}.")
+          daoActor ! JobDAOActor.SaveJobInfo(jobInfo.copy(state = state,
               endTime = Some(DateTime.now()), error = Some(error)))
         }
       case Failure(e: Exception) =>
@@ -427,18 +427,18 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
     val resp = getDataFromDAO[JobDAOActor.ContextResponse](JobDAOActor.GetContextInfo(managerActorName))
     resp match {
       case Some(JobDAOActor.ContextResponse(Some(context))) =>
-          val endTime = error match {
-            case None => context.endTime
-            case _ => Some(DateTime.now())
+          val contextInfo = ContextInfo(context.id,
+                                            context.name,
+                                            context.config,
+                                            clusterAddress,
+                                            context.startTime,
+                                            context.endTime,
+                                            state,
+                                            error)
+          error match {
+            case None => daoActor ! JobDAOActor.SaveContextInfo(contextInfo)
+            case _ => setStateForContextAndJobs(contextInfo, state)
           }
-          daoActor ! JobDAOActor.SaveContextInfo(ContextInfo(context.id,
-                                                  context.name,
-                                                  context.config,
-                                                  clusterAddress,
-                                                  context.startTime,
-                                                  endTime,
-                                                  state,
-                                                  error))
           None
       case Some(JobDAOActor.ContextResponse(None)) =>
           val e = new Throwable("Did not find context in the DB")
