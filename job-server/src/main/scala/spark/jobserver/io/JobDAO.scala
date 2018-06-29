@@ -83,6 +83,7 @@ object JobStatus {
   val Started = "STARTED"
   val Killed = "KILLED"
   val Restarting = "RESTARTING"
+  def getNonFinalStates(): Seq[String] = Seq(Started, Running, Restarting)
 }
 
 object ContextStatus {
