@@ -6,7 +6,7 @@ import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import akka.testkit._
 
 import spark.jobserver.common.akka.AkkaTestUtils
-import spark.jobserver.io.{JobDAO, JobDAOActor, ContextInfo, ContextStatus}
+import spark.jobserver.io.{JobDAO, JobDAOActor, ContextInfo, ContextStatus, JobInfo, JobStatus, BinaryInfo, BinaryType}
 import ContextSupervisor._
 import spark.jobserver.util.ManagerLauncher
 import spark.jobserver.JobManagerActor._
@@ -457,6 +457,34 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
 
       val contextInfo = Await.result(dao.getContextInfoByName("test-context"), daoTimeout)
       contextInfo should not be (None)
+    }
+
+    it("should set states of the jobs to ERROR if a context with ERROR state sends ActorIdentity") {
+      val managerProbe = TestProbe(AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX + "dummy")
+      managerProbe.setAutoPilot(new TestActor.AutoPilot {
+        def run(sender: ActorRef, msg: Any): TestActor.AutoPilot = {
+          msg match {
+            case Initialize(_,_,_) => sender ! JobManagerActor.InitError(new Throwable)
+          }
+          TestActor.KeepRunning
+        }
+      })
+      val contextId = managerProbe.ref.path.name.replace(AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX, "")
+      val configWithSuperviseMode = ConfigFactory.parseString(
+          s"${ManagerLauncher.CONTEXT_SUPERVISE_MODE_KEY}=true, is-adhoc=false")
+      val convertedContextConfig = configWithSuperviseMode.root().render(ConfigRenderOptions.concise())
+      val dt = DateTime.now()
+      val dummyContext = ContextInfo(contextId, "errorContextName", convertedContextConfig, None,
+          dt, Some(dt.plusMinutes(5)), ContextStatus.Restarting, None)
+      dao.saveContextInfo(dummyContext)
+      val dummyJob = JobInfo("jobId", contextId, "errorContextName", BinaryInfo("demo", BinaryType.Jar, dt),
+          "com.abc.meme", JobStatus.Running, dt, None, None)
+      dao.saveJobInfo(dummyJob)
+
+      supervisor ! ActorIdentity(dummyContext, Some(managerProbe.ref))
+      Thread.sleep(3000)
+      val jobInfo = Await.result(dao.getJobInfo("jobId"), daoTimeout).get
+      jobInfo.state should be(JobStatus.Error)
     }
 
     it("should try to restart context if supervise mode is enabled") {
