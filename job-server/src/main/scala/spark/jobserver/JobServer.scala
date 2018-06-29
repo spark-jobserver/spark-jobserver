@@ -5,11 +5,11 @@ import akka.actor.{ActorSystem, ActorRef, ActorContext, Props}
 import akka.util.Timeout
 import akka.pattern.ask
 import com.typesafe.config.{ConfigValueFactory, Config, ConfigFactory}
-
 import java.io.File
 import java.util.concurrent.TimeUnit
 import spark.jobserver.io.{
   BinaryType, JobDAOActor, JobDAO, DataFileDAO, ContextStatus, ContextInfo, JobStatus, ErrorData}
+import spark.jobserver.util.ContextReconnectFailedException
 import org.joda.time.DateTime
 
 import org.slf4j.LoggerFactory
@@ -151,16 +151,15 @@ object JobServer {
         val logMsg = s"Reconnecting to context $ctxName failed ->" +
           s"updating status of context $ctxName and related jobs to error"
         logger.info(logMsg);
-        val error = new Throwable("Reconnect faliled after Jobserver restart")
         val updatedContextInfo = ContextInfo(c.id, c.name, c.config, c.actorAddress, c.startTime,
-            Option(DateTime.now()), ContextStatus.Error, Some(error))
+            Option(DateTime.now()), ContextStatus.Error, Some(ContextReconnectFailedException()))
         jobDaoActor ! JobDAOActor.SaveContextInfo(updatedContextInfo)
-        (jobDaoActor ? JobDAOActor.GetJobInfosByContextId(contextInfo.id, None))(finiteDuration).onComplete {
+        (jobDaoActor ? JobDAOActor.GetJobInfosByContextId(
+            contextInfo.id, Some(JobStatus.getNonFinalStates())))(finiteDuration).onComplete {
           case Success(JobDAOActor.JobInfos(jobInfos)) =>
-            val nonFinalStates = Seq(JobStatus.Started, JobStatus.Running, JobStatus.Restarting)
-            jobInfos.filter(j => nonFinalStates.contains(j.state)).foreach(jobInfo => {
+            jobInfos.foreach(jobInfo => {
             jobDaoActor ! JobDAOActor.SaveJobInfo(jobInfo.copy(state = JobStatus.Error,
-                endTime = Some(DateTime.now()), error = Some(ErrorData(error))))
+                endTime = Some(DateTime.now()), error = Some(ErrorData(ContextReconnectFailedException()))))
             })
           case Failure(e: Exception) =>
             logger.error(s"Exception occurred while fetching jobs for context (${contextInfo.id})", e)

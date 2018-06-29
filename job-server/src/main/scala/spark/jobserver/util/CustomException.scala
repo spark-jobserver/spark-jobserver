@@ -15,3 +15,9 @@ final case class NoJobConfigFoundException(jobId: String) extends
 
 final case class UnexpectedMessageReceivedException(jobId: String) extends
   Exception(s"Received unexpected message for job $jobId")
+
+final case class ContextJVMInitializationTimeout() extends
+  Exception("Context failed to connect back within initialization time")
+
+final case class ContextReconnectFailedException() extends
+  Exception("Reconnect failed after Jobserver restart")

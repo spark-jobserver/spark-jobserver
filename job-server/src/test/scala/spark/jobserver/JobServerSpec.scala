@@ -6,7 +6,7 @@ import scala.util.Try
 import akka.actor.{ActorRef, ActorSystem, Props, Actor}
 import akka.pattern.ask
 import akka.util.Timeout
-import akka.testkit.{TestKit, TestProbe}
+import akka.testkit.{TestKit, TestProbe, TestActor}
 import org.scalatest.{BeforeAndAfterAll, FunSpecLike, Matchers}
 import java.nio.file.Files
 
@@ -15,12 +15,14 @@ import spark.jobserver.JobServer.InvalidConfiguration
 import spark.jobserver.common.akka
 import spark.jobserver.io.{
   JobDAOActor, JobDAO, ContextInfo, ContextStatus, JobInfo, BinaryInfo, BinaryType, JobStatus}
+import spark.jobserver.util.ContextReconnectFailedException
+
 
 import scala.concurrent.Await
 import scala.concurrent.duration.TimeUnit;
 import java.util.UUID
 import org.joda.time.DateTime
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{TimeUnit, CountDownLatch}
 
 object JobServerSpec {
   val system = ActorSystem("test")
@@ -166,14 +168,9 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
       return ContextInfo(uuid, name, "", Some(address), DateTime.now(), None, status, None)
     }
 
-    it("reconnect to actors after restart") {
-      val daoActor = system.actorOf(JobDAOActor.props(new InMemoryDAO))
-
-      // Add two contexts in Running mode into db, but only initialize one actor
+    it("should write error state for contexts and jobs if reconnect failed") {
       val ctxRunning = createContext("ctxRunning", ContextStatus.Running, true)
-      val ctxTerminated = createContext("ctxTerminated", ContextStatus.Running, false)
-      daoActor ! JobDAOActor.SaveContextInfo(ctxRunning)
-      daoActor ! JobDAOActor.SaveContextInfo(ctxTerminated)
+      val ctxToBeTerminated = createContext("ctxTerminated", ContextStatus.Running, false)
 
       def genJob(jobId: String, ctx: ContextInfo, status: String) = {
         val dt = DateTime.parse("2013-05-29T00Z")
@@ -181,40 +178,39 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
             status, dt, None, None)
       }
 
-      val jobRunning = genJob("jid1", ctxRunning, JobStatus.Running)
-      val jobTerminated = genJob("jid2", ctxTerminated, JobStatus.Running)
-      val jobFinsihed = genJob("jid3", ctxTerminated, JobStatus.Finished)
-      daoActor ! JobDAOActor.SaveJobInfo(jobRunning)
-      daoActor ! JobDAOActor.SaveJobInfo(jobTerminated)
-      daoActor ! JobDAOActor.SaveJobInfo(jobFinsihed)
+      val jobToBeTerminated = genJob("jid2", ctxToBeTerminated, JobStatus.Running)
 
-      JobServer.updateContextStatus(system, daoActor)
+      val daoProbe = TestProbe()
+      val latch = new CountDownLatch(1)
 
-      Thread.sleep(2000)
+      var ctxTerminated: ContextInfo = null;
+      var jobTerminated: JobInfo = null;
 
-      val timeout = Timeout.apply(Duration.create(3, TimeUnit.SECONDS))
-      val resp = Await.result((daoActor ? JobDAOActor.GetContextInfos(None, None))(timeout).
-          mapTo[JobDAOActor.ContextInfos], timeout.duration)
-      val jobInfos = Await.result((daoActor ? JobDAOActor.GetJobInfos(100))(timeout).
-          mapTo[JobDAOActor.JobInfos], timeout.duration)
-      // Expect that only the context with the initialized actor is in the running state
-      resp.contextInfos.size should equal (2)
-      resp.contextInfos.foreach(ci => {
-        val jobs = jobInfos.jobInfos.filter(j => j.contextId.equals(ci.id));
-        if (ctxRunning.name.equals(ci.name)) {
-          ci.state should equal (ContextStatus.Running)
-          jobs.head.state should equal (JobStatus.Running)
-          jobs.head.error should be (None)
-        } else {
-          ci.state should equal (ContextStatus.Error)
-          ci.error.get.getMessage should be ("Reconnect failed after Jobserver restart")
-          var job = jobs.find(j => j.jobId.equals("jid2")).head;
-          job.state should equal (JobStatus.Error)
-          job.error.get.message should be ("Reconnect failed after Jobserver restart")
-          job = jobs.find(j => j.jobId.equals("jid3")).head;
-          job should equal (jobFinsihed)
+      daoProbe.setAutoPilot(new TestActor.AutoPilot {
+        def run(sender: ActorRef, msg: Any): TestActor.AutoPilot = {
+          msg match {
+            case JobDAOActor.GetContextInfos(None, Some(Seq(ContextStatus.Running))) =>
+              sender ! JobDAOActor.ContextInfos(Seq(ctxRunning, ctxToBeTerminated))
+            case ctxInfo: JobDAOActor.SaveContextInfo => ctxTerminated = ctxInfo.contextInfo
+            case JobDAOActor.GetJobInfosByContextId(ctxToBeTerminated.id, Some(states)) =>
+              states should equal (JobStatus.getNonFinalStates())
+              sender ! JobDAOActor.JobInfos(Seq(jobToBeTerminated))
+            case jobInfo: JobDAOActor.SaveJobInfo =>
+              jobTerminated = jobInfo.jobInfo
+              latch.countDown()
+          }
+          TestActor.KeepRunning
         }
       })
+
+      JobServer.updateContextStatus(system, daoProbe.ref)
+      latch.await()
+
+      ctxTerminated.state should be(ContextStatus.Error)
+      ctxTerminated.error.get should be(ContextReconnectFailedException())
+
+      jobTerminated.state should be(JobStatus.Error)
+      jobTerminated.error.get.message should be(ContextReconnectFailedException().getMessage)
     }
   }
 }
