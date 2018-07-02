@@ -311,6 +311,12 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
         case None =>
       }
     }
+
+    case RegainWatchOnExistingContexts(actorRefs) =>
+      actorRefs.map { ref =>
+        logger.info(s"Regaining watch on existing context with address ${ref.path.address.toString}")
+        context.watch(ref)
+      }
   }
 
   protected def handleTerminatedEvent(actorRef: ActorRef) {

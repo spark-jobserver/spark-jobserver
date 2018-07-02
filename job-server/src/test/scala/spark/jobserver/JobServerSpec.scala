@@ -158,25 +158,29 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
       Await.result(system.actorSelection("/user/job-info").resolveOne, 2 seconds) shouldBe a[ActorRef]
     }
 
-    def createContext(name: String, status: String, genActor: Boolean): ContextInfo = {
+    def createContext(name: String, status: String, genActor: Boolean): (ContextInfo, Option[ActorRef]) = {
       val uuid = UUID.randomUUID().toString()
-      var address = "invalidAddress"
-      if(genActor) {
-        val actor = system.actorOf(Props.empty, name = AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX + uuid)
-        address = actor.path.address.toString
+      val ContextInfoPF = ContextInfo(uuid, name, "", _: Option[String], DateTime.now(), None, status, None)
+
+      genActor match {
+        case true =>
+          val actor = system.actorOf(Props.empty, name = AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX + uuid)
+          (ContextInfoPF(Some(actor.path.address.toString)), Some(actor))
+        case false =>
+          (ContextInfoPF(Some("invalidAddress")), None)
       }
-      return ContextInfo(uuid, name, "", Some(address), DateTime.now(), None, status, None)
+    }
+
+    def genJob(jobId: String, ctx: ContextInfo, status: String) = {
+      val dt = DateTime.parse("2013-05-29T00Z")
+      JobInfo(jobId, ctx.id, ctx.name, BinaryInfo("demo", BinaryType.Jar, dt), "com.abc.meme",
+          status, dt, None, None)
     }
 
     it("should write error state for contexts and jobs if reconnect failed") {
-      val ctxRunning = createContext("ctxRunning", ContextStatus.Running, true)
-      val ctxToBeTerminated = createContext("ctxTerminated", ContextStatus.Running, false)
+      val (ctxRunning, ctxRunningActorRef) = createContext("ctxRunning", ContextStatus.Running, true)
+      val (ctxToBeTerminated, _) = createContext("ctxTerminated", ContextStatus.Running, false)
 
-      def genJob(jobId: String, ctx: ContextInfo, status: String) = {
-        val dt = DateTime.parse("2013-05-29T00Z")
-        JobInfo(jobId, ctx.id, ctx.name, BinaryInfo("demo", BinaryType.Jar, dt), "com.abc.meme",
-            status, dt, None, None)
-      }
       val jobToBeTerminated = genJob("jid2", ctxToBeTerminated, JobStatus.Running)
 
       val daoProbe = TestProbe()
@@ -202,8 +206,11 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
         }
       })
 
-      JobServer.updateContextStatus(system, daoProbe.ref)
+      val existingManagerActorRefs = JobServer.getExistingManagerActorRefs(system, daoProbe.ref)
       latch.await()
+
+      existingManagerActorRefs.length should be(1)
+      existingManagerActorRefs(0) should be(ctxRunningActorRef.get)
 
       ctxTerminated.state should be(ContextStatus.Error)
       ctxTerminated.error.get should be(ContextReconnectFailedException())
@@ -212,23 +219,49 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
       jobTerminated.error.get.message should be(ContextReconnectFailedException().getMessage)
     }
 
-    it("should return None if no context is available to reconnect") {
+    it("should return empty list if no context is available to reconnect") {
       val daoActor = system.actorOf(JobDAOActor.props(new InMemoryDAO))
 
-      val existingClusterAddress = JobServer.updateContextStatus(system, daoActor)
-      existingClusterAddress should be(None)
+      val existingManagerActorRefs = JobServer.getExistingManagerActorRefs(system, daoActor)
+      existingManagerActorRefs should be(List())
     }
 
-    it("should return actor address (only 1) for actors state running during reconnect") {
-      val daoActor = system.actorOf(JobDAOActor.props(new InMemoryDAO))
-      val ctxRunning = createContext("ctxRunning", ContextStatus.Running, true)
-      val ctxRunning2 = createContext("ctxRunning2", ContextStatus.Running, true)
+    it("should update the status of context and jobs if reconnection failed") {
+      val daoActorProbe = TestProbe()
 
-      daoActor ! JobDAOActor.SaveContextInfo(ctxRunning)
-      daoActor ! JobDAOActor.SaveContextInfo(ctxRunning2)
+      val (ctxRunning, _) = createContext("ctxRunning", ContextStatus.Running, true)
+      JobServer.setReconnectionFailedForContextAndJobs(ctxRunning, daoActorProbe.ref)
 
-      val existingClusterAddress = JobServer.updateContextStatus(system, daoActor)
-      existingClusterAddress.get should be(ctxRunning.actorAddress.get)
+      // Check if context is updated correctly
+      val saveContextMsg = daoActorProbe.expectMsgType[JobDAOActor.SaveContextInfo]
+      saveContextMsg.contextInfo.id should be(ctxRunning.id)
+      saveContextMsg.contextInfo.state should be(ContextStatus.Error)
+      saveContextMsg.contextInfo.error.get.getMessage should be(ContextReconnectFailedException().getMessage)
+
+      // Check if job is updated correctly
+      val runningJobInfo = genJob("jid1", ctxRunning, JobStatus.Running)
+      val runningJobInfo2 = genJob("jid2", ctxRunning, JobStatus.Running)
+      daoActorProbe.expectMsgType[JobDAOActor.GetJobInfosByContextId]
+      daoActorProbe.reply(JobDAOActor.JobInfos(Seq(runningJobInfo, runningJobInfo2)))
+
+      val saveJobMsg = daoActorProbe.expectMsgType[JobDAOActor.SaveJobInfo]
+      saveJobMsg.jobInfo.state should be(JobStatus.Error)
+      saveJobMsg.jobInfo.error.get.message should be(ContextReconnectFailedException().getMessage)
+
+      val saveJobMsg2 = daoActorProbe.expectMsgType[JobDAOActor.SaveJobInfo]
+      saveJobMsg2.jobInfo.state should be(JobStatus.Error)
+      saveJobMsg2.jobInfo.error.get.message should be(ContextReconnectFailedException().getMessage)
+    }
+
+    it("should resolve valid actor reference correctly") {
+      val (ctxRunning, ctxRunningActorRef) = createContext("ctxRunning", ContextStatus.Running, true)
+      val (ctxInvalidAddress, ctxInvalidAddressRef) = createContext("ctxInvalidAddress", ContextStatus.Running, false)
+      val actorRef = JobServer.getManagerActorRef(ctxRunning, system)
+
+      actorRef should not be(None)
+      actorRef.get.actorRef.path.address.toString should be(ctxRunningActorRef.get.path.address.toString)
+
+      JobServer.getManagerActorRef(ctxInvalidAddress, system) should be(None)
     }
   }
 }
