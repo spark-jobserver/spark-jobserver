@@ -82,6 +82,7 @@ object StubbedAkkaClusterSupervisorActor {
   case object DisableDAOCommunication
   case object EnableDAOCommunication
   case class DummyTerminated(actorRef: ActorRef)
+  case class UnWatchContext(actorRef: ActorRef)
 }
 
 class StubbedAkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef, managerProbe: TestProbe, cluster: Cluster)
@@ -133,6 +134,8 @@ class StubbedAkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: Ac
       daoCommunicationDisabled = false
     case StubbedAkkaClusterSupervisorActor.DummyTerminated(actorRef) =>
       handleTerminatedEvent(actorRef)
+    case StubbedAkkaClusterSupervisorActor.UnWatchContext(actorRef) =>
+      context.unwatch(actorRef)
   }
 
   override def getDataFromDAO[T: ClassTag](msg: JobDAOActor.JobDAORequest): Option[T] = {
@@ -534,6 +537,31 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       val timedOutContext = Await.result(dao.getContextInfoByName(failingContextName), daoTimeout)
       timedOutContext.get.state should be(ContextStatus.Error)
       timedOutContext.get.error.get.getMessage should be(timeoutExceptionMessage)
+    }
+
+    it("should raise Terminated event even if the watch was added through RegainWatchOnExistingContexts message") {
+      val contextName = "ctxRunning"
+
+      supervisor ! AddContext(contextName, contextConfig)
+      expectMsg(contextInitTimeout, ContextInitialized)
+
+      val runningContextInfo = Await.result(dao.getContextInfoByName(contextName), daoTimeout)
+      val runningContextActorRef = JobServer.getManagerActorRef(runningContextInfo.get, system).get
+      runningContextActorRef should not be(None)
+
+      // Mimic SJS restart, where it loses all the watches
+      supervisor ! StubbedAkkaClusterSupervisorActor.UnWatchContext(runningContextActorRef)
+
+      supervisor ! RegainWatchOnExistingContexts(List(runningContextActorRef))
+
+      val deathWatcher = TestProbe()
+      deathWatcher.watch(runningContextActorRef)
+      runningContextActorRef ! PoisonPill
+      deathWatcher.expectTerminated(runningContextActorRef)
+
+      Thread.sleep(3000)
+      val updatedContext = Await.result(dao.getContextInfoByName(contextName), daoTimeout)
+      updatedContext.get.state should be(ContextStatus.Killed)
     }
   }
 

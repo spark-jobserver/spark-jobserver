@@ -22,6 +22,7 @@ import scala.collection.JavaConverters._
 import scala.concurrent.{Await, ExecutionContext}
 import scala.concurrent.duration._
 import scala.util.{Try, Success, Failure}
+import scala.collection.mutable.ListBuffer
 
 import com.google.common.annotations.VisibleForTesting
 
@@ -43,6 +44,7 @@ import com.google.common.annotations.VisibleForTesting
  */
 object JobServer {
   val logger = LoggerFactory.getLogger(getClass)
+  implicit val ec = scala.concurrent.ExecutionContext.Implicits.global
 
   class InvalidConfiguration(error: String) extends RuntimeException(error)
 
@@ -134,10 +136,9 @@ object JobServer {
       case true =>
         val cluster = Cluster(system)
 
-        // Check if all contexts marked as running are still available and get the Akka address of
-        // one of the nodes which is already part of Akka cluster
-        val initialSeedNode = updateContextStatus(system, daoActor)
-        joinAkkaCluster(cluster, initialSeedNode)
+        // Check if all contexts marked as running are still available and get the ActorRefs
+        val existingManagerActorRefs = getExistingManagerActorRefs(system, daoActor)
+        joinAkkaCluster(cluster, existingManagerActorRefs.headOption)
         // We don't want to read all the old events that happened in the cluster
         // So, we remove the initialStateMode parameter
         cluster.registerOnMemberUp {
@@ -146,6 +147,10 @@ object JobServer {
 
           logger.info("Subscribing to MemberUp event")
           cluster.subscribe(supervisor, classOf[MemberEvent])
+
+          if (existingManagerActorRefs.length > 0) {
+            supervisor ! ContextSupervisor.RegainWatchOnExistingContexts(existingManagerActorRefs)
+          }
 
           supervisor ! ContextSupervisor.AddContextsFromConfig  // Create initial contexts
           startWebApi(system, supervisor, jobDAO, webApiPF)
@@ -159,20 +164,20 @@ object JobServer {
     webApiPF(supervisor, jobInfo).start()
   }
 
-  def joinAkkaCluster(cluster: Cluster, initialSeedNode: Option[String]) {
+  private def joinAkkaCluster(cluster: Cluster, initialSeedNode: Option[ActorRef]) {
     initialSeedNode match {
       case None =>
         val selfAddress = cluster.selfAddress
         logger.info(s"Joining newly created cluster at ${selfAddress}")
         cluster.join(selfAddress)
-      case Some(address) =>
-        logger.info(s"Joining existing cluster at ${address}")
-        cluster.join(AddressFromURIString(address))
+      case Some(actorRef) =>
+        logger.info(s"Joining existing cluster at ${actorRef.path.address.toString}")
+        cluster.join(actorRef.path.address)
     }
   }
 
-  def validateContext(contextInfo: ContextInfo, system: ActorSystem,
-      jobDaoActor: ActorRef)(implicit e: ExecutionContext): Option[String] = {
+  @VisibleForTesting
+  def getManagerActorRef(contextInfo: ContextInfo, system: ActorSystem): Option[ActorRef] = {
     val finiteDuration = FiniteDuration(3, SECONDS)
     val clusterAddress = contextInfo.actorAddress.get
     val address = clusterAddress + "/user/" + AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX +
@@ -181,48 +186,53 @@ object JobServer {
     actorFut.value.get match {
       case Success(actorRef) =>
         logger.info(s"Found context ${contextInfo.name} -> reconnect is possible")
-        Some(clusterAddress)
-      case Failure(ex) => {
-        val c = contextInfo
-        val ctxName = c.name
-        val logMsg = s"Reconnecting to context $ctxName failed ->" +
-          s"updating status of context $ctxName and related jobs to error"
-        logger.info(logMsg);
-        val updatedContextInfo = ContextInfo(c.id, c.name, c.config, c.actorAddress, c.startTime,
-            Option(DateTime.now()), ContextStatus.Error, Some(ContextReconnectFailedException()))
-        jobDaoActor ! JobDAOActor.SaveContextInfo(updatedContextInfo)
-        (jobDaoActor ? JobDAOActor.GetJobInfosByContextId(
-            contextInfo.id, Some(JobStatus.getNonFinalStates())))(finiteDuration).onComplete {
-          case Success(JobDAOActor.JobInfos(jobInfos)) =>
-            jobInfos.foreach(jobInfo => {
-            jobDaoActor ! JobDAOActor.SaveJobInfo(jobInfo.copy(state = JobStatus.Error,
-                endTime = Some(DateTime.now()), error = Some(ErrorData(ContextReconnectFailedException()))))
-            })
-          case Failure(e: Exception) =>
-            logger.error(s"Exception occurred while fetching jobs for context (${contextInfo.id})", e)
-          case unexpectedMsg @ _ =>
-            logger.error(
-                s"$unexpectedMsg message received while fetching jobs for context (${contextInfo.id})")
-        }
-        None
-      }
+        Some(actorRef)
+      case Failure(ex) => None
     }
   }
 
-  val ec = scala.concurrent.ExecutionContext.Implicits.global
   @VisibleForTesting
-  def updateContextStatus(system: ActorSystem, jobDaoActor: ActorRef): Option[String] = {
+  def setReconnectionFailedForContextAndJobs(contextInfo: ContextInfo,
+      jobDaoActor: ActorRef) {
+    val finiteDuration = FiniteDuration(3, SECONDS)
+    val ctxName = contextInfo.name
+    val logMsg = s"Reconnecting to context $ctxName failed ->" +
+      s"updating status of context $ctxName and related jobs to error"
+    logger.info(logMsg)
+    val updatedContextInfo = contextInfo.copy(endTime = Option(DateTime.now()),
+        state = ContextStatus.Error, error = Some(ContextReconnectFailedException()))
+    jobDaoActor ! JobDAOActor.SaveContextInfo(updatedContextInfo)
+    (jobDaoActor ? JobDAOActor.GetJobInfosByContextId(
+        contextInfo.id, Some(JobStatus.getNonFinalStates())))(finiteDuration).onComplete {
+      case Success(JobDAOActor.JobInfos(jobInfos)) =>
+        jobInfos.foreach(jobInfo => {
+        jobDaoActor ! JobDAOActor.SaveJobInfo(jobInfo.copy(state = JobStatus.Error,
+            endTime = Some(DateTime.now()), error = Some(ErrorData(ContextReconnectFailedException()))))
+        })
+      case Failure(e: Exception) =>
+        logger.error(s"Exception occurred while fetching jobs for context (${contextInfo.id})", e)
+      case unexpectedMsg @ _ =>
+        logger.error(
+            s"$unexpectedMsg message received while fetching jobs for context (${contextInfo.id})")
+    }
+  }
+
+  @VisibleForTesting
+  def getExistingManagerActorRefs(system: ActorSystem, jobDaoActor: ActorRef): List[ActorRef] = {
+    val validManagerRefs = new ListBuffer[ActorRef]()
     val config = system.settings.config
     val daoAskTimeout = Timeout(config.getDuration("spark.jobserver.dao-timeout", TimeUnit.SECONDS).second)
     val resp = Await.result(
         (jobDaoActor ? JobDAOActor.GetContextInfos(None, Some(Seq(ContextStatus.Running))))(daoAskTimeout).
         mapTo[JobDAOActor.ContextInfos], daoAskTimeout.duration)
-    val initialSeedNode = resp.contextInfos.map(ci =>
-      validateContext(ci, system, jobDaoActor)(ec)).find(_ != None)
-    initialSeedNode match {
-      case None => None
-      case Some(seedNodeAddress) => seedNodeAddress
+
+    resp.contextInfos.map{ contextInfo =>
+      getManagerActorRef(contextInfo, system) match {
+        case None => setReconnectionFailedForContextAndJobs(contextInfo, jobDaoActor)
+        case Some(actorRef) => validManagerRefs += actorRef
+      }
     }
+    validManagerRefs.toList
   }
 
   private def parseInitialBinaryConfig(key: String, config: Config): Map[String, String] = {
