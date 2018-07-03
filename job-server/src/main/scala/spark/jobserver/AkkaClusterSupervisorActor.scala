@@ -27,6 +27,7 @@ import spark.jobserver.JobManagerActor.ContextTerminatedException
 import spark.jobserver.io.{JobDAOActor, ContextInfo, ContextStatus, JobStatus, ErrorData}
 import spark.jobserver.util.{InternalServerErrorException, NoCallbackFoundException,
   ContextJVMInitializationTimeout}
+import com.google.common.annotations.VisibleForTesting
 
 object AkkaClusterSupervisorActor {
   val MANAGER_ACTOR_PREFIX = "jobManager-"
@@ -144,8 +145,8 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
             getDataFromDAO[JobDAOActor.ContextResponse](JobDAOActor.GetContextInfo(contextId))
           val callbacks = contextInitInfos.remove(actorName)
           (contextFromDAO, callbacks) match {
-            case (Some(JobDAOActor.ContextResponse(Some(contextInfo))), Some((_, _, _)))
-                if isContextErroredOut(contextInfo) =>
+            case (Some(JobDAOActor.ContextResponse(Some(contextInfo))), _)
+                if isContextInFinalState(contextInfo) =>
               logger.info(s"Context forked JVM (${contextInfo.name}) already errored out. Killing it.")
               actorRef ! PoisonPill
             case (Some(JobDAOActor.ContextResponse(Some(contextInfo))),
@@ -276,7 +277,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
       resp match {
         case Some(JobDAOActor.ContextResponse(Some(c))) =>
           logger.info("Shutting down context {}", name)
-          val state = if (FINAL_STATES contains c.state) c.state else ContextStatus.Stopping
+          val state = if (ContextStatus.getFinalStates() contains c.state) c.state else ContextStatus.Stopping
           val contextInfo = ContextInfo(c.id, c.name, c.config, c.actorAddress, c.startTime,
             c.endTime, state, c.error)
           daoActor ! JobDAOActor.SaveContextInfo(contextInfo)
@@ -567,10 +568,8 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
     logger.info(s"Scheduled message has been cancelled: ${cancelHandler.isCancelled.toString()}")
   }
 
-  private def isContextErroredOut(contextInfo: ContextInfo): Boolean = {
-    contextInfo.state match {
-      case ContextStatus.Error => true
-      case _ => false
-    }
+  @VisibleForTesting
+  protected def isContextInFinalState(contextInfo: ContextInfo): Boolean = {
+    ContextStatus.getFinalStates().contains(contextInfo.state)
   }
 }
