@@ -185,7 +185,7 @@ trait JobDAO {
   /**
     * Return all job ids to their job info.
     */
-  def getJobInfosByContextId(contextId: String, jobStatus: Option[String] = None): Future[Seq[JobInfo]]
+  def getJobInfosByContextId(contextId: String, jobStatuses: Option[Seq[String]] = None): Future[Seq[JobInfo]]
 
   /**
     * Move all jobs running on context with given name to error state
@@ -194,12 +194,13 @@ trait JobDAO {
     * @param endTime time to put into job infos end time column
     */
   def cleanRunningJobInfosForContext(contextId: String, endTime: DateTime): Future[Unit] = {
-    getJobInfosByContextId(contextId, Some(JobStatus.Running)).map { infos =>
-      JobDAO.logger.info("Cleaning {} running jobs for {}", infos.size, contextId)
+    import spark.jobserver.JobManagerActor.ContextTerminatedException
+    getJobInfosByContextId(contextId, Some(Seq(JobStatus.Running))).map { infos =>
+      JobDAO.logger.info("cleaning {} running jobs for {}", infos.size, contextId)
       for (info <- infos) {
         val updatedInfo = info.copy(
           endTime = Some(endTime),
-          error = Some(ErrorData(JobKilledException(info.jobId))))
+          error = Some(ErrorData(ContextTerminatedException(contextId))))
         saveJobInfo(jobInfo = updatedInfo)
       }
     }

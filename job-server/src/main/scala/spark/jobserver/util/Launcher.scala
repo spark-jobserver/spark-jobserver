@@ -22,6 +22,8 @@ abstract class Launcher(config: Config, sparkLauncher: SparkLauncher, enviornmen
     private var handler: SparkAppHandle = null
 
     protected final val master = config.getString("spark.master")
+    protected final val defaultSuperviseModeEnabled = Try(
+        config.getBoolean(ManagerLauncher.SJS_SUPERVISE_MODE_KEY)).getOrElse(false)
     protected final val deployMode = config.getString("spark.submit.deployMode")
     protected final val sjsJarPath = getEnvironmentVariable("MANAGER_JAR_FILE")
     protected final val baseGCOPTS = getEnvironmentVariable("GC_OPTS_BASE")

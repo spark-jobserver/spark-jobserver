@@ -227,10 +227,10 @@ class JobFileDAO(config: Config) extends JobDAO {
   }
 
   override def getJobInfosByContextId(
-      contextId: String, jobStatus: Option[String] = None): Future[Seq[JobInfo]] = Future {
+      contextId: String, jobStatuses: Option[Seq[String]] = None): Future[Seq[JobInfo]] = Future {
     jobs.values.toSeq.filter(j => {
-      (contextId, jobStatus) match {
-        case (contextId, Some(status)) => contextId == j.contextId && status == j.state
+      (contextId, jobStatuses) match {
+        case (contextId, Some(statuses)) => contextId == j.contextId && statuses.contains(j.state)
         case _ => contextId == j.contextId
       }
     })

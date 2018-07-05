@@ -400,20 +400,35 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
       retrieved.map(_.jobId) should contain allOf(finishedJob.jobId, runningJob.jobId, finishedJob2.jobId)
     }
 
-    it("retrieve running jobs by context id") {
+    it("should retrieve finished and running jobs by context id") {
       val contextId = UUID.randomUUID().toString()
       val runningJob = genJobInfo(jarInfo, true, JobStatus.Running, Some(contextId))
+      val errorJob = genJobInfo(jarInfo, true, JobStatus.Error, Some(contextId))
       val finishedJob = genJobInfo(jarInfo, true, JobStatus.Finished, Some(contextId))
+
       dao.saveJobInfo(runningJob)
+      dao.saveJobInfo(errorJob)
       dao.saveJobInfo(finishedJob)
 
       val retrieved = Await.result(
-          dao.getJobInfosByContextId(contextId, Some(JobStatus.Running)), timeout)
+          dao.getJobInfosByContextId(contextId, Some(Seq(JobStatus.Running, JobStatus.Finished))), timeout)
 
       //test
-      retrieved.size shouldBe 1
-      retrieved.head.contextId shouldBe contextId
-      retrieved.head.state shouldBe JobStatus.Running
+      retrieved.size shouldBe 2
+      retrieved should contain allElementsOf(List(runningJob, finishedJob))
+    }
+
+    it("should retrieve nothing if no job with the specified status exist") {
+      val contextId = UUID.randomUUID().toString()
+      val runningJob = genJobInfo(jarInfo, true, JobStatus.Running, Some(contextId))
+
+      dao.saveJobInfo(runningJob)
+
+      val retrieved = Await.result(
+          dao.getJobInfosByContextId(contextId, Some(Seq(JobStatus.Killed, JobStatus.Finished))), timeout)
+
+      //test
+      retrieved shouldBe empty
     }
 
     it("clean running jobs for context") {
