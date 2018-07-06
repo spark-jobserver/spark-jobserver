@@ -337,9 +337,9 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
               daoActor ! JobDAOActor.CleanContextJobInfos(c.id, DateTime.now())
          }
       case Some(JobDAOActor.ContextResponse(None)) =>
-        logger.error("No context for deletion is found in the DB")
+        logger.error(s"No context (contextId: ${contextId}) for deletion is found in the DB")
       case None =>
-        logger.error("Error occurred after Terminated message was recieved")
+        logger.error(s"Error occurred after Terminated message was recieved for (contextId: ${contextId})")
     }
     cluster.down(actorRef.path.address)
     jobManagerActorRefs.remove(actorRef.path.toString())
