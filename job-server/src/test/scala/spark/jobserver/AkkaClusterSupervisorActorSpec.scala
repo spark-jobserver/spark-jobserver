@@ -20,6 +20,7 @@ import org.scalatest.{Matchers, FunSpec, BeforeAndAfter, BeforeAndAfterAll, FunS
 import org.joda.time.DateTime
 import scala.concurrent.Await
 import scala.reflect.ClassTag
+import java.util.concurrent.CountDownLatch
 
 object AkkaClusterSupervisorActorSpec {
   // All the Actors System should have the same name otherwise they cannot form a cluster
@@ -393,39 +394,63 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
     }
 
     it("should not change final state to STOPPING state") {
-      val contextId = "erroredOutContextId"
-      val contextName = "erroredOutContextName"
-      supervisor ! AddContext(contextName, contextConfig)
-      expectMsg(contextInitTimeout, ContextInitialized)
+      val daoProbe = TestProbe()
+      val latch = new CountDownLatch(1)
+      val contextInfo = ContextInfo("id", "name", "", None, DateTime.now(), None, ContextStatus.Error, None)
+      var contextToTest: ContextInfo = contextInfo
 
-      val c = Await.result(dao.getContextInfoByName(contextName), daoTimeout).get
-      val contextInfo = ContextInfo(c.id, contextName, c.config, c.actorAddress, c.startTime,
-            Some(DateTime.now()), "ERROR", Some(new Throwable))
-      dao.saveContextInfo(contextInfo)
+      daoProbe.setAutoPilot(new TestActor.AutoPilot {
+        def run(sender: ActorRef, msg: Any): TestActor.AutoPilot = {
+          msg match {
+            case JobDAOActor.GetContextInfoByName(_) =>
+              sender ! JobDAOActor.ContextResponse(Some(contextInfo))
+            case JobDAOActor.SaveContextInfo(c) =>
+              contextToTest = c
+              latch.countDown()
+          }
+          TestActor.KeepRunning
+        }
+      })
 
-      supervisor ! StopContext(contextName)
-      expectMsg(contextInitTimeout, ContextStopped)
+      val cluster = Cluster(system)
+      val supervisor = system.actorOf(Props(classOf[StubbedAkkaClusterSupervisorActor], daoProbe.ref, TestProbe().ref,
+        managerProbe), "supervisor2")
 
-      val c_new = Await.result(dao.getContextInfoByName(contextName), daoTimeout).get
-      c_new.state should be("ERROR")
+      supervisor ! StopContext("name")
+      latch.await()
+
+      contextToTest.state should be(ContextStatus.Error)
+      expectMsg(contextInitTimeout, NoSuchContext)
     }
 
     it("should change non final state to STOPPING state") {
-      val contextId = "runningContextId"
-      val contextName = "runningContextName"
-      supervisor ! AddContext(contextName, contextConfig)
-      expectMsg(contextInitTimeout, ContextInitialized)
+      val daoProbe = TestProbe()
+      val latch = new CountDownLatch(1)
+      val contextInfo = ContextInfo("id", "name", "", None, DateTime.now(), None, ContextStatus.Running, None)
+      var contextToTest: ContextInfo = contextInfo
 
-      val c = Await.result(dao.getContextInfoByName(contextName), daoTimeout).get
-      val contextInfo = ContextInfo(c.id, contextName, c.config, c.actorAddress, c.startTime,
-            Some(DateTime.now()), "RUNNING", Some(new Throwable))
-      dao.saveContextInfo(contextInfo)
+      daoProbe.setAutoPilot(new TestActor.AutoPilot {
+        def run(sender: ActorRef, msg: Any): TestActor.AutoPilot = {
+          msg match {
+            case JobDAOActor.GetContextInfoByName(_) =>
+              sender ! JobDAOActor.ContextResponse(Some(contextInfo))
+            case JobDAOActor.SaveContextInfo(c) =>
+              contextToTest = c
+              latch.countDown()
+          }
+          TestActor.KeepRunning
+        }
+      })
 
-      supervisor ! StopContext(contextName)
-      expectMsg(contextInitTimeout, ContextStopped)
+      val cluster = Cluster(system)
+      val supervisor = system.actorOf(Props(classOf[StubbedAkkaClusterSupervisorActor], daoProbe.ref, TestProbe().ref,
+        managerProbe), "supervisor3")
 
-      val c_new = Await.result(dao.getContextInfoByName(contextName), daoTimeout).get
-      c_new.state should be("STOPPING")
+      supervisor ! StopContext("name")
+      latch.await()
+
+      contextToTest.state should be(ContextStatus.Stopping)
+      expectMsg(contextInitTimeout, NoSuchContext)
     }
   }
 
