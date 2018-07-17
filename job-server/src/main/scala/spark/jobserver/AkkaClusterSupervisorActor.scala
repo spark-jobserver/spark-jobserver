@@ -350,12 +350,12 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
         state = state)
     logger.info(s"Updating the status to ${state} for context ${contextInfo.id} and jobs within")
     daoActor ! JobDAOActor.SaveContextInfo(newContextInfo)
-    setStateForRunningJobs(contextInfo, state)
+    setStateForRunningAndRestartingJobs(contextInfo, state)
   }
 
-  private def setStateForRunningJobs(contextInfo: ContextInfo, state: String) {
+  private def setStateForRunningAndRestartingJobs(contextInfo: ContextInfo, state: String) {
     (daoActor ? JobDAOActor.GetJobInfosByContextId(
-        contextInfo.id, Some(Seq(JobStatus.Running))))(daoAskTimeout).onComplete {
+        contextInfo.id, Some(Seq(JobStatus.Running, JobStatus.Restarting))))(daoAskTimeout).onComplete {
       case Success(JobDAOActor.JobInfos(Seq())) =>
         logger.info(s"No jobs found for context ${contextInfo.name}, not updating status")
       case Success(JobDAOActor.JobInfos(jobInfos)) =>

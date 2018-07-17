@@ -186,6 +186,26 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
   // This is needed to help tests pass on some MBPs when working from home
   System.setProperty("spark.driver.host", "localhost")
 
+  def saveContextAndJobInRestartingState(contextId: String) : String = {
+    val dt = DateTime.now()
+    saveContextInSomeState(contextId, ContextStatus.Restarting)
+    val job = JobInfo("specialJobId", contextId, "someContext", BinaryInfo("demo", BinaryType.Jar, dt),
+        "com.abc.meme", JobStatus.Restarting, dt, None, None)
+    dao.saveJobInfo(job)
+    job.jobId
+  }
+
+  def saveContextInSomeState(contextId: String, state: String) : ContextInfo = {
+    val dt = DateTime.now()
+    val configWithSuperviseMode = ConfigFactory.parseString(
+        s"${ManagerLauncher.CONTEXT_SUPERVISE_MODE_KEY}=true, is-adhoc=false, context.name=someContext, context.id=$contextId")
+        .withFallback(contextConfig)
+    val convertedContextConfig = configWithSuperviseMode.root().render(ConfigRenderOptions.concise())
+    val context = ContextInfo(contextId, "someContext", convertedContextConfig, None, dt, None, state, None)
+    dao.saveContextInfo(context)
+    (context)
+  }
+
   override def beforeAll() {
     dao = new InMemoryDAO
     daoActor = system.actorOf(JobDAOActor.props(dao))
@@ -649,21 +669,16 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
           TestActor.KeepRunning
         }
       })
-      val contextId = managerProbe.ref.path.name.replace(AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX, "")
-      val configWithSuperviseMode = ConfigFactory.parseString(
-          s"${ManagerLauncher.CONTEXT_SUPERVISE_MODE_KEY}=true, is-adhoc=false")
-      val convertedContextConfig = configWithSuperviseMode.root().render(ConfigRenderOptions.concise())
-      val dt = DateTime.now()
-      val dummyContext = ContextInfo(contextId, "errorContextName", convertedContextConfig, None,
-          dt, Some(dt.plusMinutes(5)), ContextStatus.Restarting, None)
-      dao.saveContextInfo(dummyContext)
-      val dummyJob = JobInfo("jobId", contextId, "errorContextName", BinaryInfo("demo", BinaryType.Jar, dt),
-          "com.abc.meme", JobStatus.Running, dt, None, None)
-      dao.saveJobInfo(dummyJob)
 
-      supervisor ! ActorIdentity(dummyContext, Some(managerProbe.ref))
+      val contextId = managerProbe.ref.path.name.replace(AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX, "")
+
+      val jobId: String = saveContextAndJobInRestartingState(contextId)
+      val context = Await.result(dao.getContextInfo(contextId), daoTimeout)
+
+      supervisor ! ActorIdentity(context, Some(managerProbe.ref))
+
       Thread.sleep(3000)
-      val jobInfo = Await.result(dao.getJobInfo("jobId"), daoTimeout).get
+      val jobInfo = Await.result(dao.getJobInfo(jobId), daoTimeout).get
       jobInfo.state should be(JobStatus.Error)
     }
 
@@ -680,12 +695,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       })
 
       val contextId = managerProbe.ref.path.name.replace(AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX, "")
-      val configWithSuperviseMode = ConfigFactory.parseString(
-          s"${ManagerLauncher.CONTEXT_SUPERVISE_MODE_KEY}=true, is-adhoc=false, context.name=name, context.id=$contextId")
-          .withFallback(contextConfig)
-      val convertedContextConfig = configWithSuperviseMode.root().render(ConfigRenderOptions.concise())
-      val restartedContext = ContextInfo(contextId, "", convertedContextConfig, None, DateTime.now(), None, ContextStatus.Started, None)
-      dao.saveContextInfo(restartedContext)
+      val context = saveContextInSomeState(contextId, ContextStatus.Started)
 
       supervisor ! ActorIdentity(unusedDummyInput, Some(managerProbe.ref))
 
@@ -696,17 +706,35 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       // lists all contexts and then tries to stop them. Since this manager slave is just a
       // TestProbe it's address doesn't get resolved so, it cannot be stopped. So, we change
       // the status to finish to cleanup.
-      dao.saveContextInfo(restartedContext.copy(state = ContextStatus.Finished))
+      dao.saveContextInfo(context.copy(state = ContextStatus.Finished))
+    }
+
+    it("should change states of a context and jobs inside to ERROR on an Error during restart") {
+      val managerProbe = TestProbe(AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX + "1234")
+      managerProbe.setAutoPilot(new TestActor.AutoPilot {
+        def run(sender: ActorRef, msg: Any): TestActor.AutoPilot = {
+          msg match {
+            case Initialize(_,_,_) =>
+          }
+          TestActor.KeepRunning
+        }
+      })
+
+      val contextId = managerProbe.ref.path.name.replace(AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX, "")
+      val jobId = saveContextAndJobInRestartingState(contextId)
+      supervisor ! ActorIdentity(unusedDummyInput, Some(managerProbe.ref))
+
+      Thread.sleep(3000)
+      val context = Await.result(dao.getContextInfo(contextId), daoTimeout)
+      context.get.state should be(ContextStatus.Error)
+      val job = Await.result(dao.getJobInfo(jobId), daoTimeout)
+      job.get.state should be(JobStatus.Error)
     }
 
     it("should set state restarting for context which was terminated unexpectedly and had supervise mode enabled") {
       val contextId = "testid"
-      val configWithSuperviseMode = ConfigFactory.parseString(
-          s"${ManagerLauncher.CONTEXT_SUPERVISE_MODE_KEY}=true").withFallback(contextConfig)
-      val convertedContextConfig = configWithSuperviseMode.root().render(ConfigRenderOptions.concise())
 
-      val runningContext = ContextInfo(contextId, "c", convertedContextConfig, None, DateTime.now(), None, ContextStatus.Running, None)
-      dao.saveContextInfo(runningContext)
+      val runningContext = saveContextInSomeState(contextId, ContextStatus.Running)
       val managerProbe = system.actorOf(Props.empty, s"jobManager-$contextId")
       val daoProbe = TestProbe()
 
