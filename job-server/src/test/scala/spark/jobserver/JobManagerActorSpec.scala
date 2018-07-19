@@ -194,7 +194,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       uploadTestJar()
       manager ! JobManagerActor.StartJob("demo", classPrefix + "MyErrorJob", emptyConfig, errorEvents)
       val errorMsg = expectMsgClass(startJobWait, classOf[JobErroredOut])
-      errorMsg.err.getClass should equal (classOf[RuntimeException])
+      errorMsg.err.getClass should equal (classOf[IllegalArgumentException])
     }
 
     it("job should get jobConfig passed in to StartJob message") {
