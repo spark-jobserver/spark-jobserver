@@ -130,7 +130,7 @@ object JobServer {
     contextPerJvm match {
       case false =>
         val supervisor = system.actorOf(Props(classOf[LocalContextSupervisorActor],
-            daoActor, dataManager), "context-supervisor")
+            daoActor, dataManager), AkkaClusterSupervisorActor.ACTOR_NAME)
         supervisor ! ContextSupervisor.AddContextsFromConfig  // Create initial contexts
         startWebApi(system, supervisor, jobDAO, webApiPF)
       case true =>

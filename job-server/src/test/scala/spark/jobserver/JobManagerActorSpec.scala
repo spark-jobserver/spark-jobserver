@@ -2,17 +2,18 @@ package spark.jobserver
 
 import java.io.File
 import java.nio.file.{Files, StandardOpenOption}
-import akka.actor.{Props, ActorRef, ActorIdentity, ReceiveTimeout, PoisonPill}
+
+import akka.actor.{ActorIdentity, ActorRef, PoisonPill, Props, ReceiveTimeout}
 import akka.testkit.TestProbe
 import org.joda.time.DateTime
-
 import com.typesafe.config.{Config, ConfigFactory}
 import spark.jobserver.DataManagerActor.RetrieveData
 import spark.jobserver.JobManagerActor.KillJob
 import spark.jobserver.common.akka.AkkaTestUtils
-import spark.jobserver.CommonMessages.{Subscribe, JobStarted, JobRestartFailed, JobValidationFailed}
-import spark.jobserver.io.{BinaryType, JobDAOActor, JobStatus, JobInfo, BinaryInfo}
-import spark.jobserver.ContextSupervisor.{AddContext, ContextInitialized}
+import spark.jobserver.CommonMessages.{JobRestartFailed, JobStarted, JobValidationFailed, Subscribe}
+import spark.jobserver.io._
+import spark.jobserver.ContextSupervisor.SparkContextStopped
+import spark.jobserver.io.JobDAOActor.SavedSuccessfully
 import spark.jobserver.util.NoJobConfigFoundException
 
 import scala.collection.mutable
@@ -21,6 +22,9 @@ import scala.concurrent.duration.FiniteDuration
 object JobManagerActorSpec extends JobSpecConfig
 
 object JobManagerActorSpy {
+  case object TriggerExternalKill
+  case object UnhandledException
+
   def props(daoActor: ActorRef, supervisorActorAddress: String,
       initializationTimeout: FiniteDuration,
       contextId: String, spyProbe: TestProbe, restartCandidates: Int = 0): Props =
@@ -43,10 +47,16 @@ class JobManagerActorSpy(daoActor: ActorRef, supervisorActorAddress: String,
       spyProbe.ref ! msg
     }
 
-    case msg @ JobValidationFailed(jobId, dateTime, err)  => {
+    case msg @ JobValidationFailed(jobId, dateTime, err) => {
       handleJobRestartFailure(jobId, err, msg)
       spyProbe.ref ! msg
     }
+
+    case JobManagerActorSpy.TriggerExternalKill =>
+      jobContext.stop()
+      sender ! "Stopped"
+
+    case JobManagerActorSpy.UnhandledException => throw new Exception("I am unhandled")
   }
 
   override def wrappedReceive: Receive = {
@@ -350,6 +360,30 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
       manager ! JobManagerActor.StartJob("demo", "no.such.class", emptyConfig, Set.empty[Class[_]])
       expectMsg(startJobWait, CommonMessages.NoSuchClass)
+    }
+
+    it("should return error message if classPath does not match (adhoc)") {
+      val adhocContextConfig = JobManagerActorSpec.getContextConfig(adhoc = true)
+      val deathWatcher = TestProbe()
+      uploadTestJar()
+
+      daoActor ! JobDAOActor.SaveContextInfo(ContextInfo(contextId, "ctx", "",
+        None, DateTime.now(), None, ContextStatus.Running, None))
+      expectMsg(SavedSuccessfully)
+      manager ! JobManagerActor.Initialize(adhocContextConfig, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+      deathWatcher.watch(manager)
+
+      manager ! JobManagerActor.StartJob("demo", "no.such.class", emptyConfig, Set.empty[Class[_]])
+
+      expectMsg(startJobWait, CommonMessages.NoSuchClass)
+      deathWatcher.expectTerminated(manager)
+      daoActor ! JobDAOActor.GetContextInfo(contextId)
+      expectMsgPF(3.seconds, "") {
+        case JobDAOActor.ContextResponse(Some(contextInfo)) =>
+          contextInfo.state should be(ContextStatus.Stopping)
+        case unexpectedMsg @ _ => fail(s"State is not stopping. Message received $unexpectedMsg")
+      }
     }
 
     it("should error out if loading garbage jar") {
@@ -814,6 +848,91 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       spyProbe.expectMsgAllClassOf(classOf[JobStarted], classOf[JobRestartFailed])
       spyProbe.expectNoMsg()
       deathWatcher.expectNoMsg()
+    }
+  }
+
+  describe("Context stop tests") {
+    it("should stop context and shutdown itself") {
+      val deathWatcher = TestProbe()
+      deathWatcher.watch(manager)
+      manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+
+      manager ! JobManagerActor.StopContextAndShutdown
+      expectMsg(SparkContextStopped)
+      deathWatcher.expectTerminated(manager)
+    }
+
+    it("should update DAO if an external kill event is fired to stop the context") {
+      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, TestProbe(), 1))
+      val deathWatcher = TestProbe()
+      deathWatcher.watch(manager)
+
+      daoActor ! JobDAOActor.SaveContextInfo(ContextInfo(contextId, "ctx", "",
+        None, DateTime.now(), None, ContextStatus.Running, None))
+      expectMsg(SavedSuccessfully)
+
+      manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+
+      manager ! JobManagerActorSpy.TriggerExternalKill
+
+      expectMsg("Stopped")
+      deathWatcher.expectTerminated(manager)
+      daoActor ! JobDAOActor.GetContextInfo(contextId)
+      expectMsgPF(3.seconds, "") {
+        case JobDAOActor.ContextResponse(Some(contextInfo)) =>
+          contextInfo.state should be(ContextStatus.Killed)
+        case unexpectedMsg => fail(s"State is not killed")
+      }
+    }
+
+    it("should stop context and cleanup properly in case of unhandled exception") {
+      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, TestProbe(), 1))
+      val deathWatcher = TestProbe()
+      deathWatcher.watch(manager)
+
+      daoActor ! JobDAOActor.SaveContextInfo(ContextInfo(contextId, "ctx", "",
+        None, DateTime.now(), None, ContextStatus.Running, None))
+      expectMsg(SavedSuccessfully)
+
+      manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+
+      manager ! JobManagerActorSpy.UnhandledException
+
+      deathWatcher.expectTerminated(manager, 5.seconds)
+      daoActor ! JobDAOActor.GetContextInfo(contextId)
+      expectMsgPF(3.seconds, "") {
+        case JobDAOActor.ContextResponse(Some(contextInfo)) =>
+          contextInfo.state should be(ContextStatus.Killed)
+        case unexpectedMsg => fail(s"State is not killed")
+      }
+    }
+
+    it("should start a job in adhoc context and should stop context once finished") {
+      val deathWatcher = TestProbe()
+      val adhocContextConfig = JobManagerActorSpec.getContextConfig(adhoc = true)
+      daoActor ! JobDAOActor.SaveContextInfo(ContextInfo(contextId, "ctx", "",
+        None, DateTime.now(), None, ContextStatus.Running, None))
+      expectMsg(SavedSuccessfully)
+      manager ! JobManagerActor.Initialize(adhocContextConfig, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+      deathWatcher.watch(manager)
+      uploadTestJar()
+
+      manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, allEvents)
+
+      expectMsgClass(startJobWait, classOf[JobStarted])
+      expectMsgAllClassOf(classOf[JobFinished], classOf[JobResult])
+      deathWatcher.expectTerminated(manager)
+      expectNoMsg(2.seconds)
+      daoActor ! JobDAOActor.GetContextInfo(contextId)
+      expectMsgPF(3.seconds, "") {
+        case JobDAOActor.ContextResponse(Some(contextInfo)) =>
+          contextInfo.state should be(ContextStatus.Stopping)
+        case unexpectedMsg @ _ => fail(s"State is not stopping. Message received $unexpectedMsg")
+      }
     }
   }
 }

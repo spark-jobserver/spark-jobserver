@@ -52,6 +52,7 @@ object AkkaClusterSupervisorActorSpec {
       jobserver.job-result-cache-size = 100
       jobserver.context-creation-timeout = 5 s
       jobserver.dao-timeout = 3 s
+      jobserver.context-deletion-timeout= 3 s
       context-per-jvm = true
       contexts {
         config-context {
@@ -63,7 +64,7 @@ object AkkaClusterSupervisorActorSpec {
         num-cpu-cores = 2
         memory-per-node = 512m
         context-init-timeout = 2 s
-        forked-jvm-init-timeout = 5s
+        forked-jvm-init-timeout = 10s
         context-factory = spark.jobserver.context.DefaultSparkContextFactory
         passthrough {
           spark.driver.allowMultipleContexts = true
@@ -169,8 +170,11 @@ class StubbedAkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: Ac
 }
 
 class StubbedJobManagerActor(contextConfig: Config) extends Actor {
+  var contextName: String = _
+  var stopAttemptCount: Int = 0
   def receive = {
     case JobManagerActor.Initialize(contextConfig,_,_) =>
+      contextName = contextConfig.getString("context.name")
       val resultActor = context.system.actorOf(Props(classOf[JobResultActor]))
       sender() ! JobManagerActor.Initialized(contextConfig.getString("context.name"), resultActor)
     case JobManagerActor.GetContexData =>
@@ -182,6 +186,39 @@ class StubbedJobManagerActor(contextConfig: Config) extends Actor {
         case (_, "") => sender() ! JobManagerActor.ContexData(appId, None)
         case (_, _) => sender() ! JobManagerActor.ContexData(appId, Some(webUiUrl))
       }
+    case JobManagerActor.StopContextAndShutdown =>
+      contextName match {
+        case "send-in-progress-back" =>
+          stopAttemptCount match {
+            case 0 =>
+              stopAttemptCount += 1
+              sender ! ContextStopInProgress
+            case 1 =>
+              sender ! SparkContextStopped
+              self ! PoisonPill
+          }
+
+        case "multiple-stop-attempts" => stopAttemptCount match {
+          case 0 | 1 =>
+            stopAttemptCount += 1
+            sender ! ContextStopInProgress
+          case 2 =>
+            sender ! SparkContextStopped
+            self ! PoisonPill
+          }
+        case "dont-respond" =>
+          stopAttemptCount match {
+            case 0 => stopAttemptCount += 1
+            case 1 =>
+              sender ! SparkContextStopped
+              self ! PoisonPill
+          }
+        case _ =>
+          sender ! SparkContextStopped
+          self ! PoisonPill
+      }
+    case unexpectedMsg @ _ =>
+      println(s"Unexpected message received: $unexpectedMsg")
   }
 }
 
@@ -325,6 +362,40 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
     it("context stop should be able to handle case when no context is present") {
       supervisor ! StopContext("test-context5")
       expectMsg(NoSuchContext)
+    }
+
+    it("should respond with ContextStopInProgress if driver failed to stop") {
+      supervisor ! AddContext("send-in-progress-back", contextConfig)
+      expectMsg(contextInitTimeout, ContextInitialized)
+
+      supervisor ! StopContext("send-in-progress-back")
+
+      expectMsg(ContextStopInProgress)
+    }
+
+    it("should respond with context stop error if driver doesn't respond back") {
+      supervisor ! AddContext("dont-respond", contextConfig)
+      expectMsg(contextInitTimeout, ContextInitialized)
+
+      supervisor ! StopContext("dont-respond")
+
+      expectMsgType[ContextStopError](4.seconds)
+    }
+
+    it("should stop context eventually if context stop was in progress") {
+      supervisor ! AddContext("multiple-stop-attempts", contextConfig)
+      expectMsg(contextInitTimeout, ContextInitialized)
+
+      supervisor ! StopContext("multiple-stop-attempts")
+      expectMsg(ContextStopInProgress)
+
+      supervisor ! StopContext("multiple-stop-attempts")
+      expectMsg(ContextStopInProgress)
+
+      supervisor ! StopContext("multiple-stop-attempts")
+      expectMsg(ContextStopped)
+      managerProbe.expectMsgClass(classOf[Terminated])
+      managerProbe.expectMsg("Executed")
     }
 
     it("should be able to start multiple contexts") {

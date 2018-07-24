@@ -56,8 +56,10 @@ object JobDAOActor {
 
   case object InvalidJar extends JobDAOResponse
   case object JarStored extends JobDAOResponse
-  case object SavedSuccessfully extends JobDAOResponse
-  case class SaveFailed(error: Throwable) extends JobDAOResponse
+
+  sealed trait SaveResponse
+  case object SavedSuccessfully extends SaveResponse
+  case class SaveFailed(error: Throwable) extends SaveResponse
 
   def props(dao: JobDAO): Props = Props(classOf[JobDAOActor], dao)
 }

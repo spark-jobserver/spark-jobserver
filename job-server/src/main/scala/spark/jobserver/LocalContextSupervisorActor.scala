@@ -20,6 +20,7 @@ import spark.jobserver.io.ContextInfo
 
 /** Messages common to all ContextSupervisors */
 object ContextSupervisor {
+  sealed trait StopContextResponse
   // Messages/actions
   case object AddContextsFromConfig // Start up initial contexts
   case object ListContexts
@@ -32,11 +33,13 @@ object ContextSupervisor {
   case class RestartOfTerminatedJobsFailed(contextId: String)
   case class ForkedJVMInitTimeout(contextActorName: String, contextInfo: ContextInfo)
   case class RegainWatchOnExistingContexts(actorRefs: Seq[ActorRef])
+  case object SparkContextStopped extends StopContextResponse
 
   // Errors/Responses
   case object ContextInitialized
   case class ContextInitError(t: Throwable)
   case class ContextStopError(t: Throwable)
+  case object ContextStopInProgress extends StopContextResponse
   case object ContextAlreadyExists
   case object NoSuchContext
   case object ContextStopped

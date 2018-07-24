@@ -24,10 +24,12 @@ trait JobSpecConfig {
   val MemoryPerNode = "512m"
   val MaxJobsPerContext = Integer.valueOf(2)
   def contextFactory: String = classOf[DefaultSparkContextFactory].getName
+
   lazy val config = {
     val ConfigMap = Map(
       "spark.jobserver.job-result-cache-size" -> JobResultCacheSize,
       "spark.jobserver.dao-timeout" -> "3s",
+      "spark.jobserver.context-deletion-timeout" -> "5s",
       "num-cpu-cores" -> NumCpuCores,
       "memory-per-node" -> MemoryPerNode,
       "spark.jobserver.max-jobs-per-context" -> MaxJobsPerContext,
@@ -37,7 +39,8 @@ trait JobSpecConfig {
       "context-factory" -> contextFactory,
       "spark.context-settings.test" -> "",
       "akka.test.single-expect-default" -> "6s",
-      "akka.test.timefactor" -> 2
+      "akka.test.timefactor" -> 2,
+      "spark.driver.allowMultipleContexts" -> true
     )
     ConfigFactory.parseMap(ConfigMap.asJava).withFallback(ConfigFactory.defaultOverrides())
   }
@@ -55,6 +58,12 @@ trait JobSpecConfig {
       "streaming.stopSparkContext" -> Boolean.box(true)
     )
     ConfigFactory.parseMap(ConfigMap.asJava).withFallback(ConfigFactory.defaultOverrides())
+  }
+
+  lazy val contextConfigWithGracefulShutdown = {
+    val configMap = Map(
+      "streaming.stopGracefully" -> Boolean.box(true))
+    ConfigFactory.parseMap(configMap.asJava).withFallback(contextConfig)
   }
 
   def getNewSystem: ActorSystem = ActorSystem("test", config)

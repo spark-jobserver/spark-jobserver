@@ -166,6 +166,7 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
       case StopContext("none") => sender ! NoSuchContext
       case StopContext("timeout-ctx") => sender ! ContextStopError(new Throwable("Some Throwable"))
       case StopContext("unexp-err") => sender ! UnexpectedError
+      case StopContext("ctx-stop-in-progress") => sender ! ContextStopInProgress
       case StopContext(_)      => sender ! ContextStopped
       case AddContext("one", _) => sender ! ContextAlreadyExists
       case AddContext("custom-ctx", c) =>
@@ -209,7 +210,7 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
         val result = "\"1, 2, 3, 4, 5, 6\"".getBytes().toStream
         if (events.contains(classOf[JobResult])) sender ! JobResult("foo.stream", result)
         statusActor ! Unsubscribe("foo.stream", sender)
-
+      case StartJob("context-already-stopped", _, _, _, _) =>  sender ! ContextStopInProgress
 
       case GetJobConfig("badjobid") => sender ! NoSuchJobId
       case GetJobConfig(_)          => sender ! config
