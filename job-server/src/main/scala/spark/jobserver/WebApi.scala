@@ -2,8 +2,8 @@ package spark.jobserver
 
 import java.util.NoSuchElementException
 import java.util.concurrent.TimeUnit
-import javax.net.ssl.SSLContext
 
+import javax.net.ssl.SSLContext
 import akka.actor.{ActorRef, ActorSystem}
 import akka.pattern.ask
 import akka.util.Timeout
@@ -12,14 +12,15 @@ import spark.jobserver.common.akka.web.JsonUtils.AnyJsonFormat
 import spark.jobserver.common.akka.web.{CommonRoutes, WebService}
 import org.apache.shiro.SecurityUtils
 import org.apache.shiro.config.IniSecurityManagerFactory
+import org.apache.http.HttpStatus
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import spark.jobserver.JobManagerActor.JobKilledException
 import spark.jobserver.auth._
-import spark.jobserver.io.{BinaryType, ErrorData, JobInfo, ContextInfo, JobStatus}
+import spark.jobserver.io.{BinaryType, ContextInfo, ErrorData, JobInfo, JobStatus}
 import spark.jobserver.routes.DataRoutes
 import spark.jobserver.util.{SSLContextFactory, SparkJobUtils}
-import spray.http.HttpHeaders.`Content-Type`
+import spray.http.HttpHeaders.{Location, `Content-Type`}
 import spray.http._
 import spray.httpx.SprayJsonSupport.sprayJsonMarshaller
 import spray.io.ServerSSLEngineProvider
@@ -448,10 +449,14 @@ class WebApi(system: ActorSystem,
           //  and currently running jobs will be lost.  Use with care!
           path(Segment) { (contextName) =>
             val (cName, _) = determineProxyUser(config, authInfo, contextName)
-            val future = (supervisor ? StopContext(cName))(contextDeletionTimeout.seconds)
+            val future = (supervisor ? StopContext(cName))(contextDeletionTimeout.seconds + 1.seconds)
             respondWithMediaType(MediaTypes.`application/json`) { ctx =>
               future.map {
                 case ContextStopped => ctx.complete(StatusCodes.OK, successMap("Context stopped"))
+                case ContextStopInProgress =>
+                  val response = HttpResponse(
+                    status = StatusCodes.Accepted, headers = List(Location(ctx.request.uri)))
+                  ctx.complete(response)
                 case NoSuchContext => notFound(ctx, "context " + contextName + " not found")
                 case ContextStopError(e) => ctx.complete(500, errMap(e, "CONTEXT DELETE ERROR"))
                 case UnexpectedError => ctx.complete(500, errMap("UNEXPECTED ERROR OCCURRED"))
@@ -714,6 +719,8 @@ class WebApi(system: ActorSystem,
                           ctx.complete(400, errMap("Invalid job type for this context"))
                         case JobLoadingError(err) =>
                           ctx.complete(500, errMap(err, "JOB LOADING FAILED"))
+                        case ContextStopInProgress =>
+                          ctx.complete(StatusCodes.Conflict, errMap("Context stop in progress"))
                         case NoJobSlotsAvailable(maxJobSlots) =>
                           val errorMsg = "Too many running jobs (" + maxJobSlots.toString +
                             ") for job context '" + contextOpt.getOrElse("ad-hoc") + "'"

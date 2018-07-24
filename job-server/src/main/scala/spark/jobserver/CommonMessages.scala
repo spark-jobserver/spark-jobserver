@@ -31,6 +31,7 @@ object CommonMessages {
   case class Unsubscribe(jobId: String, receiver: ActorRef) // all events for this jobId and receiving actor
 
   // errors
+  case object ContextStopping
   case object NoSuchJobId
   case object NoSuchApplication
   case object NoSuchClass

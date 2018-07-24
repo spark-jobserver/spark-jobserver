@@ -6,7 +6,8 @@ import java.util.concurrent.Executors._
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.TimeUnit
 
-import akka.actor.{ActorRef, PoisonPill, Props, ReceiveTimeout, Identify, ActorIdentity, Terminated}
+import akka.actor.{ActorIdentity, ActorRef, Cancellable, Identify, PoisonPill,
+  Props, ReceiveTimeout, Terminated}
 import akka.pattern.ask
 import akka.util.Timeout
 import com.typesafe.config.{Config, ConfigFactory}
@@ -16,10 +17,11 @@ import org.apache.spark.scheduler.SparkListener
 import org.apache.spark.scheduler.SparkListenerApplicationEnd
 import org.joda.time.DateTime
 import org.scalactic._
-import spark.jobserver.api.{JobEnvironment, DataFileCache}
-import spark.jobserver.io.{BinaryInfo, JobDAOActor, JobInfo, RemoteFileCache, JobStatus, ErrorData}
-import spark.jobserver.util.{ContextURLClassLoader, SparkJobUtils,
-  NoJobConfigFoundException, UnexpectedMessageReceivedException}
+import spark.jobserver.api.{DataFileCache, JobEnvironment}
+import spark.jobserver.ContextSupervisor.{ContextStopInProgress, SparkContextStopped}
+import spark.jobserver.io._
+import spark.jobserver.util.{ContextURLClassLoader, NoJobConfigFoundException,
+  SparkJobUtils, UnexpectedMessageReceivedException}
 import spark.jobserver.context._
 import spark.jobserver.common.akka.InstrumentedActor
 
@@ -38,6 +40,8 @@ object JobManagerActor {
   case class JobKilledException(jobId: String) extends Exception(s"Job $jobId killed")
   case class ContextTerminatedException(contextId: String)
     extends Exception(s"Unexpected termination of context $contextId")
+  case class ContextStopScheduledMsgTimeout(sender: ActorRef)
+  case object StopContextAndShutdown
 
   case object GetContextConfig
   case object SparkContextStatus
@@ -96,8 +100,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
 
   import CommonMessages._
   import JobManagerActor._
-  import context.dispatcher
-
+  import context.{become, dispatcher}
   import collection.JavaConverters._
 
   val config = context.system.settings.config
@@ -117,6 +120,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
 
   private val jobCacheSize = Try(config.getInt("spark.job-cache.max-entries")).getOrElse(10000)
   private val jobCacheEnabled = Try(config.getBoolean("spark.job-cache.enabled")).getOrElse(false)
+  private val contextDeletionTimeout = SparkJobUtils.getContextDeletionTimeout(config)
   // Use Spark Context's built in classloader when SPARK-1230 is merged.
   private val jarLoader = new ContextURLClassLoader(Array[URL](), getClass.getClassLoader)
 
@@ -124,6 +128,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
   private var contextConfig: Config = _
   private var contextName: String = _
   private var isAdHoc: Boolean = _
+  private var stopContextSenderAndHandler: (Option[ActorRef], Option[Cancellable]) = (None, None)
   @VisibleForTesting
   protected var statusActor: ActorRef = _
   @VisibleForTesting
@@ -158,22 +163,92 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
   }
 
   override def postStop() {
-    logger.info("Shutting down SparkContext {}", contextName)
-    Option(jobContext).foreach(_.stop())
+    logger.info("Doing final clean up in post stop!")
+    Option(jobContext).foreach { context =>
+      context.sparkContext.isStopped match {
+        case true => // Normal shutdown
+        case false =>
+          logger.warn(
+            s"""Post stop fired but spark context still not stopped.
+               |Most likely due to an unhandled exception or master
+               |sending PoisonPill in this class. Stopping context."""
+              .stripMargin.replaceAll("\n", " "))
+          context.stop() // blocking call since actor is already stopping
+      }
+    }
   }
 
   // Handle external kill events (e.g. killed via YARN)
-  private def sparkListener = {
-    new SparkListener() {
-      override def onApplicationEnd(event: SparkListenerApplicationEnd) {
-        logger.info("Got Spark Application end event, stopping job manager.")
-        self ! PoisonPill
-      }
+  private def sparkListener = new SparkListener() {
+    override def onApplicationEnd(event: SparkListenerApplicationEnd) {
+      logger.info("Got Spark Application end event, stopping job manger.")
+      // Note: This message can be dropped if postStop() has already fired due to PoisonPill.
+      // After PoisonPill, new messages cannot be scheduled.
+      self ! SparkContextStopped
     }
   }
 
   private def isKillingContextOnUnresponsiveSupervisorEnabled(): Boolean = {
     !supervisorActorAddress.isEmpty()
+  }
+
+  def adhocStopReceive: Receive = {
+    case StopContextAndShutdown =>
+      // Do a blocking stop, since job is already finished or errored out. Stop should be quick.
+      setContextState(ContextStatus.Stopping) {
+        () => jobContext.stop()
+      }
+
+    case SparkContextStopped =>
+      logger.info("Adhoc context stopped. Killing myself")
+      self ! PoisonPill
+  }
+
+  def stoppingStateReceive: Receive = {
+    // Initialize message cannot come in this state
+    // - If already in stopping state then JVM is also initialized. Initialize won't come
+    // - If restarts then whole JVM will restart and we will have a clean state
+    case ContextStopScheduledMsgTimeout(stopRequestSender) =>
+      logger.warn("Failed to stop context within in timeout. Stop is still in progress")
+      stopRequestSender ! ContextStopInProgress
+
+    case SparkContextStopped =>
+      logger.info(s"Context $contextId stopped successfully")
+      val (stopContextSender, stopContextTimeoutMsgHandler) = stopContextSenderAndHandler
+      stopContextTimeoutMsgHandler.foreach{ handler =>
+        handler.isCancelled match {
+          case true =>
+            // The response to stop request already sent. No need to send any response back.
+          case false =>
+            stopContextTimeoutMsgHandler.foreach(_.cancel())
+            stopContextSender.foreach(_ ! SparkContextStopped)
+        }
+      }
+      self ! PoisonPill
+
+    case StopContextAndShutdown =>
+      logger.info("Context stop already in progress")
+      sender ! ContextStopInProgress
+
+    case StartJob(_, _, _, _, _) =>
+      logger.warn("Tried to start job in stopping state. Not doing anything.")
+      sender ! ContextStopInProgress
+
+    case RestartExistingJobs =>
+      // This message is sent after a watch is added. Terminated will be raised on SJS Master
+      logger.warn("No point in restarting existing jobs as context is in stopping state." +
+        " Will be killed automatically")
+
+    case GetContexData => handleGetContextData
+    case KillJob(jobId: String) => handleKillJob(jobId)
+    case DeleteData(name: String) => handleDeleteData(name)
+    case Terminated(actorRef) =>
+      if (actorRef.path.name == "context-supervisor") {
+        logger.warn(s"Supervisor actor (${actorRef.path.address.toString}) terminated!" +
+          s" I will be killed automatically because context stop is in progress!")
+      }
+    case unexpectedMsg @ _ =>
+      logger.warn(s"Received unknown message in stopping state ${unexpectedMsg}")
   }
 
   def wrappedReceive: Receive = {
@@ -246,13 +321,29 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
       startJobInternal(appName, classPath, jobConfig, events, jobContext, sparkEnv, existingJobInfo)
     }
 
-    case KillJob(jobId: String) => {
-      jobContext.sparkContext.cancelJobGroup(jobId)
-      val resp = JobKilled(jobId, DateTime.now())
-      statusActor ! resp
-      sender ! resp
+    case StopContextAndShutdown => {
+      val originalSender = sender()
+      logger.info("Shutting down SparkContext {}", contextName)
+      Option(jobContext) match {
+        case Some(context) =>
+          val cancelHandler = scheduleContextStopTimeoutMsg(originalSender)
+          stopContextSenderAndHandler = (Some(originalSender), cancelHandler)
+          Future {
+            context.stop()
+          }
+          become(stoppingStateReceive)
+        case None =>
+          logger.warn("Context was null, killing myself")
+          originalSender ! SparkContextStopped
+          self ! PoisonPill
+      }
     }
 
+    case KillJob(jobId: String) => {
+      handleKillJob(jobId)
+    }
+
+    // Only used in LocalContextSupervisorActor
     case SparkContextStatus => {
       if (jobContext.sparkContext == null) {
         sender ! SparkContextDead
@@ -287,29 +378,11 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
     }
 
     case GetContexData => {
-      if (jobContext.sparkContext == null) {
-        sender ! SparkContextDead
-      } else {
-        try {
-          val appId = jobContext.sparkContext.applicationId;
-          val webUiUrl = jobContext.sparkContext.uiWebUrl
-          val msg = if (webUiUrl.isDefined) {
-            ContexData(appId, Some(webUiUrl.get))
-          } else {
-            ContexData(appId, None)
-          }
-          sender ! msg
-        } catch {
-          case e: Exception => {
-            logger.error("SparkContext does not exist!")
-            sender ! SparkContextDead
-          }
-        }
-      }
+      handleGetContextData
     }
 
     case DeleteData(name: String) => {
-      remoteFileCache.deleteDataFile(name)
+      handleDeleteData(name)
     }
 
     case RestartExistingJobs => {
@@ -342,6 +415,17 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
     case msg @ JobRestartFailed(jobId, error) => {
       handleJobRestartFailure(jobId, error, msg)
     }
+
+    case SparkContextStopped =>
+      // Stop context was not called but due to some external actions onApplicationEnd was fired
+      logger.info("Got Spark Application end event externally, stopping job manager")
+      setContextState(ContextStatus.Killed) {
+        // Update the state in DAO before sending the PoisonPill. In the Terminated event, cleanup
+        // will be done.
+        // Even if the DAO request fails, we still kill our self because what else can we do at
+        // this point? So, we just kill our self to release the resources.
+        () => self ! PoisonPill
+      }
   }
 
   def startJobInternal(appName: String,
@@ -523,7 +607,10 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
   // This method should be called after each job is succeeded or failed
   private def postEachJob() {
     // Delete myself after each adhoc job
-    if (isAdHoc) self ! PoisonPill
+    if (isAdHoc) {
+      become(adhocStopReceive)
+      self ! StopContextAndShutdown
+    }
   }
 
   // Protocol like "local" is supported in Spark for Jar loading, but not supported in Java.
@@ -625,6 +712,77 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
         case JobStatus.Running | JobStatus.Restarting => true
         case _ => false
       }
+    }
+  }
+
+  private def scheduleContextStopTimeoutMsg(sender: ActorRef): Option[Cancellable] = {
+    val stopTimeoutMsg = ContextStopScheduledMsgTimeout(sender)
+    // Timeout is (contextDeletionTimeout - 2) because we want to give some time to this
+    // actor to process the timeout message and send a response back.
+    val msgTimeoutSeconds = (contextDeletionTimeout - 2).seconds
+    Try(context.system.scheduler.scheduleOnce(msgTimeoutSeconds, self, stopTimeoutMsg)) match {
+      case Success(timeoutMsgHandler) =>
+        logger.info("Scheduled a time out message for context stop")
+        Some(timeoutMsgHandler)
+      case Failure(e) =>
+        logger.error("Failed to schedule a time out message for context stop", e)
+        None
+    }
+  }
+
+  private def handleDeleteData(name: String) = {
+    remoteFileCache.deleteDataFile(name)
+  }
+
+  private def handleKillJob(jobId: String) = {
+    jobContext.sparkContext.cancelJobGroup(jobId)
+    val resp = JobKilled(jobId, DateTime.now())
+    statusActor ! resp
+    sender ! resp
+  }
+
+  private def handleGetContextData = {
+    if (jobContext.sparkContext == null) {
+      sender ! SparkContextDead
+    } else {
+      try {
+        val appId = jobContext.sparkContext.applicationId
+        val webUiUrl = jobContext.sparkContext.uiWebUrl
+        val msg = if (webUiUrl.isDefined) {
+          ContexData(appId, Some(webUiUrl.get))
+        } else {
+          ContexData(appId, None)
+        }
+        sender ! msg
+      } catch {
+        case e: Exception => {
+          logger.error("SparkContext does not exist!")
+          sender ! SparkContextDead
+        }
+      }
+    }
+  }
+
+  private def setContextState(state: String)(onCompleteBlock: () => Unit) = {
+    (daoActor ? JobDAOActor.GetContextInfo(contextId))(daoAskTimeout)
+        .mapTo[JobDAOActor.ContextResponse].onComplete {
+      case Success(JobDAOActor.ContextResponse(Some(contextInfo))) =>
+        val stoppingContext =
+          contextInfo.copy(endTime = Some(DateTime.now()), state = state)
+        (daoActor ? JobDAOActor.SaveContextInfo(stoppingContext))(daoAskTimeout)
+            .mapTo[JobDAOActor.SaveResponse].onComplete {
+          case Success(JobDAOActor.SavedSuccessfully) | Success(JobDAOActor.SaveFailed(_)) =>
+            onCompleteBlock()
+          case Failure(t) =>
+            logger.error("Failed to receive response from DAO actor", t)
+            onCompleteBlock()
+        }
+      case Success(JobDAOActor.ContextResponse(None)) =>
+        logger.warn("Failed to get context data from DAO. Killing myself. The state might be inconsistent")
+        onCompleteBlock()
+      case Failure(t) =>
+        logger.error("Context stopped but an error occurred while saving data from DAO. Killing myself", t)
+        onCompleteBlock()
     }
   }
 }
