@@ -19,7 +19,6 @@ import scala.util.{Failure, Success, Try}
 import spark.jobserver.common.akka.InstrumentedActor
 
 import scala.concurrent.Await
-import akka.pattern.gracefulStop
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import spark.jobserver.JobManagerActor.{GetContexData, ContexData, SparkContextDead, RestartExistingJobs}
@@ -31,6 +30,7 @@ import com.google.common.annotations.VisibleForTesting
 
 object AkkaClusterSupervisorActor {
   val MANAGER_ACTOR_PREFIX = "jobManager-"
+  val ACTOR_NAME = "context-supervisor"
 }
 
 /**
@@ -284,14 +284,18 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
           val contextActorRef = getActorRef(c)
           contextActorRef match {
             case Some(ref) =>
-              val address = AddressFromURIString(c.actorAddress.get)
-              cluster.down(address)
-              try {
-                val stoppedCtx = gracefulStop(ref, contextDeletionTimeout seconds)
-                Await.result(stoppedCtx, contextDeletionTimeout + 1 seconds)
-                sender ! ContextStopped
-              } catch {
-                case err: Exception => sender ! ContextStopError(err)
+              val originalSender = sender
+              (ref ? JobManagerActor.StopContextAndShutdown)(contextDeletionTimeout seconds)
+                  .mapTo[ContextSupervisor.StopContextResponse].onComplete {
+                case Success(SparkContextStopped) =>
+                  logger.info("Spark context stopped successfully. Shutting down the driver actor system")
+                  originalSender ! ContextStopped
+                case Success(ContextStopInProgress) =>
+                  logger.info("Failed to stop context within in timeout. Stop is still in progress")
+                  originalSender ! ContextStopInProgress
+                case Failure(t) =>
+                  logger.error(s"Context stopped failed with message ${t.getMessage}")
+                  originalSender ! ContextStopError(t)
               }
             case None => sender ! NoSuchContext
           }

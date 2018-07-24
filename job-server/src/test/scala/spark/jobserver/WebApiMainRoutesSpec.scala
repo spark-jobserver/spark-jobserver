@@ -238,6 +238,16 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       }
     }
 
+    it("async route should return 409 if job starts was triggered while the context was in stopping state") {
+      Post("/jobs?appName=context-already-stopped&classPath=com.abc.meme&context=one",
+          "") ~> sealRoute(routes) ~> check {
+        status should be (Conflict)
+        val result = responseAs[Map[String, String]]
+        result(StatusKey) should equal(JobStatus.Error)
+        result(ResultKey) should be("Context stop in progress")
+      }
+    }
+
     it("adhoc job of sync route should return 200 and result") {
       val config2 = "foo.baz = booboo"
       Post("/jobs?appName=foo&classPath=com.abc.meme&sync=true", config2) ~>
@@ -554,6 +564,14 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         status should be (InternalServerError)
         val result = responseAs[Map[String, Any]]
         result(ResultKey) should equal("UNEXPECTED ERROR OCCURRED")
+      }
+    }
+
+    it("should respond with 202 and location header if failed to stop context in time") {
+      Delete("/contexts/ctx-stop-in-progress", "") ~> sealRoute(routes) ~> check {
+        status should be (Accepted)
+        header("Location").get.value should be("http://example.com/contexts/ctx-stop-in-progress")
+        response.entity.asString should be("")
       }
     }
 
