@@ -7,8 +7,8 @@ import akka.actor.{ActorRef, ActorSystem, Props, Actor}
 import akka.pattern.ask
 import akka.util.Timeout
 import akka.testkit.{TestKit, TestProbe, TestActor}
-import org.scalatest.{BeforeAndAfterAll, FunSpecLike, Matchers}
-import java.nio.file.Files
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
+import java.nio.file.{Files, Path}
 
 import scala.concurrent.duration._
 import spark.jobserver.JobServer.InvalidConfiguration
@@ -16,7 +16,6 @@ import spark.jobserver.common.akka
 import spark.jobserver.io.{
   JobDAOActor, JobDAO, ContextInfo, ContextStatus, JobInfo, BinaryInfo, BinaryType, JobStatus}
 import spark.jobserver.util.ContextReconnectFailedException
-
 
 import scala.concurrent.Await
 import scala.concurrent.duration.TimeUnit;
@@ -29,16 +28,26 @@ object JobServerSpec {
 }
 
 class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with Matchers
-  with BeforeAndAfterAll {
+    with BeforeAndAfter with BeforeAndAfterAll {
 
   import com.typesafe.config._
   import scala.collection.JavaConverters._
 
-  private val configFile = Files.createTempFile("job-server-config", ".conf")
+  private var configFile: Path = null
+  private var actorSystem: ActorSystem = null
+
+  before {
+    configFile = Files.createTempFile("job-server-config", ".conf")
+    actorSystem = ActorSystem("JobServerSpec")
+  }
+
+  after {
+    akka.AkkaTestUtils.shutdownAndWait(actorSystem)
+    Files.deleteIfExists(configFile)
+  }
 
   override def afterAll() {
     akka.AkkaTestUtils.shutdownAndWait(JobServerSpec.system)
-    Files.deleteIfExists(configFile)
   }
 
   def writeConfigFile(configMap: Map[String, Any]): String = {
@@ -49,7 +58,18 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
     configFile.toAbsolutePath.toString
   }
 
-  def makeSupervisorSystem(config: Config): ActorSystem = system
+  def resolveActorRef(actorPath: String, maxIterations: Int = 30): Option[ActorRef] = {
+    for (_ <- 1 to maxIterations) {
+      Try(Some(Await.result(
+        actorSystem.actorSelection(actorPath).resolveOne, 2.seconds))).getOrElse(None) match {
+        case None => Thread.sleep(500)
+        case ref => return ref
+      }
+    }
+    return None
+  }
+
+  def makeSupervisorSystem(config: Config): ActorSystem = actorSystem
   implicit val timeout: Timeout = 3 seconds
 
   describe("Fails on invalid configuration") {
@@ -151,11 +171,27 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
 
       JobServer.start(Seq(configFileName).toArray, makeSupervisorSystem(_))
 
-      Await.result(system.actorSelection("/user/dao-manager").resolveOne, 2 seconds) shouldBe a[ActorRef]
-      Await.result(system.actorSelection("/user/data-manager").resolveOne, 2 seconds) shouldBe a[ActorRef]
-      Await.result(system.actorSelection("/user/binary-manager").resolveOne, 2 seconds) shouldBe a[ActorRef]
-      Await.result(system.actorSelection("/user/context-supervisor").resolveOne, 2 seconds) shouldBe a[ActorRef]
-      Await.result(system.actorSelection("/user/job-info").resolveOne, 2 seconds) shouldBe a[ActorRef]
+      Await.result(actorSystem.actorSelection("/user/dao-manager").resolveOne, 2 seconds) shouldBe a[ActorRef]
+      Await.result(actorSystem.actorSelection("/user/data-manager").resolveOne, 2 seconds) shouldBe a[ActorRef]
+      Await.result(actorSystem.actorSelection("/user/binary-manager").resolveOne, 2 seconds) shouldBe a[ActorRef]
+      Await.result(actorSystem.actorSelection("/user/context-supervisor").resolveOne, 2 seconds) shouldBe a[ActorRef]
+      Await.result(actorSystem.actorSelection("/user/job-info").resolveOne, 2 seconds) shouldBe a[ActorRef]
+    }
+
+    it("should startup correctly in other modes (client/cluster)") {
+      val configFileName = writeConfigFile(Map(
+        "spark.master" -> "local[1]",
+        "spark.submit.deployMode" -> "client",
+        "spark.jobserver.context-per-jvm " -> true,
+        "spark.jobserver.sqldao.jdbc.url" -> "jdbc:h2:file"))
+
+      JobServer.start(Seq(configFileName).toArray, makeSupervisorSystem(_))
+
+      resolveActorRef("/user/dao-manager") shouldNot be(None)
+      resolveActorRef("/user/data-manager") shouldNot be(None)
+      resolveActorRef("/user/binary-manager") shouldNot be(None)
+      resolveActorRef("/user/context-supervisor") shouldNot be (None)
+      resolveActorRef("/user/job-info") shouldNot be(None)
     }
 
     def createContext(name: String, status: String, genActor: Boolean): (ContextInfo, Option[ActorRef]) = {
@@ -164,7 +200,7 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
 
       genActor match {
         case true =>
-          val actor = system.actorOf(Props.empty, name = AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX + uuid)
+          val actor = actorSystem.actorOf(Props.empty, name = AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX + uuid)
           (ContextInfoPF(Some(actor.path.address.toString)), Some(actor))
         case false =>
           (ContextInfoPF(Some("invalidAddress")), None)
@@ -212,7 +248,7 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
         }
       })
 
-      val existingManagerActorRefs = JobServer.getExistingManagerActorRefs(system, daoProbe.ref)
+      val existingManagerActorRefs = JobServer.getExistingManagerActorRefs(actorSystem, daoProbe.ref)
       latch.await()
 
       existingManagerActorRefs.length should be(1)
@@ -226,9 +262,9 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
     }
 
     it("should return empty list if no context is available to reconnect") {
-      val daoActor = system.actorOf(JobDAOActor.props(new InMemoryDAO))
+      val daoActor = actorSystem.actorOf(JobDAOActor.props(new InMemoryDAO))
 
-      val existingManagerActorRefs = JobServer.getExistingManagerActorRefs(system, daoActor)
+      val existingManagerActorRefs = JobServer.getExistingManagerActorRefs(actorSystem, daoActor)
       existingManagerActorRefs should be(List())
     }
 
@@ -262,12 +298,12 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
     it("should resolve valid actor reference correctly") {
       val (ctxRunning, ctxRunningActorRef) = createContext("ctxRunning", ContextStatus.Running, true)
       val (ctxInvalidAddress, ctxInvalidAddressRef) = createContext("ctxInvalidAddress", ContextStatus.Running, false)
-      val actorRef = JobServer.getManagerActorRef(ctxRunning, system)
+      val actorRef = JobServer.getManagerActorRef(ctxRunning, actorSystem)
 
       actorRef should not be(None)
       actorRef.get.actorRef.path.address.toString should be(ctxRunningActorRef.get.path.address.toString)
 
-      JobServer.getManagerActorRef(ctxInvalidAddress, system) should be(None)
+      JobServer.getManagerActorRef(ctxInvalidAddress, actorSystem) should be(None)
     }
   }
 }
