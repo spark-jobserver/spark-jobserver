@@ -137,6 +137,7 @@ class StubbedJobManagerActor(contextConfig: Config) extends Actor {
       val appId = Try(contextConfig.getString("manager.context.appId")).getOrElse("")
       val webUiUrl = Try(contextConfig.getString("manager.context.webUiUrl")).getOrElse("")
       (appId, webUiUrl) match {
+        case ("Error", _) => sender() ! new Throwable("Some Exception")
         case ("", "") => sender() ! JobManagerActor.SparkContextDead
         case (_, "") => sender() ! JobManagerActor.ContexData(appId, None)
         case (_, _) => sender() ! JobManagerActor.ContexData(appId, Some(webUiUrl))
@@ -364,15 +365,57 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       supervisor ! AddContext("test-context10", configWithContextInfo)
       expectMsg(contextInitTimeout, ContextInitialized)
 
+      val context = Await.result(dao.getContextInfoByName("test-context10"), (3 seconds)).get
+
       supervisor ! GetSparkContexData("test-context10")
-      expectMsg(SparkContexData("test-context10", "appId-dummy", Some("dummy-url")))
+      expectMsg(SparkContexData(context, Some("appId-dummy"), Some("dummy-url")))
     }
 
-    it("should return NoSuchContext if the context is dead") {
-      supervisor ! AddContext("test-context11", contextConfig)
+    it("should return valid contextInfo, appId but no webUiUrl") {
+      val configWithContextInfo = ConfigFactory.parseString("manager.context.appId=appId-dummy")
+                .withFallback(contextConfig)
+      supervisor ! AddContext("test-context11", configWithContextInfo)
       expectMsg(contextInitTimeout, ContextInitialized)
 
+      val context = Await.result(dao.getContextInfoByName("test-context11"), (3 seconds)).get
+
       supervisor ! GetSparkContexData("test-context11")
+      expectMsg(SparkContexData(context, Some("appId-dummy"), None))
+    }
+
+    it("should return valid contextInfo and no appId or webUiUrl if SparkContextDead is received") {
+      val configWithContextInfo = ConfigFactory.parseString("")
+                .withFallback(contextConfig)
+      supervisor ! AddContext("test-context12", configWithContextInfo)
+      expectMsg(contextInitTimeout, ContextInitialized)
+
+      val context = Await.result(dao.getContextInfoByName("test-context12"), (3 seconds)).get
+
+      supervisor ! GetSparkContexData("test-context12")
+      expectMsg(SparkContexData(context, None, None))
+    }
+
+    it("should return valid contextInfo and no appId or webUiUrl if Expception occurs") {
+      val configWithContextInfo = ConfigFactory.parseString("manager.context.appId=Error")
+                .withFallback(contextConfig)
+      supervisor ! AddContext("test-context13", configWithContextInfo)
+      expectMsg(contextInitTimeout, ContextInitialized)
+
+      val context = Await.result(dao.getContextInfoByName("test-context13"), (3 seconds)).get
+
+      supervisor ! GetSparkContexData("test-context13")
+      expectMsg(SparkContexData(context, None, None))
+    }
+
+    it("should return UnexpectedError if a problem with db happens") {
+      supervisor ! StubbedAkkaClusterSupervisorActor.DisableDAOCommunication // Simulate DAO failure
+      supervisor ! GetSparkContexData("test-context14")
+      expectMsg(UnexpectedError)
+      supervisor ! StubbedAkkaClusterSupervisorActor.EnableDAOCommunication
+    }
+
+    it("should return NoSuchContext if the context does not exist") {
+      supervisor ! GetSparkContexData("test-context-does-not-exist")
       // JobManagerActor Stub by default return NoSuchContext
       expectMsg(NoSuchContext)
     }
