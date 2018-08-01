@@ -146,7 +146,7 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
           addedContexts.add(name)
           sender ! ContextSupervisor.ContextInitialized
         }
-      case ContextSupervisor.StopContext(name) =>
+      case ContextSupervisor.StopContext(name, force) =>
         addedContexts.remove(name)
         sender ! ContextSupervisor.ContextStopped
       case ContextSupervisor.AddContextsFromConfig =>
