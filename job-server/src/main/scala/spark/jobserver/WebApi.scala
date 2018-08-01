@@ -487,31 +487,35 @@ class WebApi(system: ActorSystem,
           }
         }
       } ~
-        delete {
+        (delete & path(Segment)) { (contextName) =>
           //  DELETE /contexts/<contextName>
           //  Stop the context with the given name.  Executors will be shut down and all cached RDDs
           //  and currently running jobs will be lost.  Use with care!
-          path(Segment) { (contextName) =>
-            logger.info(s"DELETE /contexts/$contextName");
-            val (cName, _) = determineProxyUser(config, authInfo, contextName)
-            val future = (supervisor ? StopContext(cName))(contextDeletionTimeout.seconds + 1.seconds)
-            respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-              future.map {
-                case ContextStopped =>
-                  val stcode = StatusCodes.OK;
-                  val mes = "Context stopped";
-                  logger.info("StatusCode: " + stcode + ", Message: " + mes);
-                  ctx.complete(stcode, successMap(mes))
-                case ContextStopInProgress =>
-                  val response = HttpResponse(
-                    status = StatusCodes.Accepted, headers = List(Location(ctx.request.uri)))
-                  ctx.complete(response)
-                case NoSuchContext => notFound(ctx, "context " + contextName + " not found")
-                case ContextStopError(e) => logAndComplete(ctx, "CONTEXT DELETE ERROR", 500, e);
-                case UnexpectedError => logAndComplete(ctx, "UNEXPECTED ERROR OCCURRED", 500)
-              }.recover {
-                case e: Exception =>
-                  logAndComplete(ctx, "ERROR", 500, e);
+          //  If force=true flag is provided, will kill the job forcefully
+          parameters('force.as[Boolean] ?) {
+            (forceOpt) => {
+              val force = forceOpt.getOrElse(false)
+              logger.info(s"DELETE /contexts/$contextName");
+              val (cName, _) = determineProxyUser(config, authInfo, contextName)
+              val future = (supervisor ? StopContext(cName, force))(contextDeletionTimeout.seconds)
+              respondWithMediaType(MediaTypes.`application/json`) { ctx =>
+                future.map {
+                  case ContextStopped =>
+                    val stcode = StatusCodes.OK
+                    val mes = "Context stopped"
+                    logger.info("StatusCode: " + stcode + ", Message: " + mes)
+                    ctx.complete(stcode, successMap(mes))
+                  case ContextStopInProgress =>
+                    val response = HttpResponse(
+                      status = StatusCodes.Accepted, headers = List(Location(ctx.request.uri)))
+                    ctx.complete(response)
+                  case NoSuchContext => notFound(ctx, "context " + contextName + " not found")
+                  case ContextStopError(e) => logAndComplete(ctx, "CONTEXT DELETE ERROR", 500, e)
+                  case UnexpectedError => logAndComplete(ctx, "UNEXPECTED ERROR OCCURRED", 500)
+                }.recover {
+                  case e: Exception =>
+                    logAndComplete(ctx, "ERROR", 500, e)
+                }
               }
             }
           }
