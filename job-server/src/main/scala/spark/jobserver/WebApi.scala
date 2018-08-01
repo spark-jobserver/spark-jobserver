@@ -443,26 +443,31 @@ class WebApi(system: ActorSystem,
           }
         }
       } ~
-        delete {
+        (delete & path(Segment)) { (contextName) =>
           //  DELETE /contexts/<contextName>
           //  Stop the context with the given name.  Executors will be shut down and all cached RDDs
           //  and currently running jobs will be lost.  Use with care!
-          path(Segment) { (contextName) =>
-            val (cName, _) = determineProxyUser(config, authInfo, contextName)
-            val future = (supervisor ? StopContext(cName))(contextDeletionTimeout.seconds + 1.seconds)
-            respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-              future.map {
-                case ContextStopped => ctx.complete(StatusCodes.OK, successMap("Context stopped"))
-                case ContextStopInProgress =>
-                  val response = HttpResponse(
-                    status = StatusCodes.Accepted, headers = List(Location(ctx.request.uri)))
-                  ctx.complete(response)
-                case NoSuchContext => notFound(ctx, "context " + contextName + " not found")
-                case ContextStopError(e) => ctx.complete(500, errMap(e, "CONTEXT DELETE ERROR"))
-                case UnexpectedError => ctx.complete(500, errMap("UNEXPECTED ERROR OCCURRED"))
-              }.recover {
-                case e: Exception =>
-                  ctx.complete(500, errMap(e, "ERROR"));
+          //  If force=true flag is provided, will kill the job forcefully
+          parameters('force.as[Boolean] ?) {
+            (forceOpt) => {
+              val force = forceOpt.getOrElse(false)
+              logger.info(s"DELETE /contexts/$contextName");
+              val (cName, _) = determineProxyUser(config, authInfo, contextName)
+              val future = (supervisor ? StopContext(cName, force))(contextDeletionTimeout.seconds)
+              respondWithMediaType(MediaTypes.`application/json`) { ctx =>
+                future.map {
+                  case ContextStopped => ctx.complete(StatusCodes.OK, successMap("Context stopped"))
+                  case ContextStopInProgress =>
+                    val response = HttpResponse(
+                      status = StatusCodes.Accepted, headers = List(Location(ctx.request.uri)))
+                    ctx.complete(response)
+                  case NoSuchContext => notFound(ctx, "context " + contextName + " not found")
+                  case ContextStopError(e) => ctx.complete(500, errMap(e, "CONTEXT DELETE ERROR"))
+                  case UnexpectedError => ctx.complete(500, errMap("UNEXPECTED ERROR OCCURRED"))
+                }.recover {
+                  case e: Exception =>
+                     ctx.complete(500, errMap(e, "ERROR"))
+                }
               }
             }
           }

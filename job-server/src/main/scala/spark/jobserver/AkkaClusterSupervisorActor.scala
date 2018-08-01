@@ -25,7 +25,7 @@ import spark.jobserver.JobManagerActor.{GetContexData, ContexData, SparkContextD
 import spark.jobserver.JobManagerActor.ContextTerminatedException
 import spark.jobserver.io.{JobDAOActor, ContextInfo, ContextStatus, JobStatus, ErrorData}
 import spark.jobserver.util.{InternalServerErrorException, NoCallbackFoundException,
-  ContextJVMInitializationTimeout}
+  ContextJVMInitializationTimeout, ContextForcefulKillTimeout}
 import com.google.common.annotations.VisibleForTesting
 
 object AkkaClusterSupervisorActor {
@@ -272,7 +272,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
         case None => sender ! UnexpectedError
       }
 
-    case StopContext(name) =>
+    case StopContext(name, force) =>
       val resp = getContextByName(name)
       resp match {
         case Some(JobDAOActor.ContextResponse(Some(c))) =>
@@ -283,6 +283,20 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
           daoActor ! JobDAOActor.SaveContextInfo(contextInfo)
           val contextActorRef = getActorRef(c)
           contextActorRef match {
+            case Some(ref) if force =>
+              val originalSender = sender
+               (ref ? JobManagerActor.StopContextForcefully)(contextDeletionTimeout seconds)
+                  .mapTo[ContextSupervisor.StopForcefullyContextResponse].onComplete {
+                case Success(SparkContextStopped) =>
+                  logger.info("Spark context stopped successfully. Shutting down the driver actor system")
+                  originalSender ! ContextStopped
+                case Success(ContextStopError(e)) =>
+                  logger.error(s"Context stopped forcefully failed with message ${e.getMessage}")
+                  originalSender ! ContextStopError(e)
+                case Failure(t) =>
+                  logger.error(s"Context stopped forcefully failed unexpectedly with message ${t.getMessage}")
+                  originalSender ! ContextStopError(t)
+              }
             case Some(ref) =>
               val originalSender = sender
               (ref ? JobManagerActor.StopContextAndShutdown)(contextDeletionTimeout seconds)
