@@ -40,7 +40,12 @@ object JobDAOActorSpec {
     override def retrieveBinaryFile(appName: String,
                                     binaryType: BinaryType, uploadTime: DateTime): String = ???
 
-    override def saveContextInfo(contextInfo: ContextInfo): Unit = ???
+    override def saveContextInfo(contextInfo: ContextInfo): Unit = {
+      contextInfo.id match {
+        case "success" =>
+        case "failure" => throw new Exception("deliberate failure")
+      }
+    }
 
     override def getContextInfo(id: String): Future[Option[ContextInfo]] = ???
 
@@ -132,6 +137,19 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
     it("should request jobs cleanup") {
       daoActor ! CleanContextJobInfos("context", DateTime.now())
       cleanupProbe.expectMsg("context")
+    }
+
+    it("should respond with successful message if dao operation was successful") {
+      daoActor ! SaveContextInfo(ContextInfo("success", "name", "config", None,
+        DateTime.now(), None, ContextStatus.Running, None))
+      expectMsg(SavedSuccessfully)
+    }
+
+    it("should respond with failure message if dao operation has an exception") {
+      daoActor ! SaveContextInfo(ContextInfo("failure", "name", "config", None,
+        DateTime.now(), None, ContextStatus.Running, None))
+      val failedMsg = expectMsgType[SaveFailed]
+      failedMsg.error.getMessage should be("deliberate failure")
     }
   }
 

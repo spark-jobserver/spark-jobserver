@@ -56,6 +56,8 @@ object JobDAOActor {
 
   case object InvalidJar extends JobDAOResponse
   case object JarStored extends JobDAOResponse
+  case object SavedSuccessfully extends JobDAOResponse
+  case class SaveFailed(error: Throwable) extends JobDAOResponse
 
   def props(dao: JobDAO): Props = Props(classOf[JobDAOActor], dao)
 }
@@ -82,7 +84,12 @@ class JobDAOActor(dao: JobDAO) extends InstrumentedActor {
       sender() ! BinaryPath(dao.retrieveBinaryFile(appName, binType, uploadTime))
 
     case SaveContextInfo(contextInfo) =>
-      dao.saveContextInfo(contextInfo)
+      Try(dao.saveContextInfo(contextInfo)) match {
+        case Success(_) => sender ! SavedSuccessfully
+        case Failure(t) =>
+          logger.error(s"Failed to save context (${contextInfo.id}) in DAO", t)
+          sender ! SaveFailed(t)
+      }
 
     case GetContextInfo(id) =>
       dao.getContextInfo(id).map(ContextResponse).pipeTo(sender)
