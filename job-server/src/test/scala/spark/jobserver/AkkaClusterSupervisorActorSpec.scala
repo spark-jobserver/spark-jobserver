@@ -558,12 +558,33 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
        expectMsg(NoSuchContext)
     }
 
-    it("should be able to list all the started contexts") {
-      supervisor ! AddContext("test-context8", contextConfig)
+    it("should be able to list running/restarting/stopping contexts") {
+      val contextName = "test-context8"
+      supervisor ! AddContext(contextName, contextConfig)
       expectMsg(contextInitTimeout, ContextInitialized)
 
+      daoActor ! JobDAOActor.GetContextInfoByName(contextName)
+      val msg = expectMsgType[JobDAOActor.ContextResponse]
+      val runningContext = msg.contextInfo.get
+
       supervisor ! ListContexts
-      expectMsg(Seq("test-context8"))
+      expectMsg(Seq(contextName)) // Running context
+
+      val stoppingContext = runningContext.copy(state = ContextStatus.Stopping,
+        endTime = Some(DateTime.now()))
+      daoActor ! JobDAOActor.SaveContextInfo(stoppingContext)
+      expectMsg(JobDAOActor.SavedSuccessfully)
+
+      supervisor ! ListContexts
+      expectMsg(Seq(contextName)) // Stopping context
+
+      val restartingContext =  stoppingContext.copy(state = ContextStatus.Restarting,
+        endTime = Some(DateTime.now()))
+      daoActor ! JobDAOActor.SaveContextInfo(restartingContext)
+      expectMsg(JobDAOActor.SavedSuccessfully)
+
+      supervisor ! ListContexts
+      expectMsg(Seq(contextName)) // Restarting context
     }
 
     it("should return valid result actor") {
