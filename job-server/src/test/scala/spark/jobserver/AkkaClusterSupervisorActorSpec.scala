@@ -128,7 +128,7 @@ class StubbedAkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: Ac
   }
 
   override def wrappedReceive: Receive = {
-    super.wrappedReceive orElse(stubbedWrappedReceive)
+    stubbedWrappedReceive.orElse(super.wrappedReceive)
   }
 
   def stubbedWrappedReceive: Receive = {
@@ -143,14 +143,27 @@ class StubbedAkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: Ac
       daoCommunicationDisabled = false
     case StubbedAkkaClusterSupervisorActor.DummyTerminated(actorRef) =>
       handleTerminatedEvent(actorRef)
+      sender ! "Executed"
     case StubbedAkkaClusterSupervisorActor.UnWatchContext(actorRef) =>
       context.unwatch(actorRef)
+    case Terminated(actorRef) =>
+      handleTerminatedEvent(actorRef)
+      managerProbe.ref ! "Executed"
   }
 
   override def getDataFromDAO[T: ClassTag](msg: JobDAOActor.JobDAORequest): Option[T] = {
     daoCommunicationDisabled match {
       case true => None
       case false => super.getDataFromDAO[T](msg)
+    }
+  }
+
+  override def leaveCluster(actorRef: ActorRef): Unit = {
+    actorRef.path.address.toString match {
+      case "akka://test" =>
+      // If we use TestProbe and leave the cluster then the master itself leaves the cluster.
+      // For such cases, we don't do anything. For other normal cases, we leave the cluster.
+      case _ => cluster.down(actorRef.path.address)
     }
   }
 }
@@ -225,6 +238,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       supervisor ! StopContext(contextName.toString())
       expectMsg(3.seconds.dilated, ContextStopped)
       managerProbe.expectMsgClass(classOf[Terminated])
+      managerProbe.expectMsg("Executed")
     }
 
     supervisor ! ListContexts
@@ -305,6 +319,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       supervisor ! StopContext("test-context4")
       expectMsg(ContextStopped)
       managerProbe.expectMsgClass(classOf[Terminated])
+      managerProbe.expectMsg("Executed")
     }
 
     it("context stop should be able to handle case when no context is present") {
@@ -671,6 +686,22 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       val updatedContext = Await.result(dao.getContextInfoByName(contextName), daoTimeout)
       updatedContext.get.state should be(ContextStatus.Killed)
     }
+
+    it("should not change final state to non-final within the Terminated event") {
+      val contextId = "ctxFinalState"
+
+      val finalStateContext = saveContextInSomeState(contextId, ContextStatus.getFinalStates().last)
+      val managerProbe = system.actorOf(Props.empty, s"jobManager-$contextId")
+      val daoProbe = TestProbe()
+
+      supervisor ! StubbedAkkaClusterSupervisorActor.DummyTerminated(managerProbe)
+
+      expectMsg("Executed")
+      daoActor ! JobDAOActor.GetContextInfo(contextId)
+      val msg = expectMsgType[JobDAOActor.ContextResponse]
+      msg.contextInfo.get.state should be(ContextStatus.getFinalStates().last)
+      msg.contextInfo.get.endTime should be(finalStateContext.endTime)
+    }
   }
 
   describe("Supervise mode tests") {
@@ -784,29 +815,38 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
 
       supervisor ! StubbedAkkaClusterSupervisorActor.DummyTerminated(managerProbe)
 
-      Thread.sleep(3000)
-      val updatedContextInfo = Await.result(dao.getContextInfo(contextId), daoTimeout)
-      updatedContextInfo.get.state should be(ContextStatus.Restarting)
+      expectMsg("Executed")
+      daoActor ! JobDAOActor.GetContextInfo(contextId)
+      val msg = expectMsgType[JobDAOActor.ContextResponse]
+      msg.contextInfo.get.state should be(ContextStatus.Restarting)
 
-      dao.saveContextInfo(updatedContextInfo.get.copy(state = ContextStatus.Finished)) //cleanup
+      //cleanup
+      daoActor ! JobDAOActor.SaveContextInfo(msg.contextInfo.get.copy(state = ContextStatus.Finished))
+      expectMsg(JobDAOActor.SavedSuccessfully)
     }
 
     it("should set state killed for context which was terminated unexpectedly and supervise mode disabled") {
       val contextId = "testid2"
       val convertedContextConfig = contextConfig.root().render(ConfigRenderOptions.concise())
 
-      val runningContext = ContextInfo(contextId, "c", convertedContextConfig, None, DateTime.now(), None, ContextStatus.Running, None)
-      dao.saveContextInfo(runningContext)
+      val runningContext = ContextInfo(contextId, "c", convertedContextConfig, None, DateTime.now(),
+        None, ContextStatus.Running, None)
+      daoActor ! JobDAOActor.SaveContextInfo(runningContext)
+      expectMsg(JobDAOActor.SavedSuccessfully)
+
       val managerProbe = system.actorOf(Props.empty, s"jobManager-$contextId")
       val daoProbe = TestProbe()
 
       supervisor ! StubbedAkkaClusterSupervisorActor.DummyTerminated(managerProbe)
 
-      Thread.sleep(3000)
-      val updatedContextInfo = Await.result(dao.getContextInfo(contextId), daoTimeout)
-      updatedContextInfo.get.state should be(ContextStatus.Killed)
+      expectMsg("Executed")
+      daoActor ! JobDAOActor.GetContextInfo(contextId)
+      val msg = expectMsgType[JobDAOActor.ContextResponse]
+      msg.contextInfo.get.state should be(ContextStatus.Killed)
 
-      dao.saveContextInfo(updatedContextInfo.get.copy(state = ContextStatus.Finished)) //cleanup
+      //cleanup
+      daoActor ! JobDAOActor.SaveContextInfo(msg.contextInfo.get.copy(state = ContextStatus.Finished))
+      expectMsg(JobDAOActor.SavedSuccessfully)
     }
   }
 }
