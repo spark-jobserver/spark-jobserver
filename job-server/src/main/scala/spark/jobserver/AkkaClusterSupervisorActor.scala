@@ -326,23 +326,32 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
     val resp = getDataFromDAO[JobDAOActor.ContextResponse](JobDAOActor.GetContextInfo(contextId))
     resp match {
       case Some(JobDAOActor.ContextResponse(Some(c))) =>
-        val state =
-                if (c.state == ContextStatus.Stopping) ContextStatus.Finished else ContextStatus.Killed
-        (isSuperviseModeEnabled(config, ConfigFactory.parseString(c.config)), state) match {
-            case (true, ContextStatus.Killed) =>
-              setStateForContextAndJobs(c, ContextStatus.Restarting)
-            case _ =>
-              val contextInfo = c.copy(endTime = Option(DateTime.now()), state = state)
-              daoActor ! JobDAOActor.SaveContextInfo(contextInfo)
-              daoActor ! JobDAOActor.CleanContextJobInfos(c.id, DateTime.now())
-         }
+        ContextStatus.getFinalStates().contains(c.state) match {
+          case true => logger.warn(
+            s"Terminated received for context (${c.name}) which is already in final state ${c.state}")
+          case false =>
+            val state =
+              if (c.state == ContextStatus.Stopping) ContextStatus.Finished else ContextStatus.Killed
+            (isSuperviseModeEnabled(config, ConfigFactory.parseString(c.config)), state) match {
+              case (true, ContextStatus.Killed) =>
+                setStateForContextAndJobs(c, ContextStatus.Restarting)
+              case _ =>
+                val contextInfo = c.copy(endTime = Option(DateTime.now()), state = state)
+                daoActor ! JobDAOActor.SaveContextInfo(contextInfo)
+                daoActor ! JobDAOActor.CleanContextJobInfos(c.id, DateTime.now())
+            }
+        }
       case Some(JobDAOActor.ContextResponse(None)) =>
         logger.error(s"No context (contextId: ${contextId}) for deletion is found in the DB")
       case None =>
         logger.error(s"Error occurred after Terminated message was recieved for (contextId: ${contextId})")
     }
-    cluster.down(actorRef.path.address)
+    leaveCluster(actorRef)
     jobManagerActorRefs.remove(actorRef.path.toString())
+  }
+
+  protected def leaveCluster(actorRef: ActorRef): Unit = {
+    cluster.down(actorRef.path.address)
   }
 
   private def setStateForContextAndJobs(contextInfo: ContextInfo, state: String) {
