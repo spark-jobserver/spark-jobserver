@@ -249,12 +249,32 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
   def saveContextInSomeState(contextId: String, state: String) : ContextInfo = {
     val dt = DateTime.now()
     val configWithSuperviseMode = ConfigFactory.parseString(
-        s"${ManagerLauncher.CONTEXT_SUPERVISE_MODE_KEY}=true, is-adhoc=false, context.name=someContext, context.id=$contextId")
+        s"${ManagerLauncher.CONTEXT_SUPERVISE_MODE_KEY}=true, is-adhoc=false, context.name=someContext," +
+          s"context.id=$contextId")
         .withFallback(contextConfig)
     val convertedContextConfig = configWithSuperviseMode.root().render(ConfigRenderOptions.concise())
     val context = ContextInfo(contextId, "someContext", convertedContextConfig, None, dt, None, state, None)
-    dao.saveContextInfo(context)
+    saveContextInfo(context)
     (context)
+  }
+
+  def setContextState(contextName: String, state: String): ContextInfo = {
+    daoActor ! JobDAOActor.GetContextInfoByName(contextName)
+    val msg = expectMsgType[JobDAOActor.ContextResponse]
+    val currentContext = msg.contextInfo.get
+    setContextState(currentContext, state)
+  }
+
+  def setContextState(contextInfo: ContextInfo, state: String): ContextInfo = {
+    val updatedContext = contextInfo.copy(state = state,
+      endTime = Some(DateTime.now()))
+    saveContextInfo(updatedContext)
+    updatedContext
+  }
+
+  def saveContextInfo(contextInfo: ContextInfo): Unit = {
+    daoActor ! JobDAOActor.SaveContextInfo(contextInfo)
+    expectMsg(JobDAOActor.SavedSuccessfully)
   }
 
   override def beforeAll() {
@@ -313,11 +333,25 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       expectMsg(Seq.empty[String])
     }
 
-    it("should not start two contexts with the same name") {
-      supervisor ! AddContext("test-context3", contextConfig)
+    it("should not start another context with same name if first one is in non final state") {
+      val contextName = "context-non-final"
+      supervisor ! AddContext(contextName, contextConfig)
       expectMsg(contextInitTimeout, ContextInitialized)
 
-      supervisor ! AddContext("test-context3", contextConfig)
+      // Running
+      supervisor ! AddContext(contextName, contextConfig)
+      expectMsg(contextInitTimeout, ContextAlreadyExists)
+
+      val startedContext = setContextState(contextName, ContextStatus.Started)
+      supervisor ! AddContext(contextName, contextConfig)
+      expectMsg(contextInitTimeout, ContextAlreadyExists)
+
+      setContextState(startedContext, ContextStatus.Restarting)
+      supervisor ! AddContext(contextName, contextConfig)
+      expectMsg(contextInitTimeout, ContextAlreadyExists)
+
+      setContextState(startedContext, ContextStatus.Stopping)
+      supervisor ! AddContext(contextName, contextConfig)
       expectMsg(contextInitTimeout, ContextAlreadyExists)
     }
 
