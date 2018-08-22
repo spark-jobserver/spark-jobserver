@@ -73,7 +73,10 @@ class JobDAOActor(dao: JobDAO) extends InstrumentedActor {
 
   def wrappedReceive: Receive = {
     case SaveBinary(appName, binaryType, uploadTime, jarBytes) =>
-      sender ! SaveBinaryResult(Try(dao.saveBinary(appName, binaryType, uploadTime, jarBytes)))
+      val recipient = sender()
+      Future {
+        dao.saveBinary(appName, binaryType, uploadTime, jarBytes)
+      }.onComplete(recipient ! SaveBinaryResult(_))
 
     case DeleteBinary(appName) =>
       sender ! DeleteBinaryResult(Try(dao.deleteBinary(appName)))
