@@ -23,6 +23,11 @@ import spark.jobserver.JobManagerActor.ContextTerminatedException
 import spray.http.ErrorInfo
 import spark.jobserver.util.NoSuchBinaryException
 
+/**
+  * Multiple threads can access the functions in this class at the same.
+  * Don't use mutable objects as it will compromise thread safety.
+  * @param config config of jobserver
+  */
 class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
   val slickDriverClass = config.getString("spark.jobserver.sqldao.slick-driver")
   val jdbcDriverClass = config.getString("spark.jobserver.sqldao.jdbc-driver")
