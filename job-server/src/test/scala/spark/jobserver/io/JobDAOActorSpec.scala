@@ -20,6 +20,7 @@ object JobDAOActorSpec {
   val dtplus1 = dt.plusHours(1)
 
   val cleanupProbe = TestProbe()(system)
+  val unblockingProbe = TestProbe()(system)
 
   object DummyDao extends JobDAO{
 
@@ -27,6 +28,7 @@ object JobDAOActorSpec {
                             uploadTime: DateTime, binaryBytes: Array[Byte]): Unit = {
       appName match {
         case "failOnThis" => throw new Exception("deliberate failure")
+        case "blockDAO" => unblockingProbe.expectMsg(5.seconds, "unblock")
         case _ => //Do nothing
       }
     }
@@ -107,6 +109,24 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       expectMsgPF(3 seconds){
         case SaveBinaryResult(Failure(ex)) if ex.getMessage == "deliberate failure" =>
       }
+    }
+
+    it("should not block other calls to DAO if save binary is taking too long") {
+      daoActor ! SaveBinary("blockDAO", BinaryType.Jar, DateTime.now, Array[Byte]())
+
+      daoActor ! GetJobInfos(1)
+      expectMsg(1.seconds, JobInfos(Seq()))
+
+      daoActor ! SaveBinary("succeed", BinaryType.Jar, DateTime.now, Array[Byte]())
+      expectMsg(1.seconds, SaveBinaryResult(Success({})))
+
+      daoActor ! DeleteBinary("failOnThis")
+      expectMsgPF(1.seconds){
+        case DeleteBinaryResult(Failure(ex)) if ex.getMessage == "deliberate failure" =>
+      }
+
+      unblockingProbe.ref ! "unblock"
+      expectMsg(4.seconds, SaveBinaryResult(Success({})))
     }
 
     it("should respond when deleting Binary completes successfully") {
