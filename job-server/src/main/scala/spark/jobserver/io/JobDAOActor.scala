@@ -1,13 +1,13 @@
 package spark.jobserver.io
 
-import akka.actor.Props
+import akka.actor.{ActorRef, Props}
 import com.typesafe.config.Config
 import org.joda.time.DateTime
-import spark.jobserver.JobManagerActor.JobKilledException
 
 import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 import spark.jobserver.common.akka.InstrumentedActor
+import spark.jobserver.util.NoMatchingDAOObjectException
 
 import scala.concurrent.Future
 
@@ -38,7 +38,8 @@ object JobDAOActor {
   case class CleanContextJobInfos(contextId: String, endTime: DateTime)
 
   case class GetLastUploadTimeAndType(appName: String) extends JobDAORequest
-  case class SaveContextInfo(contextInfo: ContextInfo) extends JobDAORequest
+  case class SaveContextInfo(contextInfo: ContextInfo)  extends JobDAORequest
+  case class UpdateContextById(contextId: String, attributes: ContextModifiableAttributes)
   case class GetContextInfo(id: String) extends JobDAORequest
   case class GetContextInfoByName(name: String) extends JobDAORequest
   case class GetContextInfos(limit: Option[Int] = None,
@@ -89,12 +90,7 @@ class JobDAOActor(dao: JobDAO) extends InstrumentedActor {
       sender() ! BinaryPath(dao.retrieveBinaryFile(appName, binType, uploadTime))
 
     case SaveContextInfo(contextInfo) =>
-      Try(dao.saveContextInfo(contextInfo)) match {
-        case Success(_) => sender ! SavedSuccessfully
-        case Failure(t) =>
-          logger.error(s"Failed to save context (${contextInfo.id}) in DAO", t)
-          sender ! SaveFailed(t)
-      }
+      saveContextAndRespond(sender, contextInfo)
 
     case GetContextInfo(id) =>
       dao.getContextInfo(id).map(ContextResponse).pipeTo(sender)
@@ -125,5 +121,45 @@ class JobDAOActor(dao: JobDAO) extends InstrumentedActor {
 
     case GetJobInfosByContextId(contextId, jobStatuses) =>
       dao.getJobInfosByContextId(contextId, jobStatuses).map(JobInfos).pipeTo(sender)
+
+    case UpdateContextById(contextId: String, attributes: ContextModifiableAttributes) =>
+      val recipient = sender()
+      dao.getContextInfo(contextId).map(ContextResponse).onComplete {
+        case Success(ContextResponse(Some(contextInfo))) =>
+          saveContextAndRespond(recipient, copyAttributes(contextInfo, attributes))
+        case Success(ContextResponse(None)) =>
+          logger.warn(s"Context with id $contextId doesn't exist")
+          recipient ! SaveFailed(NoMatchingDAOObjectException())
+        case Failure(t) =>
+          logger.error(s"Failed to get context $contextId by Id", t)
+          recipient ! SaveFailed(t)
+      }
+  }
+
+  private def saveContextAndRespond(recipient: ActorRef, contextInfo: ContextInfo) = {
+    Try(dao.saveContextInfo(contextInfo)) match {
+      case Success(_) => recipient ! SavedSuccessfully
+      case Failure(t) =>
+        logger.error(s"Failed to save context (${contextInfo.id}) in DAO", t)
+        recipient ! SaveFailed(t)
+    }
+  }
+
+  private def copyAttributes(contextInfo: ContextInfo,
+                 attributes: ContextModifiableAttributes): ContextInfo = {
+    contextInfo.copy(
+      actorAddress = getOrDefault(attributes.actorAddress, contextInfo.actorAddress),
+      endTime = getOrDefault(attributes.endTime, contextInfo.endTime),
+      state = getOrDefault(attributes.state, contextInfo.state),
+      error = getOrDefault(attributes.error, contextInfo.error))
+  }
+
+  private def getOrDefault[T](value: T, default: T): T = {
+    value match {
+      case Some(_) => value
+      case None => default
+      case s: String if s.isEmpty => default
+      case _: String => value
+    }
   }
 }

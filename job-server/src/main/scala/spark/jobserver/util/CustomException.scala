@@ -30,3 +30,7 @@ final case class NotStandaloneModeException() extends
 
 final case class NoAliveMasterException() extends
   Exception("Could not find alive spark master")
+
+final case class NoMatchingDAOObjectException() extends Exception("No matching dao object found")
+
+final case class ContextKillingItselfException(msg: String) extends Exception(msg)

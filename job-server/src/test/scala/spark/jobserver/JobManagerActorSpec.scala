@@ -14,7 +14,7 @@ import spark.jobserver.CommonMessages.{JobRestartFailed, JobStarted, JobValidati
 import spark.jobserver.io._
 import spark.jobserver.ContextSupervisor.SparkContextStopped
 import spark.jobserver.io.JobDAOActor.SavedSuccessfully
-import spark.jobserver.util.NoJobConfigFoundException
+import spark.jobserver.util.{ContextKillingItselfException, NoJobConfigFoundException}
 
 import scala.collection.mutable
 import scala.concurrent.duration.FiniteDuration
@@ -630,6 +630,10 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       daoProbe.expectMsgClass(classOf[JobDAOActor.GetJobInfosByContextId])
       // Not replying to GetJobInfosByContextId will result in a timeout
       // and failure will occur
+      val msg = daoProbe.expectMsgClass(classOf[JobDAOActor.UpdateContextById])
+      msg.attributes.state should be(ContextStatus.Error)
+      msg.attributes.error.get.getMessage should be(s"Failed to fetch jobs for context $contextId")
+      daoProbe.reply(JobDAOActor.SavedSuccessfully)
       managerWatcher.expectTerminated(manager, 5.seconds)
     }
 
@@ -684,6 +688,10 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
           jobInfo.jobInfo.error.get.message should be((NoJobConfigFoundException("jobId")).getMessage)
       }
 
+      val msg = daoProbe.expectMsgClass(classOf[JobDAOActor.UpdateContextById])
+      msg.attributes.state should be(ContextStatus.Error)
+      msg.attributes.error.get.getMessage() should be("Job(s) restart failed")
+      daoProbe.reply(JobDAOActor.SavedSuccessfully)
       managerWatcher.expectTerminated(manager)
     }
 
@@ -708,6 +716,10 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
           jobInfo.jobInfo.state should be(JobStatus.Error)
       }
 
+      val msg = daoProbe.expectMsgClass(classOf[JobDAOActor.UpdateContextById])
+      msg.attributes.state should be(ContextStatus.Error)
+      msg.attributes.error.get.getMessage() should be("Job(s) restart failed")
+      daoProbe.reply(JobDAOActor.SavedSuccessfully)
       managerWatcher.expectTerminated(manager)
     }
   }
@@ -906,6 +918,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       expectMsgPF(3.seconds, "") {
         case JobDAOActor.ContextResponse(Some(contextInfo)) =>
           contextInfo.state should be(ContextStatus.Killed)
+          contextInfo.endTime should not be(None)
         case unexpectedMsg => fail(s"State is not killed")
       }
     }
@@ -931,6 +944,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       expectMsgPF(3.seconds, "") {
         case JobDAOActor.ContextResponse(Some(contextInfo)) =>
           contextInfo.state should be(ContextStatus.Stopping)
+          contextInfo.endTime should be(None)
         case unexpectedMsg @ _ => fail(s"State is not stopping. Message received $unexpectedMsg")
       }
     }
