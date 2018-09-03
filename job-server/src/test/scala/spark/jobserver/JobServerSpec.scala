@@ -207,7 +207,7 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
       }
     }
 
-    def genJob(jobId: String, ctx: ContextInfo, status: String) = {
+    def genJob(jobId: String, ctx: ContextInfo, status: String): JobInfo = {
       val dt = DateTime.parse("2013-05-29T00Z")
       JobInfo(jobId, ctx.id, ctx.name, BinaryInfo("demo", BinaryType.Jar, dt), "com.abc.meme",
           status, dt, None, None)
@@ -215,27 +215,49 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
 
     it("should write error state for contexts and jobs if reconnect failed") {
       val (ctxRunning, ctxRunningActorRef) = createContext("ctxRunning", ContextStatus.Running, true)
+      val (ctxStopping, ctxStoppingActorRef) = createContext("ctxStopping", ContextStatus.Stopping, true)
       val (ctxToBeTerminated, _) = createContext("ctxTerminated", ContextStatus.Running, false)
+      val (ctxAlreadyStopped, ctxStoppingInvalidActorRef) =
+        createContext("ctxStoppingInvalid", ContextStatus.Stopping, false)
 
       val jobToBeTerminated = genJob("jid2", ctxToBeTerminated, JobStatus.Running)
+      val jobOfAlreadyStoppedCtx = genJob("jid3", ctxAlreadyStopped, JobStatus.Running)
 
       val daoProbe = TestProbe()
-      val latch = new CountDownLatch(1)
+      val latch = new CountDownLatch(2)
 
-      var ctxTerminated: ContextInfo = null;
-      var jobTerminated: JobInfo = null;
+      var ctxTerminated: ContextInfo = null
+      var ctxAlreadyStoppedUpdated: ContextInfo = null
+      var jobTerminated: JobInfo = null
+      var jobAlreadyStoppedUpdated: JobInfo = null
 
       daoProbe.setAutoPilot(new TestActor.AutoPilot {
         def run(sender: ActorRef, msg: Any): TestActor.AutoPilot = {
           msg match {
-            case JobDAOActor.GetContextInfos(None, Some(Seq(ContextStatus.Running))) =>
-              sender ! JobDAOActor.ContextInfos(Seq(ctxRunning, ctxToBeTerminated))
-            case ctxInfo: JobDAOActor.SaveContextInfo => ctxTerminated = ctxInfo.contextInfo
-            case JobDAOActor.GetJobInfosByContextId(ctxToBeTerminated.id, Some(states)) =>
-              states should equal (JobStatus.getNonFinalStates())
-              sender ! JobDAOActor.JobInfos(Seq(jobToBeTerminated))
+            case JobDAOActor.GetContextInfos(None,
+                Some(Seq(ContextStatus.Running, ContextStatus.Stopping))) =>
+              sender ! JobDAOActor.ContextInfos(
+                Seq(ctxRunning, ctxToBeTerminated, ctxStopping, ctxAlreadyStopped))
+            case ctxInfo: JobDAOActor.SaveContextInfo =>
+              ctxInfo.contextInfo.id match {
+                case ctxToBeTerminated.id => ctxTerminated = ctxInfo.contextInfo
+                case ctxAlreadyStopped.id => ctxAlreadyStoppedUpdated = ctxInfo.contextInfo
+              }
+            case JobDAOActor.GetJobInfosByContextId(id, Some(states)) =>
+              id match {
+                case ctxToBeTerminated.id =>
+                  states should equal (JobStatus.getNonFinalStates())
+                  sender ! JobDAOActor.JobInfos(Seq(jobToBeTerminated))
+                case ctxAlreadyStopped.id =>
+                  states should equal (JobStatus.getNonFinalStates())
+                  sender ! JobDAOActor.JobInfos(Seq(jobOfAlreadyStoppedCtx))
+              }
+
             case jobInfo: JobDAOActor.SaveJobInfo =>
-              jobTerminated = jobInfo.jobInfo
+              jobInfo.jobInfo.jobId match {
+                case jobToBeTerminated.jobId => jobTerminated = jobInfo.jobInfo
+                case jobOfAlreadyStoppedCtx.jobId => jobAlreadyStoppedUpdated = jobInfo.jobInfo
+              }
               latch.countDown()
           }
           TestActor.KeepRunning
@@ -245,14 +267,21 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
       val existingManagerActorRefs = JobServer.getExistingManagerActorRefs(actorSystem, daoProbe.ref)
       latch.await()
 
-      existingManagerActorRefs.length should be(1)
-      existingManagerActorRefs(0) should be(ctxRunningActorRef.get)
+      existingManagerActorRefs.length should be(2)
+      existingManagerActorRefs should contain allElementsOf
+        List(ctxRunningActorRef.get, ctxStoppingActorRef.get)
 
       ctxTerminated.state should be(ContextStatus.Error)
       ctxTerminated.error.get should be(ContextReconnectFailedException())
 
       jobTerminated.state should be(JobStatus.Error)
       jobTerminated.error.get.message should be(ContextReconnectFailedException().getMessage)
+
+      ctxAlreadyStoppedUpdated.state should be(ContextStatus.Error)
+      ctxAlreadyStoppedUpdated.error.get should be(ContextReconnectFailedException())
+
+      jobAlreadyStoppedUpdated.state should be(JobStatus.Error)
+      jobAlreadyStoppedUpdated.error.get.message should be(ContextReconnectFailedException().getMessage)
     }
 
     it("should return empty list if no context is available to reconnect") {
