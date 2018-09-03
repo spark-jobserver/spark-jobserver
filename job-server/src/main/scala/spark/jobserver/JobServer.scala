@@ -223,7 +223,8 @@ object JobServer {
     val config = system.settings.config
     val daoAskTimeout = Timeout(config.getDuration("spark.jobserver.dao-timeout", TimeUnit.SECONDS).second)
     val resp = Await.result(
-        (jobDaoActor ? JobDAOActor.GetContextInfos(None, Some(Seq(ContextStatus.Running))))(daoAskTimeout).
+        (jobDaoActor ? JobDAOActor.GetContextInfos(None, Some(
+          Seq(ContextStatus.Running, ContextStatus.Stopping))))(daoAskTimeout).
         mapTo[JobDAOActor.ContextInfos], daoAskTimeout.duration)
 
     resp.contextInfos.map{ contextInfo =>
