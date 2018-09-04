@@ -179,6 +179,9 @@ object JobServer {
   @VisibleForTesting
   def getManagerActorRef(contextInfo: ContextInfo, system: ActorSystem): Option[ActorRef] = {
     val finiteDuration = FiniteDuration(3, SECONDS)
+    if (contextInfo.actorAddress == None) {
+      return None
+    }
     val clusterAddress = contextInfo.actorAddress.get
     val address = clusterAddress + "/user/" + AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX +
         contextInfo.id
