@@ -767,7 +767,8 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
     }
   }
 
-  private def scheduleContextStopTimeoutMsg(sender: ActorRef): Option[Cancellable] = {
+  @VisibleForTesting
+  protected def scheduleContextStopTimeoutMsg(sender: ActorRef): Option[Cancellable] = {
     val stopTimeoutMsg = ContextStopScheduledMsgTimeout(sender)
     contextStopTimeoutMsgHelper(stopTimeoutMsg)
   }
@@ -824,7 +825,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
         val appId = jobContext.sparkContext.applicationId
         val forcefulKill = new StandaloneForcefulKill(config, appId)
         try {
-          forcefulKill.kill()
+          forcefulKillCaller(forcefulKill)
         } catch {
           case e: Exception =>
             cancelHandler match {
@@ -840,5 +841,10 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
         originalSender ! SparkContextStopped
         self ! PoisonPill
     }
+  }
+
+  @VisibleForTesting
+  protected def forcefulKillCaller(forcefulKill: StandaloneForcefulKill) = {
+    forcefulKill.kill()
   }
 }
