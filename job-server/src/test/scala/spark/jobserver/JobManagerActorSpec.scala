@@ -3,7 +3,7 @@ package spark.jobserver
 import java.io.File
 import java.nio.file.{Files, StandardOpenOption}
 
-import akka.actor.{ActorIdentity, ActorRef, PoisonPill, Props, ReceiveTimeout}
+import akka.actor.{ActorIdentity, ActorRef, Cancellable, PoisonPill, Props, ReceiveTimeout}
 import akka.testkit.TestProbe
 import org.joda.time.DateTime
 import com.typesafe.config.{Config, ConfigFactory}
@@ -12,9 +12,9 @@ import spark.jobserver.JobManagerActor.KillJob
 import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.CommonMessages.{JobRestartFailed, JobStarted, JobValidationFailed, Subscribe}
 import spark.jobserver.io._
-import spark.jobserver.ContextSupervisor.SparkContextStopped
+import spark.jobserver.ContextSupervisor.{SparkContextStopped, ContextStopError, ContextStopInProgress}
 import spark.jobserver.io.JobDAOActor.SavedSuccessfully
-import spark.jobserver.util.NoJobConfigFoundException
+import spark.jobserver.util.{NoJobConfigFoundException, StandaloneForcefulKill, NotStandaloneModeException}
 
 import scala.collection.mutable
 import scala.concurrent.duration.FiniteDuration
@@ -66,6 +66,23 @@ class JobManagerActorSpy(daoActor: ActorRef, supervisorActorAddress: String,
   override protected def sendStartJobMessage(receiverActor: ActorRef, msg: JobManagerActor.StartJob) {
     spyProbe.ref ! "StartJob Received"
     receiverActor ! msg
+  }
+
+  override protected def forcefulKillCaller(forcefulKill: StandaloneForcefulKill) = {
+    contextId match {
+      case "forceful_exception" =>
+        throw new NotStandaloneModeException()
+      case _ => jobContext.stop()
+    }
+  }
+
+  override protected def scheduleContextStopTimeoutMsg(sender: ActorRef): Option[Cancellable] = {
+    contextId match {
+      case "normal_then_forceful" =>
+        sender ! ContextStopInProgress
+        None
+      case _ => super.scheduleContextStopTimeoutMsg(sender)
+    }
   }
 }
 
@@ -933,6 +950,46 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
           contextInfo.state should be(ContextStatus.Stopping)
         case unexpectedMsg @ _ => fail(s"State is not stopping. Message received $unexpectedMsg")
       }
+    }
+  }
+
+  describe("Forceful context stop tests") {
+    it("should stop context forcefully and shutdown itself") {
+      val deathWatcher = TestProbe()
+      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, TestProbe(), 1))
+      deathWatcher.watch(manager)
+      manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+
+      manager ! JobManagerActor.StopContextForcefully
+      expectMsg(SparkContextStopped)
+      deathWatcher.expectTerminated(manager)
+    }
+
+    it("should send ContextStopError in case of an exception for forceful context stop") {
+      manager = system.actorOf(JobManagerActorSpy.props(
+          daoActor, "", 5.seconds, "forceful_exception", TestProbe(), 1))
+      manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+
+      manager ! JobManagerActor.StopContextForcefully
+      expectMsg(ContextStopError(new NotStandaloneModeException))
+    }
+
+    it("should be able to stop context forcefully if normal stop timed out") {
+      val deathWatcher = TestProbe()
+      val contextId = "normal_then_forceful"
+      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, TestProbe(), 1))
+      deathWatcher.watch(manager)
+      manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+
+      manager ! JobManagerActor.StopContextAndShutdown
+      expectMsg(ContextStopInProgress)
+
+      manager ! JobManagerActor.StopContextForcefully
+      expectMsg(SparkContextStopped)
+      deathWatcher.expectTerminated(manager)
     }
   }
 }

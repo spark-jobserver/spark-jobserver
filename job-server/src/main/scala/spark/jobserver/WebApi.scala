@@ -453,7 +453,8 @@ class WebApi(system: ActorSystem,
               val force = forceOpt.getOrElse(false)
               logger.info(s"DELETE /contexts/$contextName");
               val (cName, _) = determineProxyUser(config, authInfo, contextName)
-              val future = (supervisor ? StopContext(cName, force))(contextDeletionTimeout.seconds)
+              val future = (supervisor ?
+                StopContext(cName, force))(contextDeletionTimeout.seconds + 1.seconds)
               respondWithMediaType(MediaTypes.`application/json`) { ctx =>
                 future.map {
                   case ContextStopped => ctx.complete(StatusCodes.OK, successMap("Context stopped"))
