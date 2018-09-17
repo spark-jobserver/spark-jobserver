@@ -305,7 +305,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
                   logger.info("Spark context stopped successfully. Shutting down the driver actor system")
                   originalSender ! ContextStopped
                 case Success(ContextStopInProgress) =>
-                  logger.info("Failed to stop context within in timeout. Stop is still in progress")
+                  logger.info("Failed to stop context within timeout. Stop is still in progress")
                   originalSender ! ContextStopInProgress
                 case Failure(t) =>
                   logger.error(s"Context stopped failed with message ${t.getMessage}")

@@ -6,8 +6,7 @@ import java.util.concurrent.Executors._
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.TimeUnit
 
-import akka.actor.{ActorIdentity, ActorRef, Cancellable, Identify,
-  PoisonPill, Props, ReceiveTimeout, Terminated}
+import akka.actor._
 import akka.pattern.ask
 import akka.util.Timeout
 import com.typesafe.config.{Config, ConfigFactory}
@@ -227,7 +226,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
       self ! PoisonPill
   }
 
-  def stoppingStateReceive: Receive = {
+  def stoppingStateReceive: Receive = commonHandlers.orElse {
     // Initialize message cannot come in this state
     // - If already in stopping state then JVM is also initialized. Initialize won't come
     // - If restarts then whole JVM will restart and we will have a clean state
@@ -268,9 +267,6 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
       logger.warn("No point in restarting existing jobs as context is in stopping state." +
         " Will be killed automatically")
 
-    case GetContexData => handleGetContextData
-    case KillJob(jobId: String) => handleKillJob(jobId)
-    case DeleteData(name: String) => handleDeleteData(name)
     case Terminated(actorRef) =>
       if (actorRef.path.name == "context-supervisor") {
         logger.warn(s"Supervisor actor (${actorRef.path.address.toString}) terminated!" +
@@ -280,7 +276,38 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
       logger.warn(s"Received unknown message in stopping state ${unexpectedMsg}")
   }
 
-  def wrappedReceive: Receive = {
+  val commonHandlers: Receive = {
+    case GetContexData =>
+      if (jobContext.sparkContext == null) {
+        sender ! SparkContextDead
+      } else {
+        try {
+          val appId = jobContext.sparkContext.applicationId
+          val webUiUrl = jobContext.sparkContext.uiWebUrl
+          val msg = if (webUiUrl.isDefined) {
+            ContexData(appId, Some(webUiUrl.get))
+          } else {
+            ContexData(appId, None)
+          }
+          sender ! msg
+        } catch {
+          case _: Exception => {
+            logger.error("SparkContext does not exist!")
+            sender ! SparkContextDead
+          }
+        }
+      }
+
+    case KillJob(jobId: String) =>
+      jobContext.sparkContext.cancelJobGroup(jobId)
+      val resp = JobKilled(jobId, DateTime.now())
+      statusActor ! resp
+      sender ! resp
+
+    case DeleteData(name: String) => remoteFileCache.deleteDataFile(name)
+  }
+
+  def wrappedReceive: Receive = commonHandlers.orElse {
     case ActorIdentity(memberActors, supervisorActorRef) =>
       supervisorActorRef.foreach { ref =>
         val actorName = ref.path.name
@@ -374,10 +401,6 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
       stopContextForcefullyHelper(originalSender)
     }
 
-    case KillJob(jobId: String) => {
-      handleKillJob(jobId)
-    }
-
     // Only used in LocalContextSupervisorActor
     case SparkContextStatus => {
       if (jobContext.sparkContext == null) {
@@ -410,14 +433,6 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
           }
         }
       }
-    }
-
-    case GetContexData => {
-      handleGetContextData
-    }
-
-    case DeleteData(name: String) => {
-      handleDeleteData(name)
     }
 
     case RestartExistingJobs => {
@@ -813,39 +828,6 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
       case Failure(e) =>
         logger.error("Failed to schedule a time out message for forceful context stop", e)
         None
-    }
-  }
-
-  private def handleDeleteData(name: String) = {
-    remoteFileCache.deleteDataFile(name)
-  }
-
-  private def handleKillJob(jobId: String) = {
-    jobContext.sparkContext.cancelJobGroup(jobId)
-    val resp = JobKilled(jobId, DateTime.now())
-    statusActor ! resp
-    sender ! resp
-  }
-
-  private def handleGetContextData = {
-    if (jobContext.sparkContext == null) {
-      sender ! SparkContextDead
-    } else {
-      try {
-        val appId = jobContext.sparkContext.applicationId
-        val webUiUrl = jobContext.sparkContext.uiWebUrl
-        val msg = if (webUiUrl.isDefined) {
-          ContexData(appId, Some(webUiUrl.get))
-        } else {
-          ContexData(appId, None)
-        }
-        sender ! msg
-      } catch {
-        case e: Exception => {
-          logger.error("SparkContext does not exist!")
-          sender ! SparkContextDead
-        }
-      }
     }
   }
 

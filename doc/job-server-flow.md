@@ -199,6 +199,7 @@ Context routes
 
         user->WebApi: DELETE /contexts/<contextName>
         WebApi->AkkaClusterSupervisorActor: StopContext(contextName)
+        note right of AkkaClusterSupervisorActor:set context state=STOPPING
         AkkaClusterSupervisorActor->JobManagerActor: StopContextAndShutdown
         JobManagerActor->JobManagerActor: ContextStopScheduledMsgTimeout
         JobManagerActor->SparkContext: sc.stop()
@@ -209,6 +210,7 @@ Context routes
         JobManagerActor ->JobManagerActor: PoisonPill
         AkkaClusterSupervisorActor ->WebApi: ContextStopped
         DeathWatch ->AkkaClusterSupervisorActor: Terminated
+        note right of AkkaClusterSupervisorActor:set context state=FINISHED
         DeathWatch->ProductionReaper: Terminated
         ProductionReaper->ActorSystem: shutdown
         WebApi ->user: 200
