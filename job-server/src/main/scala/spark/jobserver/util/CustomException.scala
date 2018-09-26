@@ -34,3 +34,9 @@ final case class NoAliveMasterException() extends
 final case class NoMatchingDAOObjectException() extends Exception("No matching dao object found")
 
 final case class ContextKillingItselfException(msg: String) extends Exception(msg)
+
+final case class NoIPAddressFoundException() extends
+  Exception("The IP address of this host could not be resolved automatically")
+
+final case class UnsupportedNetworkAddressStrategy(name: String) extends
+  Exception(s"Unsupported network address strategy $name specified.")

@@ -37,6 +37,7 @@ Add the following config to you job-server config file:
 - set `spark.jobserver.context-per-jvm` to `true`
 - set `akka.remote.netty.tcp.hostname` to the cluster interface of the host running the frontend
 - set `akka.remote.netty.tcp.maximum-frame-size` to support big remote jars fetch
+- set `spark.jobserver.network-address-resolver` to a suitable value according to your environment. `akka` is recommended.
 
 Example job server config (replace `CLUSTER-IP` with the internal IP of the host running the job server frontend):
 

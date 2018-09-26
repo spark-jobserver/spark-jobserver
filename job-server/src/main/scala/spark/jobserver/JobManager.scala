@@ -1,20 +1,21 @@
 package spark.jobserver
 
-import java.io.{File, IOException}
-import java.nio.charset.Charset
-import java.nio.file.{Files, Paths}
-import java.util.concurrent.TimeUnit
-
-import akka.actor.{ActorSystem, Address, AddressFromURIString, Props}
+import akka.actor.{ActorSystem, AddressFromURIString, Props}
 import akka.cluster.Cluster
 import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
-import spark.jobserver.common.akka.actor.Reaper.WatchMe
+import java.io._
+import java.nio.file.Files
+import java.util.concurrent.TimeUnit
+
+import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hadoop.conf.Configuration
 import org.slf4j.LoggerFactory
+import scala.util.{Failure, Success, Try}
+import scala.concurrent.duration.FiniteDuration
+import spark.jobserver.common.akka.actor.Reaper.WatchMe
 import spark.jobserver.common.akka.actor.ProductionReaper
 import spark.jobserver.io.{JobDAO, JobDAOActor}
-import scala.collection.JavaConverters._
-import scala.util.Try
-import scala.concurrent.duration.FiniteDuration
+import spark.jobserver.util.{NetworkAddressFactory}
 
 /**
  * The JobManager is the main entry point for the forked JVM process running an individual
@@ -45,15 +46,22 @@ object JobManager {
       .getOrElse("local[4]").toLowerCase()
     val deployMode = Try(systemConfig.getString("spark.submit.deployMode")).toOption
       .getOrElse("client").toLowerCase()
+
     val config = if (deployMode == "cluster") {
-      logger.info("Cluster mode: Removing akka.remote.netty.tcp.hostname from config!")
+      Try(getNetworkAddress(systemConfig)) match {
+        case Success(Some(address)) =>
+          logger.info(s"Cluster mode: Setting akka.remote.netty.tcp.hostname to ${address}!")
+          systemConfig = systemConfig.withValue("akka.remote.netty.tcp.hostname",
+            ConfigValueFactory.fromAnyRef(address))
+        case Success(None) => // Don't change hostname
+        case Failure(e) =>
+          logger.error("Exception during network address resolution", e)
+          exitJVM
+      }
+
       logger.info("Cluster mode: Replacing spark.jobserver.sqldao.rootdir with container tmp dir.")
       val sqlDaoDir = Files.createTempDirectory("sqldao")
       val sqlDaoDirConfig = ConfigValueFactory.fromAnyRef(sqlDaoDir.toAbsolutePath.toString)
-      val ignoreAkkaHostname = systemConfig.getBoolean("spark.jobserver.ignore-akka-hostname")
-      if (ignoreAkkaHostname) {
-        systemConfig = systemConfig.withoutPath("akka.remote.netty.tcp.hostname")
-      }
       systemConfig.withValue("spark.jobserver.sqldao.rootdir", sqlDaoDirConfig)
                   .withoutPath("akka.remote.netty.tcp.port")
                   .withValue("akka.remote.netty.tcp.port", ConfigValueFactory.fromAnyRef(0))
@@ -89,6 +97,20 @@ object JobManager {
     waitForTermination(system, master, deployMode)
   }
 
+  private def getNetworkAddress(systemConfig: Config): Option[String] = {
+    systemConfig.hasPath("spark.jobserver.network-address-resolver") match {
+      case true =>
+        val strategyShortName = systemConfig.getString("spark.jobserver.network-address-resolver")
+        NetworkAddressFactory(strategyShortName).getAddress()
+      case false => None
+    }
+  }
+
+  /**
+    * 0 is used as exit code to avoid restart of JVM by Spark in supervise mode
+    */
+  private def exitJVM = sys.exit(0)
+
   def main(args: Array[String]) {
     import scala.collection.JavaConverters._
 
@@ -117,7 +139,7 @@ object JobManager {
     start(args, makeManagerSystem("JobServer"), waitForTermination)
   }
 
-   private def getManagerInitializationTimeout(config: Config): FiniteDuration = {
+  private def getManagerInitializationTimeout(config: Config): FiniteDuration = {
     FiniteDuration(config.getDuration("spark.jobserver.manager-initialization-timeout",
         TimeUnit.MILLISECONDS), TimeUnit.MILLISECONDS)
   }
