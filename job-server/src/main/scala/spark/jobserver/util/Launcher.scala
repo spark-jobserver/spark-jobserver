@@ -1,8 +1,6 @@
 package spark.jobserver.util
 
 import scala.util.Try
-import scala.sys.process.{Process, ProcessLogger}
-import java.io.File
 import com.typesafe.config.Config
 import org.slf4j.LoggerFactory
 import org.apache.spark.launcher.SparkLauncher
@@ -67,12 +65,10 @@ abstract class Launcher(config: Config, sparkLauncher: SparkLauncher, enviornmen
     }
 
     protected def validate(): (Boolean, String) = {
-      if (!new File(sjsJarPath).isFile()) {
-        val errorMsg =
-          s"Environment error: job-server jar file doesn't exist. Path is $sjsJarPath"
-        logger.error(errorMsg)
-        return (false, errorMsg)
+      new HadoopFSFacade().isFile(sjsJarPath) match {
+        case Some(true) => (true, "")
+        case Some(false) => (false, s"job-server jar file doesn't exist at $sjsJarPath")
+        case None => (false, "Unexpected error occurred while reading file. Check logs")
       }
-      return (true, "")
     }
 }
