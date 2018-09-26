@@ -10,8 +10,10 @@ import akka.cluster.ClusterEvent.{InitialStateAsEvents, MemberUp}
 import akka.util.Timeout
 import com.google.common.net.InetAddresses
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
+
 import scala.concurrent.Await
 import spark.jobserver.common.akka.AkkaTestUtils
+import spark.jobserver.util.HDFSClusterLike
 
 sealed case class JVMExitException(status: Int) extends SecurityException("sys.exit() is not allowed") {
 }
@@ -27,7 +29,8 @@ sealed class NoExitSecurityManager extends SecurityManager {
   }
 }
 
-class JobManagerSpec extends FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
+class JobManagerSpec extends FunSpecLike with Matchers with BeforeAndAfter
+    with BeforeAndAfterAll with HDFSClusterLike {
 
   import akka.testkit._
   import com.typesafe.config._
@@ -230,6 +233,47 @@ class JobManagerSpec extends FunSpecLike with Matchers with BeforeAndAfter with 
         makeSupervisorSystem, waitForTermination)
 
       called should be (true)
+    }
+
+    it("should exit jvm if config file cannot be loaded") {
+      failOnWrongPath("")
+      failOnWrongPath("file:wrong_path")
+      failOnWrongPath("file:/wrong_path")
+      failOnWrongPath("hdfs:///wrong_path")
+      failOnWrongPath("hdfs://localhost:8020/wrong_path")
+
+      def failOnWrongPath(configPath: String): Unit = {
+        def makeSystem(config: Config): ActorSystem = {
+          fail("Cannot reach this point as JVM should already be exited")
+          system
+        }
+
+        intercept[JVMExitException] {
+          JobManager.start(Seq(clusterAddr, "test-manager", configPath).toArray,
+            makeSystem, waitForTerminationDummy)
+        }
+      }
+    }
+
+    it("should be able to load config file from hadoop supported file systems") {
+      val configFilePath = writeConfigFile(Map(
+        "spark.jobserver.hdfs.test" -> "Wohoo!"
+      ))
+
+      super.startHDFS()
+      val configHDFSDir = s"${super.getNameNodeURI()}/spark-jobserver"
+      super.writeFileToHDFS(configFilePath, configHDFSDir)
+      val configHDFSPath = s"${configHDFSDir}/${configFile.getFileName.toString}"
+
+      JobManager.start(Seq(clusterAddr, "test-manager", configHDFSPath).toArray,
+        makeSystem, waitForTerminationDummy)
+
+      def makeSystem(config: Config): ActorSystem = {
+        config.getString("spark.jobserver.hdfs.test") should be("Wohoo!")
+        system
+      }
+
+      super.shutdownHDFS()
     }
   }
 }

@@ -77,6 +77,12 @@ object Dependencies {
     "org.cassandraunit" % "cassandra-unit" % cassandraUnit % Test
   )
 
+  lazy val miscTestDeps = Seq(
+    "org.apache.hadoop" % "hadoop-hdfs" % hadoop % Test classifier "tests",
+    "org.apache.hadoop" % "hadoop-common" % hadoop % Test classifier "tests",
+    "org.apache.hadoop" % "hadoop-minicluster" % hadoop % Test
+  )
+
   lazy val securityDeps = Seq(
     "org.apache.shiro" % "shiro-core" % shiro
   )
