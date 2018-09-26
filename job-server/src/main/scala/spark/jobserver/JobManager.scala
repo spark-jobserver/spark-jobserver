@@ -3,19 +3,15 @@ package spark.jobserver
 import akka.actor.{ActorSystem, AddressFromURIString, Props}
 import akka.cluster.Cluster
 import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
-import java.io._
 import java.nio.file.Files
 import java.util.concurrent.TimeUnit
-
-import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.hadoop.conf.Configuration
 import org.slf4j.LoggerFactory
 import scala.util.{Failure, Success, Try}
 import scala.concurrent.duration.FiniteDuration
 import spark.jobserver.common.akka.actor.Reaper.WatchMe
 import spark.jobserver.common.akka.actor.ProductionReaper
 import spark.jobserver.io.{JobDAO, JobDAOActor}
-import spark.jobserver.util.{NetworkAddressFactory}
+import spark.jobserver.util.{HadoopFSFacade, NetworkAddressFactory}
 
 /**
  * The JobManager is the main entry point for the forked JVM process running an individual
@@ -33,15 +29,9 @@ object JobManager {
 
     val clusterAddress = AddressFromURIString.parse(args(0))
     val managerName = args(1)
-    val systemConfigFile = new File(args(2))
-
-    if (!systemConfigFile.exists()) {
-      System.err.println(s"Could not find system configuration file $systemConfigFile")
-      sys.exit(1)
-    }
-
+    val loadedConfig = getConfFromFS(args(2)).getOrElse(exitJVM)
     val defaultConfig = ConfigFactory.load()
-    var systemConfig = ConfigFactory.parseFile(systemConfigFile).withFallback(defaultConfig)
+    var systemConfig = loadedConfig.withFallback(defaultConfig)
     val master = Try(systemConfig.getString("spark.master")).toOption
       .getOrElse("local[4]").toLowerCase()
     val deployMode = Try(systemConfig.getString("spark.submit.deployMode")).toOption
@@ -95,6 +85,19 @@ object JobManager {
     reaper ! WatchMe(jobManager)
 
     waitForTermination(system, master, deployMode)
+  }
+
+  private def getConfFromFS(path: String): Option[Config] = {
+    new HadoopFSFacade().get(path) match {
+      case Some(stream) =>
+        Try(ConfigFactory.parseReader(stream)) match {
+          case Success(config) => Some(config)
+          case Failure(t) =>
+            logger.error(t.getMessage)
+            None
+        }
+      case None => None
+    }
   }
 
   private def getNetworkAddress(systemConfig: Config): Option[String] = {

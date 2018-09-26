@@ -5,10 +5,10 @@ import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.commons.collections.map.MultiValueMap
 import scala.collection.mutable.HashMap
 import collection.JavaConverters._
-import java.io.{File, IOException}
+import java.io.File
 import org.apache.spark.launcher.{SparkLauncher, SparkAppHandle}
 
-class ManagerLauncherSpec extends FunSpec with Matchers with BeforeAndAfter {
+class ManagerLauncherSpec extends FunSpec with Matchers with BeforeAndAfter with HDFSClusterLike {
     val stubbedSparkLauncher = new StubbedSparkLauncher()
     val environment = new InMemoryEnvironment
 
@@ -40,16 +40,41 @@ class ManagerLauncherSpec extends FunSpec with Matchers with BeforeAndAfter {
 
     describe("ManagerLauncher black box tests") {
       it("should fail if sjs jar path is wrong or empty") {
-        environment.set("MANAGER_JAR_FILE", "/wrong/path")
+        shouldFailOnWrongPath("file:///")
+        shouldFailOnWrongPath("/wrong/path")
+        shouldFailOnWrongPath("file:/wrong/path")
+        shouldFailOnWrongPath("hdfs:/wrong/path")
+        shouldFailOnWrongPath("hdfs://localhost:9020/wrong/path")
 
-        val launcher = managerLauncherFunc(baseContextConf)
-        launcher.start()._1 should be (false)
+        def shouldFailOnWrongPath(path: String): Unit = {
+          environment.set("MANAGER_JAR_FILE", path)
+          val launcher = managerLauncherFunc(baseContextConf)
+          val (hasStarted, _) = launcher.start()
+          hasStarted should be(false)
+        }
       }
 
-     it("should pass if sjs jar path is valid") {
+     it("should pass if sjs jar path (local) is valid") {
         val launcher = managerLauncherFunc(baseContextConf)
+        val (hasStarted, _) = launcher.start()
+        hasStarted should be (true)
+      }
 
-        launcher.start()._1 should be (true)
+      it("should accept valid HDFS path for jars") {
+        super.startHDFS()
+        val tempFile = File.createTempFile("hdfs-", ".jar")
+        tempFile.deleteOnExit()
+        val dummyHDFSDir = s"${super.getNameNodeURI()}/spark-jobserver"
+        val dummyJarHDFSPath = s"${dummyHDFSDir}/${tempFile.getName}"
+
+        super.writeFileToHDFS(tempFile.getAbsolutePath(), dummyHDFSDir)
+
+        environment.set("MANAGER_JAR_FILE", dummyJarHDFSPath)
+        val launcher = managerLauncherFunc(baseContextConf)
+        val (hasStarted, _) = launcher.start()
+        hasStarted should be(true)
+
+        super.shutdownHDFS()
       }
 
      it("should fail if wrong driver memory is provided") {

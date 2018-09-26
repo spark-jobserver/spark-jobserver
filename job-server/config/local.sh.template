@@ -2,6 +2,14 @@
 
 # Environment and deploy file
 # For use with bin/server_deploy, bin/server_package etc.
+# Note: This file is sourced 2 times
+# - ./bin/server_deploy sources this file to load environment variables. It only needs a few e.g. INSTALL_DIR.
+#    Variables like $appdir don't have value at this time. It is alright since, nobody is using it.
+# - ./bin/server_start sources this file after exporting conffile and appdir. So, these variables become available
+#    and correct MANAGER_* variables are placed in the env of jobserver master process. These same variables are
+#    also passed as env of driver processes launched through SparkLauncher (since driver processes are a fork of
+#    master process)
+
 DEPLOY_HOSTS="hostname1.net
               hostname2.net"
 
@@ -31,13 +39,14 @@ SPARK_EXECUTOR_URI=/home/spark/spark-1.6.0.tar.gz
 SCALA_VERSION=2.10.4 # or 2.11.6
 
 # optional:
-# REMOTE_JOBSERVER_DIR=file://... or hdfs://...
+#REMOTE_JOBSERVER_DIR=file://... or hdfs://...
 
-MANAGER_JAR_FILE="$appdir/spark-job-server.jar"
+REMOTE_JOBSERVER_DIR=file:$appdir
+MANAGER_JAR_FILE="$REMOTE_JOBSERVER_DIR/spark-job-server.jar"
 MANAGER_CONF_FILE="$conffile"
 MANAGER_EXTRA_JAVA_OPTIONS=
 MANAGER_EXTRA_SPARK_CONFS=
-MANAGER_LOGGING_OPTS="-Dlog4j.configuration=file:$appdir/log4j-server.properties"
+MANAGER_LOGGING_OPTS="-Dlog4j.configuration=$REMOTE_JOBSERVER_DIR/log4j-server.properties"
 SPARK_LAUNCHER_VERBOSE=0
 
 # For mesos/yarn use the following variables
