@@ -6,6 +6,7 @@ import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import java.nio.file.Files
 import java.util.concurrent.TimeUnit
 import org.slf4j.LoggerFactory
+import org.apache.commons.io.FileUtils
 import scala.util.{Failure, Success, Try}
 import scala.concurrent.duration.FiniteDuration
 import spark.jobserver.common.akka.actor.Reaper.WatchMe
@@ -51,6 +52,7 @@ object JobManager {
 
       logger.info("Cluster mode: Replacing spark.jobserver.sqldao.rootdir with container tmp dir.")
       val sqlDaoDir = Files.createTempDirectory("sqldao")
+      FileUtils.forceDeleteOnExit(sqlDaoDir.toFile)
       val sqlDaoDirConfig = ConfigValueFactory.fromAnyRef(sqlDaoDir.toAbsolutePath.toString)
       systemConfig.withValue("spark.jobserver.sqldao.rootdir", sqlDaoDirConfig)
                   .withoutPath("akka.remote.netty.tcp.port")
