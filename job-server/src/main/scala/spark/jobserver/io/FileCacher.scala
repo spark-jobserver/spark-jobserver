@@ -50,7 +50,9 @@ trait FileCacher {
       tempOutFileName, targetFullBinaryName: Any)
 
     val tempFile = new File(rootDir, tempOutFileName)
-    if (!tempFile.renameTo(new File(rootDir, targetFullBinaryName))) {
+    val renamedFile = new File(rootDir, targetFullBinaryName)
+    renamedFile.deleteOnExit()
+    if (!tempFile.renameTo(renamedFile)) {
       logger.debug("Renaming the temporary file {} failed, another process has probably already updated " +
         "the target file - deleting the redundant temp file", tempOutFileName)
       if (!tempFile.delete()) {
