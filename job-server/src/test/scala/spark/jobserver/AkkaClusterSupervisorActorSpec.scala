@@ -219,23 +219,9 @@ class StubbedJobManagerActor(contextConfig: Config) extends Actor {
       }
     case JobManagerActor.StopContextForcefully =>
       contextName match {
-        case "send-an-error" =>
-           stopAttemptCount match {
-            case 0 =>
-              stopAttemptCount += 1
-              sender ! ContextStopError(new Exception("Some exception"))
-            case 1 =>
-              sender ! SparkContextStopped
-              self ! PoisonPill
-          }
-          self ! PoisonPill
-        case "dont-respond" =>
-          stopAttemptCount match {
-            case 0 => stopAttemptCount += 1
-            case 1 =>
-              sender ! SparkContextStopped
-              self ! PoisonPill
-          }
+        case "send-on-error" =>
+          sender ! ContextStopError(new Exception("Some exception"))
+        case "dont-respond-if-force" =>
         case _ =>
           sender ! SparkContextStopped
           self ! PoisonPill
@@ -466,19 +452,19 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
     }
 
     it("should respond with context stop error if there is no answer after forcefull stop request") {
-      supervisor ! AddContext("dont-respond", contextConfig)
+      supervisor ! AddContext("dont-respond-if-force", contextConfig)
       expectMsg(contextInitTimeout, ContextInitialized)
 
-      supervisor ! StopContext("dont-respond", true)
+      supervisor ! StopContext("dont-respond-if-force", true)
 
       expectMsgType[ContextStopError](4.seconds)
     }
 
     it("should respond with context stop error if error was sent back") {
-      supervisor ! AddContext("send-an-error", contextConfig)
+      supervisor ! AddContext("send-on-error", contextConfig)
       expectMsg(contextInitTimeout, ContextInitialized)
 
-      supervisor ! StopContext("send-an-error", true)
+      supervisor ! StopContext("send-on-error", true)
 
       expectMsgType[ContextStopError](4.seconds)
     }
