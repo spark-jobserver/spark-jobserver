@@ -209,15 +209,9 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
     Await.result(db.run(query), 60 seconds)
   }
 
-  private def calculateBinaryHash(binBytes: Array[Byte]): Array[Byte] = {
-    import java.security.MessageDigest
-    val md = MessageDigest.getInstance("SHA-256");
-    md.digest(binBytes)
-  }
-
   // Insert JarInfo and its jar into db and return the primary key associated with that row
   private def insertBinaryInfo(binInfo: BinaryInfo, binBytes: Array[Byte]): Future[Int] = {
-    val hash = calculateBinaryHash(binBytes);
+    val hash = BinaryDAO.calculateBinaryHash(binBytes);
     val dbAction = (binaries +=
         (-1, binInfo.appName, binInfo.binaryType.name, convertDateJodaToSql(binInfo.uploadTime), hash))
                      .andThen(binariesContents.filter(_.binHash === hash).map(_.binHash)
