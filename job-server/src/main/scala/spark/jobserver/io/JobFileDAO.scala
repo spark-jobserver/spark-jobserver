@@ -26,8 +26,8 @@ class JobFileDAO(config: Config) extends JobDAO {
   // jobId to its Config
   private val configs = mutable.HashMap.empty[String, Config]
 
-  private val rootDir = config.getString("spark.jobserver.filedao.rootdir")
-  private val rootDirFile = new File(rootDir)
+  val rootDir = config.getString("spark.jobserver.filedao.rootdir")
+  val rootDirFile = new File(rootDir)
   logger.info("rootDir is " + rootDirFile.getAbsolutePath)
 
   private val jarsFile = new File(rootDirFile, "jars.data")
@@ -57,7 +57,6 @@ class JobFileDAO(config: Config) extends JobDAO {
         }
       } catch {
         case e: EOFException => // do nothing
-
       } finally {
         in.close()
       }
@@ -151,7 +150,7 @@ class JobFileDAO(config: Config) extends JobDAO {
     }.toMap
   }
 
-  override def retrieveBinaryFile(appName: String, binaryType: BinaryType, uploadTime: DateTime): String =
+  override def getBinaryFilePath(appName: String, binaryType: BinaryType, uploadTime: DateTime): String =
     new File(rootDir, createJarName(appName, uploadTime) + s".${binaryType.extension}").getAbsolutePath
 
   private def createJarName(appName: String, uploadTime: DateTime): String =

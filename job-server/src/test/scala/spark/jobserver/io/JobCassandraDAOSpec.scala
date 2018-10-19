@@ -132,7 +132,7 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
       jarFile.exists() should equal (false)
 
       // retrieve the jar file
-      val jarFilePath: String = dao.retrieveBinaryFile(jarInfo.appName, jarInfo.binaryType, jarInfo.uploadTime)
+      val jarFilePath: String = dao.getBinaryFilePath(jarInfo.appName, jarInfo.binaryType, jarInfo.uploadTime)
 
       // test
       jarFile.exists() should equal (true)
