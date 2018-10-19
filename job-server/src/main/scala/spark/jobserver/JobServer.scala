@@ -6,6 +6,7 @@ import akka.pattern.ask
 import akka.cluster.Cluster
 import akka.cluster.ClusterEvent.{InitialStateAsEvents, MemberEvent}
 import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
+
 import java.io.File
 import java.util.concurrent.{TimeUnit, TimeoutException}
 
@@ -15,7 +16,7 @@ import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
-import scala.concurrent.{Await, ExecutionContext}
+import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 import scala.collection.mutable.ListBuffer
@@ -298,6 +299,22 @@ object JobServer {
     if (driverMode == "cluster" && superviseModeEnabled == true && akkaTcpPort == 0) {
       throw new InvalidConfiguration("Supervise mode requires akka.remote.netty.tcp.port to be hardcoded")
     }
+  }
+
+  // FIXME: this check has an error and is not used: variables to check in DAOs initialized before check
+  private def hasValidCombinedDaoConfig(config: Config): Boolean = {
+    def createClassInstance[T](classPath: String): T = {
+      Class.forName(config.getString(classPath))
+        .getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
+        .newInstance(config).asInstanceOf[T]
+    }
+    val binaryDaoPath = "spark.jobserver.combineddao.binarydao.class"
+    val metaDataDaoPath = "spark.jobserver.combineddao.metadatadao.class"
+
+    config.hasPath(binaryDaoPath) &&
+    config.hasPath(metaDataDaoPath) &&
+    createClassInstance[BinaryDAO](binaryDaoPath).validateConfig(config) &&
+    createClassInstance[MetaDataDAO](metaDataDaoPath).validateConfig(config)
   }
 
   def main(args: Array[String]) {
