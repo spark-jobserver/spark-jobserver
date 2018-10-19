@@ -152,7 +152,7 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
       jarFile.exists() should equal (false)
 
       // retrieve the jar file
-      val jarFilePath: String = dao.retrieveBinaryFile(jarInfo.appName, BinaryType.Jar, jarInfo.uploadTime)
+      val jarFilePath: String = dao.getBinaryFilePath(jarInfo.appName, BinaryType.Jar, jarInfo.uploadTime)
 
       // test
       jarFile.exists() should equal (true)
@@ -184,7 +184,7 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
       eggFile.exists() should equal (false)
 
       // retrieve the jar file
-      val eggFilePath: String = dao.retrieveBinaryFile(eggInfo.appName, BinaryType.Egg, eggInfo.uploadTime)
+      val eggFilePath: String = dao.getBinaryFilePath(eggInfo.appName, BinaryType.Egg, eggInfo.uploadTime)
       // test
       eggFile.exists() should equal (true)
       eggFilePath should equal (eggFile.getAbsolutePath)

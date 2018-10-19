@@ -143,7 +143,7 @@ object JobDAO {
  */
 trait JobDAO {
   /**
-   * Persist a jar.
+   * Persist a binary data.
    *
    * @param appName
    * @param uploadTime
@@ -152,7 +152,7 @@ trait JobDAO {
   def saveBinary(appName: String, binaryType: BinaryType, uploadTime: DateTime, binaryBytes: Array[Byte])
 
   /**
-    * Delete a jar.
+    * Delete a binary data.
     * @param appName
     */
   def deleteBinary(appName: String)
@@ -171,7 +171,7 @@ trait JobDAO {
    * @param uploadTime
    * @return the local file path of the retrieved binary file.
    */
-  def retrieveBinaryFile(appName: String, binaryType: BinaryType, uploadTime: DateTime): String
+  def getBinaryFilePath(appName: String, binaryType: BinaryType, uploadTime: DateTime): String
 
   /**
    * Persist a context info.
