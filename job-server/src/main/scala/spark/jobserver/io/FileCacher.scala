@@ -27,11 +27,20 @@ trait FileCacher {
     appName + "-" + uploadTime.toString("yyyyMMdd_HHmmss_SSS") + s".${binaryType.extension}"
   }
 
-  // Cache the jar file into local file system.
+  protected def getPath(appName: String, binaryType: BinaryType, uploadTime: DateTime): Option[String] = {
+    val binFile = new File(rootDir, createBinaryName(appName, binaryType, uploadTime))
+    if(binFile.exists()) {
+      Some(binFile.getAbsolutePath)
+    } else {
+      None
+    }
+  }
+
+  // Cache the binary file into local file system.
   protected def cacheBinary(appName: String,
                             binaryType: BinaryType,
                             uploadTime: DateTime,
-                            binBytes: Array[Byte]) {
+                            binBytes: Array[Byte]): String = {
     val targetFullBinaryName = createBinaryName(appName, binaryType, uploadTime)
     val tempSuffix = ".tmp"
     val tempOutFile = File.createTempFile(targetFullBinaryName + "-", tempSuffix, new File(rootDir))
@@ -59,6 +68,8 @@ trait FileCacher {
         logger.warn("Could not delete the temporary file {}", tempOutFileName)
       }
     }
+
+    renamedFile.getAbsolutePath
   }
 
   protected def cleanCacheBinaries(appName: String): Unit = {
@@ -78,5 +89,4 @@ trait FileCacher {
       binaries.foreach(f => f.delete())
     }
   }
-
 }

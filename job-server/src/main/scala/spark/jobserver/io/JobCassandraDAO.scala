@@ -67,8 +67,8 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
 
 
   // NOTE: below is only needed for H2 drivers
-  val rootDir = config.getString("spark.jobserver.sqldao.rootdir")
-  val rootDirFile = new File(rootDir)
+  override val rootDir = config.getString("spark.jobserver.sqldao.rootdir")
+  override val rootDirFile = new File(rootDir)
   logger.info("rootDir is " + rootDirFile.getAbsolutePath)
   initFileDirectory()
 
@@ -269,26 +269,14 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
     }
   }
 
-  override def retrieveBinaryFile(appName: String, binaryType: BinaryType, uploadTime: DateTime): String = {
-    val binaryFile = new File(rootDir, createBinaryName(appName, binaryType, uploadTime))
-    if (!binaryFile.exists()) {
-      fetchAndCacheBinaryFile(appName, binaryType, uploadTime)
-    }
-    binaryFile.getAbsolutePath
-  }
-
   private def today(): LocalDate = {
     LocalDate.fromMillisSinceEpoch(DateTime.now.getMillis)
   }
 
-  // Fetch the binary file from database and cache it into local file system.
-  private def fetchAndCacheBinaryFile(appName: String, binaryType: BinaryType, uploadTime: DateTime) {
-    val binBytes = fetchBinary(appName, binaryType, uploadTime)
-    cacheBinary(appName, binaryType, uploadTime, binBytes)
-  }
-
   // Fetch the binary from the database
-  private def fetchBinary(appName: String, binaryType: BinaryType, uploadTime: DateTime): Array[Byte] = {
+  private def getBinary(appName: String,
+                         binaryType: BinaryType,
+                         uploadTime: DateTime): Array[Byte] = {
     val rows = session.executeAsync(QB.select(AppName, BType, UploadTime, ChunkIndex, Binary).
       from(BinariesTable).
       where(QB.eq(AppName, appName)).
@@ -300,6 +288,17 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
       (row.getInt(ChunkIndex), row.getBytes(Binary).array())
     }
     tuples.map(_._2).foldLeft(Array[Byte]()) { _ ++ _ }
+  }
+
+  override def getBinaryFilePath(appName: String,
+                                 binaryType: BinaryType,
+                                 uploadTime: DateTime): String = {
+    getPath(appName, binaryType, uploadTime) match {
+      case Some(path) => path
+      case None =>
+        val binBytes = getBinary(appName, binaryType, uploadTime)
+        cacheBinary(appName, binaryType, uploadTime, binBytes)
+    }
   }
 
   private def rowToContextInfo(row: Row): ContextInfo = {

@@ -23,7 +23,6 @@ object JobDAOActorSpec {
   val spyProbe = TestProbe()(system)
 
   object DummyDao extends JobDAO{
-
     override def saveBinary(appName: String, binaryType: BinaryType,
                             uploadTime: DateTime, binaryBytes: Array[Byte]): Unit = {
       appName match {
@@ -39,8 +38,8 @@ object JobDAOActorSpec {
         "app2" -> (BinaryType.Egg, dtplus1)
       ))
 
-    override def retrieveBinaryFile(appName: String,
-                                    binaryType: BinaryType, uploadTime: DateTime): String = ???
+    override def getBinaryFilePath(appName: String,
+                                   binaryType: BinaryType, uploadTime: DateTime): String = ???
 
     override def saveContextInfo(contextInfo: ContextInfo): Unit = {
       contextInfo.id match {

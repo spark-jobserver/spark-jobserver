@@ -20,7 +20,6 @@ import org.slf4j.LoggerFactory
 import slick.driver.JdbcProfile
 import slick.lifted.ProvenShape.proveShapeOf
 import spark.jobserver.JobManagerActor.ContextTerminatedException
-import spray.http.ErrorInfo
 import spark.jobserver.util.NoSuchBinaryException
 
 /**
@@ -41,8 +40,8 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
   private val logger = LoggerFactory.getLogger(getClass)
 
   // NOTE: below is only needed for H2 drivers
-  val rootDir = config.getString("spark.jobserver.sqldao.rootdir")
-  val rootDirFile = new File(rootDir)
+  override val rootDir = config.getString("spark.jobserver.sqldao.rootdir")
+  override val rootDirFile = new File(rootDir)
   logger.info("rootDir is " + rootDirFile.getAbsolutePath)
 
   // Definition of the tables
@@ -250,22 +249,8 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
     db.run(dbAction).recover(logDeleteErrors)
   }
 
-  override def retrieveBinaryFile(appName: String, binaryType: BinaryType, uploadTime: DateTime): String = {
-    val binFile = new File(rootDir, createBinaryName(appName, binaryType, uploadTime))
-    if (!binFile.exists()) {
-      fetchAndCacheBinFile(appName, binaryType, uploadTime)
-    }
-    binFile.getAbsolutePath
-  }
-
-  // Fetch the jar file from database and cache it into local file system.
-  private def fetchAndCacheBinFile(appName: String, binaryType: BinaryType, uploadTime: DateTime) {
-    val jarBytes = Await.result(fetchBinary(appName, binaryType, uploadTime), 60 seconds)
-    cacheBinary(appName, binaryType, uploadTime, jarBytes)
-  }
-
-  // Fetch the jar from the database
-  private def fetchBinary(appName: String,
+  // Fetch the binary file from the database
+  private def getBinary(appName: String,
                           binaryType: BinaryType,
                           uploadTime: DateTime): Future[Array[Byte]] = {
     val dateTime = convertDateJodaToSql(uploadTime)
@@ -277,6 +262,17 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
     } yield bc.binary
     val dbAction = query.result
     db.run(dbAction.head.map { b => b.getBytes(1, b.length.toInt) }.transactionally)
+  }
+
+  override def getBinaryFilePath(appName: String,
+                                 binaryType: BinaryType,
+                                 uploadTime: DateTime): String = {
+    getPath(appName, binaryType, uploadTime) match {
+      case Some(path) => path
+      case None =>
+        val binBytes = Await.result(getBinary(appName, binaryType, uploadTime), 60 seconds)
+        cacheBinary(appName, binaryType, uploadTime, binBytes)
+    }
   }
 
   private def queryBinaryId(appName: String, binaryType: BinaryType, uploadTime: DateTime): Future[Int] = {

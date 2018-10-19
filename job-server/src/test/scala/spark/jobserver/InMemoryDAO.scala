@@ -4,7 +4,7 @@ import java.io.{BufferedOutputStream, FileOutputStream}
 
 import com.typesafe.config.Config
 import org.joda.time.DateTime
-import spark.jobserver.io.{BinaryType, JobDAO, JobInfo, JobStatus, ContextInfo, ContextStatus}
+import spark.jobserver.io.{BinaryType, ContextInfo, JobDAO, JobInfo, JobStatus}
 
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -33,7 +33,7 @@ class InMemoryDAO extends JobDAO {
     }
   }
 
-  override def retrieveBinaryFile(appName: String, binaryType: BinaryType, uploadTime: DateTime): String = {
+  override def getBinaryFilePath(appName: String, binaryType: BinaryType, uploadTime: DateTime): String = {
     // Write the jar bytes to a temporary file
     val outFile = java.io.File.createTempFile("InMemoryDAO", s".${binaryType.extension}")
     outFile.deleteOnExit()

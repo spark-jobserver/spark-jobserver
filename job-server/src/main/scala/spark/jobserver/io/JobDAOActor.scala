@@ -87,7 +87,7 @@ class JobDAOActor(dao: JobDAO) extends InstrumentedActor {
         pipeTo(sender)
 
     case GetBinaryPath(appName, binType, uploadTime) =>
-      sender() ! BinaryPath(dao.retrieveBinaryFile(appName, binType, uploadTime))
+      sender() ! BinaryPath(dao.getBinaryFilePath(appName, binType, uploadTime))
 
     case SaveContextInfo(contextInfo) =>
       saveContextAndRespond(sender, contextInfo)
