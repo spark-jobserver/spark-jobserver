@@ -151,7 +151,7 @@ class LocalContextSupervisorActor(dao: ActorRef, dataManagerActor: ActorRef) ext
 
       // Create JobManagerActor and JobResultActor
       startContext(contextName, mergedConfig, true, contextTimeout) { contextMgr =>
-        originator ! contexts(contextName)
+        originator ! contexts(contextName)._1
       } { err =>
         originator ! ContextInitError(err)
       }
