@@ -6,10 +6,16 @@ import org.apache.spark.sql.SparkSession
 import spark.jobserver.{ContextLike, SparkSessionJob}
 import spark.jobserver.api.SparkJobBase
 import spark.jobserver.util.SparkJobUtils
+import org.slf4j.LoggerFactory
 
 case class SparkSessionContextLikeWrapper(spark: SparkSession) extends ContextLike {
+  val logger = LoggerFactory.getLogger(getClass)
   def sparkContext: SparkContext = spark.sparkContext
   def stop() {
+    spark.streams.active.foreach(f => {
+            logger.info("Killing stream " + f.name )
+            f.stop()
+          })
     spark.stop()
   }
 }
