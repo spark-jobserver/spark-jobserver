@@ -24,12 +24,12 @@ object CombinedDAOTestHelper {
   val defaultDate: DateTime = DateTime.now()
   val someBinaryName: String = "name-del-info-success"
   val someBinaryId = BinaryDAO.calculateBinaryHashString(Array(10, 11, 12))
-  val someBinaryInfo: BinaryInfo = BinaryInfo(someBinaryName, BinaryType.Jar, defaultDate, someBinaryId)
+  val someBinaryInfo: BinaryInfo = BinaryInfo(someBinaryName, BinaryType.Jar, defaultDate, Some(someBinaryId))
   val someOtherBinaryBytes: Array[Byte] = Array(7, 8, 9)
   val someOtherBinaryId: String = BinaryDAO.calculateBinaryHashString(someOtherBinaryBytes)
   val someOtherBinaryName: String = "other-name-del-info-success"
   val someOtherBinaryInfo: BinaryInfo = BinaryInfo(someOtherBinaryName, BinaryType.Jar, defaultDate,
-      someOtherBinaryId)
+      Some(someOtherBinaryId))
   var testProbe: TestProbe = TestProbe()
 }
 
@@ -282,7 +282,7 @@ class DummyMetaDataDAO(config: Config) extends MetaDataDAO {
       case message if message.contains("get-info-success") || message == "success" =>
         CombinedDAOTestHelper.testProbe.ref ! "MetaDataDAO: getBinary success"
         Future.successful(Some(
-          BinaryInfo("success", BinaryType.Jar, DateTime.now(), CombinedDAOTestHelper.binaryDAOSuccessId))
+          BinaryInfo("success", BinaryType.Jar, DateTime.now(), Some(CombinedDAOTestHelper.binaryDAOSuccessId)))
         )
       case _ =>
         CombinedDAOTestHelper.testProbe.ref ! "MetaDataDAO: getBinary failed"
@@ -295,9 +295,9 @@ class DummyMetaDataDAO(config: Config) extends MetaDataDAO {
       Seq(
         CombinedDAOTestHelper.someBinaryInfo,
         CombinedDAOTestHelper.someOtherBinaryInfo,
-        BinaryInfo("name3", BinaryType.Jar, CombinedDAOTestHelper.defaultDate, "1"),
-        BinaryInfo("name4", BinaryType.Jar, CombinedDAOTestHelper.defaultDate, "1"),
-        BinaryInfo("name5", BinaryType.Jar, CombinedDAOTestHelper.defaultDate, "1")
+        BinaryInfo("name3", BinaryType.Jar, CombinedDAOTestHelper.defaultDate),
+        BinaryInfo("name4", BinaryType.Jar, CombinedDAOTestHelper.defaultDate),
+        BinaryInfo("name5", BinaryType.Jar, CombinedDAOTestHelper.defaultDate)
       )
     )
   }
@@ -309,7 +309,7 @@ class DummyMetaDataDAO(config: Config) extends MetaDataDAO {
         Future.successful(Seq(
           CombinedDAOTestHelper.someBinaryInfo,
           BinaryInfo("someName", BinaryType.Jar, CombinedDAOTestHelper.defaultDate,
-              CombinedDAOTestHelper.someBinaryId))
+              Some(CombinedDAOTestHelper.someBinaryId)))
         )
       case CombinedDAOTestHelper.someOtherBinaryId =>
         CombinedDAOTestHelper.testProbe.ref ! "MetaDataDAO: getBinariesByStorageId success"
@@ -320,7 +320,7 @@ class DummyMetaDataDAO(config: Config) extends MetaDataDAO {
       case message if message.contains("get-info-success") || message == "success" =>
         CombinedDAOTestHelper.testProbe.ref ! "MetaDataDAO: getBinariesByStorageId success yes"
         Future.successful(Seq(
-          BinaryInfo("success", BinaryType.Jar, DateTime.now(), CombinedDAOTestHelper.binaryDAOSuccessId))
+          BinaryInfo("success", BinaryType.Jar, DateTime.now(), Some(CombinedDAOTestHelper.binaryDAOSuccessId)))
         )
       case _ =>
         CombinedDAOTestHelper.testProbe.ref ! "MetaDataDAO: getBinariesByStorageId success"
