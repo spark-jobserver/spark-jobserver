@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Script for setting up folders for job server deployment
 ENV=$1
 if [ -z "$ENV" ]; then

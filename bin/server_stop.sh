@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Script to stop the job server
 
 get_abs_script_path() {

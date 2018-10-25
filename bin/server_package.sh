@@ -1,5 +1,7 @@
-#!/bin/bash -ue
+#!/usr/bin/env bash
 # Script for packaging all the job server files to .tar.gz for Mesos or other single-image deploys
+set -u
+set -e
 WORK_DIR=/tmp/job-server
 
 if [ "$#" -ne 1 ]; then
