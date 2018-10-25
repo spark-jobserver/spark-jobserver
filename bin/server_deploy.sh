@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Script for deploying the job server to a host
 ENV=$1
 if [ -z "$ENV" ]; then

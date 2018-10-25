@@ -167,7 +167,7 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
         "spark.master" -> "local[1]",
         "spark.submit.deployMode" -> "client",
         "spark.jobserver.context-per-jvm " -> false,
-        "spark.jobserver.sqldao.jdbc.url" -> "jdbc:h2:mem"))
+        "spark.jobserver.sqldao.jdbc.url" -> "jdbc:h2:/tmp/spark-jobserver/mem"))
 
       JobServer.start(Seq(configFileName).toArray, makeSupervisorSystem(_))
 
@@ -183,7 +183,7 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
         "spark.master" -> "local[1]",
         "spark.submit.deployMode" -> "client",
         "spark.jobserver.context-per-jvm " -> true,
-        "spark.jobserver.sqldao.jdbc.url" -> "jdbc:h2:file"))
+        "spark.jobserver.sqldao.jdbc.url" -> "jdbc:h2:/tmp/spark-jobserver/file"))
 
       JobServer.start(Seq(configFileName).toArray, makeSupervisorSystem(_))
 
