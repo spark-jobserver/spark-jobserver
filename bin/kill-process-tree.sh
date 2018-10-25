@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 if [ "$(which pgrep)" == "" ]; then
     echo "pgrep is not available" >&2

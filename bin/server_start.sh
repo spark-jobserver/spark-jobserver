@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Script to start the job server
 # Extra arguments will be spark-submit options, for example
 #  ./server_start.sh --jars cassandra-spark-connector.jar
