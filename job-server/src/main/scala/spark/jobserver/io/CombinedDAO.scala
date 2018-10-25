@@ -123,19 +123,24 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher {
     val binaryMeta = metaDataDAO.getBinary(name)
     binaryMeta onComplete {
       case Success(Some(binaryInfo)) =>
-        metaDataDAO.deleteBinary(name) onComplete {
-          case Success(true) =>
-            metaDataDAO.getBinariesByStorageId(binaryInfo.binaryStorageId).map(
-              binaryInfos => binaryInfos.exists(_.appName != binaryInfo.appName)
-            ) onComplete {
-              case Success(false) =>
-                  binaryDAO.delete(binaryInfo.binaryStorageId) onFailure {
-                  case _ => logger.error(s"Failed to delete binary file for $name, leaving an artifact")
+        binaryInfo.binaryStorageId match {
+          case Some(hash) => {
+            metaDataDAO.deleteBinary(name) onComplete {
+              case Success(true) =>
+                metaDataDAO.getBinariesByStorageId(hash).map(
+                  binaryInfos => binaryInfos.exists(_.appName != binaryInfo.appName)
+                ) onComplete {
+                  case Success(false) =>
+                      binaryDAO.delete(hash) onFailure {
+                      case _ => logger.error(s"Failed to delete binary file for $name, leaving an artifact")
+                    }
+                  case _ =>
+                    logger.error(s"$name binary is used by other applications, not deleting it from storage")
                 }
-              case _ =>
-                logger.error(s"$name binary is used by other applications, not deleting it from storage")
+              case _ => logger.error(s"Failed to delete binary meta for $name, not proceeding with file")
             }
-          case _ => logger.error(s"Failed to delete binary meta for $name, not proceeding with file")
+          }
+          case _ => logger.error(s"Failed to delete binary meta for $name, hash is not found")
         }
       case _ => logger.error(s"Caught unexpected error try to get $name binary")
     }
@@ -145,11 +150,17 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher {
     Await.result(metaDataDAO.getBinary(name), defaultAwaitTime) match {
       case Some(binaryInfo) =>
         val binFile = new File(rootDir, createBinaryName(name, binaryType, uploadTime))
-        if (!binFile.exists()) {
-              val binBytes = Await.result(binaryDAO.get(binaryInfo.binaryStorageId), defaultAwaitTime)
-              cacheBinary(name, binaryType, uploadTime, binBytes.getOrElse(return ""))
-          }
-        binFile.getAbsolutePath
+        binaryInfo.binaryStorageId match {
+          case Some(hash) =>
+            if (!binFile.exists()) {
+                  val binBytes = Await.result(binaryDAO.get(binaryInfo.binaryStorageId.get), defaultAwaitTime)
+                  cacheBinary(name, binaryType, uploadTime, binBytes.getOrElse(return ""))
+              }
+            binFile.getAbsolutePath
+          case _ =>
+            logger.error(s"Failed to get binary file path for $name, hash is not found")
+            ""
+        }
       case _ => ""
     }
   }

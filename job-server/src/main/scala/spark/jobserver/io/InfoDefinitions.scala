@@ -91,7 +91,7 @@ case class ContextInfoModifiable(actorAddress: Option[String],
 case class BinaryInfo(appName: String,
                       binaryType: BinaryType,
                       uploadTime: DateTime,
-                      binaryStorageId: String = "")
+                      binaryStorageId: Option[String] = None)
 
 object JobStatus {
   val Running = "RUNNING"
