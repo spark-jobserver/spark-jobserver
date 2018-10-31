@@ -648,7 +648,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       daoProbe.expectMsgClass(classOf[JobDAOActor.GetJobInfosByContextId])
       // Not replying to GetJobInfosByContextId will result in a timeout
       // and failure will occur
-      val msg = daoProbe.expectMsgClass(classOf[JobDAOActor.UpdateContextById])
+      val msg = daoProbe.expectMsgClass(4.seconds, classOf[JobDAOActor.UpdateContextById])
       msg.attributes.state should be(ContextStatus.Error)
       msg.attributes.error.get.getMessage should be(s"Failed to fetch jobs for context $contextId")
       daoProbe.reply(JobDAOActor.SavedSuccessfully)
