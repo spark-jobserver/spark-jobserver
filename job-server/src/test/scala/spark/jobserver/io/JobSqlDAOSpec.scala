@@ -248,6 +248,70 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
     }
   }
 
+  describe("Migration Tests") {
+    it("should return empty array if hash doesn't matches") {
+      Await.result(dao.getBinaryBytes(""), timeout) should be(Array())
+      Await.result(dao.getBinaryBytes("a"), timeout) should be(Array())
+    }
+
+    it("should return all hashes") {
+      // Cleanup
+      val apps = Await.result(dao.getApps, timeout)
+      apps.map(a => dao.deleteBinary(a._1))
+
+      Await.result(dao.getAllHashes(), timeout) should be(Seq())
+
+      dao.saveBinary(jarInfo.appName, BinaryType.Jar, jarInfo.uploadTime, jarBytes)
+      dao.saveBinary("test", BinaryType.Jar, DateTime.now(), Array(1, 2))
+
+      val hashes = Await.result(dao.getAllHashes(), timeout)
+      hashes(0) should be(BinaryDAO.calculateBinaryHashString(jarBytes))
+      hashes(1) should be(BinaryDAO.calculateBinaryHashString(Array(1, 2)))
+    }
+
+    it("should return valid binary if it matches") {
+      dao.saveBinary(jarInfo.appName, BinaryType.Jar, jarInfo.uploadTime, jarBytes)
+
+      val fetchedBytes = Await.result(
+        dao.getBinaryBytes(BinaryDAO.calculateBinaryHashString(jarBytes)), timeout)
+
+      fetchedBytes should be(jarBytes)
+    }
+
+    it("should return hash for app if the same hash is not used in any other app") {
+      Await.result(dao.getHashForApp("dummy"), timeout) should be(Seq())
+      Await.result(dao.getHashForApp("dummy1"), timeout) should be(Seq())
+
+      dao.saveBinary("dummy", BinaryType.Jar, jarInfo.uploadTime, Array(3, 4))
+      dao.saveBinary("dummy1", BinaryType.Jar, DateTime.now(), Array(5, 6))
+
+      Await.result(dao.getHashForApp("dummy"), timeout) should
+        be(Seq(BinaryDAO.calculateBinaryHashString(Array(3, 4))))
+
+      Await.result(dao.getHashForApp("dummy1"), timeout) should
+        be(Seq(BinaryDAO.calculateBinaryHashString(Array(5, 6))))
+    }
+
+    it("should not return any hash if multiple binaries have the same hash") {
+      dao.saveBinary("same", BinaryType.Jar, jarInfo.uploadTime, Array[Byte](7, 8))
+      dao.saveBinary("same1", BinaryType.Jar, DateTime.now(), Array[Byte](7, 8))
+      dao.saveBinary("same2", BinaryType.Jar, DateTime.now(), Array[Byte](7, 8))
+
+      Await.result(dao.getHashForApp("same"), timeout) should be(Seq())
+    }
+
+    it("should return hash if no other app has the same hash") {
+      val binary = Array[Byte](9, 10)
+      dao.saveBinary("only-one", BinaryType.Jar, jarInfo.uploadTime, binary)
+      Await.result(dao.getHashForApp("only-one"), timeout) should be(
+        Seq(BinaryDAO.calculateBinaryHashString(binary)))
+    }
+
+    it("should return empty sequence if no app name matches") {
+      Await.result(dao.getHashForApp("doesnt-exist"), timeout) should be(Seq())
+    }
+  }
+
 }
 
 class JobSqlDAODBCPSpec extends JobSqlDAOSpec {

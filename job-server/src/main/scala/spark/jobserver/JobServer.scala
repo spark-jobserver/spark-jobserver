@@ -118,11 +118,13 @@ object JobServer {
     val dataFileDAO = new DataFileDAO(config)
     val dataManager = system.actorOf(Props(classOf[DataManagerActor], dataFileDAO), "data-manager")
     val binManager = system.actorOf(Props(classOf[BinaryManager], daoActor), "binary-manager")
+    val migrationActorRef = system.actorOf(MigrationActor.props(config, daoActor), "migration-actor")
 
     // Add initial job JARs, if specified in configuration.
     storeInitialBinaries(config, binManager)
 
-    val webApiPF = new WebApi(system, config, port, binManager, dataManager, _: ActorRef, _: ActorRef)
+    val webApiPF = new WebApi(system, config, port, binManager, dataManager,
+      migrationActorRef, _: ActorRef, _: ActorRef)
     contextPerJvm match {
       case false =>
         val supervisor = system.actorOf(Props(classOf[LocalContextSupervisorActor],

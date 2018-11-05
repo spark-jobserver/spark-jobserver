@@ -3,6 +3,7 @@ package spark.jobserver.io
 import akka.actor.{ActorRef, Props}
 import com.typesafe.config.Config
 import org.joda.time.DateTime
+import spark.jobserver.MigrationActor
 
 import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
@@ -133,6 +134,39 @@ class JobDAOActor(dao: JobDAO) extends InstrumentedActor {
         case Failure(t) =>
           logger.error(s"Failed to get context $contextId by Id", t)
           recipient ! SaveFailed(t)
+      }
+
+    case MigrationActor.GetAllHashes =>
+      val recipient = sender()
+      dao.getAllHashes().onComplete {
+        case Success(hashes) =>
+          logger.info(s"Successfully fetched all hashes. Total ${hashes.length}")
+          recipient ! MigrationActor.GetAllHashesSucceeded(hashes)
+        case Failure(t) =>
+          logger.error("Failed to fetch hashes from DAO", t)
+          recipient ! MigrationActor.GetAllHashesFailed
+      }
+
+    case MigrationActor.GetBinary(hash) =>
+      val recipient = sender()
+      dao.getBinaryBytes(hash).onComplete {
+        case Success(bytes) =>
+          logger.info(s"Successfully fetched bytes for ${hash}")
+          recipient ! MigrationActor.GetBinarySucceeded(bytes)
+        case Failure(t) =>
+          logger.error("Failed to fetch bytes", t)
+          recipient ! MigrationActor.GetBinaryFailed
+      }
+
+    case MigrationActor.GetHashForApp(appName) =>
+      val recipient = sender()
+      dao.getHashForApp(appName).onComplete {
+        case Success(hashes) =>
+          logger.info(s"Successfully fetched all hashes for app $appName, total hashes ${hashes.length}")
+          recipient ! MigrationActor.GetHashForAppSucceeded(hashes)
+        case Failure(t) =>
+          logger.error(s"Failed to fetch hashes for app $appName", t)
+          recipient ! MigrationActor.GetHashForAppFailed
       }
   }
 
