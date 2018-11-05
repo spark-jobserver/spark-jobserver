@@ -155,4 +155,22 @@ trait JobDAO {
    * @return Some(lastUploadedTime) if the app exists and the list of times is nonempty, None otherwise
    */
   def getLastUploadTimeAndType(appName: String): Option[(DateTime, BinaryType)]
+
+  def getAllHashes(): Future[Seq[String]] = {
+    Future {
+      Seq() // Dummy value to avoid implementation in others
+    }
+  }
+
+  def getBinaryBytes(hash: String): Future[Array[Byte]] = {
+    Future {
+      Array.emptyByteArray // Dummy value to avoid implementation in others
+    }
+  }
+
+  def getHashForApp(name: String): Future[Seq[String]] = {
+    Future {
+      Seq ()
+    }
+  }
 }

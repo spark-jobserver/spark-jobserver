@@ -55,7 +55,7 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
   val jobDaoActor = system.actorOf(JobDAOActor.props(new InMemoryDAO))
   val statusActor = system.actorOf(JobStatusActor.props(jobDaoActor))
 
-  val api = new WebApi(system, config, dummyPort, dummyActor, dummyActor, dummyActor, dummyActor)
+  val api = new WebApi(system, config, dummyPort, dummyActor, dummyActor, dummyActor, dummyActor, dummyActor)
   val routes = api.myRoutes
 
   val dt = DateTime.parse("2013-05-29T00Z")
@@ -227,6 +227,7 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
       // Adding extra cases to test both
       case GetSparkContexData("contextWithInfo") => sender ! SparkContexData(contextInfo, Some("local-1337"), Some("http://spark:4040"))
       case GetSparkContexData("finishedContextWithInfo") => sender ! SparkContexData(finishedContextInfo, None, None)
+      case MigrationActor.DeleteBinaryFromHDFS(_) => sender ! "Proceed"
     }
   }
 
