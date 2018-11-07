@@ -12,7 +12,7 @@ import scala.concurrent.duration.FiniteDuration
 import spark.jobserver.common.akka.actor.Reaper.WatchMe
 import spark.jobserver.common.akka.actor.ProductionReaper
 import spark.jobserver.io.{JobDAO, JobDAOActor}
-import spark.jobserver.util.{HadoopFSFacade, NetworkAddressFactory}
+import spark.jobserver.util.{HadoopFSFacade, NetworkAddressFactory, Utils}
 
 /**
  * The JobManager is the main entry point for the forked JVM process running an individual
@@ -92,7 +92,7 @@ object JobManager {
   private def getConfFromFS(path: String): Option[Config] = {
     new HadoopFSFacade().get(path) match {
       case Some(stream) =>
-        Try(ConfigFactory.parseReader(stream)) match {
+          Try(Utils.usingResource(stream)(ConfigFactory.parseReader)) match {
           case Success(config) => Some(config)
           case Failure(t) =>
             logger.error(t.getMessage)
