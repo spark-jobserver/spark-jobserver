@@ -30,7 +30,7 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
   val jarBytes: Array[Byte] = Files.toByteArray(testJar)
   var jarFile: File = new File(
     config.getString("spark.jobserver.sqldao.rootdir"),
-    jarInfo.appName + "-" + jarInfo.uploadTime.toString("yyyyMMdd_hhmmss_SSS") + ".jar"
+    jarInfo.appName + "-" + jarInfo.uploadTime.toString("yyyyMMdd_HHmmss_SSS") + ".jar"
   )
 
   // jobInfo test data; order is important
