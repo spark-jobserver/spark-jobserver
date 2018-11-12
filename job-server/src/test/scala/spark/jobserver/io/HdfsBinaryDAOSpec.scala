@@ -2,7 +2,10 @@ package spark.jobserver.io
 
 import com.typesafe.config.{Config, ConfigFactory}
 import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
-import spark.jobserver.util.{HDFSClusterLike, HadoopFSFacade}
+import spark.jobserver.util.HadoopFSFacade
+import spark.jobserver.JobServer.InvalidConfiguration
+import spark.jobserver.util.HDFSClusterLike
+
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -26,6 +29,14 @@ class HdfsBinaryDAOSpec extends FunSpec with Matchers with BeforeAndAfterAll wit
   override def afterAll(): Unit = {
     new HadoopFSFacade().delete(testDir, recursive = true) // cleanup artifacts
     super.shutdownHDFS()
+  }
+
+  describe("check config validation in constructor") {
+    it("should throw InvalidConfiguration if hdfs dir is missing in config") {
+      assertThrows[InvalidConfiguration] {
+        new HdfsBinaryDAO(ConfigFactory.empty())
+      }
+    }
   }
 
   describe("write, get, delete binary data") {
