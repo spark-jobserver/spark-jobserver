@@ -3,6 +3,7 @@ package spark.jobserver.io
 import com.typesafe.config.Config
 import org.apache.commons.io.IOUtils.toByteArray
 import org.slf4j.LoggerFactory
+import spark.jobserver.JobServer.InvalidConfiguration
 import spark.jobserver.util.{HadoopFSFacade, Utils}
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -13,15 +14,17 @@ import scala.concurrent.Future
   * @param config config of jobserver
   */
 class HdfsBinaryDAO(config: Config) extends BinaryDAO {
+  if (!config.hasPath("spark.jobserver.combineddao.binarydao.dir")) {
+    throw new InvalidConfiguration(
+      "To use HdfsBinaryDAO please specify absolute HDFS path in configuration file"
+    )
+  }
+
   private val logger = LoggerFactory.getLogger(getClass)
 
   private val binaryBasePath =
     config.getString("spark.jobserver.combineddao.binarydao.dir").stripSuffix("/")
   private val hdfsFacade = new HadoopFSFacade()
-
-  override def validateConfig(config: Config): Boolean = {
-    config.hasPath("spark.jobserver.combineddao.binarydao.dir")
-  }
 
   override def save(id: String, binaryBytes: Array[Byte]): Future[Boolean] = {
     Future {

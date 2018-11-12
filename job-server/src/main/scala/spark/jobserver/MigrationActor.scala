@@ -66,7 +66,6 @@ class MigrationActor(config: Config,
                      autoStartSync: Boolean)
     extends InstrumentedActor with YammerMetrics {
   val hdfsDAO = new HdfsBinaryDAO(config)
-  hdfsDAO.validateConfig(config)
 
   val metadataStore = new MigrationMetaData(config.getString("spark.jobserver.sqldao.rootdir"))
 

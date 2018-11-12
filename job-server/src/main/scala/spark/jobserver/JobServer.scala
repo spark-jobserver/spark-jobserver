@@ -303,22 +303,6 @@ object JobServer {
     }
   }
 
-  // FIXME: this check has an error and is not used: variables to check in DAOs initialized before check
-  private def hasValidCombinedDaoConfig(config: Config): Boolean = {
-    def createClassInstance[T](classPath: String): T = {
-      Class.forName(config.getString(classPath))
-        .getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
-        .newInstance(config).asInstanceOf[T]
-    }
-    val binaryDaoPath = "spark.jobserver.combineddao.binarydao.class"
-    val metaDataDaoPath = "spark.jobserver.combineddao.metadatadao.class"
-
-    config.hasPath(binaryDaoPath) &&
-    config.hasPath(metaDataDaoPath) &&
-    createClassInstance[BinaryDAO](binaryDaoPath).validateConfig(config) &&
-    createClassInstance[MetaDataDAO](metaDataDaoPath).validateConfig(config)
-  }
-
   def main(args: Array[String]) {
     import scala.collection.JavaConverters._
     def makeSupervisorSystem(name: String)(config: Config): ActorSystem = {

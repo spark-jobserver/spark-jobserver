@@ -15,15 +15,6 @@ object MetaDataDAO {
   */
 trait MetaDataDAO {
   /**
-    * Validate class configuration (e.g. that paths to store the data are given)
-    * @param config jobserver config
-    * @return true if config has all needed configuration
-    */
-  def validateConfig(config: Config): Boolean = {
-    true
-  }
-
-  /**
     * Persist a context info.
     *
     * @param contextInfo

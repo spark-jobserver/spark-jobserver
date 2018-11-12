@@ -5,34 +5,45 @@ import java.io.File
 import com.typesafe.config.Config
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
+import spark.jobserver.JobServer.InvalidConfiguration
 
-import scala.concurrent.{Await, Future}
-import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.util.{Failure, Success}
+import scala.concurrent.duration._
+import scala.concurrent.{Await, Future}
+import scala.util.Success
 
 /**
   * @param config config of jobserver
-  * @param binaryDAO BinaryDAO object (can be configured through application config file instead)
-  * @param metaDataDAO MetaDataDAO object (can be configured through application config file instead)
   */
-class CombinedDAO(config: Config,
-                  binaryDAO: BinaryDAO,
-                  metaDataDAO: MetaDataDAO) extends JobDAO with FileCacher {
-
-  def this(config: Config) {
-    this(config,
-      Class.forName(config.getString("spark.jobserver.combineddao.binarydao.class"))
-        .getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
-        .newInstance(config).asInstanceOf[BinaryDAO],
-      Class.forName(
-        config.getString("spark.jobserver.combineddao.metadatadao.class"))
-        .getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
-        .newInstance(config).asInstanceOf[MetaDataDAO]
+class CombinedDAO(config: Config) extends JobDAO with FileCacher {
+  var binaryDAO: BinaryDAO = _
+  var metaDataDAO: MetaDataDAO = _
+  private val binaryDaoPath = "spark.jobserver.combineddao.binarydao.class"
+  private val metaDataDaoPath = "spark.jobserver.combineddao.metadatadao.class"
+  private val rootDirPath = "spark.jobserver.combineddao.rootdir"
+  if (!(config.hasPath(binaryDaoPath) && config.hasPath(metaDataDaoPath) && config.hasPath(rootDirPath))) {
+    throw new InvalidConfiguration(
+      "To use CombinedDAO root directory and BinaryDAO, MetaDataDAO classes should be specified"
     )
   }
 
-  val rootDir: String = config.getString("spark.jobserver.combineddao.rootdir")
+  try {
+    binaryDAO = Class.forName(config.getString(binaryDaoPath))
+      .getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
+      .newInstance(config).asInstanceOf[BinaryDAO]
+    metaDataDAO = Class.forName(
+      config.getString(metaDataDaoPath))
+      .getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
+      .newInstance(config).asInstanceOf[MetaDataDAO]
+  } catch {
+    case error: ClassNotFoundException =>
+      logger.error(error.getMessage)
+      throw new InvalidConfiguration(
+      "Couldn't create Binary and Metadata DAO instances: please check configuration"
+      )
+  }
+
+  val rootDir: String = config.getString(rootDirPath)
   val rootDirFile: File = new File(rootDir)
   private val defaultAwaitTime = 60 seconds
 
