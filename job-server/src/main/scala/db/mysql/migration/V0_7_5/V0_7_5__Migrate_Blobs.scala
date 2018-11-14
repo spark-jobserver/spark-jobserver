@@ -19,7 +19,7 @@ import slick.driver.MySQLDriver.api.actionBasedSQLInterpolation
 import slick.jdbc.GetResult
 import slick.jdbc.PositionedParameters
 import slick.jdbc.SetParameter
-import slick.profile.SqlAction
+import slick.sql.SqlAction
 import spark.jobserver.slick.unmanaged.UnmanagedDatabase
 
 class V0_7_5__Migrate_Blobs extends Migration {

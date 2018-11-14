@@ -17,13 +17,19 @@ object Dependencies {
   lazy val akkaDeps = Seq(
     // Akka is provided because Spark already includes it, and Spark's version is shaded so it's not safe
     // to use this one
+    "com.typesafe.akka" %% "akka-http" % akkaHttp,
+    "com.typesafe.akka" %% "akka-http-core" % akkaHttp,
+    "com.typesafe.akka" %% "akka-http-caching" % akkaHttp,
+    "com.typesafe.akka" %% "akka-http-spray-json" % akkaHttp,
+//    "com.typesafe" %% "ssl-config-akka" % "0.3.8",
+    "ch.megard" %% "akka-http-cors" % akkaHttpCORS,
     "com.typesafe.akka" %% "akka-slf4j" % akka,
     "com.typesafe.akka" %% "akka-cluster" % akka exclude("com.typesafe.akka", "akka-remote"),
-    "io.spray" %% "spray-json" % sprayJson,
-    "io.spray" %% "spray-can" % spray,
-    "io.spray" %% "spray-caching" % spray,
-    "io.spray" %% "spray-routing-shapeless23" % "1.3.4",
-    "io.spray" %% "spray-client" % spray,
+//    "io.spray" %% "spray-json" % sprayJson,
+//    "io.spray" %% "spray-can" % spray,
+//    "io.spray" %% "spray-caching" % spray,
+//    "io.spray" %% "spray-routing-shapeless23" % "1.3.4",
+//    "io.spray" %% "spray-client" % spray,
     yammerDeps
   )
 
@@ -61,7 +67,7 @@ object Dependencies {
 
 
   lazy val cassandraDeps = Seq(
-    "com.datastax.spark" %% "spark-cassandra-connector" % cassandraConnector
+    "com.datastax.spark" % "spark-cassandra-connector_2.11" % cassandraConnector
   )
 
   lazy val logbackDeps = Seq(
@@ -73,7 +79,7 @@ object Dependencies {
   lazy val coreTestDeps = Seq(
     scalaTestDep,
     "com.typesafe.akka" %% "akka-testkit" % akka % Test,
-    "io.spray" %% "spray-testkit" % spray % Test,
+    "com.typesafe.akka" %% "akka-http-testkit" % akkaHttp, 
     "org.cassandraunit" % "cassandra-unit" % cassandraUnit % Test
   )
 
@@ -87,6 +93,5 @@ object Dependencies {
   val repos = Seq(
     "Typesafe Repo" at "http://repo.typesafe.com/typesafe/releases/",
     "sonatype snapshots" at "https://oss.sonatype.org/content/repositories/snapshots/",
-    "spray repo" at "http://repo.spray.io"
   )
 }

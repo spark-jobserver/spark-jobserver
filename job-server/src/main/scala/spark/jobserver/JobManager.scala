@@ -1,18 +1,17 @@
 package spark.jobserver
 
-import java.io.{File, IOException}
-import java.nio.charset.Charset
-import java.nio.file.{Files, Paths}
+import java.io.File
+import java.nio.file.Files
 import java.util.concurrent.TimeUnit
 
-import akka.actor.{ActorSystem, Address, AddressFromURIString, Props}
+import akka.actor.{ActorSystem, AddressFromURIString, Props}
 import akka.cluster.Cluster
 import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import spark.jobserver.common.akka.actor.Reaper.WatchMe
-import org.slf4j.LoggerFactory
+import org.slf4j.{Logger, LoggerFactory}
 import spark.jobserver.common.akka.actor.ProductionReaper
 import spark.jobserver.io.{JobDAO, JobDAOActor}
-import scala.collection.JavaConverters._
+
 import scala.util.Try
 import scala.concurrent.duration.FiniteDuration
 
@@ -21,7 +20,7 @@ import scala.concurrent.duration.FiniteDuration
  * SparkContext.  It is passed $clusterAddr $actorName $systemConfigFile
  */
 object JobManager {
-  val logger = LoggerFactory.getLogger(getClass)
+  val logger: Logger = LoggerFactory.getLogger(getClass)
 
   // Allow custom function to create ActorSystem.  An example of why this is useful:
   // we can have something that stores the ActorSystem so it could be shut down easily later.
@@ -65,14 +64,15 @@ object JobManager {
     val clazz = Class.forName(config.getString("spark.jobserver.jobdao"))
     val ctor = clazz.getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
     val jobDAO = ctor.newInstance(config).asInstanceOf[JobDAO]
-    val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO), "dao-manager-jobmanager")
+    val daoActor = system.actorOf(JobDAOActor.props(jobDAO), "dao-manager-jobmanager")
 
     logger.info("Starting JobManager named " + managerName + " with config {}",
       config.getConfig("spark").root.render())
 
-    val masterAddress = systemConfig.getBoolean("spark.jobserver.kill-context-on-supervisor-down") match {
-      case true => clusterAddress.toString + "/user/context-supervisor"
-      case false => ""
+    val masterAddress = if (systemConfig.getBoolean("spark.jobserver.kill-context-on-supervisor-down")) {
+      clusterAddress.toString + "/user/context-supervisor"
+    } else {
+      ""
     }
 
     val contextId = managerName.replace(AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX, "")
@@ -105,7 +105,7 @@ object JobManager {
         // the driver process, that why we have to wait here.
         // Calling System.exit results in a failed YARN application result:
         // org.apache.spark.deploy.yarn.ApplicationMaster#runImpl() in Spark
-        system.awaitTermination
+        system.terminate().wait()
       } else {
         // Spark Standalone Cluster Mode:
         // We have to call System.exit(0) otherwise the driver process keeps running

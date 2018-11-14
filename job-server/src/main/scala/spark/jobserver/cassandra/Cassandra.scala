@@ -14,6 +14,17 @@ trait CassandraResultSetOperations {
   }
 
   protected class RichResultSetFuture(resultSetFuture: ResultSetFuture) extends Future[ResultSet] {
+
+
+
+    override def transform[S](f: Try[ResultSet] => Try[S])(
+      implicit executor: ExecutionContext
+    ): Future[S] = resultSetFuture.transform(f)
+
+    override def transformWith[S](f: Try[ResultSet] => Future[S])(
+      implicit executor: ExecutionContext
+    ): Future[S] = resultSetFuture.transformWith(f)
+
     @throws(classOf[InterruptedException])
     @throws(classOf[scala.concurrent.TimeoutException])
     def ready(atMost: Duration)(implicit permit: CanAwait): this.type = {

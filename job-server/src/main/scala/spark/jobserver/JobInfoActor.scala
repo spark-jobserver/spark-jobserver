@@ -64,9 +64,13 @@ class JobInfoActor(jobDao: JobDAO, contextSupervisor: ActorRef) extends Instrume
     case GetJobConfig(jobId) =>
       val originator = sender
 
-      (jobDao getJobConfig jobId) onSuccess {
-        case None => originator ! NoSuchJobId
-        case Some(config) => originator ! config
+      (jobDao getJobConfig jobId) onComplete  {
+        case scala.util.Success(value) =>
+          value match {
+            case None => originator ! NoSuchJobId
+            case Some(config) => originator ! config
+          }
+        case scala.util.Failure(_) =>
       }
 
     case StoreJobConfig(jobId, jobConfig) =>

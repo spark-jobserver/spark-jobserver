@@ -2,15 +2,13 @@ package spark.jobserver.io
 
 import java.io.{PrintWriter, StringWriter}
 
+import akka.http.javadsl.model.{MediaType, MediaTypes}
 import com.typesafe.config._
 import org.joda.time.{DateTime, Duration}
 import org.slf4j.LoggerFactory
-import spark.jobserver.JobManagerActor.JobKilledException
-import spray.http.{HttpHeaders, MediaType, MediaTypes}
 
-import scala.concurrent.duration._
-import scala.concurrent.{Await, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 
 trait BinaryType {
   def extension: String
@@ -22,15 +20,15 @@ object BinaryType {
   case object Jar extends BinaryType {
     val extension = "jar"
     val name = "Jar"
-    val mediaType: MediaType = MediaTypes.register(MediaType.custom("application/java-archive"))
-    val contentType = HttpHeaders.`Content-Type`(mediaType)
+    val mediaType: MediaType = MediaTypes.APPLICATION_JAVA_ARCHIVE
+    val contentType = MediaTypes.APPLICATION_JAVA_ARCHIVE.toContentType
   }
 
   case object Egg extends BinaryType {
     val extension = "egg"
     val name = "Egg"
-    val mediaType: MediaType = MediaTypes.register(MediaType.custom("application/python-archive"))
-    val contentType = HttpHeaders.`Content-Type`(mediaType)
+    val mediaType: MediaType = MediaTypes.applicationBinary("python-archive", false, "egg")
+    val contentType = MediaTypes.applicationBinary("python-archive", false, "egg").toContentType
   }
 
   def fromString(typeString: String): BinaryType = typeString match {
@@ -83,8 +81,8 @@ object JobStatus {
   val Started = "STARTED"
   val Killed = "KILLED"
   val Restarting = "RESTARTING"
-  def getFinalStates(): Seq[String] = Seq(Error, Finished, Killed)
-  def getNonFinalStates(): Seq[String] = Seq(Started, Running, Restarting)
+  def getFinalStates: Seq[String] = Seq(Error, Finished, Killed)
+  def getNonFinalStates: Seq[String] = Seq(Started, Running, Restarting)
 }
 
 object ContextStatus {
@@ -95,8 +93,8 @@ object ContextStatus {
   val Started = "STARTED"
   val Killed = "KILLED"
   val Restarting = "RESTARTING"
-  def getFinalStates(): Seq[String] = Seq(Error, Finished, Killed)
-  def getNonFinalStates(): Seq[String] = Seq(Started, Running, Stopping, Restarting)
+  def getFinalStates: Seq[String] = Seq(Error, Finished, Killed)
+  def getNonFinalStates: Seq[String] = Seq(Started, Running, Stopping, Restarting)
 }
 
 object JobDAO {

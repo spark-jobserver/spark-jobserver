@@ -38,7 +38,7 @@ class ReaperSpec extends TestKit(ActorSystem("ReaperSpec")) with ImplicitSender
       // Stop one of them
       system.stop(a.ref)
 
-      expectNoMsg(500 millis)
+      expectNoMessage(500 millis)
     }
 
     it("should detect that all actors can be reaped") {

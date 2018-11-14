@@ -11,7 +11,7 @@ import org.flywaydb.core.api.migration.jdbc.JdbcMigration
 import org.slf4j.Logger
 
 import slick.jdbc.GetResult
-import slick.profile.SqlAction
+import slick.sql.SqlAction
 import slick.dbio.DBIOAction
 import slick.dbio.Streaming
 import slick.dbio.Effect
@@ -23,7 +23,7 @@ trait Migration extends JdbcMigration {
   protected val timeout = 10 minutes
   protected val logger: Logger
 
-  protected def logErrors = PartialFunction[Throwable, Unit] {
+  protected def logErrors : PartialFunction[Throwable, Unit] = {
     case e: Throwable => logger.error(e.getMessage, e)
   }
 

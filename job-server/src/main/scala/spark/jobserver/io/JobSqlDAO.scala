@@ -17,10 +17,9 @@ import org.apache.commons.dbcp.BasicDataSource
 import org.flywaydb.core.Flyway
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
-import slick.driver.JdbcProfile
+import slick.jdbc.JdbcProfile
 import slick.lifted.ProvenShape.proveShapeOf
 import spark.jobserver.JobManagerActor.ContextTerminatedException
-import spray.http.ErrorInfo
 import spark.jobserver.util.NoSuchBinaryException
 
 /**
@@ -131,7 +130,7 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
       ds.setUrl(jdbcUrl)
       ds
     }
-    Database.forDataSource(dataSource)
+    Database.forDataSource(dataSource, maxConnections = Some(100))
   } else {
     logger.info("DBCP disabled")
     Database.forURL(jdbcUrl, driver = jdbcDriverClass, user = jdbcUser, password = jdbcPassword)
@@ -229,7 +228,7 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
     db.run(dbAction)
   }
 
-  private def logDeleteErrors = PartialFunction[Any, Int] {
+  private def logDeleteErrors: PartialFunction[Any, Int] = {
     case e: Throwable => logger.error(e.getMessage, e); 0
     case c: Int => c
   }

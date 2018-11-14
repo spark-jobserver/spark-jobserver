@@ -1,15 +1,14 @@
 package spark.jobserver.common.akka.web
 
-import spray.routing.HttpService
-import com.yammer.metrics.core._
+import akka.http.scaladsl.server.Directives.{complete, _}
 import com.yammer.metrics.Metrics
-
+import com.yammer.metrics.core._
 /**
- * Defines a couple common Spray routes for metrics, status, debugging
+ * Defines a couple common Akka Http routes for metrics, status, debugging
  * * /metricz - dumps out all application metrics
  * * /statusz - dumps out GIT status of the running code
  */
-trait CommonRoutes extends HttpService {
+trait CommonRoutes {
   val commonRoutes = {
     get {
       path("metricz") {

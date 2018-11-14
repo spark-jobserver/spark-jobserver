@@ -1,18 +1,18 @@
-package spark.jobserver
-
-import akka.actor.Props
-import spray.routing.{HttpService, RequestContext}
-
-trait ChunkEncodedStreamingSupport {
-  this: HttpService =>
-
-  protected def sendStreamingResponse(ctx: RequestContext,
-                                    chunkSize: Int,
-                                    byteIterator: Iterator[_]): Unit = {
-    actorRefFactory.actorOf {
-      Props {
-        new ChunkEncodingActor(ctx, chunkSize, byteIterator)
-      }
-    }
-  }
-}
+//package spark.jobserver
+//
+//import akka.actor.{ActorSystem, Props}
+//import akka.http.scaladsl.server.{RequestContext, Route}
+//
+//trait ChunkEncodedStreamingSupport {
+//  this: Route =>
+//
+//  protected def sendStreamingResponse(ctx: RequestContext,
+//                                    chunkSize: Int,
+//                                    byteIterator: Iterator[_])(implicit system: ActorSystem): Unit = {
+//    system.actorOf {
+//      Props {
+//        new ChunkEncodingActor(ctx, chunkSize, byteIterator)
+//      }
+//    }
+//  }
+//}

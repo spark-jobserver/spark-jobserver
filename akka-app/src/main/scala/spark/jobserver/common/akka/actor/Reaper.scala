@@ -41,7 +41,7 @@ abstract class Reaper extends InstrumentedActor {
 class ProductionReaper extends Reaper {
   def allSoulsReaped() {
     logger.warn("Shutting down actor system because all actors have terminated")
-    context.system.shutdown()
+    context.system.terminate()
   }
 }
 

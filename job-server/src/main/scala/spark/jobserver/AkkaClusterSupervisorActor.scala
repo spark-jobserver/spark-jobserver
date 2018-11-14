@@ -277,7 +277,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
       resp match {
         case Some(JobDAOActor.ContextResponse(Some(c))) =>
           logger.info("Shutting down context {}", name)
-          val state = if (ContextStatus.getFinalStates() contains c.state) c.state else ContextStatus.Stopping
+          val state = if (ContextStatus.getFinalStates contains c.state) c.state else ContextStatus.Stopping
           val contextInfo = ContextInfo(c.id, c.name, c.config, c.actorAddress, c.startTime,
             c.endTime, state, c.error)
           daoActor ! JobDAOActor.SaveContextInfo(contextInfo)
@@ -344,7 +344,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
     val resp = getDataFromDAO[JobDAOActor.ContextResponse](JobDAOActor.GetContextInfo(contextId))
     resp match {
       case Some(JobDAOActor.ContextResponse(Some(c))) =>
-        ContextStatus.getFinalStates().contains(c.state) match {
+        ContextStatus.getFinalStates contains c.state match {
           case true => logger.warn(
             s"Terminated received for context (${c.name}) which is already in final state ${c.state}")
           case false =>
@@ -360,7 +360,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
             }
         }
       case Some(JobDAOActor.ContextResponse(None)) =>
-        logger.error(s"No context (contextId: ${contextId}) for deletion is found in the DB")
+        logger.error(s"No context (contextId: $contextId) for deletion is found in the DB")
       case None =>
         logger.error(s"Error occurred after Terminated message was recieved for (contextId: ${contextId})")
     }
@@ -567,7 +567,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
     resp match {
       case None => (false, None)
       case Some(JobDAOActor.ContextResponse(Some(c)))
-        if ContextStatus.getNonFinalStates().contains(c.state) => (true, Some(c))
+        if ContextStatus.getNonFinalStates contains c.state => (true, Some(c))
       case Some(_) => (true, None)
     }
   }
@@ -590,11 +590,11 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
 
   private def cancelScheduledMessage(cancelHandler: Cancellable) {
     cancelHandler.cancel()
-    logger.info(s"Scheduled message has been cancelled: ${cancelHandler.isCancelled.toString()}")
+    logger.info(s"Scheduled message has been cancelled: ${ cancelHandler.isCancelled.toString}")
   }
 
   @VisibleForTesting
   protected def isContextInFinalState(contextInfo: ContextInfo): Boolean = {
-    ContextStatus.getFinalStates().contains(contextInfo.state)
+    ContextStatus.getFinalStates contains contextInfo.state
   }
 }

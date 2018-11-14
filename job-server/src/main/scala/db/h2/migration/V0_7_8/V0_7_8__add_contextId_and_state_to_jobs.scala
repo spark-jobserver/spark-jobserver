@@ -4,7 +4,7 @@ import org.slf4j.LoggerFactory
 import db.migration.V0_7_8.Migration
 
 import slick.driver.H2Driver.api.actionBasedSQLInterpolation
-import slick.profile.SqlAction
+import slick.sql.SqlAction
 import slick.dbio.Effect
 import slick.dbio.NoStream
 

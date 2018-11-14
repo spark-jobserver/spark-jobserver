@@ -1,6 +1,7 @@
 package spark.jobserver
 
 import com.typesafe.config.Config
+import org.apache.spark.sql.SparkSession
 import org.apache.spark._
 import org.apache.spark.ml.clustering.KMeans
 import org.apache.spark.ml.feature.{StandardScaler, VectorAssembler}
@@ -29,7 +30,8 @@ object KMeansExample extends SparkJob with NamedRddSupport {
 
   override def runJob(sc: SparkContext, config: Config): (Array[String], Array[String], Long) = {
     //load the hadoop configuration file, since the job server doesn't seem to do it
-    val sqlContext = new SQLContext(sc)
+
+    val sqlContext = SparkSession.builder().config(sc.getConf).getOrCreate()
 
     //try to load namedRDD
     val cacheReturnOption = namedRdds.get[Row]("kmeans")

@@ -24,7 +24,7 @@ class V0_7_3__Migrate_Blobs extends JdbcMigration {
 
   private case class BinArray(id: Int, binary: Array[Byte])
 
-  private def logErrors = PartialFunction[Throwable, Unit] {
+  private def logErrors : PartialFunction[Throwable, Unit] = {
     case e: Throwable => logger.error(e.getMessage, e)
   }
 

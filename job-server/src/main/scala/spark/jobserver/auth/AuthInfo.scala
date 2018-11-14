@@ -5,7 +5,7 @@ package spark.jobserver.auth
  * at
  * http://www.tecnoguru.com/blog/2014/07/07/implementing-http-basic-authentication-with-spray/
  */
-class AuthInfo(val user: User) {
+case class AuthInfo(user: User) {
   def hasPermission(permission: String): Boolean = {
     //no further checks, all authenticated users can perform all
     // all operations

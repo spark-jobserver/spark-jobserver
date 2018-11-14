@@ -4,9 +4,9 @@ import java.util.concurrent.TimeUnit
 
 import akka.testkit.TestKit
 import org.scalatest.{Matchers, FunSpec}
-import spray.testkit.ScalatestRouteTest
+import akka.http.scaladsl.testkit.ScalatestRouteTest
 
-import spray.http.StatusCodes._
+import akka.http.scaladsl.model.StatusCodes._
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Gauge
 import akka.actor.ActorSystem
@@ -14,26 +14,42 @@ import akka.actor.ActorSystem
 class CommonRoutesSpec extends FunSpec with Matchers with ScalatestRouteTest with CommonRoutes {
   def actorRefFactory: ActorSystem = system
 
-
   val metricCounter = Metrics.newCounter(getClass, "test-counter")
   val metricMeter = Metrics.newMeter(getClass, "test-meter", "requests", TimeUnit.SECONDS)
   val metricHistogram = Metrics.newHistogram(getClass, "test-hist")
   val metricTimer = Metrics.newTimer(getClass, "test-timer", TimeUnit.MILLISECONDS, TimeUnit.SECONDS)
+
   val metricGauge = Metrics.newGauge(getClass, "test-gauge", new Gauge[Int] {
     def value() = 10
   })
 
   val counterMap = Map("type" -> "counter", "count" -> 0)
-  val gaugeMap = Map("type" -> "gauge", "value" -> 10)
+  val gaugeMap = Map("type"   -> "gauge", "value"   -> 10)
 
-  val meterMap = Map("type" -> "meter", "units" -> "seconds", "count" -> 0, "mean" -> 0.0,
-    "m1" -> 0.0, "m5" -> 0.0, "m15" -> 0.0)
-  val histMap = Map("type" -> "histogram", "median" -> 0.0, "p75" -> 0.0, "p95" -> 0.0,
-    "p98" -> 0.0, "p99" -> 0.0, "p999" -> 0.0)
-  val timerMap = Map("type" -> "timer", "rate" -> (meterMap - "type"),
+  val meterMap = Map(
+    "type" -> "meter",
+    "units"      -> "seconds",
+    "count"              -> 0,
+    "mean" -> 0.0,
+    "m1" -> 0.0,
+    "m5" -> 0.0,
+    "m15" -> 0.0
+  )
+  val histMap = Map(
+    "type"  -> "histogram",
+    "median" -> 0.0,
+    "p75"                      -> 0.0,
+    "p95" -> 0.0,
+    "p98" -> 0.0,
+    "p99" -> 0.0,
+    "p999" -> 0.0
+  )
+  val timerMap = Map(
+    "type" -> "timer",
+    "rate"       -> (meterMap - "type"),
     "duration" -> (histMap ++ Map("units" -> "milliseconds") - "type"))
 
-  override def afterAll():Unit = {
+  override def afterAll(): Unit = {
     TestKit.shutdownActorSystem(system)
   }
 
@@ -45,13 +61,13 @@ class CommonRoutesSpec extends FunSpec with Matchers with ScalatestRouteTest wit
         val metricsMap = JsonUtils.mapFromJson(responseAs[String])
         val classMetrics = metricsMap(getClass.getName).asInstanceOf[Map[String, Any]]
 
-        classMetrics.keys.toSet should equal (
+        classMetrics.keys.toSet should equal(
           Set("test-counter", "test-meter", "test-hist", "test-timer", "test-gauge")
         )
-        classMetrics("test-counter") should equal (counterMap)
-        classMetrics("test-meter") should equal (meterMap)
-        classMetrics("test-hist") should equal (histMap)
-        classMetrics("test-timer") should equal (timerMap)
+        classMetrics("test-counter") should equal(counterMap)
+        classMetrics("test-meter") should equal(meterMap)
+        classMetrics("test-hist") should equal(histMap)
+        classMetrics("test-timer") should equal(timerMap)
       }
     }
   }
@@ -60,7 +76,7 @@ class CommonRoutesSpec extends FunSpec with Matchers with ScalatestRouteTest wit
     it("should serialize all metrics") {
       val flattenedMap = MetricsSerializer.asFlatMap()
 
-      List("test-meter", "test-counter", "test-timer", "test-gauge", "test-hist") foreach { metricName =>
+      List("test-meter", "test-counter", "test-timer", "test-gauge", "test-hist").foreach { metricName =>
         flattenedMap.keys should contain("spark.jobserver.common.akka.web.CommonRoutesSpec." + metricName)
       }
 

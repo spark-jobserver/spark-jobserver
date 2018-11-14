@@ -203,7 +203,7 @@ object JobServer {
         state = ContextStatus.Error, error = Some(ContextReconnectFailedException()))
     jobDaoActor ! JobDAOActor.SaveContextInfo(updatedContextInfo)
     (jobDaoActor ? JobDAOActor.GetJobInfosByContextId(
-        contextInfo.id, Some(JobStatus.getNonFinalStates())))(finiteDuration).onComplete {
+        contextInfo.id, Some(JobStatus.getNonFinalStates)))(finiteDuration).onComplete {
       case Success(JobDAOActor.JobInfos(jobInfos)) =>
         jobInfos.foreach(jobInfo => {
         jobDaoActor ! JobDAOActor.SaveJobInfo(jobInfo.copy(state = JobStatus.Error,

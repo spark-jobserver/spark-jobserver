@@ -20,13 +20,13 @@ lazy val jobServer = Project(id = "job-server", base = file("job-server"))
     libraryDependencies ++= sparkDeps ++ slickDeps ++ cassandraDeps ++ securityDeps ++ coreTestDeps,
     test in Test := (test in Test).dependsOn(packageBin in Compile in jobServerTestJar)
       .dependsOn(clean in Compile in jobServerTestJar)
-      .dependsOn(buildPython in jobServerPython)
-      .dependsOn(clean in Compile in jobServerPython)
+//      .dependsOn(buildPython in jobServerPython)
+//      .dependsOn(clean in Compile in jobServerPython)
       .value,
     testOnly in Test := (testOnly in Test).dependsOn(packageBin in Compile in jobServerTestJar)
       .dependsOn(clean in Compile in jobServerTestJar)
-      .dependsOn(buildPython in jobServerPython)
-      .dependsOn(clean in Compile in jobServerPython)
+//      .dependsOn(buildPython in jobServerPython)
+//      .dependsOn(clean in Compile in jobServerPython)
       .inputTaskValue,
     console in Compile := Defaults.consoleTask(fullClasspath in Compile, console in Compile).value,
     fullClasspath in Compile := (fullClasspath in Compile).map { classpath =>
@@ -59,26 +59,26 @@ lazy val jobServerExtras = Project(id = "job-server-extras", base = file("job-se
     test in Test := (test in Test)
       .dependsOn(packageBin in Compile in jobServerTestJar)
       .dependsOn(clean in Compile in jobServerTestJar)
-      .dependsOn(buildPython in jobServerPython)
-      .dependsOn(buildPyExamples in jobServerPython)
-      .dependsOn(clean in Compile in jobServerPython)
+//      .dependsOn(buildPython in jobServerPython)
+//      .dependsOn(buildPyExamples in jobServerPython)
+//      .dependsOn(clean in Compile in jobServerPython)
       .value,
     testOnly in Test := (testOnly in Test)
       .dependsOn(packageBin in Compile in jobServerTestJar)
       .dependsOn(clean in Compile in jobServerTestJar)
-      .dependsOn(buildPython in jobServerPython)
-      .dependsOn(buildPyExamples in jobServerPython)
-      .dependsOn(clean in Compile in jobServerPython)
+//      .dependsOn(buildPython in jobServerPython)
+//      .dependsOn(buildPyExamples in jobServerPython)
+//      .dependsOn(clean in Compile in jobServerPython)
       .inputTaskValue
   )
   .dependsOn(jobServerApi, jobServer % "compile->compile; test->test")
   .disablePlugins(SbtScalariform)
 
-lazy val jobServerPython = Project(id = "job-server-python", base = file("job-server-python"))
-  .settings(commonSettings)
-  .settings(jobServerPythonSettings)
-  .dependsOn(jobServerApi, akkaApp % "test")
-  .disablePlugins(SbtScalariform)
+//lazy val jobServerPython = Project(id = "job-server-python", base = file("job-server-python"))
+//  .settings(commonSettings)
+//  .settings(jobServerPythonSettings)
+//  .dependsOn(jobServerApi, akkaApp % "test")
+//  .disablePlugins(SbtScalariform)
 
 lazy val root = Project(id = "root", base = file("."))
   .settings(commonSettings)
@@ -86,7 +86,7 @@ lazy val root = Project(id = "root", base = file("."))
   .settings(noPublishSettings)
   .settings(rootSettings)
   .settings(dockerSettings)
-  .aggregate(jobServer, jobServerApi, jobServerTestJar, akkaApp, jobServerExtras, jobServerPython)
+  .aggregate(jobServer, jobServerApi, jobServerTestJar, akkaApp, jobServerExtras/*, jobServerPython*/)
   .dependsOn(jobServer, jobServerExtras)
   .disablePlugins(SbtScalariform).enablePlugins(DockerPlugin)
 
@@ -246,13 +246,13 @@ lazy val runScalaStyle = taskKey[Unit]("testScalaStyle")
 lazy val commonSettings = Defaults.coreDefaultSettings ++ dirSettings ++ Seq(
   organization := "spark.jobserver",
   crossPaths   := true,
-  scalaVersion := sys.env.getOrElse("SCALA_VERSION", "2.11.8"),
+  scalaVersion := sys.env.getOrElse("SCALA_VERSION", "2.12.7"),
   dependencyOverrides += "org.scala-lang" % "scala-compiler" % scalaVersion.value,
-  // scalastyleFailOnError := true,
+//   scalastyleFailOnError := false,
   runScalaStyle := {
     scalastyle.in(Compile).toTask("").value
   },
-  (compile in Compile) := (compile in Compile).dependsOn(runScalaStyle).value,
+//  (compile in Compile) := (compile in Compile).dependsOn(runScalaStyle).value,
 
   // In Scala 2.10, certain language features are disabled by default, such as implicit conversions.
   // Need to pass in language options or import scala.language.* to enable them.

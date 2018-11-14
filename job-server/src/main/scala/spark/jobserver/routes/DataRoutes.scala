@@ -1,23 +1,36 @@
 package spark.jobserver.routes
 
+import akka.http.scaladsl.server.directives.ParameterDirectives.ParamMagnet
+import akka.http.scaladsl.model._
+//import akka.http.scaladsl.server.directives.BasicDirectives._
+//import akka.http.scaladsl.server.directives.ParameterDirectives._
+//import akka.http.scaladsl.server.directives.RouteDirectives._
+//import akka.http.scaladsl.server.directives.PathDirectives._
+//import akka.http.scaladsl.server.directives.MethodDirectives._
+//import akka.http.scaladsl.server.directives.FutureDirectives._
+//import akka.http.scaladsl.server.directives.MarshallingDirectives._
+import akka.http.scaladsl.marshalling.{Marshaller, ToEntityMarshaller, ToResponseMarshallable}
+import akka.http.scaladsl.marshalling.ToResponseMarshallable._
 import akka.actor.ActorRef
 import akka.pattern.ask
 import akka.util.Timeout
 import spark.jobserver.DataManagerActor._
-import spray.routing.{HttpService, Route}
-import spray.http.MediaTypes
-import spray.http.StatusCodes
 import java.net.URLDecoder
 import java.util.concurrent.TimeUnit
 
+import akka.http.scaladsl.model.Uri.Path.Segment
+import akka.http.scaladsl.server.Route
 import org.slf4j.LoggerFactory
 import spark.jobserver.ContextSupervisor.StopContext
 import spark.jobserver.common.akka.web.JsonUtils.getClass
-import spray.httpx.SprayJsonSupport.sprayJsonMarshaller
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport.sprayJsonMarshaller
+import akka.http.scaladsl.model.StatusCodes
 import spray.json.DefaultJsonProtocol._
 
 import scala.concurrent.{Await, ExecutionContext, Future}
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
+
+import akka.http.scaladsl.server.Directives._
 
 /**
  * Routes for listing, deletion of and storing data files
@@ -27,81 +40,77 @@ import scala.util.Try
  *                                      a time stamp is appended to ensure uniqueness
  * @author TimMaltGermany
  */
-trait DataRoutes extends HttpService {
+trait DataRoutes {
   import scala.concurrent.duration._
   import spark.jobserver.WebApi._
+
+  implicit val mapMarshaller: ToEntityMarshaller[Map[String, Any]] = Marshaller.opaque { map =>
+    HttpEntity(ContentType(MediaTypes.`application/json`), map.toString)
+  }
 
   def dataRoutes(dataManager: ActorRef)(implicit ec: ExecutionContext, ShortTimeout: Timeout): Route = {
     // Get spray-json type classes for serializing Map[String, Any]
     import spark.jobserver.common.akka.web.JsonUtils._
 
     // GET /data route returns a JSON map of the stored files and their upload time
-    get { ctx =>
-      val future = (dataManager ? ListData).mapTo[collection.Set[String]]
-      future.map { names =>
-        ctx.complete(names)
-      }.recover {
-        case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+    get {
+      onComplete((dataManager ? ListData).mapTo[collection.Set[String]]){
+        case Success(names) => complete(names)
+        case Failure(ex) => complete(StatusCodes.InternalServerError, errMap(ex, "ERROR"))
       }
     } ~
       // DELETE /data/filename delete the given file
       delete {
-        path(Segment) { filename =>
-          val future = dataManager ? DeleteData(filename)
-          respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-            future.map {
-              case Deleted => ctx.complete(StatusCodes.OK)
-              case Error =>
-                badRequest(ctx, "Unable to delete data file '" + filename + "'.")
-            }.recover {
-              case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
-            }
+        extractUnmatchedPath { filename =>
+        onComplete(dataManager ? DeleteData(filename.toString())){
+          case Success(value) => value match {
+            case Deleted => complete(StatusCodes.OK)
+            case Error => complete(StatusCodes.BadRequest, errMap(s"Unable to delete data file `$filename`."))
           }
+          case Failure(ex) => complete(StatusCodes.InternalServerError, errMap(ex, "ERROR"))
+        }
         }
       } ~
       put {
         parameters("reset", 'sync.as[Boolean] ?) { (reset, sync) =>
-          respondWithMediaType(MediaTypes.`application/json`) { ctx =>
             reset match {
-              case "reboot" => {
+              case "reboot" =>
                 if (sync.isDefined && !sync.get) {
                   dataManager ! DeleteAllData
-                  ctx.complete(StatusCodes.OK, successMap("Data reset requested"))
+                  complete(StatusCodes.OK, successMap("Data reset requested"))
                 }
                 else {
-                  val future = dataManager ? DeleteAllData
-                  future.map {
-                    case Deleted => ctx.complete(StatusCodes.OK, successMap("Data reset"))
-                    case Error => badRequest(ctx, "Unable to delete data folder")
-                  }.recover {
-                    case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+                  onComplete(dataManager ? DeleteAllData) {
+                    case Success(value) => value match {
+                      case Deleted => complete(StatusCodes.OK, successMap("Data reset"))
+
+                      case Error => complete(StatusCodes.BadRequest, errMap("Unable to delete data folder"))
+                    }
+                    case Failure(ex) => complete(StatusCodes.InternalServerError, errMap(ex, "ERROR"))
                   }
                 }
-              }
-              case _ => ctx.complete("ERROR")
+              case _ => complete("ERROR")
             }
           }
         }
       } ~
       // POST /data/<filename>
       post {
-        path(Segment) { filename =>
+        extractUnmatchedPath { filename =>
           entity(as[Array[Byte]]) { bytes =>
-            val future = dataManager ? StoreData(filename, bytes)
-            respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-              future.map {
-                case Stored(filename) => {
-                  ctx.complete(StatusCodes.OK, Map[String, Any](
-                    ResultKey -> Map("filename" -> filename)))
-                }
-                case Error =>
-                  badRequest(ctx, "Failed to store data file '" + filename + "'.")
-              }.recover {
-                case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+          onComplete(dataManager ? StoreData(filename.toString(), bytes)) {
+            case Success(value) => value match {
+              case Stored(name) => {
+                val map = Map[String, Any](ResultKey -> Map("filename" -> name))
+                complete(StatusCodes.OK, map)
               }
+              case Error(m) =>
+                complete(StatusCodes.BadRequest, errMap(s"Failed to store data file '$filename': $m"))
             }
+            case Failure(ex) => complete(StatusCodes.InternalServerError, errMap(ex, "ERROR"))
+          }
+
           }
         }
       }
   }
-}

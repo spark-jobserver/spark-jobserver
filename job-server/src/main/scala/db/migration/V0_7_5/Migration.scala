@@ -17,7 +17,7 @@ import slick.dbio.NoStream
 import slick.jdbc.GetResult
 import slick.jdbc.PositionedParameters
 import slick.jdbc.SetParameter
-import slick.profile.SqlAction
+import slick.sql.SqlAction
 import spark.jobserver.slick.unmanaged.UnmanagedDatabase
 import slick.dbio.DBIOAction
 import slick.dbio.Streaming
@@ -43,7 +43,7 @@ trait Migration extends JdbcMigration {
 
   protected val dropColumn: SqlAction[Int, NoStream, Effect]
 
-  protected def logErrors = PartialFunction[Throwable, Unit] {
+  protected def logErrors : PartialFunction[Throwable, Unit] = {
     case e: Throwable => logger.error(e.getMessage, e)
   }
 

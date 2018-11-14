@@ -3,13 +3,14 @@ package spark.jobserver.python
 import java.io.File
 import java.nio.file.Files
 
-import com.typesafe.config.{ConfigRenderOptions, Config, ConfigFactory}
+import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
 import org.apache.spark.SparkContext
 import org.apache.spark.api.java.JavaSparkContext
-import org.apache.spark.sql.SQLContext
+import org.apache.spark.sql.{SQLContext, SparkSession, SparkSessionExtensions}
 import org.apache.spark.sql.hive.HiveContext
+import org.apache.spark.sql.internal.StaticSQLConf.CATALOG_IMPLEMENTATION
 import org.apache.spark.{SparkConf, SparkContext}
-import org.scalatest.{BeforeAndAfterAll, Matchers, FunSpec}
+import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
 import py4j.GatewayServer
 
 import scala.collection.JavaConverters._
@@ -123,12 +124,14 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
   lazy val jsc = new JavaSparkContext(sc) with IdentifiedContext{
     def contextType = classOf[JavaSparkContext].getCanonicalName
   }
-  lazy val sqlContext = new SQLContext(sc) with IdentifiedContext{
+
+  lazy val sqlContext = SparkSession.builder().config(sc.getConf).getOrCreate() /*with IdentifiedContext{
     def contextType = classOf[SQLContext].getCanonicalName
-  }
-  lazy val hiveContext = new HiveContext(sc) with IdentifiedContext{
+  }*/
+
+  lazy val hiveContext = SparkSession.builder().config(sc.getConf).enableHiveSupport().getOrCreate() /*with IdentifiedContext{
     def contextType = classOf[HiveContext].getCanonicalName
-  }
+  }*/
 
   override def afterAll(): Unit = {
     sc.stop()
@@ -227,6 +230,7 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
           |  ["sue", 21, 1600]
           |]
         """.stripMargin)
+      hiveContext.sessionState.conf.setConfString(CATALOG_IMPLEMENTATION.key, "hive")
       val endpoint =
         TestEndpoint(hiveContext, conf, jobConfig,
           "example_jobs.hive_window.HiveWindowJob", hiveContextImports)

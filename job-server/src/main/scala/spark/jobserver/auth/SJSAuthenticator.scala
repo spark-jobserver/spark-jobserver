@@ -1,10 +1,11 @@
 package spark.jobserver.auth
 
-import spray.routing.authentication._
-import spray.routing.directives.AuthMagnet
+import akka.http.scaladsl.model.headers.{BasicHttpCredentials, HttpChallenge, HttpCredentials}
+import akka.http.scaladsl.server.directives.SecurityDirectives.{AuthenticationResult, Authenticator}
+import akka.http.scaladsl.server.directives.{AuthenticationResult, Credentials}
 
 import scala.concurrent.duration.Duration
-import scala.concurrent.{ Await, ExecutionContext, Future }
+import scala.concurrent.{Await, ExecutionContext, Future, Promise}
 import org.slf4j.LoggerFactory
 import org.slf4j.Logger
 import org.apache.shiro.SecurityUtils
@@ -18,62 +19,56 @@ import org.apache.shiro.subject.Subject
  * specified in the ini file for Shiro
  */
 trait SJSAuthenticator {
-
+  def logger: Logger = LoggerFactory.getLogger(getClass)
+  val challenge = HttpChallenge("SJSAuth", Some("SJS"))
   import scala.concurrent.duration._
 
-  def asShiroAuthenticator(authTimeout : Int)(implicit ec: ExecutionContext): AuthMagnet[AuthInfo] = {
-    val logger = LoggerFactory.getLogger(getClass)
-
-    def validate(userPass: Option[UserPass]): Future[Option[AuthInfo]] = {
-      //if (!currentUser.isAuthenticated()) {
-      Future {
-        explicitValidation(userPass getOrElse UserPass("", ""), logger)
-      }
+  def asShiroAuthenticator(authTimeout: Int)(implicit ec: ExecutionContext): Option[HttpCredentials] => Future[AuthenticationResult[User]] = {
+    credentials: Option[HttpCredentials] =>
+    Future {
+      credentials match {
+      case Some(creds) if explicitValidation(creds, logger) => Right(User(creds.asInstanceOf[BasicHttpCredentials].username))
+      case None => Left(challenge)
     }
-
-    def authenticator(userPass: Option[UserPass]): Future[Option[AuthInfo]] = Future {
-      Await.result(validate(userPass), authTimeout.seconds)
     }
-
-    BasicAuth(authenticator _, realm = "Shiro Private")
   }
 
  /**
    * do not call directly - only for unit testing!
    */
-  def explicitValidation(userPass: UserPass, logger: Logger): Option[AuthInfo] = {
-    import collection.JavaConverters._
-    val currentUser = SecurityUtils.getSubject()
-    val UserPass(user, pass) = userPass
-    val token = new UsernamePasswordToken(user, pass)
-    try {
-      currentUser.login(token)
-      val fullName = currentUser.getPrincipal().toString
-      //is this user allowed to do anything -
-      //  realm implementation may for example throw an exception
-      //  if user is not a member of a valid group
-      currentUser.isPermitted("*")
-      logger.trace("ACCESS GRANTED, user [%s]", fullName)
-      currentUser.logout()
-      Option(new AuthInfo(new User(fullName)))
-    } catch {
-      case uae: UnknownAccountException =>
-        logger.info("ACCESS DENIED (Unknown), user [" + user + "]")
-        None
-      case ice: IncorrectCredentialsException =>
-        logger.info("ACCESS DENIED (Incorrect credentials), user [" + user + "]")
-        None
-      case lae: LockedAccountException =>
-        logger.info("ACCESS DENIED (Account is locked), user [" + user + "]")
-        None
-      case ae: AuthorizationException =>
-        logger.info("ACCESS DENIED (" + ae.getMessage() + "), user [" + user + "]")
-        None
-      case ae: AuthenticationException =>
-        logger.info("ACCESS DENIED (Authentication Exception), user [" + user + "]")
-        None
+  def explicitValidation(userPass: HttpCredentials, logger: Logger)(implicit ec: ExecutionContext): Boolean = {
+
+      val currentUser = SecurityUtils.getSubject()
+      val BasicHttpCredentials(user, pass) = userPass
+      val token = new UsernamePasswordToken(user, pass)
+      try {
+        currentUser.login(token)
+        val fullName = currentUser.getPrincipal().toString
+        //is this user allowed to do anything -
+        //  realm implementation may for example throw an exception
+        //  if user is not a member of a valid group
+        currentUser.isPermitted("*")
+        logger.trace("ACCESS GRANTED, user [%s]", fullName)
+        currentUser.logout()
+        true
+      } catch {
+        case uae: UnknownAccountException =>
+          logger.info("ACCESS DENIED (Unknown), user [" + user + "]")
+          false
+        case ice: IncorrectCredentialsException =>
+          logger.info("ACCESS DENIED (Incorrect credentials), user [" + user + "]")
+          false
+        case lae: LockedAccountException =>
+          logger.info("ACCESS DENIED (Account is locked), user [" + user + "]")
+          false
+        case ae: AuthorizationException =>
+          logger.info("ACCESS DENIED (" + ae.toString + "), user [" + user + "]")
+          false
+        case ae: AuthenticationException =>
+          logger.info("ACCESS DENIED (Authentication Exception), user [" + user + "]")
+          false
+      }
     }
-  }
 
   /**
    * default authenticator that accepts all users
@@ -81,16 +76,13 @@ trait SJSAuthenticator {
    * at
    * http://www.tecnoguru.com/blog/2014/07/07/implementing-http-basic-authentication-with-spray/
    */
-  def asAllUserAuthenticator(implicit ec: ExecutionContext): AuthMagnet[AuthInfo] = {
-    def validateUser(userPass: Option[UserPass]): Option[AuthInfo] = {
-      Some(new AuthInfo(new User("anonymous")))
-    }
-
-    def authenticator(userPass: Option[UserPass]): Future[Option[AuthInfo]] = {
-      Future { validateUser(userPass) }
-    }
-
-    BasicAuth(authenticator _, realm = "Private API")
+  def asAllUserAuthenticator(implicit ec: ExecutionContext): Option[HttpCredentials] => Future[AuthenticationResult[User]] = {
+    credentials: Option[HttpCredentials] =>
+      Future {
+        credentials match {
+          case _ => Right(User("anonymous"))
+        }
+      }
   }
 }
 

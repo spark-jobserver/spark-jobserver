@@ -420,7 +420,7 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
     })
     val queryOptions = new QueryOptions().setConsistencyLevel(consistencyLevel)
     val cluster = Cluster.builder
-      .addContactPointsWithPorts(WrapAsJava.asJavaCollection(addrs))
+      .addContactPointsWithPorts(addrs.asJava)
       .withQueryOptions(queryOptions)
       .withCredentials(username, password)
       .build
