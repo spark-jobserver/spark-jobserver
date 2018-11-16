@@ -99,6 +99,13 @@ trait MetaDataDAO {
   def getBinaries: Future[Seq[BinaryInfo]]
 
   /**
+    * Return info for all binaries with the given storage id.
+    *
+    * @return
+    */
+  def getBinariesByStorageId(storageId: String): Future[Seq[BinaryInfo]]
+
+  /**
     * Persist meta information about binary.
     *
     * @param name

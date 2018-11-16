@@ -104,7 +104,9 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher {
           case Success(true) => logger.info(s"Successfully uploaded binary for $name")
           case _ =>
             logger.error(s"Failed to save binary meta for $name, will try to delete file")
-            isBinaryUsed(binHash) onComplete {
+            metaDataDAO.getBinariesByStorageId(binHash).map(
+              binaryInfos => binaryInfos.nonEmpty
+            ) onComplete {
               case Success(false) => binaryDAO.delete(binHash) onComplete {
                 case Success(true) =>
                   logger.info(s"Successufully deleted binary for $name after failed save.")
@@ -119,11 +121,13 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher {
 
   override def deleteBinary(name: String): Unit = {
     val binaryMeta = metaDataDAO.getBinary(name)
-    binaryMeta onComplete   {
+    binaryMeta onComplete {
       case Success(Some(binaryInfo)) =>
         metaDataDAO.deleteBinary(name) onComplete {
           case Success(true) =>
-            isBinaryUsed(binaryInfo.binaryStorageId, binaryInfo.appName) onComplete {
+            metaDataDAO.getBinariesByStorageId(binaryInfo.binaryStorageId).map(
+              binaryInfos => binaryInfos.exists(_.appName != binaryInfo.appName)
+            ) onComplete {
               case Success(false) =>
                   binaryDAO.delete(binaryInfo.binaryStorageId) onFailure {
                   case _ => logger.error(s"Failed to delete binary file for $name, leaving an artifact")
@@ -147,26 +151,6 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher {
           }
         binFile.getAbsolutePath
       case _ => ""
-    }
-  }
-
-  /**
-    * Checks if binaryStorageId is referenced in any currently saved binary meta.
-    * @param binaryStorageId id to check usage for
-    * @param excludeName if given, will check refence under other name (won't count reference from this name)
-    * @return true if there are existing references, else false
-    */
-  def isBinaryUsed(binaryStorageId: String, excludeName: String = ""): Future[Boolean] = {
-    if (excludeName == "") {
-      metaDataDAO.getBinaries.map(
-        binaryInfos => binaryInfos.exists(_.binaryStorageId == binaryStorageId)
-      )
-    } else {
-      metaDataDAO.getBinaries.map(
-        binaryInfos => binaryInfos.exists(
-          i => i.binaryStorageId == binaryStorageId && i.appName != excludeName
-        )
-      )
     }
   }
 }
