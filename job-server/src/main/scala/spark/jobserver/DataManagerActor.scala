@@ -20,7 +20,7 @@ object DataManagerActor {
   case object Deleted
   case class Error(msg: String)
 
-  def props(fileDao: DataFileDAO): Props = Props(classOf[DataManagerActor], fileDao)
+  def props(fileDao: DataFileDAO): Props = Props(new DataManagerActor(fileDao))
 }
 
 /**
@@ -38,8 +38,8 @@ class DataManagerActor(fileDao: DataFileDAO) extends InstrumentedActor {
     case DeleteData(fileName) =>
       sender ! {
         if (fileDao.deleteFile(fileName)) {
-          remoteCaches.remove(fileName).map { actors =>
-            actors.map { _ ! JobManagerActor.DeleteData(fileName) }
+          remoteCaches.remove(fileName).foreach { actors =>
+            actors.foreach { _ ! JobManagerActor.DeleteData(fileName) }
           }
           Deleted
         } else {
@@ -50,9 +50,9 @@ class DataManagerActor(fileDao: DataFileDAO) extends InstrumentedActor {
     case DeleteAllData =>
       sender ! {
         if (fileDao.deleteAll()) {
-          remoteCaches.keySet.map { fileName =>
-            remoteCaches.remove(fileName).map { actors =>
-              actors.map { _ ! JobManagerActor.DeleteData(fileName) }
+          remoteCaches.keySet.foreach { fileName =>
+            remoteCaches.remove(fileName).foreach { actors =>
+              actors.foreach { _ ! JobManagerActor.DeleteData(fileName) }
             }
           }
           Deleted

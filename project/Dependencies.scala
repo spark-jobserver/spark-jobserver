@@ -52,7 +52,7 @@ object Dependencies {
 
   lazy val sparkPythonDeps = Seq(
     "net.sf.py4j" % "py4j" % py4j,
-    "io.spray" %% "spray-json" % sprayJson % Test
+    "io.spray" %% "spray-json" % sprayJson % Test excludeAll(excludeJpountz)
   ) ++ sparkExtraDeps
 
   lazy val slickDeps = Seq(
@@ -64,7 +64,7 @@ object Dependencies {
     "org.flywaydb" % "flyway-core" % flyway
   )
 
-
+  lazy val excludeJpountz = ExclusionRule(organization = "net.jpountz.lz4", name = "lz4")
 
   lazy val cassandraDeps = Seq(
     "com.datastax.spark" % "spark-cassandra-connector_2.11" % cassandraConnector
@@ -74,13 +74,14 @@ object Dependencies {
     "ch.qos.logback" % "logback-classic" % logback
   )
 
-  lazy val scalaTestDep = "org.scalatest" %% "scalatest" % scalaTest % Test
+  lazy val scalaTestDep = "org.scalatest" %% "scalatest" % scalaTest % Test excludeAll(excludeJpountz)
 
   lazy val coreTestDeps = Seq(
     scalaTestDep,
-    "com.typesafe.akka" %% "akka-testkit" % akka % Test,
-    "com.typesafe.akka" %% "akka-http-testkit" % akkaHttp, 
-    "org.cassandraunit" % "cassandra-unit" % cassandraUnit % Test
+    "com.typesafe.akka" %% "akka-testkit" % akka % Test excludeAll(excludeJpountz),
+    "com.typesafe.akka" %% "akka-stream-testkit" % akka % Test excludeAll(excludeJpountz), 
+    "com.typesafe.akka" %% "akka-http-testkit" % akkaHttp % Test excludeAll(excludeJpountz), 
+    "org.cassandraunit" % "cassandra-unit" % cassandraUnit % Test excludeAll(excludeJpountz)
   )
 
   lazy val securityDeps = Seq(

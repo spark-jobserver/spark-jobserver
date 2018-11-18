@@ -92,12 +92,9 @@ class JobServerNamedObjects(system: ActorSystem) extends NamedObjects {
                       (implicit persister: NamedObjectPersister[O]) {
     namesToObjects.get(name) match {
       case Some(value) =>
-        value onComplete {
-        case Success(obj) =>
+        val obj = Await.result(value, Duration.Inf)
           persister.unpersist(obj.asInstanceOf[O])
           namesToObjects.remove(name)
-        case Failure(t) =>
-      }
       case None =>
     }
   }

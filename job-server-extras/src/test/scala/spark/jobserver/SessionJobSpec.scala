@@ -1,7 +1,7 @@
 package spark.jobserver
 
 import com.typesafe.config.{Config, ConfigFactory}
-import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.SparkConf
 import org.apache.spark.sql.{Row, SparkSession}
 import spark.jobserver.CommonMessages.JobResult
 import spark.jobserver.context.{SessionContextFactory, SparkSessionContextLikeWrapper}
@@ -12,7 +12,7 @@ import scala.concurrent.duration._
 
 class TestSessionContextFactory extends SessionContextFactory {
 
-  override def makeContext(sparkConf: SparkConf, config: Config,  contextName: String): C = {
+  override def makeContext(sparkConf: SparkConf, config: Config, contextName: String): C = {
     val builder = SparkSession.builder()
     builder.config(sparkConf).appName(contextName).master("local")
     builder.config("javax.jdo.option.ConnectionURL", "jdbc:derby:memory:myDB;create=true")
@@ -20,7 +20,7 @@ class TestSessionContextFactory extends SessionContextFactory {
     try {
       builder.enableHiveSupport()
     } catch {
-      case e: IllegalArgumentException => logger.warn(s"Hive support not enabled - ${e.getMessage()}")
+      case e: IllegalArgumentException => logger.warn(s"Hive support not enabled - ${e.getMessage}")
     }
     val spark = builder.getOrCreate()
     for ((k, v) <- SparkJobUtils.getHadoopConfig(config)) spark.sparkContext.hadoopConfiguration.set(k, v)
@@ -29,7 +29,7 @@ class TestSessionContextFactory extends SessionContextFactory {
 }
 
 object SessionJobSpec extends JobSpecConfig {
-  override val contextFactory = classOf[TestSessionContextFactory].getName
+  override val contextFactory: String = classOf[TestSessionContextFactory].getName
 }
 
 class SessionJobSpec extends ExtrasJobSpecBase(SessionJobSpec.getNewSystem) {
@@ -38,11 +38,11 @@ class SessionJobSpec extends ExtrasJobSpecBase(SessionJobSpec.getNewSystem) {
   private val hiveLoaderClass = classPrefix + "SessionLoaderTestJob"
   private val hiveQueryClass = classPrefix + "SessionTestJob"
 
-  val emptyConfig = ConfigFactory.parseString("spark.master = bar")
-  val queryConfig = ConfigFactory.parseString(
+  val emptyConfig: Config = ConfigFactory.parseString("spark.master = bar")
+  val queryConfig: Config = ConfigFactory.parseString(
     """sql = "SELECT firstName, lastName FROM `default`.`test_addresses` WHERE city = 'San Jose'" """
   )
-  lazy val contextConfig = SessionJobSpec.getContextConfig(false, SessionJobSpec.contextConfig)
+  lazy val contextConfig: Config = SessionJobSpec.getContextConfig(adhoc = false, SessionJobSpec.contextConfig)
 
   before {
     dao = new InMemoryDAO
@@ -60,7 +60,7 @@ class SessionJobSpec extends ExtrasJobSpecBase(SessionJobSpec.getNewSystem) {
       expectMsgPF(120 seconds, "Did not get JobResult") {
         case JobResult(_, result: Long) => result should equal (3L)
       }
-      expectNoMsg()
+      expectNoMessage()
 
       manager ! JobManagerActor.StartJob("demo", hiveQueryClass, queryConfig, syncEvents ++ errorEvents)
       expectMsgPF(6 seconds, "Did not get JobResult") {
@@ -68,7 +68,7 @@ class SessionJobSpec extends ExtrasJobSpecBase(SessionJobSpec.getNewSystem) {
           result should have length 2
           result(0)(0) should equal ("Bob")
       }
-      expectNoMsg()
+      expectNoMessage()
     }
   }
 }

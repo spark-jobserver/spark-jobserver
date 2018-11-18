@@ -12,12 +12,10 @@ import ContextSupervisor._
 import spark.jobserver.util.{ManagerLauncher, ContextJVMInitializationTimeout, SparkJobUtils}
 import spark.jobserver.JobManagerActor._
 
-import scala.collection.JavaConverters._
 import scala.concurrent.duration._
-import scala.collection.mutable.ArrayBuffer
 import scala.util.Try
-import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory, ConfigRenderOptions}
-import org.scalatest.{Matchers, FunSpec, BeforeAndAfter, BeforeAndAfterAll, FunSpecLike}
+import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
+import org.scalatest.{Matchers, BeforeAndAfter, BeforeAndAfterAll, FunSpecLike}
 import org.joda.time.DateTime
 import scala.concurrent.Await
 import scala.reflect.ClassTag
@@ -28,7 +26,7 @@ object AkkaClusterSupervisorActorSpec {
   // All the Actors System should have the same name otherwise they cannot form a cluster
   val ACTOR_SYSTEM_NAME = "test"
 
-  val config = ConfigFactory.parseString("""
+  val config: Config = ConfigFactory.parseString("""
     akka {
       # Disable all akka output to console
       log-dead-letters = 0
@@ -92,9 +90,9 @@ class StubbedAkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: Ac
   override def isContextInFinalState(contextInfo: ContextInfo): Boolean = {
     if (super.isContextInFinalState(contextInfo)) {
       visitedContextIsFinalStatePath.incrementAndGet()
-      return true;
+      true
     } else {
-      return false;
+      false
     }
   }
 
@@ -134,9 +132,9 @@ class StubbedAkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: Ac
 
   def stubbedWrappedReceive: Receive = {
     case StubbedAkkaClusterSupervisorActor.AddContextToContextInitInfos(name) =>
-      contextInitInfos(name) = ({ref=>}, {ref=>}, new Cancellable {
-        def cancel(): Boolean = { return false }
-        def isCancelled: Boolean = { return false }
+      contextInitInfos(name) = ({ ref => }, { ref => }, new Cancellable {
+        def cancel(): Boolean = { false }
+        def isCancelled: Boolean = { false }
       })
     case StubbedAkkaClusterSupervisorActor.DisableDAOCommunication =>
       daoCommunicationDisabled = true
@@ -153,9 +151,10 @@ class StubbedAkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: Ac
   }
 
   override def getDataFromDAO[T: ClassTag](msg: JobDAOActor.JobDAORequest): Option[T] = {
-    daoCommunicationDisabled match {
-      case true => None
-      case false => super.getDataFromDAO[T](msg)
+    if (daoCommunicationDisabled) {
+      None
+    } else {
+      super.getDataFromDAO[T](msg)
     }
   }
 
@@ -172,9 +171,9 @@ class StubbedAkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: Ac
 class StubbedJobManagerActor(contextConfig: Config) extends Actor {
   var contextName: String = _
   var stopAttemptCount: Int = 0
-  def receive = {
-    case JobManagerActor.Initialize(contextConfig,_,_) =>
-      contextName = contextConfig.getString("context.name")
+  def receive: PartialFunction[Any, Unit] = {
+    case JobManagerActor.Initialize(cc, _, _) =>
+      contextName = cc.getString("context.name")
       val resultActor = context.system.actorOf(Props(classOf[JobResultActor]))
       sender() ! JobManagerActor.Initialized(contextConfig.getString("context.name"), resultActor)
     case JobManagerActor.GetContexData =>
@@ -234,13 +233,13 @@ class StubbedJobManagerActor(contextConfig: Config) extends Actor {
 class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorSpec.system) with ImplicitSender
       with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
-  val daoTimeout = 5.seconds.dilated
-  val contextInitTimeout = 10.seconds.dilated
+  val daoTimeout: FiniteDuration = 5.seconds.dilated
+  val contextInitTimeout: FiniteDuration = 10.seconds.dilated
   var supervisor: ActorRef = _
   var dao: JobDAO = _
   var daoActor: ActorRef = _
   var managerProbe = TestProbe()
-  val contextConfig = AkkaClusterSupervisorActorSpec.config.getConfig("spark.context-settings")
+  val contextConfig: Config = AkkaClusterSupervisorActorSpec.config.getConfig("spark.context-settings")
   val unusedDummyInput = 1
   val visitedContextIsFinalStatePath = new AtomicInteger(0)
   // This is needed to help tests pass on some MBPs when working from home
@@ -264,7 +263,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
     val convertedContextConfig = configWithSuperviseMode.root().render(ConfigRenderOptions.concise())
     val context = ContextInfo(contextId, "someContext", convertedContextConfig, None, dt, None, state, None)
     saveContextInfo(context)
-    (context)
+    context
   }
 
   def setContextState(contextName: String, state: String): ContextInfo = {
@@ -294,14 +293,14 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
         managerProbe, cluster, visitedContextIsFinalStatePath), "supervisor")
   }
 
-  override def afterAll() = {
+  override def afterAll(): Unit = {
      AkkaTestUtils.shutdownAndWait(AkkaClusterSupervisorActorSpec.system)
   }
 
   after {
     // Cleanup all the context to have a fresh start for next testcase
     def stopContext(contextName: Any) {
-      supervisor ! StopContext(contextName.toString())
+      supervisor ! StopContext(contextName.toString)
       expectMsg(3.seconds.dilated, ContextStopped)
       managerProbe.expectMsgClass(classOf[Terminated])
       managerProbe.expectMsg("Executed")
@@ -309,7 +308,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
 
     supervisor ! ListContexts
     expectMsgPF(3.seconds.dilated) {
-      case contexts: Seq[_] => contexts.foreach(stopContext(_))
+      case contexts: Seq[_] => contexts.foreach(stopContext)
       case _ =>
     }
   }
@@ -326,7 +325,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
 
       supervisor ! GetContext("test-context1")
       val isValid = expectMsgPF(2.seconds.dilated) {
-        case (jobManagerActor: ActorRef) => true
+        case jobManagerActor: ActorRef => true
         case _ => false
       }
 
@@ -377,7 +376,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       supervisor ! StartAdHocContext("test-adhoc-classpath", ConfigFactory.parseString(""))
 
       val isValid = expectMsgPF(contextInitTimeout, "manager and result actors") {
-        case (manager: ActorRef) =>
+        case manager: ActorRef =>
           manager.path.name.startsWith("jobManager-")
       }
 
@@ -386,7 +385,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       supervisor ! ListContexts
       val hasContext = expectMsgPF(3.seconds.dilated) {
         case contexts: Seq[_] =>
-          contexts.head.toString().endsWith("test-adhoc-classpath")
+          contexts.head.toString.endsWith("test-adhoc-classpath")
         case _ => false
       }
       hasContext should be (true)
@@ -445,7 +444,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       supervisor ! AddContext("test-context6", contextConfig)
       expectMsg(contextInitTimeout, ContextInitialized)
 
-      supervisor ! StopContext("test-context6", true)
+      supervisor ! StopContext("test-context6", force = true)
       expectMsg(ContextStopped)
       managerProbe.expectMsgClass(classOf[Terminated])
       managerProbe.expectMsg("Executed")
@@ -455,7 +454,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       supervisor ! AddContext("dont-respond-if-force", contextConfig)
       expectMsg(contextInitTimeout, ContextInitialized)
 
-      supervisor ! StopContext("dont-respond-if-force", true)
+      supervisor ! StopContext("dont-respond-if-force", force = true)
 
       expectMsgType[ContextStopError](4.seconds)
     }
@@ -464,7 +463,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       supervisor ! AddContext("send-on-error", contextConfig)
       expectMsg(contextInitTimeout, ContextInitialized)
 
-      supervisor ! StopContext("send-on-error", true)
+      supervisor ! StopContext("send-on-error", force = true)
 
       expectMsgType[ContextStopError](4.seconds)
     }
@@ -516,7 +515,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
 
       supervisor ! ActorIdentity(unusedDummyInput, Some(managerProbe.ref))
       deathWatch.expectTerminated(managerProbe.ref)
-      expectNoMsg((SparkJobUtils.getForkedJVMInitTimeout(system.settings.config) + 1).second)
+      expectNoMessage((SparkJobUtils.getForkedJVMInitTimeout(system.settings.config) + 1).second)
 
       supervisor ! StubbedAkkaClusterSupervisorActor.EnableDAOCommunication
     }
@@ -614,7 +613,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
     it("should not receive JVM creation timed out error if context was intialized properly") {
       supervisor ! AddContext("test-context-proper-init", contextConfig)
       expectMsg(contextInitTimeout, ContextInitialized)
-      expectNoMsg((SparkJobUtils.getForkedJVMInitTimeout(system.settings.config) + 1).second)
+      expectNoMessage((SparkJobUtils.getForkedJVMInitTimeout(system.settings.config) + 1).second)
     }
   }
 
@@ -649,7 +648,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       supervisor ! ListContexts
       expectMsg(Seq(contextName)) // Stopping context
 
-      val restartingContext =  stoppingContext.copy(state = ContextStatus.Restarting,
+      val restartingContext = stoppingContext.copy(state = ContextStatus.Restarting,
         endTime = Some(DateTime.now()))
       daoActor ! JobDAOActor.SaveContextInfo(restartingContext)
       expectMsg(JobDAOActor.SavedSuccessfully)
@@ -677,7 +676,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       supervisor ! AddContext("test-context11", configWithContextInfo)
       expectMsg(contextInitTimeout, ContextInitialized)
 
-      val context = Await.result(dao.getContextInfoByName("test-context11"), (3 seconds)).get
+      val context = Await.result(dao.getContextInfoByName("test-context11"), 3 seconds).get
 
       supervisor ! GetSparkContexData("test-context11")
       expectMsg(SparkContexData(context, Some("appId-dummy"), Some("dummy-url")))
@@ -689,7 +688,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       supervisor ! AddContext("test-context12", configWithContextInfo)
       expectMsg(contextInitTimeout, ContextInitialized)
 
-      val context = Await.result(dao.getContextInfoByName("test-context12"), (3 seconds)).get
+      val context = Await.result(dao.getContextInfoByName("test-context12"), 3 seconds).get
 
       supervisor ! GetSparkContexData("test-context12")
       expectMsg(SparkContexData(context, Some("appId-dummy"), None))
@@ -701,7 +700,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       supervisor ! AddContext("test-context13", configWithContextInfo)
       expectMsg(contextInitTimeout, ContextInitialized)
 
-      val context = Await.result(dao.getContextInfoByName("test-context13"), (3 seconds)).get
+      val context = Await.result(dao.getContextInfoByName("test-context13"), 3 seconds).get
 
       supervisor ! GetSparkContexData("test-context13")
       expectMsg(SparkContexData(context, None, None))
@@ -713,7 +712,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       supervisor ! AddContext("test-context14", configWithContextInfo)
       expectMsg(contextInitTimeout, ContextInitialized)
 
-      val context = Await.result(dao.getContextInfoByName("test-context14"), (3 seconds)).get
+      val context = Await.result(dao.getContextInfoByName("test-context14"), 3 seconds).get
 
       supervisor ! GetSparkContexData("test-context14")
       expectMsg(SparkContexData(context, None, None))
@@ -832,7 +831,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
 
       val runningContextInfo = Await.result(dao.getContextInfoByName(contextName), daoTimeout)
       val runningContextActorRef = JobServer.getManagerActorRef(runningContextInfo.get, system).get
-      runningContextActorRef should not be(None)
+      runningContextActorRef should not be None
 
       // Mimic SJS restart, where it loses all the watches
       supervisor ! StubbedAkkaClusterSupervisorActor.UnWatchContext(runningContextActorRef)
@@ -852,7 +851,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
     it("should not change final state to non-final within the Terminated event") {
       val contextId = "ctxFinalState"
 
-      val finalStateContext = saveContextInSomeState(contextId, ContextStatus.getFinalStates().last)
+      val finalStateContext = saveContextInSomeState(contextId, ContextStatus.getFinalStates.last)
       val managerProbe = system.actorOf(Props.empty, s"jobManager-$contextId")
       val daoProbe = TestProbe()
 
@@ -861,7 +860,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       expectMsg("Executed")
       daoActor ! JobDAOActor.GetContextInfo(contextId)
       val msg = expectMsgType[JobDAOActor.ContextResponse]
-      msg.contextInfo.get.state should be(ContextStatus.getFinalStates().last)
+      msg.contextInfo.get.state should be(ContextStatus.getFinalStates.last)
       msg.contextInfo.get.endTime should be(finalStateContext.endTime)
     }
   }
@@ -872,14 +871,14 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       expectMsg(contextInitTimeout, ContextInitialized)
 
       val contextInfo = Await.result(dao.getContextInfoByName("test-context"), daoTimeout)
-      contextInfo should not be (None)
+      contextInfo should not be None
     }
 
     it("should start adhoc context if supervise mode is disabled") {
       supervisor ! StartAdHocContext("test-adhoc-classpath", contextConfig)
 
       val isValid = expectMsgPF(contextInitTimeout, "manager and result actors") {
-        case (manager: ActorRef) =>
+        case manager: ActorRef =>
           manager.path.name.startsWith("jobManager-")
       }
 
@@ -893,7 +892,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       expectMsg(contextInitTimeout, ContextInitialized)
 
       val contextInfo = Await.result(dao.getContextInfoByName("test-context"), daoTimeout)
-      contextInfo should not be (None)
+      contextInfo should not be None
     }
 
     it("should set states of the jobs to ERROR if a context with ERROR state sends ActorIdentity") {
@@ -901,7 +900,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       managerProbe.setAutoPilot(new TestActor.AutoPilot {
         def run(sender: ActorRef, msg: Any): TestActor.AutoPilot = {
           msg match {
-            case Initialize(_,_,_) => sender ! JobManagerActor.InitError(new Throwable)
+            case Initialize(_, _, _) => sender ! JobManagerActor.InitError(new Throwable)
           }
           TestActor.KeepRunning
         }
@@ -924,7 +923,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       managerProbe.setAutoPilot(new TestActor.AutoPilot {
         def run(sender: ActorRef, msg: Any): TestActor.AutoPilot = {
           msg match {
-            case Initialize(_,_,_) => sender ! Initialized("", TestProbe().ref)
+            case Initialize(_, _, _) => sender ! Initialized("", TestProbe().ref)
             case RestartExistingJobs =>
           }
           TestActor.KeepRunning
@@ -951,7 +950,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       managerProbe.setAutoPilot(new TestActor.AutoPilot {
         def run(sender: ActorRef, msg: Any): TestActor.AutoPilot = {
           msg match {
-            case Initialize(_,_,_) =>
+            case Initialize(_, _, _) =>
           }
           TestActor.KeepRunning
         }

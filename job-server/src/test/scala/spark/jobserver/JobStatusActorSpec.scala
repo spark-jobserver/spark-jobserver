@@ -64,7 +64,7 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
   describe("JobStatusActor") {
     it("should return empty sequence if there is no job infos") {
       actor ! GetRunningJobStatus
-      daoMsgReceiverProbe.expectNoMsg()
+      daoMsgReceiverProbe.expectNoMessage()
       expectMsg(Seq.empty)
     }
 
@@ -93,7 +93,7 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
       actor ! Unsubscribe(jobId, self)
       actor ! JobStarted(jobId, jobInfo)
       daoMsgReceiverProbe.expectMsg(JobDAOActor.SaveJobInfo(jobInfo))
-      expectNoMsg()   // shouldn't get it again
+      expectNoMessage()   // shouldn't get it again
 
       actor ! Unsubscribe(jobId, self)
       expectMsg(NoSuchJobId)
@@ -119,7 +119,7 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
       expectMsg(msg)
 
       actor ! msg
-      daoMsgReceiverProbe.expectNoMsg()
+      daoMsgReceiverProbe.expectNoMessage()
       expectMsg(NoSuchJobId)
     }
 
@@ -136,7 +136,7 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
       expectMsg(msg)
 
       actor ! msg
-      daoMsgReceiverProbe.expectNoMsg()
+      daoMsgReceiverProbe.expectNoMessage()
       expectMsg(NoSuchJobId)
     }
 
@@ -153,7 +153,7 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
       expectMsg(msg)
 
       actor ! msg
-      daoMsgReceiverProbe.expectNoMsg()
+      daoMsgReceiverProbe.expectNoMessage()
       expectMsg(NoSuchJobId)
     }
 
@@ -175,7 +175,7 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
           state = JobStatus.Finished, endTime = Some(finishTime))))
 
       actor ! GetRunningJobStatus
-      daoMsgReceiverProbe.expectNoMsg()
+      daoMsgReceiverProbe.expectNoMessage()
       expectMsg(Seq.empty)
     }
 
@@ -188,7 +188,7 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
           state = JobStatus.Error, endTime = Some(endTime), error = Some(ErrorData(error)))))
 
       actor ! GetRunningJobStatus
-      daoMsgReceiverProbe.expectNoMsg()
+      daoMsgReceiverProbe.expectNoMessage()
       expectMsg(Seq.empty)
     }
 
@@ -203,7 +203,7 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
           state = JobStatus.Error, endTime = Some(endTime), error = Some(ErrorData(error)))))
 
       actor ! GetRunningJobStatus
-      daoMsgReceiverProbe.expectNoMsg()
+      daoMsgReceiverProbe.expectNoMessage()
       expectMsg(Seq.empty)
     }
 
@@ -225,7 +225,7 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
       }
 
       actor ! GetRunningJobStatus
-      daoMsgReceiverProbe.expectNoMsg()
+      daoMsgReceiverProbe.expectNoMessage()
       expectMsg(Seq.empty)
     }
 
@@ -245,7 +245,7 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
           receivedJobInfo.error.get.message should be (s"Context (${contextName}) for this job was terminated")
       }
 
-      daoMsgReceiverProbe.expectNoMsg()
+      daoMsgReceiverProbe.expectNoMessage()
     }
   }
 }

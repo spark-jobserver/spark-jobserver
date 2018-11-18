@@ -1,11 +1,11 @@
 package spark.jobserver.cassandra
 
 import com.datastax.driver.core.{BoundStatement, ResultSet, ResultSetFuture}
-import scala.concurrent.{CanAwait, Future, ExecutionContext}
+
+import scala.concurrent.{CanAwait, ExecutionContext, Future}
 import scala.util.{Success, Try}
 import scala.concurrent.duration.Duration
 import java.util.concurrent.{TimeUnit, Executor => JExecutor}
-
 
 trait CassandraResultSetOperations {
 

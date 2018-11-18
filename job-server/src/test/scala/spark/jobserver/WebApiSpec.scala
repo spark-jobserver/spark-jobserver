@@ -8,26 +8,30 @@ import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
 import spark.jobserver.JobManagerActor.JobKilledException
 import spark.jobserver.io._
-import spray.client.pipelining._
+import akka.http.scaladsl.testkit.ScalatestRouteTest
 import JobServerSprayProtocol._
 import org.scalatest.time.{Seconds, Span}
-import spray.http.{ContentType, HttpHeader, HttpHeaders, MediaTypes, HttpRequest}
-import spray.httpx.{SprayJsonSupport, UnsuccessfulResponseException}
-import spray.routing.HttpService
-import spray.testkit.ScalatestRouteTest
+import akka.http.scaladsl.model._
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
+import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.model.headers._
+import akka.http.scaladsl.testkit
 
 import scala.concurrent.{Await, Future}
 import scala.util.{Failure, Success}
 import java.util.concurrent.TimeUnit
+import akka.http.scaladsl.server.{ Directives, Route}
 import scala.concurrent.duration.Duration
 import spark.jobserver.util.NoSuchBinaryException
 
 // Tests web response codes and formatting
 // Does NOT test underlying Supervisor / JarManager functionality
-// HttpService trait is needed for the sealRoute() which wraps exception handling
+// HttpService trait is needed for the Route.seal() which wraps exception handling
 class WebApiSpec extends FunSpec with Matchers with BeforeAndAfterAll
-with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport {
+with ScalatestRouteTest with ScalaFutures with SprayJsonSupport {
   import scala.collection.JavaConverters._
+
+  import TildeArrow._
 
   def actorRefFactory: ActorSystem = system
 
@@ -41,7 +45,7 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
       jobserver.bind-address = "$bindConfVal"
       jobserver.short-timeout = 3 s
     }
-    spray.can.server {}
+    akka.http.server {}
     shiro {
       authentication = off
     }
@@ -62,11 +66,11 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
   val baseJobInfo =
     JobInfo("foo-1", "cid", "context", BinaryInfo("demo", BinaryType.Jar, dt), "com.abc.meme",
         JobStatus.Running, dt, None, None)
-  val finishedJobInfo = baseJobInfo.copy(endTime = Some(dt.plusMinutes(5)),state = JobStatus.Finished)
+  val finishedJobInfo = baseJobInfo.copy(endTime = Some(dt.plusMinutes(5)), state = JobStatus.Finished)
   val errorJobInfo = finishedJobInfo.copy(
-      error =  Some(ErrorData(new Throwable("test-error"))), state = JobStatus.Error)
+      error = Some(ErrorData(new Throwable("test-error"))), state = JobStatus.Error)
   val killedJobInfo = finishedJobInfo.copy(
-      error =  Some(ErrorData(JobKilledException(finishedJobInfo.jobId))), state = JobStatus.Killed)
+      error = Some(ErrorData(JobKilledException(finishedJobInfo.jobId))), state = JobStatus.Killed)
   val JobId = "jobId"
   val StatusKey = "status"
   val ResultKey = "result"
@@ -147,9 +151,9 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
           "demo3" -> (BinaryType.Egg, dt.plusHours(2))
         )
       // Ok these really belong to a JarManager but what the heck, type unsafety!!
-      case StoreBinary("badjar", _, _)  => sender ! InvalidBinary
+      case StoreBinary("badjar", _, _) => sender ! InvalidBinary
       case StoreBinary("daofail", _, _) => sender ! BinaryStorageFailure(new Exception("DAO failed to store"))
-      case StoreBinary(_, _, _)         => sender ! BinaryStored
+      case StoreBinary(_, _, _) => sender ! BinaryStored
 
       case DeleteBinary("badbinary") => sender ! NoSuchBinary
       case DeleteBinary(_) => sender ! BinaryDeleted
@@ -162,12 +166,12 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
       case DataManagerActor.DeleteData("/tmp/fileToRemove") => sender ! DataManagerActor.Deleted
       case DataManagerActor.DeleteData("errorfileToRemove") => sender ! DataManagerActor.Error
 
-      case ListContexts =>  sender ! Seq("context1", "context2")
+      case ListContexts => sender ! Seq("context1", "context2")
       case StopContext("none", _) => sender ! NoSuchContext
       case StopContext("timeout-ctx", _) => sender ! ContextStopError(new Throwable("Some Throwable"))
       case StopContext("unexp-err", _) => sender ! UnexpectedError
       case StopContext("ctx-stop-in-progress", _) => sender ! ContextStopInProgress
-      case StopContext(_, _)      => sender ! ContextStopped
+      case StopContext(_, _) => sender ! ContextStopped
       case AddContext("one", _) => sender ! ContextAlreadyExists
       case AddContext("custom-ctx", c) =>
         // see WebApiMainRoutesSpec => "context routes" =>
@@ -178,21 +182,21 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
         sender ! ContextInitialized
       case AddContext("initError-ctx", _) => sender ! ContextInitError(new Throwable("Some Throwable"))
       case AddContext("unexp-err", _) => sender ! UnexpectedError
-      case AddContext(_, _)     => sender ! ContextInitialized
+      case AddContext(_, _) => sender ! ContextInitialized
 
       case GetContext("no-context") => sender ! NoSuchContext
-      case GetContext(_)            => sender ! (self)
+      case GetContext(_) => sender ! (self)
 
       case StartAdHocContext(_, _) => sender ! (self)
 
       // These routes are part of JobManagerActor
-      case StartJob("no-app", _, _, _, _)   =>  sender ! NoSuchApplication
-      case StartJob(_, "no-class", _, _, _) =>  sender ! NoSuchClass
+      case StartJob("no-app", _, _, _, _) => sender ! NoSuchApplication
+      case StartJob(_, "no-class", _, _, _) => sender ! NoSuchClass
       case StartJob("wrong-type", _, _, _, _) => sender ! WrongJobType
-      case StartJob("err", _, config, _, _) =>  sender ! JobErroredOut("foo", dt,
+      case StartJob("err", _, config, _, _) => sender ! JobErroredOut("foo", dt,
                                                         new RuntimeException("oops",
                                                           new IllegalArgumentException("foo")))
-      case StartJob("foo", _, config, events, _)     =>
+      case StartJob("foo", _, config, events, _) =>
         statusActor ! Subscribe("foo", sender, events)
 
         val jobInfo = JobInfo("foo", "cid", "context", null, "com.abc.meme", getStateBasedOnEvents(events), dt, None, None)
@@ -202,7 +206,7 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
         if (events.contains(classOf[JobResult])) sender ! JobResult("foo", map)
         statusActor ! Unsubscribe("foo", sender)
 
-      case StartJob("foo.stream", _, config, events, _)     =>
+      case StartJob("foo.stream", _, config, events, _) =>
         statusActor ! Subscribe("foo.stream", sender, events)
         val jobInfo = JobInfo("foo.stream", "cid", "context", null, "", getStateBasedOnEvents(events), dt, None, None)
         statusActor ! JobStatusActor.JobInit(jobInfo)
@@ -210,10 +214,10 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
         val result = "\"1, 2, 3, 4, 5, 6\"".getBytes().toStream
         if (events.contains(classOf[JobResult])) sender ! JobResult("foo.stream", result)
         statusActor ! Unsubscribe("foo.stream", sender)
-      case StartJob("context-already-stopped", _, _, _, _) =>  sender ! ContextStopInProgress
+      case StartJob("context-already-stopped", _, _, _, _) => sender ! ContextStopInProgress
 
       case GetJobConfig("badjobid") => sender ! NoSuchJobId
-      case GetJobConfig(_)          => sender ! config
+      case GetJobConfig(_) => sender ! config
 
       case StoreJobConfig(_, _) => sender ! JobConfigStored
       case KillJob(jobId) => sender ! JobKilled(jobId, DateTime.now())
@@ -233,26 +237,31 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
   implicit override val patienceConfig =
     PatienceConfig(timeout = Span(5, Seconds), interval = Span(1, Seconds))
 
-  override def beforeAll():Unit = {
+  override def beforeAll(): Unit = {
     api.start()
   }
 
-  override def afterAll():Unit = {
+  override def afterAll(): Unit = {
     TestKit.shutdownActorSystem(system)
   }
 
   describe ("The WebApi") {
 
-    val jsonContentType = HttpHeaders.`Content-Type`(ContentType(MediaTypes.`application/json`))
-
+    val jsonContentType = ContentTypes.`application/json`
     it ("Should return valid JSON when resetting a context") {
-      val p = sendReceive ~> unmarshal[JobServerResponse]
-      val valid:Future[JobServerResponse] = p(Put("http://127.0.0.1:9999/contexts?reset=reboot"))
-      whenReady(valid) { r=>
-        r.isSuccess shouldBe true
-        r.status shouldBe "SUCCESS"
-        r.result shouldBe "Context reset"
-      }
+      Put("http://127.0.0.1:9999/contexts?reset=reboot") ~> {
+        extractDataBytes { data =>
+          val f = data.runFold("")((acc , s) => acc + s.utf8String)
+          onComplete(f) { json =>
+            complete(HttpResponse(entity = HttpEntity(json.toString)))
+          }
+        }
+      } ~>
+        check {
+          status shouldEqual "SUCCESS"
+          responseAs[JobServerResponse].isSuccess shouldEqual true
+          responseAs[JobServerResponse].result shouldEqual "Context reset"
+        }
     }
   }
 

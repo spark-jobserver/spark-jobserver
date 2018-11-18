@@ -27,7 +27,7 @@ class JobInfoActor(jobDao: JobDAO, contextSupervisor: ActorRef) extends Instrume
   import context.dispatcher       // for futures to work
 
   // Used in the asks (?) below to request info from contextSupervisor and resultActor
-  implicit val ShortTimeout = Timeout(3 seconds)
+  implicit val ShortTimeout: Timeout = Timeout(3 seconds)
 
   override def wrappedReceive: Receive = {
     case GetJobStatuses(limit, statusOpt) =>

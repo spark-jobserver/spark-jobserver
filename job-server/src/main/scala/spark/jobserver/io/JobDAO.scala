@@ -2,7 +2,8 @@ package spark.jobserver.io
 
 import java.io.{PrintWriter, StringWriter}
 
-import akka.http.javadsl.model.{MediaType, MediaTypes}
+import akka.http.scaladsl.model.MediaType.NotCompressible
+import akka.http.scaladsl.model.{ContentType, MediaType, MediaTypes}
 import com.typesafe.config._
 import org.joda.time.{DateTime, Duration}
 import org.slf4j.LoggerFactory
@@ -20,15 +21,15 @@ object BinaryType {
   case object Jar extends BinaryType {
     val extension = "jar"
     val name = "Jar"
-    val mediaType: MediaType = MediaTypes.APPLICATION_JAVA_ARCHIVE
-    val contentType = MediaTypes.APPLICATION_JAVA_ARCHIVE.toContentType
+    val mediaType: MediaType = MediaTypes.`application/java-archive`
+    val contentType: ContentType.Binary = MediaTypes.`application/java-archive`.toContentType
   }
 
   case object Egg extends BinaryType {
     val extension = "egg"
     val name = "Egg"
-    val mediaType: MediaType = MediaTypes.applicationBinary("python-archive", false, "egg")
-    val contentType = MediaTypes.applicationBinary("python-archive", false, "egg").toContentType
+    val mediaType: MediaType = MediaType.applicationBinary("python-archive", NotCompressible, "egg")
+    val contentType = MediaType.applicationBinary("python-archive", NotCompressible, "egg").toContentType
   }
 
   def fromString(typeString: String): BinaryType = typeString match {

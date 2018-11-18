@@ -19,7 +19,7 @@ abstract class JobSqlDAOSpecBase {
 class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLike with Matchers
   with BeforeAndAfter {
   override def config: Config = ConfigFactory.load("local.test.jobsqldao.conf")
-  val timeout = 60 seconds
+  val timeout: FiniteDuration = 60 seconds
   var dao: JobSqlDAO = _
 
   // *** TEST DATA ***
@@ -39,10 +39,10 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
     eggInfo.appName + "-" + jarInfo.uploadTime.toString("yyyyMMdd_hhmmss_SSS") + ".egg")
 
   // jobInfo test data
-  val jobInfoNoEndNoErr:JobInfo = genJobInfo(jarInfo, false, JobStatus.Running)
-  val expectedJobInfo = jobInfoNoEndNoErr
-  val jobInfoSomeEndNoErr: JobInfo = genJobInfo(jarInfo, false, JobStatus.Finished)
-  val jobInfoSomeEndSomeErr: JobInfo = genJobInfo(jarInfo, false, ContextStatus.Error)
+  val jobInfoNoEndNoErr: JobInfo = genJobInfo(jarInfo, isNew = false, JobStatus.Running)
+  val expectedJobInfo: JobInfo = jobInfoNoEndNoErr
+  val jobInfoSomeEndNoErr: JobInfo = genJobInfo(jarInfo, isNew = false, JobStatus.Finished)
+  val jobInfoSomeEndSomeErr: JobInfo = genJobInfo(jarInfo, isNew = false, ContextStatus.Error)
 
   // job config test data
   val jobId: String = jobInfoNoEndNoErr.jobId
@@ -71,13 +71,13 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
   case class GenJobInfoClosure() {
     var count: Int = 0
 
-    def apply(jarInfo: BinaryInfo, isNew:Boolean, state: String,
+    def apply(jarInfo: BinaryInfo, isNew: Boolean, state: String,
         contextId: Option[String] = None): JobInfo = {
       count = count + (if (isNew) 1 else 0)
       val id: String = "test-id" + count
 
       val ctxId = contextId match {
-        case Some(id) => id
+        case Some(_id) => _id
         case None => "test-context-id" + count
       }
 
@@ -85,7 +85,6 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
       val classPath: String = "test-classpath"
       val startTime: DateTime = time
 
-      val noEndTime: Option[DateTime] = None
       val someEndTime: Option[DateTime] = Some(time) // Any DateTime Option is fine
       val someError = Some(ErrorData(throwable))
 
@@ -218,7 +217,7 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
     }
 
     it("Save a new config, bring down DB, bring up DB, should get configs from DB") {
-      val jobId2: String = genJobInfo(genJarInfo(false, false), true, JobStatus.Running).jobId
+      val jobId2: String = genJobInfo(genJarInfo(false, false), isNew = true, JobStatus.Running).jobId
       val jobConfig2: Config = ConfigFactory.parseString("{merry=xmas}")
       val expectedConfig2 = ConfigFactory.empty().withValue("merry", ConfigValueFactory.fromAnyRef("xmas"))
       // config previously saved
@@ -267,7 +266,7 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
     }
 
     it("Save another new jobInfo, bring down DB, bring up DB, should JobInfos from DB") {
-      val jobInfo2 = genJobInfo(jarInfo, true, JobStatus.Running)
+      val jobInfo2 = genJobInfo(jarInfo, isNew = true, JobStatus.Running)
       val jobId2 = jobInfo2.jobId
       val expectedJobInfo2 = jobInfo2
       // jobInfo previously saved
@@ -292,7 +291,6 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
       val expectedNoEndNoErr = jobInfoNoEndNoErr
       val expectedSomeEndNoErr = jobInfoSomeEndNoErr
       val expectedSomeEndSomeErr = jobInfoSomeEndSomeErr
-      val exJobId = jobInfoNoEndNoErr.jobId
 
       val info = genJarInfo(true, false)
       info.uploadTime should equal (jarInfo.uploadTime)
@@ -337,7 +335,7 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
       val dt1 = DateTime.now()
       val dt2 = Some(DateTime.now())
       val someError = Some(ErrorData("test-error", "", ""))
-      val finishedJob: JobInfo = JobInfo("test-finished", "cid","test", jarInfo, "test-class", JobStatus.Finished, dt1, dt2, None)
+      val finishedJob: JobInfo = JobInfo("test-finished", "cid", "test", jarInfo, "test-class", JobStatus.Finished, dt1, dt2, None)
       val errorJob: JobInfo = JobInfo("test-error", "cid", "test", jarInfo, "test-class", JobStatus.Error, dt1, dt2, someError)
       val runningJob: JobInfo = JobInfo("test-running", "cid", "test", jarInfo, "test-class", JobStatus.Running, dt1, None, None)
       dao.saveJobInfo(finishedJob)
@@ -370,8 +368,8 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
     }
 
     it("should retrieve jobs by context id") {
-      val contextId = UUID.randomUUID().toString()
-      val runningJob = genJobInfo(jarInfo, true, JobStatus.Running, Some(contextId))
+      val contextId = UUID.randomUUID().toString
+      val runningJob = genJobInfo(jarInfo, isNew = true, JobStatus.Running, Some(contextId))
       dao.saveJobInfo(runningJob)
 
       val retrieved = Await.result(dao.getJobInfosByContextId(contextId), timeout)
@@ -382,11 +380,11 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
     }
 
     it("should retrieve multiple jobs if they have the same context id") {
-      val contextId = UUID.randomUUID().toString()
-      val finishedJob = genJobInfo(jarInfo, true, JobStatus.Finished, Some(contextId))
-      val jobWithDifferentContextId = genJobInfo(jarInfo, true, JobStatus.Finished)
-      val runningJob = genJobInfo(jarInfo, true, JobStatus.Running, Some(contextId))
-      val finishedJob2 = genJobInfo(jarInfo, true, JobStatus.Error, Some(contextId))
+      val contextId = UUID.randomUUID().toString
+      val finishedJob = genJobInfo(jarInfo, isNew = true, JobStatus.Finished, Some(contextId))
+      val jobWithDifferentContextId = genJobInfo(jarInfo, isNew = true, JobStatus.Finished)
+      val runningJob = genJobInfo(jarInfo, isNew = true, JobStatus.Running, Some(contextId))
+      val finishedJob2 = genJobInfo(jarInfo, isNew = true, JobStatus.Error, Some(contextId))
       dao.saveJobInfo(finishedJob)
       dao.saveJobInfo(jobWithDifferentContextId)
       dao.saveJobInfo(runningJob)
@@ -396,15 +394,15 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
 
       //test
       retrieved.size shouldBe 3
-      retrieved.filter(_.contextId == contextId).size shouldBe 3
+      retrieved.count(_.contextId == contextId) shouldBe 3
       retrieved.map(_.jobId) should contain allOf(finishedJob.jobId, runningJob.jobId, finishedJob2.jobId)
     }
 
     it("should retrieve finished and running jobs by context id") {
-      val contextId = UUID.randomUUID().toString()
-      val runningJob = genJobInfo(jarInfo, true, JobStatus.Running, Some(contextId))
-      val errorJob = genJobInfo(jarInfo, true, JobStatus.Error, Some(contextId))
-      val finishedJob = genJobInfo(jarInfo, true, JobStatus.Finished, Some(contextId))
+      val contextId = UUID.randomUUID().toString
+      val runningJob = genJobInfo(jarInfo, isNew = true, JobStatus.Running, Some(contextId))
+      val errorJob = genJobInfo(jarInfo, isNew = true, JobStatus.Error, Some(contextId))
+      val finishedJob = genJobInfo(jarInfo, isNew = true, JobStatus.Finished, Some(contextId))
 
       dao.saveJobInfo(runningJob)
       dao.saveJobInfo(errorJob)
@@ -415,12 +413,12 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
 
       //test
       retrieved.size shouldBe 2
-      retrieved should contain allElementsOf(List(runningJob, finishedJob))
+      retrieved should contain allElementsOf List(runningJob, finishedJob)
     }
 
     it("should retrieve nothing if no job with the specified status exist") {
-      val contextId = UUID.randomUUID().toString()
-      val runningJob = genJobInfo(jarInfo, true, JobStatus.Running, Some(contextId))
+      val contextId = UUID.randomUUID().toString
+      val runningJob = genJobInfo(jarInfo, isNew = true, JobStatus.Running, Some(contextId))
 
       dao.saveJobInfo(runningJob)
 
@@ -433,7 +431,7 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
 
     it("clean running jobs for context") {
       val ctxToBeCleaned: JobInfo = JobInfo(
-          "jobId", UUID.randomUUID().toString(), "context", jarInfo,
+          "jobId", UUID.randomUUID().toString, "context", jarInfo,
           "test-class", JobStatus.Running, DateTime.now(), None, None)
       dao.saveJobInfo(ctxToBeCleaned)
 
@@ -584,7 +582,7 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
       dao.deleteBinary(jarInfo.appName)
 
       val apps = Await.result(dao.getApps, timeout)
-      apps.keys should not contain (jarInfo.appName)
+      apps.keys should not contain jarInfo.appName
     }
   }
 

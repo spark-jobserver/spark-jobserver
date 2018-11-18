@@ -116,7 +116,7 @@ trait NamedObjects {
   /**
    * Destroys the named object with the given name, if one existed. The reference to the object
    * is removed from the cache and the persister is asked asynchronously to unpersist the
-   * object iff it was found in the list of named objects.
+   * object if it was found in the list of named objects.
    * Has no effect if no named object with this name is known to the cache.
    *
    * @param name the unique name of the object. The uniqueness is scoped to the current SparkContext.

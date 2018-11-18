@@ -17,15 +17,15 @@ import spark.jobserver.io.{BinaryType, JobDAO}
 trait JobSpecConfig {
   import collection.JavaConverters._
 
-  val JobResultCacheSize = Integer.valueOf(30)
+  val JobResultCacheSize: Integer = Integer.valueOf(30)
   // number of cores to allocate. Required.
-  val NumCpuCores = Integer.valueOf(Runtime.getRuntime.availableProcessors())
+  val NumCpuCores: Integer = Integer.valueOf(Runtime.getRuntime.availableProcessors())
   // Executor memory per node, -Xmx style eg 512m, 1G, etc.
   val MemoryPerNode = "512m"
-  val MaxJobsPerContext = Integer.valueOf(2)
+  val MaxJobsPerContext: Integer = Integer.valueOf(2)
   def contextFactory: String = classOf[DefaultSparkContextFactory].getName
 
-  lazy val config = {
+  lazy val config: Config = {
     val ConfigMap = Map(
       "spark.jobserver.job-result-cache-size" -> JobResultCacheSize,
       "spark.jobserver.dao-timeout" -> "3s",
@@ -48,7 +48,7 @@ trait JobSpecConfig {
                                "context.actorname" -> "ctx",
                                "is-adhoc" -> adhoc.toString).asJava).withFallback(baseConfig)
 
-  lazy val contextConfig = {
+  lazy val contextConfig: Config = {
     val ConfigMap = Map(
       "context-factory" -> contextFactory,
       "streaming.batch_interval" -> Integer.valueOf(40),
@@ -58,7 +58,7 @@ trait JobSpecConfig {
     ConfigFactory.parseMap(ConfigMap.asJava).withFallback(ConfigFactory.defaultOverrides())
   }
 
-  lazy val contextConfigWithGracefulShutdown = {
+  lazy val contextConfigWithGracefulShutdown: Config = {
     val configMap = Map(
       "streaming.stopGracefully" -> Boolean.box(true))
     ConfigFactory.parseMap(configMap.asJava).withFallback(contextConfig)
@@ -71,7 +71,7 @@ abstract class JobSpecBaseBase(system: ActorSystem) extends TestKit(system) with
 with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
   var dao: JobDAO = _
   var daoActor: ActorRef = _
-  val emptyActor = system.actorOf(Props.empty)
+  val emptyActor: ActorRef = system.actorOf(Props.empty)
   var manager: ActorRef = _
   def testJar: java.io.File
   def testEgg: java.io.File
@@ -104,7 +104,7 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
     classOf[NoJobSlotsAvailable], classOf[JobKilled])
   val asyncEvents = Set(classOf[JobStarted])
   val syncEvents = Set(classOf[JobResult])
-  val allEvents = errorEvents ++ asyncEvents ++ syncEvents ++ Set(classOf[JobFinished])
+  val allEvents: Set[Class[_]] = errorEvents ++ asyncEvents ++ syncEvents ++ Set(classOf[JobFinished])
 }
 
 abstract class JobSpecBase(system: ActorSystem) extends JobSpecBaseBase(system) with TestJarFinder

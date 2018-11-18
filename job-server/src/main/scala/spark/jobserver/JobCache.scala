@@ -12,8 +12,8 @@ import spark.jobserver.io.{BinaryType, JobDAOActor}
 import spark.jobserver.japi.BaseJavaJob
 import spark.jobserver.util.{ContextURLClassLoader, JarUtils, LRUCache}
 import spark.jobserver.common.akka.metrics.YammerMetrics
-
 import akka.pattern.ask
+import com.yammer.metrics.core.Gauge
 
 import scala.concurrent.Await
 
@@ -32,7 +32,7 @@ class JobCacheImpl(maxEntries: Int,
   private val logger = LoggerFactory.getLogger(getClass)
   implicit val daoAskTimeout: Timeout = Timeout(60 seconds)
 
-  val metricJobCache = gauge("job-cache-size", cache.size)
+  val metricJobCache: Gauge[Int] = gauge("job-cache-size", cache.size)
 
   /**
    * Retrieves the given SparkJob class from the cache if it's there, otherwise use the DAO to retrieve it.
@@ -47,7 +47,7 @@ class JobCacheImpl(maxEntries: Int,
       val jarPathReq =
         (dao ? JobDAOActor.GetBinaryPath(appName, BinaryType.Jar, uploadTime)).mapTo[JobDAOActor.BinaryPath]
       val jarPath = Await.result(jarPathReq, daoAskTimeout.duration).binPath
-      val jarFilePath = new File(jarPath).getAbsolutePath()
+      val jarFilePath = new File(jarPath).getAbsolutePath
       sparkContext.addJar(jarFilePath) // Adds jar for remote executors
       loader.addURL(new URL("file:" + jarFilePath)) // Now jar added for local loader
       val constructor = JarUtils.loadClassOrObject[spark.jobserver.api.SparkJobBase](classPath, loader)

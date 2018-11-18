@@ -1,8 +1,8 @@
 package spark.jobserver.util
 
 import com.typesafe.config.Config
-import akka.http.scaladsl.{Http, model}
-import akka.http.scaladsl.model.Multipart.FormData
+import akka.http.scaladsl.{Http}
+import akka.http.scaladsl.model.FormData
 import spray.json._
 
 import scala.concurrent.{Await, Future}
@@ -12,6 +12,7 @@ import akka.stream.{ActorMaterializer, ActorMaterializerSettings}
 import akka.util.ByteString
 import javax.ws.rs.GET
 
+import scala.concurrent.duration.Duration
 import scala.util.{Failure, Success}
 
 trait ForcefulKill {
@@ -42,10 +43,8 @@ class StandaloneForcefulKill(config: Config, appId: String) extends ForcefulKill
         uri = Uri("http://" + sparkMasterArray.head + ":8080/json/")
       )
 
-      val fBody = Await.result(Http().singleRequest(getRequest).map {
-        case HttpResponse(StatusCodes.OK, headers, entity, _) => entity.toStrict(3 seconds).map(_.data).map(_.utf8String)
-        case HttpResponse(status, headers, entity, _) => throw new Exception(s"Failed to get response: [$status] with body: $entity")
-      },5 seconds)
+      val fBody = getHTTPResponse(getRequest).entity.toStrict(30 seconds).map(_.data).map(_.utf8String)
+
       val ent = Await.result(fBody, 5 seconds)
 //      val result: HttpResponse = getHTTPResponse(pipeline, request)
       //  "status" is showing the state of this master
@@ -55,22 +54,26 @@ class StandaloneForcefulKill(config: Config, appId: String) extends ForcefulKill
       if (sparkMasterArray.isEmpty) throw NoAliveMasterException()
     }
 
-    val data = Multipart.FormData(Map(
-      "id" -> HttpEntity.Strict(MediaTypes.`text/plain`.toContentTypeWithMissingCharset, ByteString(appId)),
-      "terminate" -> HttpEntity.Strict(MediaTypes.`text/plain`.toContentTypeWithMissingCharset, ByteString("true"))
+    val data = FormData(Map(
+      "id" -> appId,
+      "terminate" -> "true"
+     )
     )
-    ).toEntity()
 
     val postRequest = HttpRequest(
       method = HttpMethods.POST,
       uri = Uri("http://" + sparkMasterArray.head + ":8080/app/kill/"),
-      entity = data
+      entity = data.toEntity
     )
 
-   Http().singleRequest(postRequest).map {
-      case HttpResponse(status, headers, entity, _) =>
-    }
+   getHTTPResponse(postRequest)
 
     system.terminate()
   }
+
+    import scala.concurrent.duration._
+  def getHTTPResponse(req: HttpRequest, timout: Duration = 30 seconds)(implicit system: ActorSystem): HttpResponse = {
+    Await.result(Http().singleRequest(req), timout)
+  }
+
 }

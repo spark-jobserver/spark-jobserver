@@ -3,7 +3,7 @@ import java.io.File
 import scala.sys.process.Process
 
 object PythonTasks {
-  val ext : String = if(System.getProperty("os.name").indexOf("Win") >= 0) "cmd" else "sh"
+  val ext: String = if(System.getProperty("os.name").indexOf("Win") >= 0) "cmd" else "sh"
 
   def workingDirectory(baseDirectory: File): File =
     new File(baseDirectory.getAbsolutePath + Seq("src", "python")

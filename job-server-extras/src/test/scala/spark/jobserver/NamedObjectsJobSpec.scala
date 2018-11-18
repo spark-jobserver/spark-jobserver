@@ -18,7 +18,7 @@ class NamedObjectsJobSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
     manager ! JobManagerActor.Initialize(cfg, None, emptyActor)
 
-    expectMsgClass(10.seconds, classOf[JobManagerActor.Initialized])
+    expectMsgClass(30.seconds, classOf[JobManagerActor.Initialized])
 
     uploadTestJar()
   }
@@ -34,39 +34,39 @@ class NamedObjectsJobSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
   private def getDeleteConfig(names: List[String]) : Config = {
     ConfigFactory.parseString("spark.jobserver.named-object-creation-timeout = 60 s, " +
-        NamedObjectsTestJobConfig.DELETE+" = [" + names.mkString(", ") + "]")
+        NamedObjectsTestJobConfig.DELETE + " = [" + names.mkString(", ") + "]")
   }
 
   describe("NamedObjects (RDD)") {
     it("should survive from one job to another one") {
-      manager ! JobManagerActor.StartJob("demo", jobName, getCreateConfig(false, true), errorEvents ++ syncEvents)
+      manager ! JobManagerActor.StartJob("demo", jobName, getCreateConfig(createDF = false, createRDD = true), errorEvents ++ syncEvents)
       val JobResult(_, names: Array[String]) = expectMsgClass(classOf[JobResult])
       names should contain("rdd1")
 
-      manager ! JobManagerActor.StartJob("demo", jobName, getCreateConfig(false, false), errorEvents ++ syncEvents)
+      manager ! JobManagerActor.StartJob("demo", jobName, getCreateConfig(createDF = false, createRDD = false), errorEvents ++ syncEvents)
       val JobResult(_, names2: Array[String]) = expectMsgClass(classOf[JobResult])
 
       names2 should contain("rdd1")
-      names2 should not contain("df1")
+      names2 should not contain "df1"
 
       //clean-up
       manager ! JobManagerActor.StartJob("demo", jobName, getDeleteConfig(List("rdd1")), errorEvents ++ syncEvents)
       val JobResult(_, names3: Array[String]) = expectMsgClass(classOf[JobResult])
 
-      names3 should not contain("rdd1")
-      names3 should not contain("df1")
+      names3 should not contain "rdd1"
+      names3 should not contain "df1"
     }
   }
 
   describe("NamedObjects (DataFrame)") {
     it("should survive from one job to another one") {
-      manager ! JobManagerActor.StartJob("demo", jobName, getCreateConfig(true, false), errorEvents ++ syncEvents)
+      manager ! JobManagerActor.StartJob("demo", jobName, getCreateConfig(createDF = true, createRDD = false), errorEvents ++ syncEvents)
       // for some reason, this just needs some more time to finish occasinally
       val JobResult(_, names: Array[String]) = expectMsgClass(10.seconds, classOf[JobResult])
 
       names should contain("df1")
 
-      manager ! JobManagerActor.StartJob("demo", jobName, getCreateConfig(false, false), errorEvents ++ syncEvents)
+      manager ! JobManagerActor.StartJob("demo", jobName, getCreateConfig(createDF = false, createRDD = false), errorEvents ++ syncEvents)
       val JobResult(_, names2: Array[String]) = expectMsgClass(classOf[JobResult])
 
       names2 should equal(names)
@@ -79,13 +79,13 @@ class NamedObjectsJobSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
   describe("NamedObjects (DataFrame + RDD)") {
     it("should survive from one job to another one") {
-      manager ! JobManagerActor.StartJob("demo", jobName, getCreateConfig(true, true), errorEvents ++ syncEvents)
+      manager ! JobManagerActor.StartJob("demo", jobName, getCreateConfig(createDF = true, createRDD = true), errorEvents ++ syncEvents)
       val JobResult(_, names: Array[String]) = expectMsgClass(classOf[JobResult])
 
       names should contain("rdd1")
       names should contain("df1")
 
-      manager ! JobManagerActor.StartJob("demo", jobName, getCreateConfig(false, false), errorEvents ++ syncEvents)
+      manager ! JobManagerActor.StartJob("demo", jobName, getCreateConfig(createDF = false, createRDD = false), errorEvents ++ syncEvents)
       val JobResult(_, names2: Array[String]) = expectMsgClass(classOf[JobResult])
 
       names2 should equal(names)
@@ -99,14 +99,14 @@ class NamedObjectsJobSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
   describe("NamedObjects (Broadcast)") {
     it("should survive from one job to another one") {
 
-      manager ! JobManagerActor.StartJob("demo", jobName, getCreateConfig(true, true, true), errorEvents ++ syncEvents)
+      manager ! JobManagerActor.StartJob("demo", jobName, getCreateConfig(createDF = true, createRDD = true, createBroadcast = true), errorEvents ++ syncEvents)
       val JobResult(_, names: Array[String]) = expectMsgClass(classOf[JobResult])
 
       names should contain("rdd1")
       names should contain("df1")
       names should contain("broadcast1")
 
-      manager ! JobManagerActor.StartJob("demo", jobName, getCreateConfig(false, false, false), errorEvents ++ syncEvents)
+      manager ! JobManagerActor.StartJob("demo", jobName, getCreateConfig(createDF = false, createRDD = false, createBroadcast = false), errorEvents ++ syncEvents)
       val JobResult(_, names2: Array[String]) = expectMsgClass(classOf[JobResult])
 
       names2 should equal(names)

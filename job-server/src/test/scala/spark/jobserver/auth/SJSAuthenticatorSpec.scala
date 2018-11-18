@@ -2,7 +2,7 @@ package spark.jobserver.auth
 
 import akka.actor.ActorSystem
 import akka.testkit.TestKit
-import org.scalatest.{ FunSpecLike, FunSpec, BeforeAndAfter, BeforeAndAfterAll, Matchers }
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpec, FunSpecLike, Matchers}
 import org.apache.shiro.config.IniSecurityManagerFactory
 import org.apache.shiro.mgt.DefaultSecurityManager
 import org.apache.shiro.mgt.SecurityManager
@@ -10,19 +10,19 @@ import org.apache.shiro.realm.Realm
 import org.apache.shiro.SecurityUtils
 import org.apache.shiro.config.Ini
 import spark.jobserver.auth._
-import spray.routing.authentication.UserPass
+import akka.http.scaladsl.server.RequestContext
+import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.testkit.ScalatestRouteTest
 
-import spray.routing.directives.AuthMagnet
-import spray.routing.{ HttpService, Route, RequestContext }
-import spray.http.StatusCodes
-import spray.testkit.ScalatestRouteTest
 import scala.concurrent.duration.Duration
-import scala.concurrent.{ Await, ExecutionContext, Future }
+import scala.concurrent.{Await, ExecutionContext, Future}
 import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeoutException
 
+import akka.http.scaladsl.model.headers.{BasicHttpCredentials, HttpCredentials}
+
 object SJSAuthenticatorSpec {
-    //edit this with your real LDAP server information, just remember not to 
+    //edit this with your real LDAP server information, just remember not to
   // check it in....
   val LdapIniConfig = """
 # use this for basic ldap authorization, without group checking
@@ -71,11 +71,8 @@ goodguy = winnebago:drive:eagle5
 
 }
 
-class SJSAuthenticatorSpec extends HttpService with SJSAuthenticator with FunSpecLike
+class SJSAuthenticatorSpec extends SJSAuthenticator with FunSpecLike
     with ScalatestRouteTest with Matchers with BeforeAndAfter with BeforeAndAfterAll {
-
-  def actorRefFactory = system
-
 
   //set this to true to check your real ldap server
   val isGroupChecking = false
@@ -93,7 +90,7 @@ class SJSAuthenticatorSpec extends HttpService with SJSAuthenticator with FunSpe
   val sManager = factory.getInstance()
   SecurityUtils.setSecurityManager(sManager)
 
-  val logger = LoggerFactory.getLogger(getClass)
+  override val logger = LoggerFactory.getLogger(getClass)
 
   val testUserWithValidGroup = if (isGroupChecking) {
     "user"
@@ -121,26 +118,26 @@ class SJSAuthenticatorSpec extends HttpService with SJSAuthenticator with FunSpe
   val testUserInvalid = "no-user"
   val testUserInvalidPassword = "pw"
 
-  override def afterAll():Unit = {
+  override def afterAll(): Unit = {
     TestKit.shutdownActorSystem(system)
   }
 
   describe("SJSAuthenticator") {
     it("should allow user with valid role/group") {
-      explicitValidation(new UserPass(testUserWithValidGroup, testUserWithValidGroupPassword), logger) should equal(Some(new AuthInfo(User(testUserWithValidGroup))))
+      explicitValidation(new BasicHttpCredentials(testUserWithValidGroup, testUserWithValidGroupPassword), logger) should equal(true)
     }
 
     it("should check role/group when checking is activated") {
       val expected = if (isGroupChecking) {
-        None
+        false
       } else {
-        Some(new AuthInfo(User(testUserWithoutValidGroup)))
+        true
       }
-      explicitValidation(new UserPass(testUserWithoutValidGroup, testUserWithoutValidGroupPassword), logger) should equal(expected)
+      explicitValidation(new BasicHttpCredentials(testUserWithoutValidGroup, testUserWithoutValidGroupPassword), logger) should equal(expected)
     }
 
     it("should not allow invalid user") {
-      explicitValidation(new UserPass(testUserInvalid, testUserInvalidPassword), logger) should equal(None)
+      explicitValidation(new BasicHttpCredentials(testUserInvalid, testUserInvalidPassword), logger) should equal(false)
     }
   }
 

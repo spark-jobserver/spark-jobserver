@@ -1,29 +1,25 @@
 package spark.jobserver
 
-import akka.actor.{ActorSystem, ActorRef, ActorContext, Props}
-
+import akka.actor.{ActorContext, ActorRef, ActorSystem, Props}
 import akka.util.Timeout
 import akka.pattern.ask
 import akka.cluster.Cluster
 import akka.cluster.ClusterEvent.{InitialStateAsEvents, MemberEvent}
 import akka.actor.AddressFromURIString
-
-import com.typesafe.config.{ConfigValueFactory, Config, ConfigFactory}
+import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import java.io.File
 import java.util.concurrent.TimeUnit
-import spark.jobserver.io.{
-  BinaryType, JobDAOActor, JobDAO, DataFileDAO, ContextStatus, ContextInfo, JobStatus, ErrorData}
+
+import spark.jobserver.io.{BinaryType, ContextInfo, ContextStatus, DataFileDAO, ErrorData, JobDAO, JobDAOActor, JobStatus}
 import spark.jobserver.util.ContextReconnectFailedException
 import org.joda.time.DateTime
-
-import org.slf4j.LoggerFactory
+import org.slf4j.{Logger, LoggerFactory}
 
 import scala.collection.JavaConverters._
 import scala.concurrent.{Await, ExecutionContext}
 import scala.concurrent.duration._
-import scala.util.{Try, Success, Failure}
+import scala.util.{Failure, Success, Try}
 import scala.collection.mutable.ListBuffer
-
 import com.google.common.annotations.VisibleForTesting
 
 /**
@@ -43,8 +39,8 @@ import com.google.common.annotations.VisibleForTesting
  * }}}
  */
 object JobServer {
-  val logger = LoggerFactory.getLogger(getClass)
-  implicit val ec = scala.concurrent.ExecutionContext.Implicits.global
+  val logger: Logger = LoggerFactory.getLogger(getClass)
+  implicit val ec: ExecutionContext = scala.concurrent.ExecutionContext.Implicits.global
 
   class InvalidConfiguration(error: String) extends RuntimeException(error)
 
@@ -118,9 +114,9 @@ object JobServer {
 
     val ctor = jobDaoClass.getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
     val jobDAO = ctor.newInstance(config).asInstanceOf[JobDAO]
-    val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO), "dao-manager")
+    val daoActor = system.actorOf(JobDAOActor.props(jobDAO), "dao-manager")
     val dataFileDAO = new DataFileDAO(config)
-    val dataManager = system.actorOf(Props(classOf[DataManagerActor], dataFileDAO), "data-manager")
+    val dataManager = system.actorOf(DataManagerActor.props(dataFileDAO), "data-manager")
     val binManager = system.actorOf(Props(classOf[BinaryManager], daoActor), "binary-manager")
 
     // Add initial job JARs, if specified in configuration.
@@ -148,7 +144,7 @@ object JobServer {
           logger.info("Subscribing to MemberUp event")
           cluster.subscribe(supervisor, classOf[MemberEvent])
 
-          if (existingManagerActorRefs.length > 0) {
+          if (existingManagerActorRefs.nonEmpty) {
             supervisor ! ContextSupervisor.RegainWatchOnExistingContexts(existingManagerActorRefs)
           }
 
@@ -168,7 +164,7 @@ object JobServer {
     initialSeedNode match {
       case None =>
         val selfAddress = cluster.selfAddress
-        logger.info(s"Joining newly created cluster at ${selfAddress}")
+        logger.info(s"Joining newly created cluster at $selfAddress")
         cluster.join(selfAddress)
       case Some(actorRef) =>
         logger.info(s"Joining existing cluster at ${actorRef.path.address.toString}")
@@ -226,7 +222,7 @@ object JobServer {
         (jobDaoActor ? JobDAOActor.GetContextInfos(None, Some(Seq(ContextStatus.Running))))(daoAskTimeout).
         mapTo[JobDAOActor.ContextInfos], daoAskTimeout.duration)
 
-    resp.contextInfos.map{ contextInfo =>
+    resp.contextInfos.foreach{ contextInfo =>
       getManagerActorRef(contextInfo, system) match {
         case None => setReconnectionFailedForContextAndJobs(contextInfo, jobDaoActor)
         case Some(actorRef) => validManagerRefs += actorRef
@@ -241,7 +237,7 @@ object JobServer {
       logger.info("Adding initial job jars: {}", initialJarsConfig.render())
       initialJarsConfig
         .asScala
-        .map { case (key, value) => (key, value.unwrapped.toString) }
+        .map { case (k, value) => (k, value.unwrapped.toString) }
         .toMap
     } else {
       Map()
@@ -293,7 +289,7 @@ object JobServer {
 
   private def checkIfAkkaTcpPortSpecifiedForSuperviseMode(driverMode: String,
       superviseModeEnabled: Boolean, akkaTcpPort: Int) {
-    if (driverMode == "cluster" && superviseModeEnabled == true && akkaTcpPort == 0) {
+    if (driverMode == "cluster" && superviseModeEnabled && akkaTcpPort == 0) {
       throw new InvalidConfiguration("Supervise mode requires akka.remote.netty.tcp.port to be hardcoded")
     }
   }
