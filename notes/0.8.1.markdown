@@ -27,3 +27,4 @@
 * Improved documentation in readme for H2 db (@ericraymond)
 * docs(jobserver): Add new logging doc and a line to cluster doc (@LXXIII73)
 * docs(jobserver): Update JMX documentation for Akka Cluster (@bsikander)
+* fix(job-server): use 24h format for cached binary file name (@sgautrin)

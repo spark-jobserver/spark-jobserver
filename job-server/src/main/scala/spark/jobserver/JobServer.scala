@@ -175,6 +175,9 @@ object JobServer {
   @VisibleForTesting
   def getManagerActorRef(contextInfo: ContextInfo, system: ActorSystem): Option[ActorRef] = {
     val finiteDuration = FiniteDuration(3, SECONDS)
+    if (contextInfo.actorAddress == None) {
+      return None
+    }
     val clusterAddress = contextInfo.actorAddress.get
     val address = clusterAddress + "/user/" + AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX +
         contextInfo.id
@@ -219,7 +222,8 @@ object JobServer {
     val config = system.settings.config
     val daoAskTimeout = Timeout(config.getDuration("spark.jobserver.dao-timeout", TimeUnit.SECONDS).second)
     val resp = Await.result(
-        (jobDaoActor ? JobDAOActor.GetContextInfos(None, Some(Seq(ContextStatus.Running))))(daoAskTimeout).
+        (jobDaoActor ? JobDAOActor.GetContextInfos(None, Some(
+          Seq(ContextStatus.Running, ContextStatus.Stopping))))(daoAskTimeout).
         mapTo[JobDAOActor.ContextInfos], daoAskTimeout.duration)
 
     resp.contextInfos.foreach{ contextInfo =>

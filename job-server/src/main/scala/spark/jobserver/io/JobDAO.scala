@@ -70,10 +70,45 @@ case class JobInfo(jobId: String, contextId: String, contextName: String,
   def jobLengthMillis: Option[Long] = endTime.map { end => new Duration(startTime, end).getMillis }
 }
 
+trait ContextUnModifiableAttributes {
+  def id: String
+  def name: String
+  def config: String
+  def startTime: DateTime
+}
+
+trait ContextModifiableAttributes {
+  def actorAddress: Option[String]
+  def endTime: Option[DateTime]
+  def state: String
+  def error: Option[Throwable]
+}
+
+object ContextInfoModifiable {
+  def apply(state: String): ContextInfoModifiable = new ContextInfoModifiable(state)
+  def apply(state: String, error: Option[Throwable]): ContextInfoModifiable =
+    new ContextInfoModifiable(state, error)
+
+  def getEndTime(state: String): Option[DateTime] = {
+    ContextStatus.getFinalStates().contains(state) match {
+      case true => Some(DateTime.now())
+      case false => None
+    }
+  }
+}
+
+case class ContextInfoModifiable(actorAddress: Option[String], endTime: Option[DateTime],
+             state: String, error: Option[Throwable]) extends ContextModifiableAttributes {
+  def this(state: String) = this(None, ContextInfoModifiable.getEndTime(state), state, None)
+  def this(state: String, error: Option[Throwable]) =
+    this(None, ContextInfoModifiable.getEndTime(state), state, error)
+}
+
 case class ContextInfo(id: String, name: String,
                    config: String, actorAddress: Option[String],
                    startTime: DateTime, endTime: Option[DateTime],
                    state: String, error: Option[Throwable])
+  extends ContextUnModifiableAttributes with ContextModifiableAttributes
 
 object JobStatus {
   val Running = "RUNNING"

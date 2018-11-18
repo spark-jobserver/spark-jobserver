@@ -5,14 +5,13 @@ import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import com.typesafe.config.Config
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfterAll, FunSpecLike, Matchers}
-import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.io.JobDAOActor._
 
-import scala.concurrent.{ExecutionContext, Future, Promise}
+import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
-
 import spark.jobserver.common.akka.AkkaTestUtils
+import spark.jobserver.util.NoMatchingDAOObjectException
 
 object JobDAOActorSpec {
   val system = ActorSystem("dao-test")
@@ -21,6 +20,7 @@ object JobDAOActorSpec {
 
   val cleanupProbe = TestProbe()(system)
   val unblockingProbe = TestProbe()(system)
+  val spyProbe = TestProbe()(system)
 
   object DummyDao extends JobDAO{
 
@@ -45,11 +45,32 @@ object JobDAOActorSpec {
     override def saveContextInfo(contextInfo: ContextInfo): Unit = {
       contextInfo.id match {
         case "success" =>
-        case "failure" => throw new Exception("deliberate failure")
+        case "update-running" | "update-with-address" | "update-non-final" =>
+          spyProbe.ref ! contextInfo
+          unblockingProbe.expectMsg("unblock")
+        case "failure" | "update-fail" => throw new Exception("deliberate failure")
       }
     }
 
-    override def getContextInfo(id: String): Future[Option[ContextInfo]] = ???
+    override def getContextInfo(id: String): Future[Option[ContextInfo]] = {
+      id match {
+        case "update-running" => Future.successful(
+          Option(ContextInfo("update-running", "name", "config", None,
+            DateTime.now(), None, ContextStatus.Running, None)))
+        case "update-with-address" => Future.successful(
+          Option(ContextInfo("update-with-address", "name", "config", Some("address"),
+            DateTime.now(), None, ContextStatus.Running, None)))
+        case "update-non-final" => Future.successful(
+          Option(ContextInfo("update-non-final", "name", "config", None,
+            DateTime.now(), None, ContextStatus.Stopping, None)))
+        case "update-dao-fail" => Future.failed(new Exception("deliberate failure"))
+        case "update-not-found" => Future.successful(None)
+        case "update-fail" => Future.successful(
+          Option(ContextInfo("update-fail", "name", "config", None,
+            DateTime.now(), None, ContextStatus.Running, None)))
+        case _ => Future.successful(None)
+      }
+    }
 
     override def getContextInfos(limit: Option[Int] = None, statuses: Option[Seq[String]] = None):
       Future[Seq[ContextInfo]] = ???
@@ -171,6 +192,68 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       val failedMsg = expectMsgType[SaveFailed]
       failedMsg.error.getMessage should be("deliberate failure")
     }
-  }
 
+    it("should update context by id with all attributes") {
+      val contextId = "update-running"
+      val endTime = DateTime.now()
+      daoActor ! UpdateContextById(contextId, ContextInfoModifiable(
+          Some("new-address"), Some(endTime), ContextStatus.Error, Some(new Exception("Yay!"))))
+
+      val msg = spyProbe.expectMsgType[ContextInfo]
+      msg.id should be(contextId)
+      msg.state should be(ContextStatus.Error)
+      msg.actorAddress.get should be("new-address")
+      msg.endTime.get should be(endTime)
+      msg.error.get.getMessage should be("Yay!")
+      unblockingProbe.ref ! "unblock"
+      expectMsg(5.seconds, SavedSuccessfully)
+    }
+
+    it("should update with new values and if final state is being set then should also set the end time") {
+      val contextId = "update-with-address"
+      daoActor ! UpdateContextById(contextId, ContextInfoModifiable(
+        ContextStatus.Killed, Some(new Exception("Nooo!"))))
+
+      val msg = spyProbe.expectMsgType[ContextInfo]
+      msg.id should be(contextId)
+      msg.state should be(ContextStatus.Killed)
+      msg.actorAddress.get should be("address")
+      msg.endTime should not be(None)
+      msg.error.get.getMessage should be("Nooo!")
+      unblockingProbe.ref ! "unblock"
+      expectMsg(5.seconds, SavedSuccessfully)
+    }
+
+    it("should update with new values and if non-final state is being set then endTime should be None") {
+      val contextId = "update-non-final"
+      daoActor ! UpdateContextById(contextId, ContextInfoModifiable(
+        ContextStatus.Stopping))
+
+      val msg = spyProbe.expectMsgType[ContextInfo]
+      msg.id should be(contextId)
+      msg.state should be(ContextStatus.Stopping)
+      msg.actorAddress should be(None)
+      msg.endTime should be(None)
+      msg.error should be(None)
+      unblockingProbe.ref ! "unblock"
+      expectMsg(5.seconds, SavedSuccessfully)
+    }
+
+    it("should respond with SaveFailed if DAO calls fails (no context or exceptio)") {
+      val contextId = "update-dao-fail"
+      daoActor ! UpdateContextById(contextId, ContextInfoModifiable(
+        ContextStatus.Restarting))
+      expectMsgType[SaveFailed].error.getMessage() should be("deliberate failure")
+
+      val contextId2 = "update-not-found"
+      daoActor ! UpdateContextById(contextId2, ContextInfoModifiable(
+        ContextStatus.Running))
+      expectMsgType[SaveFailed].error.getMessage() should be(NoMatchingDAOObjectException().getMessage)
+
+      val contextId3 = "update-fail"
+      daoActor ! UpdateContextById(contextId3, ContextInfoModifiable(
+        ContextStatus.Started))
+      expectMsgType[SaveFailed].error.getMessage() should be("deliberate failure")
+    }
+  }
 }
