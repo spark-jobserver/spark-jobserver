@@ -1,7 +1,6 @@
 package spark.jobserver.util
 
 import java.io.{InputStreamReader, Reader}
-import java.net.URI
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
@@ -14,21 +13,23 @@ import scala.util.control.NonFatal
   * If no parameter is passed then config file is expected to be on the classpath
   * otherwise inputs should be valid uri's with scheme.
   */
-class HadoopFSFacade(hadoopConf: Configuration = new Configuration()) {
+class HadoopFSFacade(hadoopConf: Configuration = new Configuration(),
+                     implicit val defaultFS: String = "") {
   private val logger = LoggerFactory.getLogger(getClass)
 
   /**
     * This function checks if file exists in any hadoop supported file system.
     * Example file path formats
-    *   Local: /tmp/test.txt, file:/tmp/test.txt, file:///tmp/test.txt
+    *   Local: file:/tmp/test.txt, file:///tmp/test.txt
     *   HDFS: hdfs:///tmp/test.txt, hdfs://namenode:port/tmp/test, s3:///tmp/test.txt
     * @param filePath path of jar file preferably with scheme
     * @return true if exists, false otherwise
     */
   def isFile(filePath: String): Option[Boolean] = {
     try {
-      val fs = FileSystem.get(getPathURI(filePath), hadoopConf)
-      Some(fs.isFile(new Path(filePath)))
+      val path = new Path(filePath)
+      val fs = getFileSystem(filePath)(defaultFS)
+      Some(fs.isFile(path))
     } catch {
       case NonFatal(e) =>
         logger.error(e.getMessage)
@@ -43,8 +44,9 @@ class HadoopFSFacade(hadoopConf: Configuration = new Configuration()) {
     */
   def get(filePath: String): Option[Reader] = {
     try {
-      val fs = FileSystem.get(getPathURI(filePath), hadoopConf)
-      val stream = fs.open(new Path(filePath))
+      val path = new Path(filePath)
+      val fs = getFileSystem(filePath)
+      val stream = fs.open(path)
       Some(new InputStreamReader(stream))
     } catch {
       case NonFatal(e) =>
@@ -63,7 +65,7 @@ class HadoopFSFacade(hadoopConf: Configuration = new Configuration()) {
   def save(filePath: String, bytes: Array[Byte], skipIfExists: Boolean = false): Boolean = {
     try {
       val path = new Path(filePath)
-      val fs = FileSystem.get(path.toUri, hadoopConf)
+      val fs = getFileSystem(filePath)
       if (skipIfExists && fs.exists(path)) {
         logger.info(s"Skip saving the file: $filePath already exists on HDFS.")
       } else {
@@ -88,8 +90,9 @@ class HadoopFSFacade(hadoopConf: Configuration = new Configuration()) {
     */
   def delete(filePath: String, recursive: Boolean = false): Boolean = {
     try {
-      val fs = FileSystem.get(getPathURI(filePath), hadoopConf)
-      fs.delete(new Path(filePath), recursive)
+      val path = new Path(filePath)
+      val fs = getFileSystem(filePath)
+      fs.delete(path, recursive)
     } catch {
       case NonFatal(e) =>
         logger.error(e.getMessage)
@@ -98,19 +101,27 @@ class HadoopFSFacade(hadoopConf: Configuration = new Configuration()) {
   }
 
   /**
-    * This function returns a URI of the file path. If there is no scheme specified
-    * it applies default scheme (defaults to "file:").
-    * Example: /tmp/test.txt -> file:/tmp/test.txt
-    *          hdfs:///tmp/test.txt -> hdfs:///tmp/test.txt (already has schema)
-    * @param filePath path of the file
-    * @return URI of the path
+    * Creates file system object taking in account preferred defaultFS. If path doesn't use current defaultFS
+    * settings, overwrite to wished value.
+    * Examples:
+    *   path: /path/to/file, defaultFS: hdfs://localhost:8020, wished defaultFS: file:/// -> overwrite
+    *   path: hdfs:///path, defaultFS: hdfs://localhost:8020, wished defaultFS: file:/// -> keep defaults
+    * This functions helps HadoopFS to act as local FS for configuration files
+    * @param filePath path for which to create file system object
+    * @param defaultFS (implicit) new value for defaultFS. if not needed, pass empty string.
+    * @return file system object, with needed defaultFS depending on given path and real defaultFS value
     */
-  def getPathURI(filePath: String, defaultSchema: String = "file"): URI = {
-    val path = new Path(filePath).toUri
-    Option(path.getScheme) match {
-      case None => new URI(s"$defaultSchema:$filePath")
-      case _ => path
+  def getFileSystem(filePath: String)(implicit defaultFS: String): FileSystem = {
+    if (defaultFS != "") {
+      val defaultFSPrefix = hadoopConf.get("fs.defaultFS", "").split(":")(0)
+      // don't overwrite default schema if it's used
+      if (defaultFSPrefix != "" && !filePath.startsWith(defaultFSPrefix)) {
+        val modifiedConf = new Configuration(hadoopConf)
+        modifiedConf.set("fs.defaultFS", defaultFS)
+        return FileSystem.get(new Path(filePath).toUri, modifiedConf)
+      }
     }
+    FileSystem.get(new Path(filePath).toUri, hadoopConf)
   }
 }
 

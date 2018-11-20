@@ -2,50 +2,56 @@ package spark.jobserver.io
 
 import com.typesafe.config.{Config, ConfigFactory}
 import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
-import spark.jobserver.util.HDFSClusterLike
+import spark.jobserver.util.{HDFSClusterLike, HadoopFSFacade}
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
 class HdfsBinaryDAOSpec extends FunSpec with Matchers with BeforeAndAfterAll with HDFSClusterLike {
   private var hdfsDAO: HdfsBinaryDAO = _
+  private var testDir: String = _
+  private val testFileName = "test_file"
+  private val timeout = 30 seconds
 
   override def beforeAll: Unit = {
     super.startHDFS()
     val testClusterUrl = getNameNodeURI()
+    testDir = s"$testClusterUrl/binarydao-test"
     def config: Config = ConfigFactory.parseString(
-      s"""spark.jobserver.combineddao.binarydao.dir = "$testClusterUrl/binarydao-test""""
+      s"""spark.jobserver.combineddao.binarydao.dir = "$testDir""""
     )
     hdfsDAO = new HdfsBinaryDAO(config)
   }
 
   override def afterAll(): Unit = {
-    hdfsDAO.delete(s"/") // cleanup artifacts
+    new HadoopFSFacade().delete(testDir, recursive = true) // cleanup artifacts
     super.shutdownHDFS()
   }
 
   describe("write, get, delete binary data") {
     it("should write, get, delete the file from hdfs") {
       val testArray: Array[Byte] = Array(1, 4, 4, 1)
-      Await.result(hdfsDAO.get("test_file"), 60 seconds) should equal (None) // ensure there is no file before
-      Await.result(hdfsDAO.save("test_file", testArray), 60 seconds) should equal (true)
-      Await.result(hdfsDAO.get("test_file"), 60 seconds).get should equal (testArray)
-      Await.result(hdfsDAO.delete("test_file"), 60 seconds) should equal (true)
-      Await.result(hdfsDAO.get("test_file"), 60 seconds) should equal (None) // ensure there is no file after
+      Await.result(
+        hdfsDAO.get(testFileName), timeout) should equal (None) // ensure there is no file before
+      Await.result(hdfsDAO.save(testFileName, testArray), timeout) should equal (true)
+      Await.result(hdfsDAO.get(testFileName), timeout).get should equal (testArray)
+      Await.result(hdfsDAO.delete(testFileName), timeout) should equal (true)
+      Await.result(
+        hdfsDAO.get(testFileName), timeout) should equal (None) // ensure there is no file after
     }
 
     it("should return nothing if file doesn't exist") {
-      Await.result(hdfsDAO.get("some_random_file"), 60 seconds) should equal (None)
+      Await.result(hdfsDAO.get(testFileName), timeout) should equal (None)
     }
 
     it("should return false if delete is unsuccessful") {
-      Await.result(hdfsDAO.delete("some_random_file"), 60 seconds) should equal (false)
+      Await.result(hdfsDAO.delete(testFileName), timeout) should equal (false)
     }
 
     it("should return true writing a file which already exists") {
       val testArray: Array[Byte] = "Test file".toCharArray.map(_.toByte)
-      Await.result(hdfsDAO.save("test_file", testArray), 60 seconds) should equal (true)
-      Await.result(hdfsDAO.save("test_file", testArray), 60 seconds) should equal (true)
+      Await.result(hdfsDAO.save(testFileName, testArray), timeout) should equal (true)
+      Await.result(hdfsDAO.save(testFileName, testArray), timeout) should equal (true)
     }
   }
 
@@ -55,7 +61,7 @@ class HdfsBinaryDAOSpec extends FunSpec with Matchers with BeforeAndAfterAll wit
         s"""spark.jobserver.combineddao.binarydao.dir = "hdfs://foo:foo/binarydao-test""""
       )
       hdfsDAO = new HdfsBinaryDAO(config)
-      Await.result(hdfsDAO.delete("some_random_file"), 60 seconds) should equal(false)
+      Await.result(hdfsDAO.delete(testFileName), timeout) should equal(false)
     }
   }
 }

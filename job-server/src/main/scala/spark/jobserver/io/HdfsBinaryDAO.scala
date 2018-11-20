@@ -1,7 +1,5 @@
 package spark.jobserver.io
 
-import java.nio.file.FileAlreadyExistsException
-
 import com.typesafe.config.Config
 import org.apache.commons.io.IOUtils.toByteArray
 import org.slf4j.LoggerFactory
@@ -18,7 +16,7 @@ class HdfsBinaryDAO(config: Config) extends BinaryDAO {
   private val logger = LoggerFactory.getLogger(getClass)
 
   private val binaryBasePath =
-    config.getString("spark.jobserver.combineddao.binarydao.dir").stripPrefix("/").stripSuffix("/")
+    config.getString("spark.jobserver.combineddao.binarydao.dir").stripSuffix("/")
   private val hdfsFacade = new HadoopFSFacade()
 
   override def validateConfig(config: Config): Boolean = {
