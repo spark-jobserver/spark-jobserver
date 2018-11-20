@@ -59,10 +59,11 @@ class JobServerNamedObjects(system: ActorSystem) extends NamedObjects {
       logger.info("Named object [{}] not found, starting creation", key)
       val future = Future { f() }
 
-      future onComplete(_ => logger.info("Named object [{}] created", key))
-      future onFailure{
-        case e: Exception =>
-          logger.error("Named object [{}] creation failed with error: {}", key, e.toString, e)
+      future onComplete{
+        case Success(_) =>
+          logger.info("Named object [{}] created", key)
+        case Failure(exception) =>
+          logger.error("Named object [{}] creation failed with error: {}", key, exception.toString, exception)
       }
 
       future

@@ -240,7 +240,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
   with BeforeAndAfter with BeforeAndAfterAll {
 
   val daoTimeout: FiniteDuration = 5.seconds.dilated
-  val contextInitTimeout: FiniteDuration = 10.seconds.dilated
+  val contextInitTimeout: FiniteDuration = 60.seconds.dilated
   var supervisor: ActorRef = _
   var dao: JobDAO = _
   var daoActor: ActorRef = _

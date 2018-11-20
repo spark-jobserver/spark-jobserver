@@ -8,9 +8,8 @@ import akka.http.scaladsl.common.{EntityStreamingSupport, JsonEntityStreamingSup
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport.sprayJsonMarshaller
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.headers.{HttpCredentials, Location, `Content-Type`}
-import akka.http.scaladsl.server.{Directives, ExceptionHandler, RejectionHandler, Route}
+import akka.http.scaladsl.server._
 import akka.http.scaladsl.server.Directives._
-import akka.http.scaladsl.server.{Directive1, RequestContext, Route}
 import akka.pattern.ask
 import akka.stream.scaladsl
 import akka.util.Timeout
@@ -166,8 +165,8 @@ class WebApi(system: ActorSystem,
 
   override val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  val rejectionHandler = corsRejectionHandler withFallback RejectionHandler.default
-  val handleErrors = handleRejections(rejectionHandler)
+  val rejectionHandler: RejectionHandler = corsRejectionHandler withFallback RejectionHandler.default
+  val handleErrors: Directive0 = handleRejections(rejectionHandler)
 
   val myRoutes: Route = cors() {
     handleErrors {
@@ -331,9 +330,12 @@ class WebApi(system: ActorSystem,
              onComplete( binaryManager ? StoreBinary(appName, BinaryType.Jar, jarBytes)) {
                case Success(value) =>
                  value match {
-                   case BinaryStored => complete(StatusCodes.OK, successMap("Jar uploaded"))
-                   case InvalidBinary => complete(StatusCodes.BadRequest, errMap("Jar is not of the right format"))
-                   case BinaryStorageFailure(ex) => complete(StatusCodes.InternalServerError, errMap(ex, "Storage Failure"))
+                   case BinaryStored =>
+                     complete(StatusCodes.OK, successMap("Jar uploaded"))
+                   case InvalidBinary =>
+                     complete(StatusCodes.BadRequest, errMap("Jar is not of the right format"))
+                   case BinaryStorageFailure(ex) =>
+                     complete(StatusCodes.InternalServerError, errMap(ex, "Storage Failure"))
                  }
                case Failure(ex) => complete(StatusCodes.InternalServerError, errMap(ex, "ERROR"))
              }
@@ -602,7 +604,8 @@ class WebApi(system: ActorSystem,
                         case JobResult(_, result) =>
                           result match {
                             case s: Stream[_] =>
-                              implicit val jsonStreamingSupport: JsonEntityStreamingSupport = EntityStreamingSupport.json()
+                              implicit val jsonStreamingSupport: JsonEntityStreamingSupport =
+                                EntityStreamingSupport.json()
                               complete(scaladsl.Source(s.asInstanceOf[Stream[String]]))
                             case _ => complete(jobReport ++ resultToTable(result))
                           }
@@ -635,7 +638,8 @@ class WebApi(system: ActorSystem,
                 }
               case JobInfo(_, _, _, _, _, state, _, _, Some(ex)) if state.equals(JobStatus.Error) =>
                 complete(Map(StatusKey -> JobStatus.Error, "ERROR" -> formatException(ex)))
-              case JobInfo(_, _, _, _, _, state, _, _, _) if state.equals(JobStatus.Finished) || state.equals(JobStatus.Killed) =>
+              case JobInfo(_, _, _, _, _, state, _, _, _)
+                if state.equals(JobStatus.Finished) || state.equals(JobStatus.Killed) =>
                 complete(StatusCodes.NotFound, errMap(s"No such job ID $jobId"))
               case _ => complete(StatusCodes.InternalServerError, errMap("Received an unexpected message"))
             }
@@ -670,10 +674,10 @@ class WebApi(system: ActorSystem,
 
           onComplete((jobInfoActor ? GetJobStatuses(Some(limit), statusUpperCaseOpt)).mapTo[Seq[JobInfo]]) {
             case Success(infos) =>
-              val jobReport = infos.map { info => getJobReport(info)
-              }
+              val jobReport = infos.map(getJobReport(_))
               complete(jobReport)
-            case Failure(ex) => complete(StatusCodes.InternalServerError, errMap(ex, "ERROR"))
+            case Failure(ex) =>
+              complete(StatusCodes.InternalServerError, errMap(ex, "ERROR"))
           }
         }
       } ~
@@ -695,7 +699,8 @@ class WebApi(system: ActorSystem,
          */
       post {
         entity(as[String]) { configString =>
-          parameters('appName, 'classPath, 'context ?, 'sync.as[Boolean] ?, 'timeout.as[Int] ?, SparkJobUtils.SPARK_PROXY_USER_PARAM ?) {
+          parameters('appName, 'classPath, 'context ?,
+            'sync.as[Boolean] ?, 'timeout.as[Int] ?, SparkJobUtils.SPARK_PROXY_USER_PARAM ?) {
             (appName, classPath, contextOpt, syncOpt, timeoutOpt, sparkProxyUser) =>
                 val async = !syncOpt.getOrElse(false)
                 val postedJobConfig = ConfigFactory.parseString(configString)
@@ -718,7 +723,8 @@ class WebApi(system: ActorSystem,
                         case JobResult(jobId, res) =>
                           res match {
                             case s: Stream[_] =>
-                              implicit val jsonStreamingSupport: JsonEntityStreamingSupport = EntityStreamingSupport.json()
+                              implicit val jsonStreamingSupport: JsonEntityStreamingSupport =
+                                EntityStreamingSupport.json()
                               complete(scaladsl.Source(s.asInstanceOf[Stream[String]]))
                             case _ => complete(Map[String, Any]("jobId" -> jobId) ++ resultToTable(res))
                           }

@@ -63,7 +63,8 @@ class TestPythonSessionContextFactory extends PythonContextFactory {
       try {
         builder.enableHiveSupport()
       } catch {
-        case e: IllegalArgumentException => println(s"Hive support not enabled - ${e.getMessage()}")
+        case e: IllegalArgumentException =>
+          println(s"Hive support not enabled - ${e.toString}")
       }
       val spark = builder.getOrCreate()
       for ((k, v) <- SparkJobUtils.getHadoopConfig(contextConfig))
@@ -74,12 +75,11 @@ class TestPythonSessionContextFactory extends PythonContextFactory {
   }
 }
 
-//FIXME: python is not supported should be fixed
-@Ignore
+
 class PythonSessionContextFactorySpec extends FunSpec with Matchers with BeforeAndAfter {
   import PythonSparkContextFactorySpec._
 
-  var context: PythonSessionContextLikeWrapper = null
+  var context: PythonSessionContextLikeWrapper = _
 
   after {
     if (context != null) {
@@ -112,7 +112,7 @@ class PythonSessionContextFactorySpec extends FunSpec with Matchers with BeforeA
 
     def runSessionTest(factory: TestPythonSessionContextFactory,
                    context: PythonSessionContextLikeWrapper,
-                   c:Config): Unit = {
+                   c: Config): Unit = {
       val loadResult = factory.loadAndValidateJob(
         "sql-average",
         DateTime.now(),

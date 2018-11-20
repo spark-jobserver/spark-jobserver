@@ -20,13 +20,13 @@ lazy val jobServer = Project(id = "job-server", base = file("job-server"))
     libraryDependencies ++= sparkDeps ++ slickDeps ++ cassandraDeps ++ securityDeps ++ coreTestDeps,
     test in Test := (test in Test).dependsOn(packageBin in Compile in jobServerTestJar)
       .dependsOn(clean in Compile in jobServerTestJar)
-//      .dependsOn(buildPython in jobServerPython)
-//      .dependsOn(clean in Compile in jobServerPython)
+      .dependsOn(buildPython in jobServerPython)
+      .dependsOn(clean in Compile in jobServerPython)
       .value,
     testOnly in Test := (testOnly in Test).dependsOn(packageBin in Compile in jobServerTestJar)
       .dependsOn(clean in Compile in jobServerTestJar)
-//      .dependsOn(buildPython in jobServerPython)
-//      .dependsOn(clean in Compile in jobServerPython)
+      .dependsOn(buildPython in jobServerPython)
+      .dependsOn(clean in Compile in jobServerPython)
       .inputTaskValue,
     console in Compile := Defaults.consoleTask(fullClasspath in Compile, console in Compile).value,
     fullClasspath in Compile := (fullClasspath in Compile).map { classpath =>
@@ -59,26 +59,26 @@ lazy val jobServerExtras = Project(id = "job-server-extras", base = file("job-se
     test in Test := (test in Test)
       .dependsOn(packageBin in Compile in jobServerTestJar)
       .dependsOn(clean in Compile in jobServerTestJar)
-//      .dependsOn(buildPython in jobServerPython)
-//      .dependsOn(buildPyExamples in jobServerPython)
-//      .dependsOn(clean in Compile in jobServerPython)
+      .dependsOn(buildPython in jobServerPython)
+      .dependsOn(buildPyExamples in jobServerPython)
+      .dependsOn(clean in Compile in jobServerPython)
       .value,
     testOnly in Test := (testOnly in Test)
       .dependsOn(packageBin in Compile in jobServerTestJar)
       .dependsOn(clean in Compile in jobServerTestJar)
-//      .dependsOn(buildPython in jobServerPython)
-//      .dependsOn(buildPyExamples in jobServerPython)
-//      .dependsOn(clean in Compile in jobServerPython)
+      .dependsOn(buildPython in jobServerPython)
+      .dependsOn(buildPyExamples in jobServerPython)
+      .dependsOn(clean in Compile in jobServerPython)
       .inputTaskValue
   )
   .dependsOn(jobServerApi, jobServer % "compile->compile; test->test")
   .disablePlugins(SbtScalariform)
 
-//lazy val jobServerPython = Project(id = "job-server-python", base = file("job-server-python"))
-//  .settings(commonSettings)
-//  .settings(jobServerPythonSettings)
-//  .dependsOn(jobServerApi, akkaApp % "test")
-//  .disablePlugins(SbtScalariform)
+lazy val jobServerPython = Project(id = "job-server-python", base = file("job-server-python"))
+  .settings(commonSettings)
+  .settings(jobServerPythonSettings)
+  .dependsOn(jobServerApi, akkaApp % "test")
+  .disablePlugins(SbtScalariform)
 
 lazy val root = Project(id = "root", base = file("."))
   .settings(commonSettings)
@@ -145,6 +145,7 @@ lazy val dockerSettings = Seq(
           case s if s.startsWith("1") => {"./make-distribution.sh -Dscala-2.11 -Phadoop-2.7 -Phive"}
           case _ => {"./dev/make-distribution.sh -Dscala-2.11 -Phadoop-2.7 -Phive"}
         }
+      case "2.12" => {"./dev/make-distribution.sh -Dscala-2.12 -Phadoop-2.7 -Phive"}
       case other => throw new RuntimeException(s"Scala version $other is not supported!")
     }
 

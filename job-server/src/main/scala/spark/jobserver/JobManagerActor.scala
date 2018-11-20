@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit
 import akka.actor._
 import akka.pattern.ask
 import akka.util.Timeout
-import com.typesafe.config.{Config, ConfigFactory}
+import com.typesafe.config.Config
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.{SparkConf, SparkEnv}
 import org.apache.spark.scheduler.SparkListener
@@ -17,14 +17,14 @@ import org.apache.spark.scheduler.SparkListenerApplicationEnd
 import org.joda.time.DateTime
 import org.scalactic._
 import spark.jobserver.api.{DataFileCache, JobEnvironment}
-import spark.jobserver.ContextSupervisor.{ContextStopInProgress, SparkContextStopped, ContextStopError}
+import spark.jobserver.ContextSupervisor.{ContextStopError, ContextStopInProgress, SparkContextStopped}
 import spark.jobserver.io._
 import spark.jobserver.util._
 import spark.jobserver.context._
 import spark.jobserver.common.akka.InstrumentedActor
-import spark.jobserver.util.{StandaloneForcefulKill, ContextForcefulKillTimeout}
+import spark.jobserver.util.{ContextForcefulKillTimeout, StandaloneForcefulKill}
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{ExecutionContext, ExecutionContextExecutorService, Future}
 import scala.util.{Failure, Success, Try}
 import scala.concurrent.duration._
 import org.spark_project.guava.annotations.VisibleForTesting
@@ -66,7 +66,7 @@ object JobManagerActor {
   // Akka 2.2.x style actor props for actor creation
   def props(daoActor: ActorRef, supervisorActorAddress: String = "", contextId: String = "",
       initializationTimeout: FiniteDuration = 40.seconds): Props =
-      Props(classOf[JobManagerActor], daoActor, supervisorActorAddress, contextId, initializationTimeout)
+      Props(new JobManagerActor(daoActor, supervisorActorAddress, contextId, initializationTimeout))
 }
 
 /**
@@ -105,9 +105,10 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
   import context.{become, dispatcher}
   import collection.JavaConverters._
 
-  val config = context.system.settings.config
+  val config: Config = context.system.settings.config
   private val maxRunningJobs = SparkJobUtils.getMaxRunningJobs(config)
-  val executionContext = ExecutionContext.fromExecutorService(newFixedThreadPool(maxRunningJobs))
+  val executionContext: ExecutionContextExecutorService =
+    ExecutionContext.fromExecutorService(newFixedThreadPool(maxRunningJobs))
 
   val daoAskTimeout = Timeout(config.getDuration("spark.jobserver.dao-timeout", TimeUnit.SECONDS).second)
 
@@ -146,8 +147,8 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
 
   private val jobServerNamedObjects = new JobServerNamedObjects(context.system)
 
-  if (isKillingContextOnUnresponsiveSupervisorEnabled()) {
-    logger.info(s"Sending identify message to supervisor at ${supervisorActorAddress}")
+  if (isKillingContextOnUnresponsiveSupervisorEnabled) {
+    logger.info(s"Sending identify message to supervisor at $supervisorActorAddress")
     context.setReceiveTimeout(initializationTimeout)
     context.actorSelection(supervisorActorAddress) ! Identify(1)
   }
@@ -167,15 +168,11 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
   override def postStop() {
     logger.info("Doing final clean up in post stop!")
     Option(jobContext).foreach { context =>
-      context.sparkContext.isStopped match {
-        case true => // Normal shutdown
-        case false =>
-          logger.warn(
-            s"""Post stop fired but spark context still not stopped.
-               |Most likely due to an unhandled exception or master
-               |sending PoisonPill in this class. Stopping context."""
-              .stripMargin.replaceAll("\n", " "))
-          context.stop() // blocking call since actor is already stopping
+      if (context.sparkContext.isStopped) {} else {
+        logger.warn(s"""Post stop fired but spark context still not stopped.
+Most likely due to an unhandled exception or master
+sending PoisonPill in this class. Stopping context.""".stripMargin.replaceAll("\n", " "))
+        context.stop()
       }
     }
   }
@@ -190,8 +187,8 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
     }
   }
 
-  private def isKillingContextOnUnresponsiveSupervisorEnabled(): Boolean = {
-    !supervisorActorAddress.isEmpty()
+  private def isKillingContextOnUnresponsiveSupervisorEnabled: Boolean = {
+    supervisorActorAddress.nonEmpty
   }
 
   def adhocStopReceive: Receive = {
@@ -209,18 +206,15 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
     case ContextStopForcefullyScheduledMsgTimeout(stopRequestSender) =>
       logger.warn("Failed to stop context forcefully within in timeout.")
       become(stoppingStateReceive)
-      stopRequestSender ! ContextStopError(new ContextForcefulKillTimeout())
+      stopRequestSender ! ContextStopError(ContextForcefulKillTimeout())
 
     case SparkContextStopped =>
       logger.info(s"Context $contextId stopped successfully")
       val (stopContextSender, stopContextForcefullyTimeoutMsgHandler) = stopContextSenderAndHandler
       stopContextForcefullyTimeoutMsgHandler.foreach{ handler =>
-        handler.isCancelled match {
-          case true =>
-            // The response to stop request already sent. No need to send any response back.
-          case false =>
-            stopContextForcefullyTimeoutMsgHandler.foreach(_.cancel())
-            stopContextSender.foreach(_ ! SparkContextStopped)
+        if (handler.isCancelled) {} else {
+          stopContextForcefullyTimeoutMsgHandler.foreach(_.cancel())
+          stopContextSender.foreach(_ ! SparkContextStopped)
         }
       }
       self ! PoisonPill
@@ -234,22 +228,18 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
       logger.warn("Failed to stop context within in timeout. Stop is still in progress")
       stopRequestSender ! ContextStopInProgress
 
-    case StopContextForcefully => {
+    case StopContextForcefully =>
       val originalSender = sender
       become(forcefulStoppingStateReceive)
       stopContextForcefullyHelper(originalSender)
-    }
 
     case SparkContextStopped =>
       logger.info(s"Context $contextId stopped successfully")
       val (stopContextSender, stopContextTimeoutMsgHandler) = stopContextSenderAndHandler
       stopContextTimeoutMsgHandler.foreach{ handler =>
-        handler.isCancelled match {
-          case true =>
-            // The response to stop request already sent. No need to send any response back.
-          case false =>
-            stopContextTimeoutMsgHandler.foreach(_.cancel())
-            stopContextSender.foreach(_ ! SparkContextStopped)
+        if (handler.isCancelled) {} else {
+          stopContextTimeoutMsgHandler.foreach(_.cancel())
+          stopContextSender.foreach(_ ! SparkContextStopped)
         }
       }
       self ! PoisonPill
@@ -273,7 +263,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
           s" I will be killed automatically because context stop is in progress!")
       }
     case unexpectedMsg @ _ =>
-      logger.warn(s"Received unknown message in stopping state ${unexpectedMsg}")
+      logger.warn(s"Received unknown message in stopping state $unexpectedMsg")
   }
 
   val commonHandlers: Receive = {
@@ -291,10 +281,9 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
           }
           sender ! msg
         } catch {
-          case _: Exception => {
+          case _: Exception =>
             logger.error("SparkContext does not exist!")
             sender ! SparkContextDead
-          }
         }
       }
 
@@ -332,7 +321,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
         self ! PoisonPill
 
     case Initialize(ctxConfig, resOpt, dataManagerActor) =>
-      if (isKillingContextOnUnresponsiveSupervisorEnabled()) {
+      if (isKillingContextOnUnresponsiveSupervisorEnabled) {
         logger.info("Initialize message received from master, stopping the timer.")
         context.setReceiveTimeout(Duration.Undefined) // Deactivate receive timeout
       }
@@ -350,7 +339,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
         getSideJars(contextConfig).foreach { jarUri =>
           jarLoader.addURL(new URL(convertJarUriSparkToJava(jarUri)))
         }
-        factory = getContextFactory()
+        factory = getContextFactory
         jobContext = factory.makeContext(config, contextConfig, contextName)
         jobContext.sparkContext.addSparkListener(sparkListener)
         sparkEnv = SparkEnv.get
@@ -364,7 +353,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
           self ! PoisonPill
       }
 
-    case StartJob(appName, classPath, jobConfig, events, existingJobInfo) => {
+    case StartJob(appName, classPath, jobConfig, events, existingJobInfo) =>
       val loadedJars = jarLoader.getURLs
       getSideJars(jobConfig).foreach { jarUri =>
         val jarToLoad = new URL(convertJarUriSparkToJava(jarUri))
@@ -375,17 +364,16 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
         }
       }
       startJobInternal(appName, classPath, jobConfig, events, jobContext, sparkEnv, existingJobInfo)
-    }
 
-    case StopContextAndShutdown => {
+    case StopContextAndShutdown =>
       val originalSender = sender()
       logger.info("Shutting down SparkContext {}", contextName)
       Option(jobContext) match {
-        case Some(context) =>
+        case Some(_context) =>
           val cancelHandler = scheduleContextStopTimeoutMsg(originalSender)
           stopContextSenderAndHandler = (Some(originalSender), cancelHandler)
           Future {
-            context.stop()
+            _context.stop()
           }
           become(stoppingStateReceive)
         case None =>
@@ -393,16 +381,14 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
           originalSender ! SparkContextStopped
           self ! PoisonPill
       }
-    }
 
-    case StopContextForcefully => {
+    case StopContextForcefully =>
       val originalSender = sender
       become(forcefulStoppingStateReceive)
       stopContextForcefullyHelper(originalSender)
-    }
 
     // Only used in LocalContextSupervisorActor
-    case SparkContextStatus => {
+    case SparkContextStatus =>
       if (jobContext.sparkContext == null) {
         sender ! SparkContextDead
       } else {
@@ -410,15 +396,13 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
           jobContext.sparkContext.getSchedulingMode
           sender ! SparkContextAlive
         } catch {
-          case e: Exception => {
-            logger.error("SparkContext does not exist!")
+          case e: Exception =>
+            logger.error("SparkContext does not exist!", e)
             sender ! SparkContextDead
-          }
         }
       }
-    }
 
-    case GetContextConfig => {
+    case GetContextConfig =>
       if (jobContext.sparkContext == null) {
         sender ! SparkContextDead
       } else {
@@ -427,18 +411,15 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
           val hadoopConf: Configuration = jobContext.sparkContext.hadoopConfiguration
           sender ! ContextConfig(jobContext.sparkContext.appName, conf, hadoopConf)
         } catch {
-          case e: Exception => {
+          case e: Exception =>
             logger.error("SparkContext does not exist!")
             sender ! SparkContextDead
-          }
         }
       }
-    }
 
-    case RestartExistingJobs => {
+    case RestartExistingJobs =>
       logger.info("Job restart message received, trying to restart existing jobs.")
       restartTerminatedJobs(contextId, sender)
-    }
 
     /**
      * Normally, JobStarted/JobValidationFailed are sent back to WebAPI but in restart scenario,
@@ -449,32 +430,29 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
      * what happens after the job was restarted. These messages won't be received by this actor,
      * since we are not subscribed but the statusActor will update DAO based on these messages.
      */
-    case JobStarted(jobId, jobInfo) => {
+    case JobStarted(jobId, jobInfo) =>
       logger.info(s"Job ($jobId) restarted successfully")
-    }
 
-    case msg @ JobValidationFailed(jobId, dateTime, error) => {
+    case msg @ JobValidationFailed(jobId, dateTime, error) =>
       handleJobRestartFailure(jobId, error, msg)
-    }
 
     /**
      * This message is specific to restart scenario. It is sent for all the errors before
      * StartJob message is sent to restart a job. All the messages after StartJob are
      * handled by JobStarted/JobValidationFailed
      */
-    case msg @ JobRestartFailed(jobId, error) => {
+    case msg @ JobRestartFailed(jobId, error) =>
       handleJobRestartFailure(jobId, error, msg)
-    }
 
     case SparkContextStopped =>
       // Stop context was not called but due to some external actions onApplicationEnd was fired
       logger.info("Got Spark Application end event externally, stopping job manager")
       // Even if the DAO request fails, we still kill our self because what else can we do at
       // this point? So, we just kill our self to release the resources.
-      setCurrentContextState(ContextInfoModifiable(ContextStatus.Killed), killMyself, killMyself)
+      setCurrentContextState(ContextInfoModifiable(ContextStatus.Killed), killMyself(), killMyself())
   }
 
-  private def killMyself = {self ! PoisonPill}
+  private def killMyself(): Unit = {self ! PoisonPill}
 
   private def setCurrentContextState(attributes: ContextModifiableAttributes,
                              successCallback: => Unit = () => Unit,
@@ -516,7 +494,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
       daoAskTimeout.duration)
 
     val lastUploadTimeAndType = resp.uploadTimeAndType
-    if (!lastUploadTimeAndType.isDefined) return failed(NoSuchApplication)
+    if (lastUploadTimeAndType.isEmpty) return failed(NoSuchApplication)
     val (lastUploadTime, binaryType) = lastUploadTimeAndType.get
 
     val (jobId, startDateTime) = existingJobInfo match {
@@ -526,7 +504,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
         (info.jobId, info.startTime)
       case None =>
         logger.info(s"Creating new JobId for current job")
-        (java.util.UUID.randomUUID().toString(), DateTime.now())
+        (java.util.UUID.randomUUID().toString, DateTime.now())
     }
 
     val jobContainer = factory.loadAndValidateJob(appName, lastUploadTime,
@@ -590,22 +568,20 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
             case Good(jobData) =>
               statusActor ! JobStarted(jobId: String, jobInfo)
               val sc = jobContext.sparkContext
-              sc.setJobGroup(jobId, s"Job group for $jobId and spark context ${sc.applicationId}", true)
+              sc.setJobGroup(jobId, s"Job group for $jobId and spark context ${sc.applicationId}", interruptOnCancel = true)
               job.runJob(jobC, jobEnv, jobData)
           }
         } finally {
           org.slf4j.MDC.remove("jobId")
         }
       } catch {
-        case e: java.lang.AbstractMethodError => {
+        case e: java.lang.AbstractMethodError =>
           logger.error("Oops, there's an AbstractMethodError... maybe you compiled " +
             "your code with an older version of SJS? here's the exception:", e)
           throw e
-        }
-        case e: Throwable => {
+        case e: Throwable =>
           logger.error("Got Throwable", e)
           throw e
-        };
       }
     }(executionContext).andThen {
       case Success(result: Any) =>
@@ -651,7 +627,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
       case 0 =>
         logger.error(s"Restart report -> $totalJobsWhichFailedToRestart failed out of $totalJobsToRestart")
         val error = Some(ContextKillingItselfException("Job(s) restart failed"))
-        setCurrentContextState(ContextInfoModifiable(ContextStatus.Error, error), killMyself, killMyself)
+        setCurrentContextState(ContextInfoModifiable(ContextStatus.Error, error), killMyself(), killMyself())
       case _ =>
         logger.warn(s"Job ($jobId) errored out during restart but continuing", error)
     }
@@ -660,7 +636,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
   // Use our classloader and a factory to create the SparkContext.  This ensures the SparkContext will use
   // our class loader when it spins off threads, and ensures SparkContext can find the job and dependent jars
   // when doing serialization, for example.
-  def getContextFactory(): SparkContextFactory = {
+  def getContextFactory: SparkContextFactory = {
     val factoryClassName = contextConfig.getString("context-factory")
     val factoryClass = jarLoader.loadClass(factoryClassName)
     val factory = factoryClass.newInstance.asInstanceOf[SparkContextFactory]
@@ -695,7 +671,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
   // Each one should be an URL (http, ftp, hdfs, local, or file). local URLs are local files
   // present on every node, whereas file:// will be assumed only present on driver node
   private def getSideJars(config: Config): Seq[String] =
-    Try(config.getStringList("dependent-jar-uris").asScala.toSeq).
+    Try(config.getStringList("dependent-jar-uris").asScala).
      orElse(Try(config.getString("dependent-jar-uris").split(",").toSeq)).getOrElse(Nil)
 
   /**
@@ -713,18 +689,18 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
     (daoActor ? JobDAOActor.GetJobInfosByContextId(
         contextId, Some(Seq(JobStatus.Running, JobStatus.Restarting))))(daoAskTimeout).onComplete {
       case Success(JobDAOActor.JobInfos(Seq())) =>
-        logger.info(s"No job found for context ${contextName} which was terminated unexpectedly." +
+        logger.info(s"No job found for context $contextName which was terminated unexpectedly." +
             " Not restarting any job.")
       case Success(JobDAOActor.JobInfos(jobInfos)) =>
-        logger.info(s"Found jobs for this context ${contextId}")
+        logger.info(s"Found jobs for this context $contextId")
 
         val restartCandidates = getRestartCandidates(jobInfos)
         logger.info(s"Total restart candidates are ${restartCandidates.length}")
         totalJobsToRestart = restartCandidates.length
         restartCandidates.foreach { jobInfo =>
           (daoActor ? JobDAOActor.GetJobConfig(jobInfo.jobId))(daoAskTimeout).onComplete {
-            case Success(JobDAOActor.JobConfig(Some(config))) =>
-              restartJob(jobInfo, config)
+            case Success(JobDAOActor.JobConfig(Some(_config))) =>
+              restartJob(jobInfo, _config)
             case Success(JobDAOActor.JobConfig(None)) =>
               updateJobInfoAndReportFailure(jobInfo, NoJobConfigFoundException(jobInfo.jobId))
             case Failure(e: Exception) =>
@@ -737,10 +713,10 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
           }
         }
       case Failure(e: Exception) =>
-        logger.error(s"Exception occured while accessing job ids for context ${contextId} from DAO.", e)
+        logger.error(s"Exception occured while accessing job ids for context $contextId from DAO.", e)
         // This failure might be temporary, try to update context if possible
-        val error = Some(ContextKillingItselfException(s"Failed to fetch jobs for context ${contextId}"))
-        setCurrentContextState(ContextInfoModifiable(ContextStatus.Error, error), killMyself, killMyself)
+        val error = Some(ContextKillingItselfException(s"Failed to fetch jobs for context $contextId"))
+        setCurrentContextState(ContextInfoModifiable(ContextStatus.Error, error), killMyself(), killMyself())
       case unexpectedMsg @ _ =>
         logger.error(s"Unexpected scenario occured, message received is $unexpectedMsg")
         self ! PoisonPill
@@ -774,7 +750,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
 
   private def getRestartCandidates(jobInfos: Seq[JobInfo]): Seq[JobInfo] = {
     jobInfos.filter { jobInfo =>
-      (jobInfo.state) match {
+      jobInfo.state match {
         case JobStatus.Running | JobStatus.Restarting => true
         case _ => false
       }
@@ -807,10 +783,10 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
     }
   }
 
-  private def stopContextForcefullyHelper(originalSender: ActorRef) = {
+  private def stopContextForcefullyHelper(originalSender: ActorRef): Unit = {
     logger.info("Shutting down forcefully SparkContext {}", contextName)
     Option(jobContext) match {
-      case Some(context) =>
+      case Some(_context) =>
         val cancelHandler = scheduleContextStopForcefullyTimeoutMsg(originalSender)
         stopContextSenderAndHandler = (Some(originalSender), cancelHandler)
         val appId = jobContext.sparkContext.applicationId
@@ -835,7 +811,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
   }
 
   @VisibleForTesting
-  protected def forcefulKillCaller(forcefulKill: StandaloneForcefulKill) = {
+  protected def forcefulKillCaller(forcefulKill: StandaloneForcefulKill): Unit = {
     forcefulKill.kill()
   }
 }
