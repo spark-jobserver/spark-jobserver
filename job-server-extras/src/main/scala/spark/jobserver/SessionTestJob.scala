@@ -34,12 +34,15 @@ object SessionLoaderTestJob extends SparkSessionJob {
   JobData Or Every[ValidationProblem] = Good(config)
 
   def runJob(spark: SparkSession, runtime: JobEnvironment, config: JobData): JobOutput = {
-    spark.sql("DROP TABLE if exists `default`.`test_addresses`")
+    spark.sql("DROP TABLE if exists `default`.`test_addresses`").foreach(println(_))
     spark.sql(s"$tableCreate $tableArgs $tableRowFormat $tableColFormat $tableMapFormat $tableAs")
+      .foreach(println(_))
 
     spark.sql(s"LOAD DATA LOCAL INPATH $loadPath OVERWRITE INTO TABLE `default`.`test_addresses`")
     val addrRdd: DataFrame = spark.sql("SELECT * FROM `default`.`test_addresses`")
-    addrRdd.count()
+    val count = addrRdd.count()
+
+    count
   }
 }
 
@@ -54,6 +57,8 @@ object SessionTestJob extends SparkSessionJob {
   JobData Or Every[ValidationProblem] = Good(config)
 
   def runJob(spark: SparkSession, runtime: JobEnvironment, config: JobData): JobOutput = {
-    spark.sql(config.getString("sql")).collect()
+    val rows = spark.sql(config.getString("sql")).collect()
+    spark.sql("DROP TABLE if exists `default`.`test_addresses`").foreach(println(_))
+    rows
   }
 }

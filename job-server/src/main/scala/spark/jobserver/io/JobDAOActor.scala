@@ -62,7 +62,7 @@ object JobDAOActor {
   case object SavedSuccessfully extends SaveResponse
   case class SaveFailed(error: Throwable) extends SaveResponse
 
-  def props(dao: JobDAO): Props = Props(classOf[JobDAOActor], dao)
+  def props(dao: JobDAO): Props = Props(new JobDAOActor(dao))
 }
 
 class JobDAOActor(dao: JobDAO) extends InstrumentedActor {

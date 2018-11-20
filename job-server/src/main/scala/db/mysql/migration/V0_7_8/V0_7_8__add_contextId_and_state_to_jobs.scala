@@ -3,7 +3,7 @@ package db.mysql.migration.V0_7_8
 import org.slf4j.LoggerFactory
 import db.migration.V0_7_8.Migration
 
-import slick.driver.H2Driver.api.actionBasedSQLInterpolation
+import slick.jdbc.H2Profile.api.actionBasedSQLInterpolation
 import slick.sql.SqlAction
 import slick.dbio.Effect
 import slick.dbio.NoStream

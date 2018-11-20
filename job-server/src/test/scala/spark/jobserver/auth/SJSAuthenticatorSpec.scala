@@ -124,7 +124,8 @@ class SJSAuthenticatorSpec extends SJSAuthenticator with FunSpecLike
 
   describe("SJSAuthenticator") {
     it("should allow user with valid role/group") {
-      explicitValidation(new BasicHttpCredentials(testUserWithValidGroup, testUserWithValidGroupPassword), logger) should equal(true)
+      explicitValidation(new BasicHttpCredentials(testUserWithValidGroup,
+        testUserWithValidGroupPassword), logger) should equal(true)
     }
 
     it("should check role/group when checking is activated") {
@@ -133,11 +134,13 @@ class SJSAuthenticatorSpec extends SJSAuthenticator with FunSpecLike
       } else {
         true
       }
-      explicitValidation(new BasicHttpCredentials(testUserWithoutValidGroup, testUserWithoutValidGroupPassword), logger) should equal(expected)
+      explicitValidation(new BasicHttpCredentials(testUserWithoutValidGroup,
+        testUserWithoutValidGroupPassword), logger) should equal(expected)
     }
 
     it("should not allow invalid user") {
-      explicitValidation(new BasicHttpCredentials(testUserInvalid, testUserInvalidPassword), logger) should equal(false)
+      explicitValidation(new BasicHttpCredentials(testUserInvalid,
+        testUserInvalidPassword), logger) should equal(false)
     }
   }
 

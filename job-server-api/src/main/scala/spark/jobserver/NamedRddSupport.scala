@@ -68,7 +68,7 @@ trait NamedRddSupport extends NamedObjectSupport { self: SparkJob =>
     def defaultTimeout : FiniteDuration
 
     // Default level to cache RDDs at.
-    val defaultStorageLevel = StorageLevel.MEMORY_ONLY
+    val defaultStorageLevel: StorageLevel = StorageLevel.MEMORY_ONLY
 
     /**
      * Gets an RDD with the given name, or creates it if one doesn't already exist.
@@ -157,7 +157,7 @@ trait NamedRddSupport extends NamedObjectSupport { self: SparkJob =>
 
   def namedRdds: _NamedRdds = new _NamedRdds {
 
-    val defaultTimeout = namedObjects.defaultTimeout
+    val defaultTimeout: FiniteDuration = namedObjects.defaultTimeout
 
     override def getOrElseCreate[T](name: String,
                                     rddGen: => RDD[T],

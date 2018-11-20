@@ -55,9 +55,17 @@ class JobServerNamedObjects(system: ActorSystem) extends NamedObjects {
   // wrap the operation with caching support
   // (providing a caching key)
   private def cachedOp[O <: NamedObject](name: String, f: () => O): Future[NamedObject] = {
-    namesToObjects.get(name, () => {
-      logger.info("Named object [{}] not found, starting creation", name)
-      f()
+    namesToObjects.getOrLoad(name, key => {
+      logger.info("Named object [{}] not found, starting creation", key)
+      val future = Future { f() }
+
+      future onComplete(_ => logger.info("Named object [{}] created", key))
+      future onFailure{
+        case e: Exception =>
+          logger.error("Named object [{}] creation failed with error: {}", key, e.toString, e)
+      }
+
+      future
     })
   }
 

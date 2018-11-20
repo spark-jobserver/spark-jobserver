@@ -20,7 +20,6 @@ object JobInfoActor {
 
 class JobInfoActor(jobDao: JobDAO, contextSupervisor: ActorRef) extends InstrumentedActor {
   import scala.concurrent.duration._
-  import scala.util.control.Breaks._
 
   import CommonMessages._
   import JobInfoActor._

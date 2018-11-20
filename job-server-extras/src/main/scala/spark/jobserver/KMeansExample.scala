@@ -5,8 +5,7 @@ import org.apache.spark.sql.SparkSession
 import org.apache.spark._
 import org.apache.spark.ml.clustering.KMeans
 import org.apache.spark.ml.feature.{StandardScaler, VectorAssembler}
-import org.apache.spark.sql.{DataFrame, Row, SQLContext}
-import org.apache.spark.storage.StorageLevel
+import org.apache.spark.sql.{DataFrame, Row}
 
 /**
  * A Spark job example that implements the SparkJob trait and can be submitted to the job server.
@@ -45,7 +44,7 @@ object KMeansExample extends SparkJob with NamedRddSupport {
       //limit forces
       val data = sqlContext.read.parquet("s3n://us-east-1.elasticmapreduce.samples/flightdata/input")
         .limit(5E6.toInt)
-      val intCols = data.dtypes.filter(_._2 == "IntegerType").map(_._1).map(data.col(_))
+      val intCols = data.dtypes.filter(_._2 == "IntegerType").map(_._1).map(data(_))
       val intDF = data.select(intCols: _*).repartition(50)
       //just choose some reasonable na value
       val noNADF = intDF.na.fill(0)

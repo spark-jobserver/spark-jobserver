@@ -91,7 +91,9 @@ class NamedObjectsRDDsOnlySpec extends TestKit(ActorSystem("NamedObjectsSpec")) 
     it("update() should replace existing RDD") {
       val rdd1 = sc.parallelize(Seq(1, 2, 3))
       val rdd2 = sc.parallelize(Seq(4, 5, 6))
-      namedObjects.getOrElseCreate("rdd", NamedRDD(rdd1, true, StorageLevel.MEMORY_ONLY)) should equal(NamedRDD(rdd1, true, StorageLevel.MEMORY_ONLY))
+      namedObjects.getOrElseCreate("rdd",
+        NamedRDD(rdd1, true,
+          StorageLevel.MEMORY_ONLY)) should equal(NamedRDD(rdd1, true, StorageLevel.MEMORY_ONLY))
       namedObjects.update("rdd", NamedRDD(rdd2, true, StorageLevel.MEMORY_ONLY))
       namedObjects.get("rdd") should equal(Some(NamedRDD(rdd2, true, StorageLevel.MEMORY_ONLY)))
     }

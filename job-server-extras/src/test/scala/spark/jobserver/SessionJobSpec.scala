@@ -17,6 +17,7 @@ class TestSessionContextFactory extends SessionContextFactory {
     builder.config(sparkConf).appName(contextName).master("local")
     builder.config("javax.jdo.option.ConnectionURL", "jdbc:derby:memory:myDB;create=true")
     builder.config("javax.jdo.option.ConnectionDriverName", "org.apache.derby.jdbc.EmbeddedDriver")
+    builder.config("spark.sql.catalogImplementation", "hive")
     try {
       builder.enableHiveSupport()
     } catch {
@@ -42,7 +43,8 @@ class SessionJobSpec extends ExtrasJobSpecBase(SessionJobSpec.getNewSystem) {
   val queryConfig: Config = ConfigFactory.parseString(
     """sql = "SELECT firstName, lastName FROM `default`.`test_addresses` WHERE city = 'San Jose'" """
   )
-  lazy val contextConfig: Config = SessionJobSpec.getContextConfig(adhoc = false, SessionJobSpec.contextConfig)
+  lazy val contextConfig: Config =
+    SessionJobSpec.getContextConfig(adhoc = false, SessionJobSpec.contextConfig)
 
   before {
     dao = new InMemoryDAO

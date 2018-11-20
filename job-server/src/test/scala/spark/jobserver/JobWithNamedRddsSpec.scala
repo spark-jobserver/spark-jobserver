@@ -12,7 +12,9 @@ import spark.jobserver.common.akka.AkkaTestUtils
 
 class JobWithNamedRddsSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) {
 
-  val sc = new SparkContext("local[4]", getClass.getSimpleName, new SparkConf)
+  val sc = new SparkContext("local[4]",
+    getClass.getSimpleName,
+    new SparkConf().set("spark.driver.allowMultipleContexts", "true"))
 
   class TestJob1 extends SparkJob with NamedRddSupport {
     def validate(sc: SparkContext, config: Config): SparkJobValidation = SparkJobValid

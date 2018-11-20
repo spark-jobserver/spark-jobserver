@@ -1,11 +1,9 @@
 package spark.jobserver.auth
 
+import akka.actor.ActorSystem
 import akka.http.scaladsl.model.headers.{BasicHttpCredentials, HttpChallenge, HttpCredentials}
-import akka.http.scaladsl.server.directives.SecurityDirectives.{AuthenticationResult, Authenticator}
-import akka.http.scaladsl.server.directives.{AuthenticationResult, Credentials}
-
-import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, ExecutionContext, Future, Promise}
+import akka.http.scaladsl.server.directives.SecurityDirectives.{AuthenticationResult}
+import scala.concurrent._
 import org.slf4j.LoggerFactory
 import org.slf4j.Logger
 import org.apache.shiro.SecurityUtils
@@ -23,20 +21,33 @@ trait SJSAuthenticator {
   val challenge = HttpChallenge("SJSAuth", Some("SJS"))
   import scala.concurrent.duration._
 
-  def asShiroAuthenticator(authTimeout: Int)(implicit ec: ExecutionContext): Option[HttpCredentials] => Future[AuthenticationResult[User]] = {
-    credentials: Option[HttpCredentials] =>
-    Future {
+  def asShiroAuthenticator(authTimeout: Int)
+                          (implicit ec: ExecutionContext, s: ActorSystem):
+  Option[HttpCredentials] => Future[AuthenticationResult[User]] = {
+    credentials: Option[HttpCredentials] => {
+    lazy val f = Future {
       credentials match {
-      case Some(creds) if explicitValidation(creds, logger) => Right(User(creds.asInstanceOf[BasicHttpCredentials].username))
-      case None => Left(challenge)
+          case Some(creds) if explicitValidation(creds, logger) =>
+            Right(User(creds.asInstanceOf[BasicHttpCredentials].username))
+          case Some(_) =>
+            Left(challenge)
+          case None =>
+            Left(challenge)
+        }
     }
+      import akka.pattern.after
+      lazy val t = after(duration = authTimeout second,
+        using = s.scheduler)(Future.failed(new TimeoutException("Authentication timed out!")))
+
+      Future firstCompletedOf Seq(f, t)
     }
   }
 
  /**
    * do not call directly - only for unit testing!
    */
-  def explicitValidation(userPass: HttpCredentials, logger: Logger)(implicit ec: ExecutionContext): Boolean = {
+  def explicitValidation(userPass: HttpCredentials, logger: Logger)
+                        (implicit ec: ExecutionContext): Boolean = {
 
       val currentUser = SecurityUtils.getSubject()
       val BasicHttpCredentials(user, pass) = userPass
@@ -76,7 +87,8 @@ trait SJSAuthenticator {
    * at
    * http://www.tecnoguru.com/blog/2014/07/07/implementing-http-basic-authentication-with-spray/
    */
-  def asAllUserAuthenticator(implicit ec: ExecutionContext): Option[HttpCredentials] => Future[AuthenticationResult[User]] = {
+  def asAllUserAuthenticator(implicit ec: ExecutionContext):
+  Option[HttpCredentials] => Future[AuthenticationResult[User]] = {
     credentials: Option[HttpCredentials] =>
       Future {
         credentials match {

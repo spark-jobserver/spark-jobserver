@@ -8,19 +8,8 @@ import akka.http.scaladsl.common.{EntityStreamingSupport, JsonEntityStreamingSup
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport.sprayJsonMarshaller
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.headers.{HttpCredentials, Location, `Content-Type`}
+import akka.http.scaladsl.server.{Directives, ExceptionHandler, RejectionHandler, Route}
 import akka.http.scaladsl.server.Directives._
-//import akka.http.scaladsl.server.directives.BasicDirectives._
-//import akka.http.scaladsl.server.directives.FileAndResourceDirectives._
-//import akka.http.scaladsl.server.directives.FutureDirectives._
-//import akka.http.scaladsl.server.directives.HeaderDirectives._
-//import akka.http.scaladsl.server.directives.MarshallingDirectives._
-//import akka.http.scaladsl.server.directives.MethodDirectives
-//import akka.http.scaladsl.server.directives.MethodDirectives._
-//import akka.http.scaladsl.server.directives.ParameterDirectives._
-//import akka.http.scaladsl.server.directives.PathDirectives._
-//import akka.http.scaladsl.server.directives.RouteDirectives._
-//import akka.http.scaladsl.server.directives.SecurityDirectives._
-//import akka.http.scaladsl.server.directives.TimeoutDirectives._
 import akka.http.scaladsl.server.{Directive1, RequestContext, Route}
 import akka.pattern.ask
 import akka.stream.scaladsl
@@ -161,6 +150,7 @@ class WebApi(system: ActorSystem,
 
   def actorRefFactory: ActorSystem = system
   implicit val ec: ExecutionContext = system.dispatcher
+  implicit val actorSystem: ActorSystem = system
   implicit val ShortTimeout: Timeout =
     Timeout(config.getDuration("spark.jobserver.short-timeout", TimeUnit.MILLISECONDS), TimeUnit.MILLISECONDS)
   val DefaultSyncTimeout: FiniteDuration = 10 seconds
@@ -176,10 +166,15 @@ class WebApi(system: ActorSystem,
 
   override val logger: Logger = LoggerFactory.getLogger(getClass)
 
+  val rejectionHandler = corsRejectionHandler withFallback RejectionHandler.default
+  val handleErrors = handleRejections(rejectionHandler)
+
   val myRoutes: Route = cors() {
-    overrideMethodWithParameter("_method") {
-      binaryRoutes ~ jarRoutes ~ contextRoutes ~ jobRoutes ~
-        dataRoutes ~ healthzRoutes ~ otherRoutes
+    handleErrors {
+      overrideMethodWithParameter("_method") {
+        binaryRoutes ~ jarRoutes ~ contextRoutes ~ jobRoutes ~
+          dataRoutes ~ healthzRoutes ~ otherRoutes
+      }
     }
   }
 
@@ -270,8 +265,10 @@ class WebApi(system: ActorSystem,
                       case Success(value) =>
                         value match {
                           case BinaryStored => complete( StatusCodes.OK)
-                          case InvalidBinary => complete( StatusCodes.BadRequest, "Binary is not of the right format")
-                          case BinaryStorageFailure(ex) => complete( StatusCodes.InternalServerError, errMap( ex, "Storage Failure"))
+                          case InvalidBinary =>
+                            complete(StatusCodes.BadRequest, "Binary is not of the right format")
+                          case BinaryStorageFailure(ex) =>
+                            complete( StatusCodes.InternalServerError, errMap( ex, "Storage Failure"))
                         }
                       case Failure(ex) => complete(StatusCodes.InternalServerError, errMap(ex, "ERROR"))
 
@@ -291,8 +288,11 @@ class WebApi(system: ActorSystem,
           onComplete(binaryManager ? DeleteBinary(appName)) {
             case Success(value) =>
               value match {
-                case BinaryDeleted => complete(StatusCodes.OK)
-                case NoSuchBinary => complete(StatusCodes.NotFound, errMap(s"can't find binary with name $appName"))
+                case BinaryDeleted =>
+                  complete(StatusCodes.OK)
+                case NoSuchBinary =>
+                  complete(StatusCodes.NotFound,
+                    errMap(s"can't find binary with name $appName"))
               }
             case Failure(ex) => complete(StatusCodes.InternalServerError, errMap(ex, "ERROR"))
           }
@@ -379,8 +379,10 @@ class WebApi(system: ActorSystem,
               val contextMap = getContextReport(context, appId, url)
               logger.info("StatusCode: " + stcode + ", " + contextMap)
               complete(stcode, contextMap)
-            case NoSuchContext => complete(StatusCodes.BadRequest, errMap(s"can't find context with name $contextName"))
-            case UnexpectedError => complete(StatusCodes.InternalServerError, errMap("UNEXPECTED ERROR OCCURRED"))
+            case NoSuchContext =>
+              complete(StatusCodes.BadRequest, errMap(s"can't find context with name $contextName"))
+            case UnexpectedError =>
+              complete(StatusCodes.InternalServerError, errMap("UNEXPECTED ERROR OCCURRED"))
           }
           case Failure(ex) => complete(StatusCodes.InternalServerError, errMap(ex, "ERROR"))
         }
@@ -390,11 +392,13 @@ class WebApi(system: ActorSystem,
         logger.info("GET /contexts")
         onComplete(supervisor ? ListContexts){
           case Success(value) => value match {
-            case UnexpectedError => complete(StatusCodes.InternalServerError, errMap("UNEXPECTED ERROR OCCURRED"))
+            case UnexpectedError =>
+              complete(StatusCodes.InternalServerError, errMap("UNEXPECTED ERROR OCCURRED"))
             case contexts =>
               val getContexts = SparkJobUtils.removeProxyUserPrefix(
                 user.toString, contexts.asInstanceOf[Seq[String]],
-                config.getBoolean("shiro.authentication") && config.getBoolean("shiro.use-as-proxy-user"))
+                config.getBoolean("shiro.authentication") &&
+                  config.getBoolean("shiro.use-as-proxy-user"))
               complete(getContexts)
           }
           case Failure(ex) => complete(StatusCodes.InternalServerError, errMap(ex, "ERROR"))
@@ -416,8 +420,8 @@ class WebApi(system: ActorSystem,
          */
         entity(as[String]) { configString =>
           withRequestTimeout(contextTimeout.seconds) {
-            extractUnmatchedPath { cn =>
-              val contextName = cn.toString
+            path(Segment) { cn =>
+              val contextName = cn
               // Enforce user context name to start with letters
               if (!contextName.head.isLetter) {
                 complete(StatusCodes.BadRequest, errMap("context name must start with letters"))
@@ -465,11 +469,15 @@ class WebApi(system: ActorSystem,
                       value match {
                         case ContextStopped => complete(StatusCodes.OK, successMap("Context stopped"))
                         case ContextStopInProgress =>
-                          val response = HttpResponse(status = StatusCodes.Accepted, headers = List(Location(uri)))
+                          val response = HttpResponse(status = StatusCodes.Accepted,
+                            headers = List(Location(uri)))
                           complete(response)
-                        case NoSuchContext => complete(StatusCodes.NotFound, errMap( s"context $contextName not found"))
-                        case ContextStopError(e) => complete(StatusCodes.InternalServerError, errMap(e, "CONTEXT DELETE ERROR"))
-                        case UnexpectedError => complete(StatusCodes.InternalServerError, errMap("UNEXPECTED ERROR OCCURRED"))
+                        case NoSuchContext =>
+                          complete(StatusCodes.NotFound, errMap( s"context $contextName not found"))
+                        case ContextStopError(e) =>
+                          complete(StatusCodes.InternalServerError, errMap(e, "CONTEXT DELETE ERROR"))
+                        case UnexpectedError =>
+                          complete(StatusCodes.InternalServerError, errMap("UNEXPECTED ERROR OCCURRED"))
                       }
                     case Failure(ex) => complete(StatusCodes.InternalServerError, errMap(ex, "ERROR"))
                   }
@@ -496,10 +504,13 @@ class WebApi(system: ActorSystem,
                     } else {
                       onComplete(Future.sequence( contexts.map(c => supervisor ? StopContext(c)))){
                         case Success(_) =>
-                          Thread.sleep(1000) // we apparently need some sleeping in here, so spark can catch up
+                          Thread.sleep(1000) // we apparently need some sleeping
+                          // in here, so spark can catch up
                           onComplete(supervisor ? AddContextsFromConfig) {
-                            case Success(_) => complete(StatusCodes.OK, successMap("Context reset"))
-                            case Failure(ex) => complete(StatusCodes.InternalServerError, errMap(ex, "ERROR"))
+                            case Success(_) =>
+                              complete(StatusCodes.OK, successMap("Context reset"))
+                            case Failure(ex) =>
+                              complete(StatusCodes.InternalServerError, errMap(ex, "ERROR"))
                           }
                         case Failure(ex) => complete(StatusCodes.InternalServerError, errMap(ex, "ERROR"))
                       }

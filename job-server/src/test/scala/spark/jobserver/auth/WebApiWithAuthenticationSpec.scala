@@ -9,35 +9,27 @@ import spark.jobserver.io.{BinaryInfo, BinaryType, JobInfo, JobStatus}
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
 import akka.http.scaladsl.model.StatusCodes._
+import akka.http.scaladsl.model.Uri.Query
 import akka.http.scaladsl.model.headers.{Authorization, BasicHttpCredentials, HttpCredentials}
 import akka.http.scaladsl.server.Route
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import org.apache.shiro.config.IniSecurityManagerFactory
-import org.apache.shiro.mgt.{DefaultSecurityManager, SecurityManager}
-import org.apache.shiro.realm.Realm
 import org.apache.shiro.SecurityUtils
 import org.apache.shiro.config.Ini
 
 import scala.collection.mutable.SynchronizedSet
-import scala.util.Try
-import scala.concurrent.{Await, ExecutionContext, Future}
-import scala.concurrent.duration._
+import scala.concurrent.{ExecutionContext, Future, TimeoutException}
 import org.slf4j.LoggerFactory
-import java.util.concurrent.TimeoutException
-
-import akka.http.scaladsl.server._
-import Directives._
-import akka.http.scaladsl.model.HttpEntity
+import akka.http.scaladsl.model.{HttpEntity, Uri}
 import akka.http.scaladsl.server
 import akka.http.scaladsl.server.directives.SecurityDirectives.AuthenticationResult
 
 // Tests authorization only, actual responses are tested elsewhere
 // Does NOT test underlying Supervisor / JarManager functionality
-class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndAfterAll with ScalatestRouteTest {
-  import scala.collection.JavaConverters._
+class WebApiWithAuthenticationSpec extends FunSpec
+  with Matchers with BeforeAndAfterAll with ScalatestRouteTest {
   import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport._
   import spray.json.DefaultJsonProtocol._
-  import spark.jobserver.common.akka.web.JsonUtils._
 
   def actorRefFactory: ActorSystem = system
 
@@ -47,8 +39,8 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
   val masterConfVal = "spark://localhost:7079"
   val config = ConfigFactory.parseString(s"""
     spark {
-      master = "${masterConfVal}"
-      jobserver.bind-address = "${bindConfVal}"
+      master = "$masterConfVal"
+      jobserver.bind-address = "$bindConfVal"
       jobserver.short-timeout = 3 s
     }
     shiro {
@@ -71,16 +63,29 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
       .withValue("shiro.authentication-timeout", ConfigValueFactory.fromAnyRef(authTimeout))
       .withValue("shiro.use-as-proxy-user", ConfigValueFactory.fromAnyRef(useAsProxyUser))
     val api = new WebApi(system, testConfig, dummyPort, dummyActor, dummyActor, dummyActor, dummyActor) {
-      private def asShiroAuthenticatorWithWait(authTimeout: Int)(implicit ec: ExecutionContext): Option[HttpCredentials] => Future[AuthenticationResult[User]] = {
+      private def asShiroAuthenticatorWithWait(authTimeout: Int)
+                                              (implicit ec: ExecutionContext,
+                                               s: ActorSystem):
+      Option[HttpCredentials] => Future[AuthenticationResult[User]] = {
         val logger = LoggerFactory.getLogger(getClass)
 
-        credentials: Option[HttpCredentials] =>
-          Future {
+        credentials: Option[HttpCredentials] => {
+          lazy val f = Future {
             credentials match {
-              case Some(creds) if explicitValidation(creds, logger) => Right(User(creds.asInstanceOf[BasicHttpCredentials].username))
-              case None => Left(challenge)
+              case Some(creds) if explicitValidation(creds, logger) =>
+                Right(User(creds.asInstanceOf[BasicHttpCredentials].username))
+              case Some(_) =>
+                Left(challenge)
+              case None =>
+                Left(challenge)
             }
           }
+          import scala.concurrent.duration._
+          lazy val t = akka.pattern.after(duration = authTimeout second,
+            using = s.scheduler)(Future.failed(new TimeoutException("Authentication timed out!")))
+
+          Future firstCompletedOf Seq(f, t)
+        }
       }
 
       override def initSecurityManager() {
@@ -98,7 +103,7 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
       override lazy val authenticator: Option[HttpCredentials] => Future[AuthenticationResult[User]] = {
         logger.info("Using authentication.")
         initSecurityManager()
-        asShiroAuthenticatorWithWait(authTimeout)
+        asShiroAuthenticatorWithWait(authTimeout)(ec = system.dispatcher, s = system)
       }
     }
     api.myRoutes
@@ -113,9 +118,12 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
   // set to some valid user
   private val authorization = new Authorization(new BasicHttpCredentials(USER_NAME, "12345"))
   private val authorizationInvalidPassword = new Authorization(new BasicHttpCredentials(USER_NAME, "xxx"))
-  private val authorizationUnknownUser = new Authorization(new BasicHttpCredentials("whoami", "xxx"))
+  private val authorizationUnknownUser =
+    new Authorization(new BasicHttpCredentials("whoami", "xxx"))
   private val dt = DateTime.parse("2013-05-29T00Z")
-  private val jobInfo = JobInfo("foo-1", "cid", "context", BinaryInfo("demo", BinaryType.Jar, dt), "com.abc.meme", JobStatus.Running, dt, None, None)
+  private val jobInfo =
+    JobInfo("foo-1", "cid", "context",
+      BinaryInfo("demo", BinaryType.Jar, dt), "com.abc.meme", JobStatus.Running, dt, None, None)
   private val ResultKey = "result"
 
   private val addedContexts = new scala.collection.mutable.HashSet[String] with SynchronizedSet[String]
@@ -156,7 +164,9 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
     }
 
     it("should not allow user with invalid password") {
-      Post("/jars/foobar", Array[Byte](0, 1, 2)).addHeader(authorizationInvalidPassword) ~> Route.seal(routesWithProxyUser) ~> check {
+      Post("/jars/foobar", Array[Byte](0, 1, 2))
+        .addHeader(authorizationInvalidPassword) ~>
+        Route.seal(routesWithProxyUser) ~> check {
         status should be(Unauthorized)
       }
     }
@@ -177,14 +187,16 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
     }
 
     it("should not allow user with invalid password") {
-      Post("/binaries/pyfoo", HttpEntity(BinaryType.Egg.contentType, Array[Byte](0, 1, 2))).addHeader(authorizationInvalidPassword) ~>
+      Post("/binaries/pyfoo", HttpEntity(BinaryType.Egg.contentType, Array[Byte](0, 1, 2)))
+        .addHeader(authorizationInvalidPassword) ~>
         Route.seal(routesWithProxyUser) ~> check {
         status should be(Unauthorized)
       }
     }
 
     it("should not allow unknown user") {
-      Post("/binaries/pyfoo", HttpEntity(BinaryType.Egg.contentType, Array[Byte](0, 1, 2))).addHeader(authorizationUnknownUser) ~>
+      Post("/binaries/pyfoo", HttpEntity(BinaryType.Egg.contentType, Array[Byte](0, 1, 2)))
+        .addHeader(authorizationUnknownUser) ~>
       Route.seal(routesWithProxyUser) ~> check {
         status should be(Unauthorized)
       }
@@ -232,6 +244,7 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
       Post("/contexts/one?" + SparkJobUtils.SPARK_PROXY_USER_PARAM + "=" + USER_NAME)
         .addHeader(authorization) ~>
       Route.seal(testRoutes) ~> check {
+        println(responseAs[String])
         status should be(OK)
       }
       Post("/contexts/two").addHeader(authorization) ~>
@@ -396,7 +409,9 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
     }
 
     it("should allow user with valid authorization to impersonate herself") {
-      Post("/contexts/validImpersonation?" + SparkJobUtils.SPARK_PROXY_USER_PARAM + "=" + USER_NAME)
+      Post(
+        Uri("/contexts/validImpersonation")
+          .withQuery(Query(s"${SparkJobUtils.SPARK_PROXY_USER_PARAM}=$USER_NAME")))
         .addHeader(authorization) ~>
       Route.seal(routesWithoutProxyUser) ~> check {
         status should be(OK)

@@ -26,7 +26,7 @@ trait SparkJobBase extends NewSparkJob {
   type JobOutput = Any
   type JobData = Config
 
-  var namedObjects: NamedObjects = null
+  var namedObjects: NamedObjects = _
 
   def runJob(sc: C, runtime: JobEnvironment, data: JobData): JobOutput = runJob(sc, data)
 

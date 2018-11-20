@@ -15,7 +15,7 @@ import org.slf4j.LoggerFactory
 import slick.dbio.DBIO
 import slick.dbio.Effect
 import slick.dbio.NoStream
-import slick.driver.H2Driver.api.actionBasedSQLInterpolation
+import slick.jdbc.H2Profile.api.actionBasedSQLInterpolation
 import slick.jdbc.GetResult
 import slick.jdbc.PositionedParameters
 import slick.jdbc.SetParameter

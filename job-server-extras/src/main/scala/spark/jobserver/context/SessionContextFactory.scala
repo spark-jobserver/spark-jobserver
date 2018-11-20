@@ -27,6 +27,7 @@ class SessionContextFactory extends ScalaContextFactory {
 
   def makeContext(sparkConf: SparkConf, config: Config, contextName: String): C = {
     val builder = SparkSession.builder()
+    builder.config("spark.sql.catalogImplementation", "hive")
     builder.config(sparkConf).appName(contextName)
     try {
       builder.enableHiveSupport()

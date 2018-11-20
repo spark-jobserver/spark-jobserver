@@ -65,8 +65,8 @@ class InMemoryDAO extends JobDAO {
         Future[Seq[ContextInfo]] = Future {
     val allContexts = contextInfos.values.toSeq.sortWith(sortTime)
     val filteredContexts = statuses match {
-      case Some(statuses) =>
-        allContexts.filter(j => statuses.contains(j.state))
+      case Some(_statuses) =>
+        allContexts.filter(j => _statuses.contains(j.state))
       case _ => allContexts
     }
 
@@ -77,7 +77,7 @@ class InMemoryDAO extends JobDAO {
   }
 
   override def getContextInfoByName(name: String): Future[Option[ContextInfo]] = Future {
-    contextInfos.values.toSeq.sortWith(sortTime).filter(_.name == name).headOption
+    contextInfos.values.toSeq.filter(_.name == name).sortWith(sortTime).headOption
   }
 
   val jobInfos = mutable.HashMap.empty[String, JobInfo]

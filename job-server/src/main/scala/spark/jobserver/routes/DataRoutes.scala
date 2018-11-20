@@ -1,5 +1,8 @@
 package spark.jobserver.routes
 
+import java.net.URLEncoder
+
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import akka.http.scaladsl.server.directives.ParameterDirectives.ParamMagnet
 import akka.http.scaladsl.model._
 //import akka.http.scaladsl.server.directives.BasicDirectives._
@@ -31,6 +34,8 @@ import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 
 import akka.http.scaladsl.server.Directives._
+import spray.json._
+
 
 /**
  * Routes for listing, deletion of and storing data files
@@ -41,12 +46,13 @@ import akka.http.scaladsl.server.Directives._
  * @author TimMaltGermany
  */
 trait DataRoutes {
+  import spark.jobserver.common.akka.web.JsonUtils._
   import scala.concurrent.duration._
   import spark.jobserver.WebApi._
 
-  implicit val mapMarshaller: ToEntityMarshaller[Map[String, Any]] = Marshaller.opaque { map =>
-    HttpEntity(ContentType(MediaTypes.`application/json`), map.toString)
-  }
+//  implicit val mapMarshaller: ToEntityMarshaller[Map[String, Any]] = Marshaller.opaque { map =>
+//    HttpEntity(ContentType(MediaTypes.`application/json`), map.toJson)
+//  }
 
   def dataRoutes(dataManager: ActorRef)(implicit ec: ExecutionContext, ShortTimeout: Timeout): Route = {
     // Get spray-json type classes for serializing Map[String, Any]
@@ -61,13 +67,17 @@ trait DataRoutes {
     } ~
       // DELETE /data/filename delete the given file
       delete {
-        extractUnmatchedPath { filename =>
-        onComplete(dataManager ? DeleteData(filename.toString())){
+        path(Segments) { filename =>
+          val realPath = filename.mkString("/")
+        onComplete(dataManager ? DeleteData(realPath)){
           case Success(value) => value match {
-            case Deleted => complete(StatusCodes.OK)
-            case Error => complete(StatusCodes.BadRequest, errMap(s"Unable to delete data file `$filename`."))
+            case Deleted =>
+              complete(StatusCodes.OK)
+            case Error =>
+              complete(StatusCodes.BadRequest, errMap(s"Unable to delete data file '$realPath'."))
           }
-          case Failure(ex) => complete(StatusCodes.InternalServerError, errMap(ex, "ERROR"))
+          case Failure(ex) =>
+            complete(StatusCodes.InternalServerError, errMap(ex, "ERROR"))
         }
         }
       } ~
@@ -82,11 +92,14 @@ trait DataRoutes {
                 else {
                   onComplete(dataManager ? DeleteAllData) {
                     case Success(value) => value match {
-                      case Deleted => complete(StatusCodes.OK, successMap("Data reset"))
+                      case Deleted =>
+                        complete(StatusCodes.OK, successMap("Data reset"))
 
-                      case Error => complete(StatusCodes.BadRequest, errMap("Unable to delete data folder"))
+                      case Error =>
+                        complete(StatusCodes.BadRequest, errMap("Unable to delete data folder"))
                     }
-                    case Failure(ex) => complete(StatusCodes.InternalServerError, errMap(ex, "ERROR"))
+                    case Failure(ex) =>
+                      complete(StatusCodes.InternalServerError, errMap(ex, "ERROR"))
                   }
                 }
               case _ => complete("ERROR")
@@ -96,18 +109,19 @@ trait DataRoutes {
       } ~
       // POST /data/<filename>
       post {
-        extractUnmatchedPath { filename =>
+        path(Segments) { filename =>
+        val realPath = filename.mkString("/")
           entity(as[Array[Byte]]) { bytes =>
-          onComplete(dataManager ? StoreData(filename.toString(), bytes)) {
+          onComplete(dataManager ? StoreData(realPath, bytes)) {
             case Success(value) => value match {
-              case Stored(name) => {
+              case Stored(name) =>
                 val map = Map[String, Any](ResultKey -> Map("filename" -> name))
                 complete(StatusCodes.OK, map)
-              }
-              case Error(m) =>
-                complete(StatusCodes.BadRequest, errMap(s"Failed to store data file '$filename': $m"))
+              case Error =>
+                complete(StatusCodes.BadRequest, errMap(s"Failed to store data file '$realPath'."))
             }
-            case Failure(ex) => complete(StatusCodes.InternalServerError, errMap(ex, "ERROR"))
+            case Failure(ex) =>
+              complete(StatusCodes.InternalServerError, errMap(ex, "ERROR"))
           }
 
           }

@@ -20,7 +20,10 @@ import akka.http.scaladsl.testkit
 import scala.concurrent.{Await, Future}
 import scala.util.{Failure, Success}
 import java.util.concurrent.TimeUnit
-import akka.http.scaladsl.server.{ Directives, Route}
+
+import akka.http.scaladsl.model.Uri.Query
+import akka.http.scaladsl.server.{Directives, Route}
+
 import scala.concurrent.duration.Duration
 import spark.jobserver.util.NoSuchBinaryException
 
@@ -32,6 +35,8 @@ with ScalatestRouteTest with ScalaFutures with SprayJsonSupport {
   import scala.collection.JavaConverters._
 
   import TildeArrow._
+
+  val acceptHeader = RawHeader("Accept", "application/json")
 
   def actorRefFactory: ActorSystem = system
 
@@ -208,7 +213,8 @@ with ScalatestRouteTest with ScalaFutures with SprayJsonSupport {
 
       case StartJob("foo.stream", _, config, events, _) =>
         statusActor ! Subscribe("foo.stream", sender, events)
-        val jobInfo = JobInfo("foo.stream", "cid", "context", null, "", getStateBasedOnEvents(events), dt, None, None)
+        val jobInfo =
+          JobInfo("foo.stream", "cid", "context", null, "", getStateBasedOnEvents(events), dt, None, None)
         statusActor ! JobStatusActor.JobInit(jobInfo)
         statusActor ! JobStarted(jobInfo.jobId, jobInfo)
         val result = "\"1, 2, 3, 4, 5, 6\"".getBytes().toStream
@@ -222,15 +228,18 @@ with ScalatestRouteTest with ScalaFutures with SprayJsonSupport {
       case StoreJobConfig(_, _) => sender ! JobConfigStored
       case KillJob(jobId) => sender ! JobKilled(jobId, DateTime.now())
 
-      case GetSparkContexData("context1") => sender ! SparkContexData("context1", Some("local-1337"), Some("http://spark:4040"))
+      case GetSparkContexData("context1") =>
+        sender ! SparkContexData("context1", Some("local-1337"), Some("http://spark:4040"))
       case GetSparkContexData("context2") => sender ! SparkContexData("context2", Some("local-1337"), None)
       case GetSparkContexData("unexp-err") => sender ! UnexpectedError
 
       // On a GetSparkContexData LocalContextSupervisorActor returns only name of the context, api and url,
       // AkkaClusterSupervisorActor returns whole contextInfo instead.
       // Adding extra cases to test both
-      case GetSparkContexData("contextWithInfo") => sender ! SparkContexData(contextInfo, Some("local-1337"), Some("http://spark:4040"))
-      case GetSparkContexData("finishedContextWithInfo") => sender ! SparkContexData(finishedContextInfo, None, None)
+      case GetSparkContexData("contextWithInfo") =>
+        sender ! SparkContexData(contextInfo, Some("local-1337"), Some("http://spark:4040"))
+      case GetSparkContexData("finishedContextWithInfo") =>
+        sender ! SparkContexData(finishedContextInfo, None, None)
     }
   }
 
@@ -245,22 +254,38 @@ with ScalatestRouteTest with ScalaFutures with SprayJsonSupport {
     TestKit.shutdownActorSystem(system)
   }
 
-  describe ("The WebApi") {
+  import akka.http.scaladsl.unmarshalling.Unmarshal
 
+
+  describe ("The WebApi") {
+    import akka.http.scaladsl.marshalling.ToResponseMarshallable._
     val jsonContentType = ContentTypes.`application/json`
     it ("Should return valid JSON when resetting a context") {
-      Put("http://127.0.0.1:9999/contexts?reset=reboot") ~> {
-        extractDataBytes { data =>
-          val f = data.runFold("")((acc , s) => acc + s.utf8String)
-          onComplete(f) { json =>
-            complete(HttpResponse(entity = HttpEntity(json.toString)))
+      Put(Uri("/contexts").withQuery(Query("reset=reboot"))).addHeader(acceptHeader) ~> {
+
+        extractRequestEntity { entity =>
+          onComplete(Unmarshal(entity).to[String]){
+            case Success(obj) =>
+              complete(HttpResponse(entity = HttpEntity(jsonContentType, obj)))
+            case Failure(t) =>
+              complete(500, t.toString)
           }
         }
+//        extractDataBytes { data =>
+//          val f = data.runFold("")((acc , s) => acc + s.utf8String)
+//          onComplete(f) {
+//            case Success(obj) =>
+//            complete(HttpResponse(entity = HttpEntity(jsonContentType, obj)))
+//            case Failure(t) =>
+//              complete(500, t.toString)
+//          }
+//        }
       } ~>
         check {
-          status shouldEqual "SUCCESS"
-          responseAs[JobServerResponse].isSuccess shouldEqual true
-          responseAs[JobServerResponse].result shouldEqual "Context reset"
+          val response = responseAs[JobServerResponse]
+          response.status shouldEqual "SUCCESS"
+          response.isSuccess shouldEqual true
+          response.result shouldEqual "Context reset"
         }
     }
   }

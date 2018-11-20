@@ -14,13 +14,13 @@ import scala.concurrent.duration._
 import spark.jobserver.JobServer.InvalidConfiguration
 import spark.jobserver.common.akka
 import spark.jobserver.io.{
-  JobDAOActor, JobDAO, ContextInfo, ContextStatus, JobInfo, BinaryInfo, BinaryType, JobStatus}
+  JobDAOActor, ContextInfo, ContextStatus, JobInfo, BinaryInfo, BinaryType, JobStatus}
 import spark.jobserver.util.ContextReconnectFailedException
 
 import scala.concurrent.Await
 import java.util.UUID
 import org.joda.time.DateTime
-import java.util.concurrent.{TimeUnit, CountDownLatch}
+import java.util.concurrent.CountDownLatch
 
 object JobServerSpec {
   val system = ActorSystem("test")
@@ -171,9 +171,12 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
       JobServer.start(Seq(configFileName).toArray, makeSupervisorSystem)
 
       Await.result(actorSystem.actorSelection("/user/dao-manager").resolveOne, 2 seconds) shouldBe a[ActorRef]
-      Await.result(actorSystem.actorSelection("/user/data-manager").resolveOne, 2 seconds) shouldBe a[ActorRef]
-      Await.result(actorSystem.actorSelection("/user/binary-manager").resolveOne, 2 seconds) shouldBe a[ActorRef]
-      Await.result(actorSystem.actorSelection("/user/context-supervisor").resolveOne, 2 seconds) shouldBe a[ActorRef]
+      Await.result(actorSystem
+        .actorSelection("/user/data-manager").resolveOne, 2 seconds) shouldBe a[ActorRef]
+      Await.result(actorSystem
+        .actorSelection("/user/binary-manager").resolveOne, 2 seconds) shouldBe a[ActorRef]
+      Await.result(actorSystem
+        .actorSelection("/user/context-supervisor").resolveOne, 2 seconds) shouldBe a[ActorRef]
       Await.result(actorSystem.actorSelection("/user/job-info").resolveOne, 2 seconds) shouldBe a[ActorRef]
     }
 
@@ -198,7 +201,8 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
       val ContextInfoPF = ContextInfo(uuid, name, "", _: Option[String], DateTime.now(), None, status, None)
 
       if (genActor) {
-        val actor = actorSystem.actorOf(Props.empty, name = AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX + uuid)
+        val actor =
+          actorSystem.actorOf(Props.empty, name = AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX + uuid)
         (ContextInfoPF(Some(actor.path.address.toString)), Some(actor))
       } else {
         (ContextInfoPF(Some("invalidAddress")), None)
@@ -212,11 +216,13 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
     }
 
     it("should write error state for contexts and jobs if reconnect failed") {
-      val (ctxRunning, ctxRunningActorRef) = createContext("ctxRunning", ContextStatus.Running, genActor = true)
-      val (ctxStopping, ctxStoppingActorRef) = createContext("ctxStopping", ContextStatus.Stopping, true)
+      val (ctxRunning, ctxRunningActorRef) =
+        createContext("ctxRunning", ContextStatus.Running, genActor = true)
+      val (ctxStopping, ctxStoppingActorRef) =
+        createContext("ctxStopping", ContextStatus.Stopping, genActor = true)
       val (ctxToBeTerminated, _) = createContext("ctxTerminated", ContextStatus.Running, genActor = false)
       val (ctxAlreadyStopped, ctxStoppingInvalidActorRef) =
-        createContext("ctxStoppingInvalid", ContextStatus.Stopping, false)
+        createContext("ctxStoppingInvalid", ContextStatus.Stopping, genActor = false)
 
       def genJob(jobId: String, ctx: ContextInfo, status: String): JobInfo = {
         val dt = DateTime.parse("2013-05-29T00Z")
@@ -254,7 +260,7 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
                   states should equal(JobStatus.getNonFinalStates)
                   sender ! JobDAOActor.JobInfos(Seq(jobToBeTerminated))
                 case ctxAlreadyStopped.id =>
-                  states should equal (JobStatus.getNonFinalStates())
+                  states should equal (JobStatus.getNonFinalStates)
                   sender ! JobDAOActor.JobInfos(Seq(jobOfAlreadyStoppedCtx))
               }
             case jobInfo: JobDAOActor.SaveJobInfo =>
@@ -323,8 +329,10 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
     }
 
     it("should resolve valid actor reference correctly") {
-      val (ctxRunning, ctxRunningActorRef) = createContext("ctxRunning", ContextStatus.Running, genActor = true)
-      val (ctxInvalidAddress, ctxInvalidAddressRef) = createContext("ctxInvalidAddress", ContextStatus.Running, genActor = false)
+      val (ctxRunning, ctxRunningActorRef) =
+        createContext("ctxRunning", ContextStatus.Running, genActor = true)
+      val (ctxInvalidAddress, ctxInvalidAddressRef) =
+        createContext("ctxInvalidAddress", ContextStatus.Running, genActor = false)
       val actorRef = JobServer.getManagerActorRef(ctxRunning, actorSystem)
 
       actorRef should not be None

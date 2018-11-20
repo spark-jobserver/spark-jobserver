@@ -29,7 +29,8 @@ object BinaryType {
     val extension = "egg"
     val name = "Egg"
     val mediaType: MediaType = MediaType.applicationBinary("python-archive", NotCompressible, "egg")
-    val contentType = MediaType.applicationBinary("python-archive", NotCompressible, "egg").toContentType
+    val contentType: ContentType.Binary =
+      MediaType.applicationBinary("python-archive", NotCompressible, "egg").toContentType
   }
 
   def fromString(typeString: String): BinaryType = typeString match {
@@ -90,9 +91,10 @@ object ContextInfoModifiable {
     new ContextInfoModifiable(state, error)
 
   def getEndTime(state: String): Option[DateTime] = {
-    ContextStatus.getFinalStates().contains(state) match {
-      case true => Some(DateTime.now())
-      case false => None
+    if (ContextStatus.getFinalStates.contains(state)) {
+      Some(DateTime.now())
+    } else {
+      None
     }
   }
 }

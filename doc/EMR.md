@@ -110,7 +110,7 @@ InstanceCount=10,BidPrice=2.99,Name=sparkSlave,InstanceGroupType=CORE,InstanceTy
      }
      sqldao {
        # Slick database driver, full classpath
-       slick-driver = slick.driver.H2Driver
+       slick-driver = slick.jdbc.H2Profile
 
        # JDBC driver, full classpath
        jdbc-driver = org.h2.Driver

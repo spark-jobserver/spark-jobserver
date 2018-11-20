@@ -12,7 +12,7 @@ import org.slf4j.LoggerFactory
 
 import javax.sql.rowset.serial.SerialBlob
 import slick.dbio.DBIO
-import slick.driver.H2Driver.api.actionBasedSQLInterpolation
+import slick.jdbc.H2Profile.api.actionBasedSQLInterpolation
 import slick.jdbc.GetResult
 import slick.jdbc.PositionedParameters
 import slick.jdbc.SetParameter
