@@ -7,7 +7,7 @@ import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 import org.slf4j.{Logger, LoggerFactory}
-import akka.http.caching.scaladsl.{Cache, CachingSettings}
+import akka.http.caching.scaladsl.{Cache, CachingSettings, LfuCacheSettings}
 import akka.http.caching.LfuCache
 
 /**
@@ -26,13 +26,13 @@ class JobServerNamedObjects(system: ActorSystem) extends NamedObjects {
 
   val defaultCachingSettings = CachingSettings(system)
 
-  val lfuCacheSettings =
+  val lfuCacheSettings: LfuCacheSettings =
     defaultCachingSettings.lfuCacheSettings
       .withInitialCapacity(25)
       .withMaxCapacity(50)
       .withTimeToLive(20.seconds)
       .withTimeToIdle(10.seconds)
-  val cachingSettings =
+  val cachingSettings: CachingSettings =
     defaultCachingSettings.withLfuCacheSettings(lfuCacheSettings)
 
   // we must store a reference to each NamedObject even though only its ID is used here

@@ -1,14 +1,14 @@
 package spark.jobserver
 
-import akka.actor.{Actor, ActorSystem, Props}
+import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 import akka.testkit.TestKit
-import com.typesafe.config.ConfigFactory
+import com.typesafe.config.{Config, ConfigFactory}
 import org.joda.time.DateTime
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
 import spark.jobserver.JobManagerActor.JobKilledException
 import spark.jobserver.io._
-import akka.http.scaladsl.testkit.ScalatestRouteTest
+import akka.http.scaladsl.testkit.{RouteTestTimeout, ScalatestRouteTest}
 import JobServerSprayProtocol._
 import org.scalatest.time.{Seconds, Span}
 import akka.http.scaladsl.model._
@@ -36,7 +36,9 @@ with ScalatestRouteTest with ScalaFutures with SprayJsonSupport {
 
   import TildeArrow._
 
-  val acceptHeader = RawHeader("Accept", "application/json")
+  val applicationJsonAcceptHeader = RawHeader("Accept", "application/json")
+  val plainTextAcceptHeader = RawHeader("Accept", "plain/text")
+//  val acceptHeader = RawHeader("Accept", "application/json")
 
   def actorRefFactory: ActorSystem = system
 
@@ -44,11 +46,14 @@ with ScalatestRouteTest with ScalaFutures with SprayJsonSupport {
   val bindConfVal = "0.0.0.0"
   val masterConfKey = "spark.master"
   val masterConfVal = "spark://localhost:7077"
-  val config = ConfigFactory.parseString(s"""
+  val config: Config = ConfigFactory.parseString(s"""
     spark {
       master = "$masterConfVal"
       jobserver.bind-address = "$bindConfVal"
-      jobserver.short-timeout = 3 s
+      jobserver {
+        short-timeout = 60 s
+        context-lookup-timeout = 100000
+      }
     }
     akka.http.server {}
     shiro {
@@ -60,21 +65,22 @@ with ScalatestRouteTest with ScalaFutures with SprayJsonSupport {
 
   // See http://doc.akka.io/docs/akka/2.2.4/scala/actors.html#Deprecated_Variants;
   // for actors declared as inner classes we need to pass this as first arg
-  val dummyActor = system.actorOf(Props(classOf[DummyActor], this))
-  val jobDaoActor = system.actorOf(JobDAOActor.props(new InMemoryDAO))
-  val statusActor = system.actorOf(JobStatusActor.props(jobDaoActor))
+  val dummyActor: ActorRef = system.actorOf(Props(classOf[DummyActor], this))
+  val jobDaoActor: ActorRef = system.actorOf(JobDAOActor.props(new InMemoryDAO))
+  val statusActor: ActorRef = system.actorOf(JobStatusActor.props(jobDaoActor))
 
   val api = new WebApi(system, config, dummyPort, dummyActor, dummyActor, dummyActor, dummyActor)
-  val routes = api.myRoutes
+  val routes: Route = api.myRoutes
 
-  val dt = DateTime.parse("2013-05-29T00Z")
+  val dt: DateTime = DateTime.parse("2013-05-29T00Z")
   val baseJobInfo =
     JobInfo("foo-1", "cid", "context", BinaryInfo("demo", BinaryType.Jar, dt), "com.abc.meme",
         JobStatus.Running, dt, None, None)
-  val finishedJobInfo = baseJobInfo.copy(endTime = Some(dt.plusMinutes(5)), state = JobStatus.Finished)
-  val errorJobInfo = finishedJobInfo.copy(
+  val finishedJobInfo: JobInfo =
+    baseJobInfo.copy(endTime = Some(dt.plusMinutes(5)), state = JobStatus.Finished)
+  val errorJobInfo: JobInfo = finishedJobInfo.copy(
       error = Some(ErrorData(new Throwable("test-error"))), state = JobStatus.Error)
-  val killedJobInfo = finishedJobInfo.copy(
+  val killedJobInfo: JobInfo = finishedJobInfo.copy(
       error = Some(ErrorData(JobKilledException(finishedJobInfo.jobId))), state = JobStatus.Killed)
   val JobId = "jobId"
   val StatusKey = "status"
@@ -82,7 +88,7 @@ with ScalatestRouteTest with ScalaFutures with SprayJsonSupport {
 
   val contextInfo = ContextInfo("contextId", "contextWithInfo", "config", Some("address"), dt, None,
       ContextStatus.Running, None)
-  val finishedContextInfo = contextInfo.copy(name = "finishedContextWithInfo",
+  val finishedContextInfo: ContextInfo = contextInfo.copy(name = "finishedContextWithInfo",
       endTime = Some(dt.plusMinutes(5)), state = ContextStatus.Finished)
 
   class DummyActor extends Actor {
@@ -133,6 +139,8 @@ with ScalatestRouteTest with ScalaFutures with SprayJsonSupport {
         sender ! finishedJobInfo
       case GetJobStatus("_no_status") =>
         sender ! NoSuchJobId
+      case AddContextsFromConfig =>
+        sender() ! "OK"
       case GetJobStatus("job_to_kill") => sender ! baseJobInfo
       case GetJobStatus(id) => sender ! baseJobInfo
       case GetJobResult(id) => sender ! JobResult(id, id + "!!!")
@@ -204,7 +212,9 @@ with ScalatestRouteTest with ScalaFutures with SprayJsonSupport {
       case StartJob("foo", _, config, events, _) =>
         statusActor ! Subscribe("foo", sender, events)
 
-        val jobInfo = JobInfo("foo", "cid", "context", null, "com.abc.meme", getStateBasedOnEvents(events), dt, None, None)
+        val jobInfo =
+          JobInfo("foo", "cid", "context", null,
+            "com.abc.meme", getStateBasedOnEvents(events), dt, None, None)
         statusActor ! JobStatusActor.JobInit(jobInfo)
         statusActor ! JobStarted(jobInfo.jobId, jobInfo)
         val map = config.entrySet().asScala.map { entry => entry.getKey -> entry.getValue.unwrapped }.toMap
@@ -243,45 +253,29 @@ with ScalatestRouteTest with ScalaFutures with SprayJsonSupport {
     }
   }
 
-  implicit override val patienceConfig =
+  implicit override val patienceConfig: PatienceConfig =
     PatienceConfig(timeout = Span(5, Seconds), interval = Span(1, Seconds))
 
   override def beforeAll(): Unit = {
-    api.start()
+//    api.start()
   }
 
   override def afterAll(): Unit = {
     TestKit.shutdownActorSystem(system)
   }
-
-  import akka.http.scaladsl.unmarshalling.Unmarshal
-
-
+  import scala.concurrent.duration._
+  private implicit def default(implicit system: ActorSystem) = RouteTestTimeout(5.seconds)
   describe ("The WebApi") {
     import akka.http.scaladsl.marshalling.ToResponseMarshallable._
     val jsonContentType = ContentTypes.`application/json`
     it ("Should return valid JSON when resetting a context") {
-      Put(Uri("/contexts").withQuery(Query("reset=reboot"))).addHeader(acceptHeader) ~> {
-
-        extractRequestEntity { entity =>
-          onComplete(Unmarshal(entity).to[String]){
-            case Success(obj) =>
-              complete(HttpResponse(entity = HttpEntity(jsonContentType, obj)))
-            case Failure(t) =>
-              complete(500, t.toString)
-          }
-        }
-//        extractDataBytes { data =>
-//          val f = data.runFold("")((acc , s) => acc + s.utf8String)
-//          onComplete(f) {
-//            case Success(obj) =>
-//            complete(HttpResponse(entity = HttpEntity(jsonContentType, obj)))
-//            case Failure(t) =>
-//              complete(500, t.toString)
-//          }
-//        }
-      } ~>
+      Put(Uri("/contexts").withQuery(Query("reset=reboot"))).addHeader(applicationJsonAcceptHeader) ~>
+        api.contextRoutes ~>
         check {
+          if (status == StatusCodes.InternalServerError){
+            println(responseAs[String])
+          }
+          status shouldEqual StatusCodes.OK
           val response = responseAs[JobServerResponse]
           response.status shouldEqual "SUCCESS"
           response.isSuccess shouldEqual true

@@ -3,9 +3,8 @@ package spark.jobserver
 import com.typesafe.config.ConfigFactory
 import spark.jobserver.io.BinaryType
 import akka.http.scaladsl.model.StatusCodes._
-import akka.http.scaladsl.model.{HttpEntity, MediaTypes}
+import akka.http.scaladsl.model.{ContentTypes, HttpEntity, MediaTypes}
 import akka.http.scaladsl.server.Route
-import org.junit.Ignore
 import org.scalatest
 import spark.jobserver.io.{ContextStatus, JobStatus}
 import spark.jobserver.util.SparkJobUtils
@@ -14,8 +13,6 @@ import spark.jobserver.util.SparkJobUtils
 // Tests web response codes and formatting
 // Does NOT test underlying Supervisor / JarManager functionality
 // HttpService trait is needed for the Route.seal() which wraps exception handling
-// dependency issue with scala 2.12
-@scalatest.Ignore
 class WebApiMainRoutesSpec extends WebApiSpec {
   import spark.jobserver.common.akka.web.JsonUtils._
   import spray.json.DefaultJsonProtocol._
@@ -194,8 +191,9 @@ Post("/binaries/foobar", HttpEntity(BinaryType.Jar.contentType, Array[Byte](0, 1
 
   describe("/jobs routes") {
     it("should respond with bad request if jobConfig cannot be parsed") {
-      Post("/jobs?appName=foo&classPath=com.abc.meme", "Not parseable jobConfig!!") ~>
+      Post("/jobs?appName=foo&classPath=com.abc.meme", "Not parseable jobConfig!!").addHeader(applicationJsonAcceptHeader) ~>
           Route.seal(routes) ~> check {
+        println(responseAs[String])
         status should be (BadRequest)
         val result = responseAs[Map[String, String]]
         result(StatusKey) should equal(JobStatus.Error)
@@ -203,6 +201,7 @@ Post("/binaries/foobar", HttpEntity(BinaryType.Jar.contentType, Array[Byte](0, 1
       }
       Post("/jobs?appName=foo&classPath=com.abc.meme&sync=true", "Not parseable jobConfig!!") ~>
           Route.seal(routes) ~> check {
+        println(responseAs[String])
         status should be (BadRequest)
         val result = responseAs[Map[String, String]]
         result(StatusKey) should equal(JobStatus.Error)
@@ -222,7 +221,8 @@ Post("/binaries/foobar", HttpEntity(BinaryType.Jar.contentType, Array[Byte](0, 1
             bindConfKey -> bindConfVal,
             "foo.baz" -> "booboo",
             "shiro.authentication" -> "off",
-            "spark.jobserver.short-timeout" -> "3 s"
+            "spark.jobserver.context-lookup-timeout" -> 100000,
+            "spark.jobserver.short-timeout" -> "60 s"
           )
         ))
       }
@@ -265,7 +265,8 @@ Post("/binaries/foobar", HttpEntity(BinaryType.Jar.contentType, Array[Byte](0, 1
             bindConfKey -> bindConfVal,
             "foo.baz" -> "booboo",
             "shiro.authentication" -> "off",
-            "spark.jobserver.short-timeout" -> "3 s"
+            "spark.jobserver.context-lookup-timeout" -> 100000,
+            "spark.jobserver.short-timeout" -> "60 s"
           )
         ))
       }
@@ -273,9 +274,11 @@ Post("/binaries/foobar", HttpEntity(BinaryType.Jar.contentType, Array[Byte](0, 1
 
     it("adhoc job with Stream result of sync route should return 200 and chunked result") {
       val config2 = "foo.baz = booboo"
-      Post("/jobs?appName=foo.stream&classPath=com.abc.meme&sync=true", config2) ~>
+      Post("/jobs?appName=foo.stream&classPath=com.abc.meme&sync=true",
+        HttpEntity(ContentTypes.`text/plain(UTF-8)`, config2)) ~>
         Route.seal(routes) ~> check {
         status should be (OK)
+        val r = responseAs[String]
         responseAs[Map[String, Any]] should be (Map(
           ResultKey -> "1, 2, 3, 4, 5, 6"
         ))
@@ -294,7 +297,8 @@ Post("/binaries/foobar", HttpEntity(BinaryType.Jar.contentType, Array[Byte](0, 1
             bindConfKey -> bindConfVal,
             "foo.baz" -> "booboo",
             "shiro.authentication" -> "off",
-            "spark.jobserver.short-timeout" -> "3 s"
+            "spark.jobserver.context-lookup-timeout" -> 100000,
+            "spark.jobserver.short-timeout" -> "60 s"
           )
         ))
       }
@@ -377,7 +381,9 @@ Post("/binaries/foobar", HttpEntity(BinaryType.Jar.contentType, Array[Byte](0, 1
     }
 
     it("should respond with 404 Not Found if context does not exist") {
-      Post("/jobs?appName=foo&classPath=com.abc.meme&context=no-context", " ") ~> Route.seal(routes) ~> check {
+      Post("/jobs?appName=foo&classPath=com.abc.meme&context=no-context", " ").addHeader(applicationJsonAcceptHeader) ~>
+        Route.seal(routes) ~>
+        check {
         status should be (NotFound)
         val resultMap = responseAs[Map[String, String]]
         resultMap(StatusKey) should be (JobStatus.Error)

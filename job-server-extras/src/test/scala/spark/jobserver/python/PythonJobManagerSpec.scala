@@ -13,8 +13,6 @@ object PythonJobManagerSpec extends JobSpecConfig {
   override val contextFactory = classOf[PythonSessionContextFactory].getName
 }
 
-//FIXME: python is not supported should be fixed
-@Ignore
 class PythonJobManagerSpec extends ExtrasJobSpecBase(PythonJobManagerSpec.getNewSystem) {
 
   before {
