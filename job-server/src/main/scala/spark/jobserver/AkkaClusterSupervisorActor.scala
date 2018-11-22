@@ -501,7 +501,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
     logger.info("Created working directory {} for context {}", contextDir: Any, name)
 
     val launcher = new ManagerLauncher(config, contextConfig,
-        selfAddress.toString, contextActorName, contextDir.toString)
+        selfAddress.toString, encodedContextName, contextActorName, contextDir.toString)
 
     launcher.start()
   }
