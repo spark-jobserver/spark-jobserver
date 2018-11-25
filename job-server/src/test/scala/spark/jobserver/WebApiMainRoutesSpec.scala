@@ -3,6 +3,7 @@ package spark.jobserver
 import com.typesafe.config.ConfigFactory
 import spark.jobserver.io.BinaryType
 import akka.http.scaladsl.model.StatusCodes._
+import akka.http.scaladsl.model.headers.RawHeader
 import akka.http.scaladsl.model.{ContentTypes, HttpEntity, MediaTypes}
 import akka.http.scaladsl.server.Route
 import org.scalatest
@@ -54,7 +55,8 @@ class WebApiMainRoutesSpec extends WebApiSpec {
 
   describe("binaries routes") {
     it("should list all binaries") {
-      Get("/binaries") ~> Route.seal(routes) ~> check {
+      Get("/binaries").addHeader(applicationJsonAcceptHeader) ~> Route.seal(routes) ~>
+        check {
         status should be (OK)
         responseAs[Map[String, Map[String, String]]] should be (Map(
           "demo1" -> Map("binary-type" -> "Jar", "upload-time" -> "2013-05-29T00:00:00.000Z"),
@@ -64,14 +66,18 @@ class WebApiMainRoutesSpec extends WebApiSpec {
     }
 
     it("should respond with OK if jar uploaded successfully") {
-Post("/binaries/foobar", HttpEntity(BinaryType.Jar.contentType, Array[Byte](0, 1, 2))) ~>
+Post("/binaries/foobar", HttpEntity(BinaryType.Jar.contentType, Array[Byte](0, 1, 2)))
+  .addHeader(applicationJsonAcceptHeader)
+  .addHeader(RawHeader("Content-Type", BinaryType.Jar.contentType.toString())) ~>
   Route.seal(routes) ~> check {
         status should be (OK)
       }
     }
 
     it("should respond with OK if egg uploaded successfully") {
-      Post("/binaries/pyfoo", HttpEntity(BinaryType.Egg.contentType, Array[Byte](0, 1, 2))) ~>
+      Post("/binaries/pyfoo", HttpEntity(BinaryType.Egg.contentType, Array[Byte](0, 1, 2)))
+        .addHeader(applicationJsonAcceptHeader)
+        .addHeader(RawHeader("Content-Type", BinaryType.Jar.contentType.toString())) ~>
         Route.seal(routes) ~> check {
         status should be (OK)
       }
@@ -91,14 +97,18 @@ Post("/binaries/foobar", HttpEntity(BinaryType.Jar.contentType, Array[Byte](0, 1
     }
 
     it("should respond with bad request if jar formatted incorrectly") {
-      Post("/binaries/badjar", HttpEntity(BinaryType.Jar.contentType, Array[Byte](0, 1, 2))) ~>
+      Post("/binaries/badjar", HttpEntity(BinaryType.Jar.contentType, Array[Byte](0, 1, 2)))
+        .addHeader(applicationJsonAcceptHeader)
+        .addHeader(RawHeader("Content-Type", BinaryType.Jar.contentType.toString())) ~>
         Route.seal(routes) ~> check {
         status should be (BadRequest)
       }
     }
 
     it("should respond with internal server error if storage fails") {
-      Post("/binaries/daofail", HttpEntity(BinaryType.Jar.contentType, Array[Byte](0, 1, 2))) ~>
+      Post("/binaries/daofail", HttpEntity(BinaryType.Jar.contentType, Array[Byte](0, 1, 2)))
+        .addHeader(applicationJsonAcceptHeader)
+        .addHeader(RawHeader("Content-Type", BinaryType.Jar.contentType.toString())) ~>
         Route.seal(routes) ~> check {
         status should be (InternalServerError)
       }

@@ -7,7 +7,7 @@ import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.common.{EntityStreamingSupport, JsonEntityStreamingSupport}
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport.sprayJsonMarshaller
 import akka.http.scaladsl.model._
-import akka.http.scaladsl.model.headers.{HttpCredentials, Location, `Content-Type`}
+import akka.http.scaladsl.model.headers.{HttpCredentials, Location, RawHeader, `Content-Type`}
 import akka.http.scaladsl.server._
 import akka.http.scaladsl.server.Directives._
 import akka.pattern.ask
@@ -28,6 +28,7 @@ import spark.jobserver.io._
 import spark.jobserver.routes.DataRoutes
 import spark.jobserver.util.{SSLContextFactory, SparkJobUtils}
 import spray.json.DefaultJsonProtocol._
+import akka.http.scaladsl.model.HttpEntity.{ChunkStreamPart, Chunked}
 
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
@@ -38,6 +39,9 @@ object WebApi {
   val ResultKeyStartBytes: Array[Byte] = "{\n".getBytes
   val ResultKeyEndBytes: Array[Byte] = "}".getBytes
   val ResultKeyBytes: Array[Byte] = ("\"" + ResultKey + "\":").getBytes
+
+  val dataToByteStr : Byte => ByteString = b => ByteString(b)
+
 
   def badRequest(ctx: RequestContext, msg: String) {
     ctx.complete(StatusCodes.BadRequest, errMap(msg))
@@ -262,13 +266,21 @@ class WebApi(system: ActorSystem,
     WebService.start(myRoutes ~ commonRoutes, system, bindAddress, port)
   }
 
-  val contentType: Directive1[Option[ContentType]] =
-    optionalHeaderValue {
-      case `Content-Type`(ct) => Some(ct)
-      case _ => None
+  def extracContentTypeHeader: HttpHeader => Option[ContentType] = {
+    case HttpHeader("Content-Type", value) => Some(ContentType.parse(value)) match {
+      case Some(Right(v)) => Some(v)
+      case Some(Left(v)) => throw new IllegalArgumentException(v.mkString)
     }
+    case h: RawHeader if h.name == "Content-Type" => Some(ContentType.parse(h.value)) match {
+      case Some(Right(v)) => Some(v)
+      case Some(Left(v)) => throw new IllegalArgumentException(v.mkString)
+    }
+    case _ => None
+  }
 
-  /**
+  val contentType: Directive1[Option[ContentType]] = optionalHeaderValue(extracContentTypeHeader)
+
+ /**
     * Routes for listing and uploading binaries
     *    GET /binaries              - lists all current binaries
     *    POST /binaries/<appName>   - upload a new binary file
@@ -788,12 +800,25 @@ class WebApi(system: ActorSystem,
                         case JobResult(_, result) =>
                           result match {
                             case s: Stream[_] =>
-                              implicit val jsonStreamingSupport
-                                : JsonEntityStreamingSupport =
+
+                              implicit val jsonStreamingSupport =
                                 EntityStreamingSupport.json()
-                              complete(
-                                scaladsl.Source(s.asInstanceOf[Stream[String]])
-                              )
+                              val r = resultToByteIterator(jobReport,
+                                                           s.toIterator)
+
+                              val chunks = scaladsl.Source
+                                .fromIterator(() => r)
+                                .map(dataToByteStr)
+                                .map(ChunkStreamPart(_))
+
+                              val entity : ResponseEntity =
+                                Chunked(ContentTypes.`application/json`, chunks)
+
+                              val httpResponse : HttpResponse =
+                                HttpResponse(entity = entity)
+
+                              complete(httpResponse)
+
                             case _ =>
                               complete(jobReport ++ resultToTable(result))
                           }
@@ -971,8 +996,7 @@ class WebApi(system: ActorSystem,
                           case JobResult(jobId, res) =>
                             res match {
                               case s: Stream[_] =>
-                                import akka.http.scaladsl.model.HttpEntity.{Chunked, ChunkStreamPart}
-                                val dataToByteStr : Byte => ByteString = b => ByteString(b)
+
                                 implicit val jsonStreamingSupport =
                                   EntityStreamingSupport.json()
                                     val r = resultToByteIterator(Map.empty, s.toIterator)
@@ -988,10 +1012,7 @@ class WebApi(system: ActorSystem,
                                 val httpResponse : HttpResponse =
                                   HttpResponse(entity = entity)
 
-                                    complete(
-                                      httpResponse
-
-                                )
+                                    complete(httpResponse)
                               case _ =>
                                 complete(
                                   Map[String, Any]("jobId" -> jobId) ++ resultToTable(
