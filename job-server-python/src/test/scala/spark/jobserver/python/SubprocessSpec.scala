@@ -229,7 +229,8 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
           |  ["sue", 21, 1600]
           |]
         """.stripMargin)
-      hiveContext.sessionState.conf.setConfString(CATALOG_IMPLEMENTATION.key, "hive")
+      hiveContext.sparkSession.sessionState
+        .conf.setConfString(CATALOG_IMPLEMENTATION.key, "hive")
       val endpoint =
         TestEndpoint(hiveContext, conf, jobConfig,
           "example_jobs.hive_window.HiveWindowJob", hiveContextImports)
