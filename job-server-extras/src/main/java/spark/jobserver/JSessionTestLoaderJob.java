@@ -25,7 +25,9 @@ public class JSessionTestLoaderJob extends JSessionJob<Long> {
         spark.sql(String.format("LOAD DATA LOCAL INPATH %s OVERWRITE INTO TABLE `default`.`test_addresses`", loadPath));
 
         final Dataset<Row> addrRdd = spark.sql("SELECT * FROM `default`.`test_addresses`");
-        return addrRdd.count();
+        long count = addrRdd.count();
+        spark.sql("DROP TABLE if exists `default`.`test_addresses`").count();
+        return count;
     }
 
     @Override
