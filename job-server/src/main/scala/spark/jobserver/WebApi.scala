@@ -1,6 +1,5 @@
 package spark.jobserver
 
-import java.util.NoSuchElementException
 import java.util.concurrent.TimeUnit
 
 import akka.actor.{ActorRef, ActorSystem}
@@ -20,9 +19,8 @@ import org.apache.shiro.SecurityUtils
 import org.apache.shiro.config.IniSecurityManagerFactory
 import org.joda.time.DateTime
 import org.slf4j.{Logger, LoggerFactory}
-import spark.jobserver.WebApi.errMap
+import spark.jobserver.WebApiUtils._
 import spark.jobserver.auth._
-import spark.jobserver.common.akka.web.JsonUtils.AnyJsonFormat
 import spark.jobserver.common.akka.web.{CommonRoutes, WebService}
 import spark.jobserver.io._
 import spark.jobserver.routes.DataRoutes
@@ -40,137 +38,11 @@ object WebApi {
   val ResultKeyEndBytes: Array[Byte] = "}".getBytes
   val ResultKeyBytes: Array[Byte] = ("\"" + ResultKey + "\":").getBytes
 
-  val dataToByteStr : Byte => ByteString = b => ByteString(b)
-
-
-  def badRequest(ctx: RequestContext, msg: String) {
-    ctx.complete(StatusCodes.BadRequest, errMap(msg))
   }
 
-  def notFound(ctx: RequestContext, msg: String) {
-    ctx.complete(StatusCodes.NotFound, errMap(msg))
-  }
-
-  def errMap(errMsg: String): Map[String, String] =
-    Map(StatusKey -> JobStatus.Error, ResultKey -> errMsg)
-
-  def errMap(t: Throwable, status: String): Map[String, Any] =
-    Map(StatusKey -> status, ResultKey -> formatException(t))
-
-  def successMap(msg: String): Map[String, String] =
-    Map(StatusKey -> "SUCCESS", ResultKey -> msg)
-
-  def getJobDurationString(info: JobInfo): String =
-    info.jobLengthMillis
-      .map { ms => ms / 1000.0 + " secs"
-      }
-      .getOrElse("Job not done yet")
-
-  def resultToMap(result: Any): Map[String, Any] = result match {
-    case m: Map[_, _] => m.map { case (k, v) => (k.toString, v) }
-    case s: Seq[_] =>
-      s.zipWithIndex.map { case (item, idx) => (idx.toString, item) }.toMap
-    case a: Array[_] =>
-      a.toSeq.zipWithIndex.map { case (item, idx) => (idx.toString, item) }.toMap
-    case item => Map(ResultKey -> item)
-  }
-
-  def resultToTable(result: Any): Map[String, Any] = {
-    Map(ResultKey -> result)
-  }
-
-  def resultToByteIterator(jobReport: Map[String, Any],
-                           result: Iterator[_]): Iterator[Byte] = {
-    ResultKeyStartBytes.toIterator ++
-      (jobReport
-        .map(
-          t =>
-            Seq(
-              AnyJsonFormat.write(t._1).toString(),
-              AnyJsonFormat.write(t._2).toString()
-            ).mkString(":")
-        )
-        .mkString(",") ++
-        (if (jobReport.nonEmpty) "," else "")).getBytes().toIterator ++
-      ResultKeyBytes.toIterator ++ result.asInstanceOf[Iterator[Byte]] ++ ResultKeyEndBytes.toIterator
-  }
-
-  def formatException(t: Throwable): Any =
-    Map(
-      "message" -> t.getMessage,
-      "errorClass" -> t.getClass.getName,
-      "stack" -> ErrorData.getStackTrace(t)
-    )
-
-  def formatException(t: ErrorData): Any = {
-    Map(
-      "message" -> t.message,
-      "errorClass" -> t.errorClass,
-      "stack" -> t.stackTrace
-    )
-  }
-
-  def getJobReport(jobInfo: JobInfo,
-                   jobStarted: Boolean = false): Map[String, Any] = {
-
-    val statusMap = jobInfo match {
-      case JobInfo(_, _, _, _, _, state, _, _, Some(err)) =>
-        Map(StatusKey -> state, ResultKey -> formatException(err))
-      case JobInfo(_, _, _, _, _, _, _, _, None) if jobStarted =>
-        Map(StatusKey -> JobStatus.Started)
-      case JobInfo(_, _, _, _, _, state, _, _, None) => Map(StatusKey -> state)
-    }
-    Map(
-      "jobId" -> jobInfo.jobId,
-      "startTime" -> jobInfo.startTime.toString(),
-      "classPath" -> jobInfo.classPath,
-      "context" -> (if (jobInfo.contextName.isEmpty) {"<<ad-hoc>>"}
-                    else {jobInfo.contextName}),
-      "contextId" -> jobInfo.contextId,
-      "duration" -> getJobDurationString(jobInfo)
-    ) ++ statusMap
-  }
-
-  def getContextReport(context: Any,
-                       appId: Option[String],
-                       url: Option[String]): Map[String, String] = {
-    import scala.collection.mutable
-    val map = mutable.Map.empty[String, String]
-    context match {
-      case contextInfo: ContextInfo =>
-        map("id") = contextInfo.id
-        map("name") = contextInfo.name
-        map("startTime") = contextInfo.startTime.toString()
-        map("endTime") =
-          if (contextInfo.endTime.isDefined){contextInfo.endTime.get.toString}
-          else {"Empty"}
-        map("state") = contextInfo.state
-      case name: String =>
-        map("name") = name
-      case _ =>
-    }
-    (appId, url) match {
-      case (Some(id), Some(u)) =>
-        map("applicationId") = id
-        map("url") = u
-      case (Some(id), None) =>
-        map("applicationId") = id
-      case _ =>
-    }
-    map.toMap
-  }
-}
-
-class WebApi(system: ActorSystem,
-             config: Config,
-             port: Int,
-             binaryManager: ActorRef,
-             dataManager: ActorRef,
-             supervisor: ActorRef,
-             jobInfoActor: ActorRef)
-    extends CommonRoutes
-    with DataRoutes
-    with SJSAuthenticator {
+class WebApi(system: ActorSystem, config: Config, port: Int, binaryManager: ActorRef, dataManager: ActorRef,
+             supervisor: ActorRef, jobInfoActor: ActorRef) extends CommonRoutes with DataRoutes
+  with SJSAuthenticator {
   import CommonMessages._
   import ContextSupervisor._
   import WebApi._
@@ -185,8 +57,7 @@ class WebApi(system: ActorSystem,
   implicit val actorSystem: ActorSystem = system
   implicit val ShortTimeout: Timeout =
     Timeout(
-      config
-        .getDuration("spark.jobserver.short-timeout", TimeUnit.MILLISECONDS),
+      config.getDuration("spark.jobserver.short-timeout", TimeUnit.MILLISECONDS),
       TimeUnit.MILLISECONDS
     )
   val DefaultSyncTimeout: FiniteDuration = 10 seconds
@@ -208,8 +79,7 @@ class WebApi(system: ActorSystem,
   val exceptionHandler = ExceptionHandler {
     case e: Exception =>
       complete(
-        StatusCodes.InternalServerError,
-        errMap(e, "ERROR")
+        StatusCodes.InternalServerError, errMap(e, "ERROR")
       )
   }
 
@@ -218,8 +88,7 @@ class WebApi(system: ActorSystem,
   val myRoutes: Route = cors() {
     handleErrors {
       overrideMethodWithParameter("_method") {
-        binaryRoutes ~ jarRoutes ~ contextRoutes ~ jobRoutes ~
-          dataRoutes ~ healthzRoutes ~ otherRoutes
+        binaryRoutes ~ jarRoutes ~ contextRoutes ~ jobRoutes ~ dataRoutes ~ healthzRoutes ~ otherRoutes
       }
     }
   }
@@ -266,7 +135,7 @@ class WebApi(system: ActorSystem,
     WebService.start(myRoutes ~ commonRoutes, system, bindAddress, port)
   }
 
-  def extracContentTypeHeader: HttpHeader => Option[ContentType] = {
+  def extractContentTypeHeader: HttpHeader => Option[ContentType] = {
     case HttpHeader("Content-Type", value) => Some(ContentType.parse(value)) match {
       case Some(Right(v)) => Some(v)
       case Some(Left(v)) => throw new IllegalArgumentException(v.mkString)
@@ -278,7 +147,7 @@ class WebApi(system: ActorSystem,
     case _ => None
   }
 
-  val contentType: Directive1[Option[ContentType]] = optionalHeaderValue(extracContentTypeHeader)
+  val contentType: Directive1[Option[ContentType]] = optionalHeaderValue(extractContentTypeHeader)
 
  /**
     * Routes for listing and uploading binaries
@@ -660,10 +529,7 @@ class WebApi(system: ActorSystem,
                 import ContextSupervisor._
                 val lookupTimeout = Try(
                   config
-                    .getDuration(
-                      "spark.jobserver.context-lookup-timeout",
-                      TimeUnit.MILLISECONDS
-                    )
+                    .getDuration("spark.jobserver.context-lookup-timeout", TimeUnit.MILLISECONDS)
                     .toInt / 1000
                 ).getOrElse(1) + contextTimeout
                 withRequestTimeout(lookupTimeout.seconds) {
@@ -869,18 +735,12 @@ class WebApi(system: ActorSystem,
                 case JobInfo(_, _, _, _, _, state, _, _, Some(ex))
                     if state.equals(JobStatus.Error) =>
                   complete(
-                    Map(
-                      StatusKey -> JobStatus.Error,
-                      "ERROR" -> formatException(ex)
-                    )
+                    Map(StatusKey -> JobStatus.Error, "ERROR" -> WebApiUtils.formatException(ex))
                   )
                 case JobInfo(_, _, _, _, _, state, _, _, _)
                     if state.equals(JobStatus.Finished) || state
                       .equals(JobStatus.Killed) =>
-                  complete(
-                    StatusCodes.NotFound,
-                    errMap(s"No such job ID $jobId")
-                  )
+                  complete(StatusCodes.NotFound, errMap(s"No such job ID $jobId"))
                 case _ =>
                   complete(
                     StatusCodes.InternalServerError,
@@ -949,26 +809,15 @@ class WebApi(system: ActorSystem,
         post {
           entity(as[String]) { configString =>
             JobsRouteUtils.exceptionHandler {
-              parameters(
-                'appName,
-                'classPath,
-                'context ?,
-                'sync.as[Boolean] ?,
-                'timeout.as[Int] ?,
+              parameters('appName, 'classPath, 'context ?, 'sync.as[Boolean] ?, 'timeout.as[Int] ?,
                 SparkJobUtils.SPARK_PROXY_USER_PARAM ?
               ) {
-                (appName,
-                 classPath,
-                 contextOpt,
-                 syncOpt,
-                 timeoutOpt,
-                 sparkProxyUser) =>
+                (appName, classPath, contextOpt, syncOpt, timeoutOpt, sparkProxyUser) =>
                   val async = !syncOpt.getOrElse(false)
                   val postedJobConfig = ConfigFactory.parseString(configString)
                   val jobConfig = postedJobConfig.withFallback(config).resolve()
                   val contextConfig = getContextConfig(
-                    jobConfig,
-                    sparkProxyUser
+                    jobConfig, sparkProxyUser
                       .map(user => Map((SparkJobUtils.SPARK_PROXY_USER_PARAM, user)))
                       .getOrElse(Map.empty)
                   )
@@ -1090,18 +939,12 @@ class WebApi(system: ActorSystem,
                               )
                             )
                           case ContextInitError(e) =>
-                            complete(
-                              StatusCodes.InternalServerError,
-                              errMap(e, "CONTEXT INIT FAILED")
-                            )
+                            complete(StatusCodes.InternalServerError, errMap(e, "CONTEXT INIT FAILED"))
                         }
                       case Failure(ex) =>
                         ex match {
                           case e: Exception =>
-                            complete(
-                              StatusCodes.InternalServerError,
-                              errMap(e, "ERROR")
-                            )
+                            complete(StatusCodes.InternalServerError, errMap(e, "ERROR"))
                         }
                     }
                   }
@@ -1117,25 +960,17 @@ class WebApi(system: ActorSystem,
     * computes the context name from the user name (and a prefix) and appends the user name
     * as the spark proxy user parameter to the config
     */
-  def determineProxyUser(aConfig: Config,
-                         authInfo: AuthInfo,
-                         contextName: String): (String, Config) = {
+  def determineProxyUser(aConfig: Config, authInfo: AuthInfo, contextName: String): (String, Config) = {
     if (config.getBoolean("shiro.authentication") && config.getBoolean(
-          "shiro.use-as-proxy-user"
-        )) {
+          "shiro.use-as-proxy-user")) {
       //proxy-user-param is ignored and the authenticated user name is used
-      val config = aConfig.withValue(
-        SparkJobUtils.SPARK_PROXY_USER_PARAM,
-        ConfigValueFactory.fromAnyRef(authInfo.toString)
-      )
+      val config = aConfig.withValue(SparkJobUtils.SPARK_PROXY_USER_PARAM,
+        ConfigValueFactory.fromAnyRef(authInfo.toString))
       (SparkJobUtils.userNamePrefix(authInfo.toString) + contextName, config)
-    } else {
-      (contextName, aConfig)
-    }
+    } else { (contextName, aConfig) }
   }
 
-  private def getJobManagerForContext(context: Option[String],
-                                      contextConfig: Config,
+  private def getJobManagerForContext(context: Option[String], contextConfig: Config,
                                       classPath: String): Option[ActorRef] = {
     import ContextSupervisor._
     val msg =
@@ -1146,16 +981,13 @@ class WebApi(system: ActorSystem,
       }
     val future = (supervisor ? msg)(contextTimeout.seconds)
     Await.result(future, contextTimeout.seconds) match {
-      case manager: ActorRef     => Some(manager)
-      case NoSuchContext         => None
+      case manager: ActorRef => Some(manager)
+      case NoSuchContext => None
       case ContextInitError(err) => throw new RuntimeException(err)
     }
   }
 
-  private def getContextConfig(
-    baseConfig: Config,
-    fallbackParams: Map[String, String] = Map()
-  ): Config = {
+  private def getContextConfig(baseConfig: Config, fallbackParams: Map[String, String] = Map()): Config = {
     import collection.JavaConverters.mapAsJavaMapConverter
     Try(baseConfig.getConfig("spark.context-settings"))
       .getOrElse(ConfigFactory.empty)
@@ -1163,21 +995,4 @@ class WebApi(system: ActorSystem,
       .resolve()
   }
 
-}
-
-object JobsRouteUtils {
-  private val _exceptionHandler = ExceptionHandler {
-    case e: NoSuchElementException =>
-      complete(
-        StatusCodes.NotFound,
-        errMap("context " + "contextOpt.get" + " not found")
-      )
-    case e: ConfigException =>
-      complete(
-        StatusCodes.BadRequest,
-        errMap("Cannot parse config: " + e.getMessage)
-      )
-  }
-
-  val exceptionHandler: Directive0 = handleExceptions(_exceptionHandler)
 }

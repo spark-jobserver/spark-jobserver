@@ -1,16 +1,16 @@
 package spark.jobserver
 
-import akka.actor.{ActorContext, ActorRef, ActorSystem, Props}
+import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.util.Timeout
 import akka.pattern.ask
 import akka.cluster.Cluster
-import akka.cluster.ClusterEvent.{InitialStateAsEvents, MemberEvent}
-import akka.actor.AddressFromURIString
+import akka.cluster.ClusterEvent.MemberEvent
 import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import java.io.File
 import java.util.concurrent.TimeUnit
 
-import spark.jobserver.io.{BinaryType, ContextInfo, ContextStatus, DataFileDAO, ErrorData, JobDAO, JobDAOActor, JobStatus}
+import spark.jobserver.io.{DataFileDAO, ErrorData, JobDAO, JobDAOActor, JobStatus}
+import spark.jobserver.io.{BinaryType, ContextInfo, ContextStatus}
 import spark.jobserver.util.ContextReconnectFailedException
 import org.joda.time.DateTime
 import org.slf4j.{Logger, LoggerFactory}
@@ -18,7 +18,7 @@ import org.slf4j.{Logger, LoggerFactory}
 import scala.collection.JavaConverters._
 import scala.concurrent.{Await, ExecutionContext}
 import scala.concurrent.duration._
-import scala.util.{Failure, Success, Try}
+import scala.util.{Failure, Success}
 import scala.collection.mutable.ListBuffer
 import com.google.common.annotations.VisibleForTesting
 

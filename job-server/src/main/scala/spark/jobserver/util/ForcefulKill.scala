@@ -72,7 +72,8 @@ class StandaloneForcefulKill(config: Config, appId: String) extends ForcefulKill
   }
 
     import scala.concurrent.duration._
-  def getHTTPResponse(req: HttpRequest, timout: Duration = 30 seconds)(implicit system: ActorSystem): HttpResponse = {
+  def getHTTPResponse(req: HttpRequest, timout: Duration = 30 seconds)
+                     (implicit system: ActorSystem): HttpResponse = {
     Await.result(Http().singleRequest(req), timout)
   }
 

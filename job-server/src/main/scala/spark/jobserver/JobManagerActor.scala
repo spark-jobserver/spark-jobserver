@@ -568,7 +568,8 @@ sending PoisonPill in this class. Stopping context.""".stripMargin.replaceAll("\
             case Good(jobData) =>
               statusActor ! JobStarted(jobId: String, jobInfo)
               val sc = jobContext.sparkContext
-              sc.setJobGroup(jobId, s"Job group for $jobId and spark context ${sc.applicationId}", interruptOnCancel = true)
+              sc.setJobGroup(jobId, s"Job group for $jobId and spark context ${sc.applicationId}",
+                interruptOnCancel = true)
               job.runJob(jobC, jobEnv, jobData)
           }
         } finally {
