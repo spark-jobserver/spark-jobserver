@@ -24,29 +24,13 @@ class CommonRoutesSpec extends FunSpec with Matchers with ScalatestRouteTest wit
   })
 
   val counterMap = Map("type" -> "counter", "count" -> 0)
-  val gaugeMap = Map("type"   -> "gauge", "value"   -> 10)
+  val gaugeMap = Map("type" -> "gauge", "value" -> 10)
 
-  val meterMap = Map(
-    "type" -> "meter",
-    "units"      -> "seconds",
-    "count"              -> 0,
-    "mean" -> 0.0,
-    "m1" -> 0.0,
-    "m5" -> 0.0,
-    "m15" -> 0.0
-  )
-  val histMap = Map(
-    "type"  -> "histogram",
-    "median" -> 0.0,
-    "p75"                      -> 0.0,
-    "p95" -> 0.0,
-    "p98" -> 0.0,
-    "p99" -> 0.0,
-    "p999" -> 0.0
-  )
-  val timerMap = Map(
-    "type" -> "timer",
-    "rate"       -> (meterMap - "type"),
+  val meterMap = Map("type" -> "meter", "units" -> "seconds", "count" -> 0, "mean" -> 0.0,
+    "m1" -> 0.0, "m5" -> 0.0, "m15" -> 0.0)
+  val histMap = Map("type" -> "histogram", "median" -> 0.0, "p75" -> 0.0, "p95" -> 0.0,
+    "p98" -> 0.0, "p99" -> 0.0, "p999" -> 0.0)
+  val timerMap = Map("type" -> "timer", "rate" -> (meterMap - "type"),
     "duration" -> (histMap ++ Map("units" -> "milliseconds") - "type"))
 
   override def afterAll(): Unit = {
@@ -61,13 +45,13 @@ class CommonRoutesSpec extends FunSpec with Matchers with ScalatestRouteTest wit
         val metricsMap = JsonUtils.mapFromJson(responseAs[String])
         val classMetrics = metricsMap(getClass.getName).asInstanceOf[Map[String, Any]]
 
-        classMetrics.keys.toSet should equal(
+        classMetrics.keys.toSet should equal (
           Set("test-counter", "test-meter", "test-hist", "test-timer", "test-gauge")
         )
-        classMetrics("test-counter") should equal(counterMap)
-        classMetrics("test-meter") should equal(meterMap)
-        classMetrics("test-hist") should equal(histMap)
-        classMetrics("test-timer") should equal(timerMap)
+        classMetrics("test-counter") should equal (counterMap)
+        classMetrics("test-meter") should equal (meterMap)
+        classMetrics("test-hist") should equal (histMap)
+        classMetrics("test-timer") should equal (timerMap)
       }
     }
   }
@@ -76,7 +60,7 @@ class CommonRoutesSpec extends FunSpec with Matchers with ScalatestRouteTest wit
     it("should serialize all metrics") {
       val flattenedMap = MetricsSerializer.asFlatMap()
 
-      List("test-meter", "test-counter", "test-timer", "test-gauge", "test-hist").foreach { metricName =>
+      List("test-meter", "test-counter", "test-timer", "test-gauge", "test-hist") foreach { metricName =>
         flattenedMap.keys should contain("spark.jobserver.common.akka.web.CommonRoutesSpec." + metricName)
       }
 

@@ -1,21 +1,22 @@
 package spark.jobserver.routes
-
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport.sprayJsonMarshaller
+import spark.jobserver.common.akka.web.JsonUtils._
+import spray.json.DefaultJsonProtocol._
 import akka.http.scaladsl.marshalling.ToResponseMarshallable._
+
 import akka.actor.ActorRef
+import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.server.Route
 import akka.pattern.ask
 import akka.util.Timeout
 import spark.jobserver.DataManagerActor._
-import akka.http.scaladsl.server.Route
-import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport.sprayJsonMarshaller
-import akka.http.scaladsl.model.StatusCodes
+import spark.jobserver.WebApiUtils
+import spark.jobserver.WebApiUtils.successMap
 import spray.json.DefaultJsonProtocol._
 
 import scala.concurrent.ExecutionContext
 import scala.util.{Failure, Success}
-import akka.http.scaladsl.server.Directives._
-import spark.jobserver.WebApiUtils
-import spark.jobserver.WebApiUtils.successMap
-import spark.jobserver.common.akka.web.JsonUtils._
 
 /**
  * Routes for listing, deletion of and storing data files
@@ -26,7 +27,6 @@ import spark.jobserver.common.akka.web.JsonUtils._
  * @author TimMaltGermany
  */
 trait DataRoutes {
-  import spark.jobserver.WebApi._
 
 //  implicit val mapMarshaller: ToEntityMarshaller[Map[String, Any]] = Marshaller.opaque { map =>
 //    HttpEntity(ContentType(MediaTypes.`application/json`), map.toJson)
@@ -91,7 +91,7 @@ trait DataRoutes {
           onComplete(dataManager ? StoreData(filename, bytes)) {
             case Success(value) => value match {
               case Stored(name) =>
-                val map = Map[String, Any](ResultKey -> Map("filename" -> name))
+                val map = Map[String, Any](WebApiUtils.ResultKey -> Map("filename" -> name))
                 complete(StatusCodes.OK, map)
               case Error =>
                 complete(StatusCodes.BadRequest,

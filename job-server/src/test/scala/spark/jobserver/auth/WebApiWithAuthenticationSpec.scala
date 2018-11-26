@@ -1,5 +1,7 @@
 package spark.jobserver.auth
 
+import java.util.concurrent.ConcurrentHashMap
+
 import akka.actor.{Actor, ActorSystem, Props}
 import akka.testkit.TestKit
 import com.typesafe.config.{ConfigFactory, ConfigValueFactory}
@@ -100,7 +102,7 @@ class WebApiWithAuthenticationSpec extends FunSpec
         SecurityUtils.setSecurityManager(sManager)
       }
 
-      override lazy val authenticator: Option[HttpCredentials] => Future[AuthenticationResult[User]] = {
+      override def authenticatorBuilder: Option[HttpCredentials] => Future[AuthenticationResult[User]] = {
         logger.info("Using authentication.")
         initSecurityManager()
         asShiroAuthenticatorWithWait(authTimeout)(ec = system.dispatcher, s = system)
@@ -126,22 +128,22 @@ class WebApiWithAuthenticationSpec extends FunSpec
       BinaryInfo("demo", BinaryType.Jar, dt), "com.abc.meme", JobStatus.Running, dt, None, None)
   private val ResultKey = "result"
 
-  private val addedContexts = new scala.collection.mutable.HashSet[String] with SynchronizedSet[String]
+  private val addedContexts = new ConcurrentHashMap[String, Unit]()
 
   class DummyActor extends Actor {
     import CommonMessages._
     import JobInfoActor._
-
+import scala.collection.JavaConverters._
     def receive: PartialFunction[Any, Unit] = {
       case ListBinaries(_) => sender ! Map()
       case GetJobStatus(id) => sender ! jobInfo
       case GetJobResult(id) => sender ! JobResult(id, id + "!!!")
-      case ContextSupervisor.ListContexts => sender ! addedContexts.toSeq
+      case ContextSupervisor.ListContexts => sender ! addedContexts.asScala.keys.toSeq
       case ContextSupervisor.AddContext(name, _) =>
-        if (addedContexts.contains(name)) {
+        if (addedContexts.containsKey(name)) {
           sender ! ContextSupervisor.ContextAlreadyExists
         } else {
-          addedContexts.add(name)
+          addedContexts.put(name, ())
           sender ! ContextSupervisor.ContextInitialized
         }
       case ContextSupervisor.StopContext(name, force) =>
@@ -256,9 +258,9 @@ class WebApiWithAuthenticationSpec extends FunSpec
       Route.seal(testRoutes) ~> check {
         status should be(OK)
       }
-      while (!addedContexts.contains(USER_NAME + SparkJobUtils.NameContextDelimiter + "one") &&
-             !addedContexts.contains(USER_NAME + SparkJobUtils.NameContextDelimiter + "two") &&
-             !addedContexts.contains(USER_NAME + SparkJobUtils.NameContextDelimiter + "three")) {
+      while (!addedContexts.containsKey(USER_NAME + SparkJobUtils.NameContextDelimiter + "one") &&
+             !addedContexts.containsKey(USER_NAME + SparkJobUtils.NameContextDelimiter + "two") &&
+             !addedContexts.containsKey(USER_NAME + SparkJobUtils.NameContextDelimiter + "three")) {
         Thread.sleep(3)
       }
 
@@ -298,9 +300,9 @@ class WebApiWithAuthenticationSpec extends FunSpec
         status should be(OK)
       }
 
-      while (!addedContexts.contains(USER_NAME + SparkJobUtils.NameContextDelimiter + "c") &&
-             !addedContexts.contains(USER_NAME + SparkJobUtils.NameContextDelimiter + USER_NAME + "_c") &&
-             !addedContexts.contains(USER_NAME + SparkJobUtils.NameContextDelimiter + USER_NAME + "_c2")) {
+      while (!addedContexts.containsKey(USER_NAME + SparkJobUtils.NameContextDelimiter + "c") &&
+             !addedContexts.containsKey(USER_NAME + SparkJobUtils.NameContextDelimiter + USER_NAME + "_c") &&
+             !addedContexts.containsKey(USER_NAME + SparkJobUtils.NameContextDelimiter + USER_NAME + "_c2")) {
         Thread.sleep(3)
       }
 
@@ -327,8 +329,8 @@ class WebApiWithAuthenticationSpec extends FunSpec
         status should be(OK)
       }
 
-      while (!addedContexts.contains(USER_NAME + SparkJobUtils.NameContextDelimiter + "c1") &&
-             !addedContexts.contains(
+      while (!addedContexts.containsKey(USER_NAME + SparkJobUtils.NameContextDelimiter + "c1") &&
+             !addedContexts.containsKey(
                USER_NAME + SparkJobUtils.NameContextDelimiter
                + SparkJobUtils.NameContextDelimiter + "2"
                + SparkJobUtils.NameContextDelimiter + "c2"
@@ -356,7 +358,7 @@ class WebApiWithAuthenticationSpec extends FunSpec
         status should be(OK)
       }
       Thread.sleep(5)
-      addedContexts.contains(USER_NAME + SparkJobUtils.NameContextDelimiter + cName) should equal(true)
+      addedContexts.containsKey(USER_NAME + SparkJobUtils.NameContextDelimiter + cName) should equal(true)
       Post("/contexts/" + cName).addHeader(authorization) ~>
       Route.seal(routesWithProxyUser) ~> check {
         status should be(BadRequest)
@@ -456,7 +458,7 @@ class WebApiWithAuthenticationSpec extends FunSpec
         status should be(OK)
       }
 
-      while (!addedContexts.contains(USER_NAME + SparkJobUtils.NameContextDelimiter + "xxx")) {
+      while (!addedContexts.containsKey(USER_NAME + SparkJobUtils.NameContextDelimiter + "xxx")) {
         Thread.sleep(3)
       }
       Get("/contexts/").addHeader(authorization) ~> Route.seal(routesWithProxyUser) ~> check {

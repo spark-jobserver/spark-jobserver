@@ -270,7 +270,7 @@ with ScalatestRouteTest with ScalaFutures with SprayJsonSupport {
     val jsonContentType = ContentTypes.`application/json`
     it ("Should return valid JSON when resetting a context") {
       Put(Uri("/contexts").withQuery(Query("reset=reboot"))).addHeader(applicationJsonAcceptHeader) ~>
-        api.contextRoutes ~>
+        api.myRoutes ~>
         check {
           if (status == StatusCodes.InternalServerError){
             println(responseAs[String])

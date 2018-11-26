@@ -108,7 +108,7 @@ object JobServer {
     // start embedded H2 server
     if (config.getBoolean("spark.jobserver.startH2Server")) {
       val rootDir = config.getString("spark.jobserver.sqldao.rootdir")
-      val h2 = org.h2.tools.Server.createTcpServer("-tcpAllowOthers", "-baseDir", rootDir).start();
+      val h2 = org.h2.tools.Server.createTcpServer("-tcpAllowOthers", "-baseDir", rootDir).start()
       logger.info("Embeded H2 server started with base dir {} and URL {}", rootDir, h2.getURL: Any)
     }
 

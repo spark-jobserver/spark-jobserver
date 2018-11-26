@@ -83,6 +83,10 @@ object SparkJobUtils {
     // Set the Jetty port to 0 to find a random port
     conf.set("spark.ui.port", "0")
 
+    // Set number of akka threads
+    // TODO: need to figure out how many extra threads spark needs, besides the job threads
+    conf.set("spark.akka.threads", (getMaxRunningJobs(config) + 4).toString)
+
     // Set any other settings in context config that start with "spark"
     for (e <- contextConfig.entrySet().asScala if e.getKey.startsWith("spark.")) {
       conf.set(e.getKey, e.getValue.unwrapped.toString)

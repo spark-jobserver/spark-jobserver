@@ -4,6 +4,8 @@ import spark.jobserver.WebApi._
 import spark.jobserver.common.akka.web.JsonUtils.AnyJsonFormat
 import spark.jobserver.io.{ContextInfo, ErrorData, JobInfo, JobStatus}
 
+import scala.concurrent.duration.FiniteDuration
+
 object WebApiUtils {
   def errMap(errMsg: String): Map[String, String] =
     Map(StatusKey -> JobStatus.Error, ResultKey -> errMsg)
@@ -107,4 +109,10 @@ object WebApiUtils {
     map.toMap
   }
   val dataToByteStr : Byte => ByteString = b => ByteString(b)
+  val StatusKey = "status"
+  val ResultKey = "result"
+
+  import scala.concurrent.duration._
+  val DefaultSyncTimeout: FiniteDuration = 10 seconds
+  val DefaultJobLimit = 50
 }

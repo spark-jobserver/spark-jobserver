@@ -18,7 +18,7 @@ class NamedObjectsJobSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
     manager ! JobManagerActor.Initialize(cfg, None, emptyActor)
 
-    expectMsgClass(30.seconds, classOf[JobManagerActor.Initialized])
+    expectMsgClass(10.seconds, classOf[JobManagerActor.Initialized])
 
     uploadTestJar()
   }
