@@ -86,7 +86,7 @@ lazy val root = Project(id = "root", base = file("."))
   .settings(noPublishSettings)
   .settings(rootSettings)
   .settings(dockerSettings)
-  .aggregate(jobServer, jobServerApi, jobServerTestJar, akkaApp, jobServerExtras/*, jobServerPython*/)
+  .aggregate(jobServer, jobServerApi, jobServerTestJar, akkaApp, jobServerExtras, jobServerPython)
   .dependsOn(jobServer, jobServerExtras)
   .disablePlugins(SbtScalariform).enablePlugins(DockerPlugin)
 
@@ -249,11 +249,11 @@ lazy val commonSettings = Defaults.coreDefaultSettings ++ dirSettings ++ Seq(
   crossPaths   := true,
   scalaVersion := sys.env.getOrElse("SCALA_VERSION", "2.12.7"),
   dependencyOverrides += "org.scala-lang" % "scala-compiler" % scalaVersion.value,
-//   scalastyleFailOnError := false,
+  // scalastyleFailOnError := true,
   runScalaStyle := {
     scalastyle.in(Compile).toTask("").value
   },
-//  (compile in Compile) := (compile in Compile).dependsOn(runScalaStyle).value,
+  (compile in Compile) := (compile in Compile).dependsOn(runScalaStyle).value,
 
   // In Scala 2.10, certain language features are disabled by default, such as implicit conversions.
   // Need to pass in language options or import scala.language.* to enable them.
