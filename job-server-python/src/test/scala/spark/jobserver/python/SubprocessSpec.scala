@@ -125,13 +125,12 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
     def contextType = classOf[JavaSparkContext].getCanonicalName
   }
 
-  lazy val sqlContext = SparkSession.builder().config(sc.getConf).getOrCreate() /*with IdentifiedContext{
+  lazy val sqlContext = new SQLContext(sc) with IdentifiedContext{
     def contextType = classOf[SQLContext].getCanonicalName
-  }*/
-
-  lazy val hiveContext = SparkSession.builder().config(sc.getConf).enableHiveSupport().getOrCreate() /*with IdentifiedContext{
+  }
+  lazy val hiveContext = new HiveContext(sc) with IdentifiedContext{
     def contextType = classOf[HiveContext].getCanonicalName
-  }*/
+  }
 
   override def afterAll(): Unit = {
     sc.stop()
