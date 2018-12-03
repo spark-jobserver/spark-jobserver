@@ -227,7 +227,7 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
       // Adding extra cases to test both
       case GetSparkContexData("contextWithInfo") => sender ! SparkContexData(contextInfo, Some("local-1337"), Some("http://spark:4040"))
       case GetSparkContexData("finishedContextWithInfo") => sender ! SparkContexData(finishedContextInfo, None, None)
-      case MigrationActor.DeleteBinaryFromHDFS(_) => sender ! "Proceed"
+      case MigrationActor.GetHashForApp(_) => sender ! "Dummy unused message"
     }
   }
 

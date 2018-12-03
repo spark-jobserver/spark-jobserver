@@ -19,11 +19,12 @@ import org.slf4j.LoggerFactory
 import org.apache.commons.configuration.ConfigurationException
 
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 import scala.util.{Failure, Success, Try}
 
 object MigrationActor {
   case class SaveBinaryInHDFS(name: String, jarBytes: Array[Byte])
-  case class DeleteBinaryFromHDFS(name: String)
+  case class DeleteBinaryFromHDFS(response: Try[Any])
   case object Init
   case object ProcessNextBinary
   case object ScheduleProcessNextBinary
@@ -66,7 +67,6 @@ class MigrationActor(config: Config,
                      autoStartSync: Boolean)
     extends InstrumentedActor with YammerMetrics {
   val hdfsDAO = new HdfsBinaryDAO(config)
-  hdfsDAO.validateConfig(config)
 
   val metadataStore = new MigrationMetaData(config.getString("spark.jobserver.sqldao.rootdir"))
 
@@ -92,10 +92,17 @@ class MigrationActor(config: Config,
   val syncHandlers: Receive = {
     case Init =>
       if (metadataStore.exists()) {
-        logger.info("Sync file already exists, just starting scheduler")
-        totalSyncCount.inc(metadataStore.totalKeys)
-        totalSuccessfulSyncRequests.inc(metadataStore.getCurrentIndex.toInt - 1)
-        self ! ScheduleProcessNextBinary
+        if ((metadataStore.getCurrentIndex.toInt - 1) == metadataStore.totalKeys) { // Sync already finished
+          logger.info("Sync already finished. Deleting file and retriggering sync")
+          metadataStore.deleteConfig
+          daoActor ! GetAllHashes
+        } else {
+          // Sync still in progress
+          logger.info("Sync file already exists, just starting scheduler")
+          totalSyncCount.inc(metadataStore.totalKeys)
+          totalSuccessfulSyncRequests.inc(metadataStore.getCurrentIndex.toInt - 1)
+          self ! ScheduleProcessNextBinary
+        }
       } else {
         daoActor ! GetAllHashes
       }
@@ -179,26 +186,46 @@ class MigrationActor(config: Config,
       * If we don't do this, then delete binary wipes the data from DB and when
       * this actor tries to read the data, it is not there.
       */
-    case DeleteBinaryFromHDFS(name) =>
+    case GetHashForApp(name) =>
       totalLiveRequests.inc()
       val recipient = sender()
       (daoActor ? GetHashForApp(name))(3.seconds)
-          .mapTo[GetHashForAppResponse].onComplete {
+        .mapTo[GetHashForAppResponse].onComplete {
         case Success(GetHashForAppSucceeded(Seq())) =>
           logger.warn(s"Did not find any hashes for app $name")
           totalLiveSuccessfulDeleteRequests.inc()
-          recipient ! "Proceed"
+          recipient ! GetHashForAppSucceeded(Seq())
         case Success(GetHashForAppSucceeded(hashes)) =>
-          deleteBinariesFromHDFS(hashes)
-          recipient ! "Proceed"
+          logger.info(s"Found candidates for deletion of hash $hashes")
+          recipient ! GetHashForAppSucceeded(hashes)
         case Success(GetHashForAppFailed) =>
           logger.error("Received GetAllHashesForAppFailed for app $name")
           totalLiveFailedDeleteRequests.inc()
-          recipient ! "Proceed"
+          recipient ! GetHashForAppFailed
         case Failure(t) =>
           logger.error(s"Failed to get hashes for app $name", t)
           totalLiveFailedDeleteRequests.inc()
-          recipient ! "Proceed"
+          recipient ! GetHashForAppFailed
+      }
+
+    /**
+      * WebApi send a message of type GetHashForAppResponse type of message.
+      * For all failure cases, this function won't react, as everything has been handled.
+      * For the case where we receive hashes, we trigger deletion in HDFS.
+      * We only increment the counter 1 time even if the total hashes to delete from HDFS
+      * were more than 1.
+      */
+    case DeleteBinaryFromHDFS(response) =>
+      val recipient = sender()
+      response.asInstanceOf[Try[GetHashForAppResponse]] match {
+        case Success(GetHashForAppSucceeded(Seq())) =>
+          sender() ! "Empty Seq" // Nothing to be done, ignore
+        case Success(GetHashForAppSucceeded(hashes)) =>
+          logger.info(s"Going to delete $hashes from HDFS")
+          deleteBinariesFromHDFS(hashes, recipient)
+        case _ @ otherFailedMessage =>
+          logger.warn(s"Received $otherFailedMessage. Most likely GetHashForApp failed. Ignoring")
+          sender() ! "Failed"
       }
   }
 
@@ -227,20 +254,24 @@ class MigrationActor(config: Config,
     }
   }
 
-  private def deleteBinariesFromHDFS(hashes: Seq[String]): Unit = {
-    hashes.foreach{
-      h => hdfsDAO.delete(h).onComplete {
-        case Success(true) =>
-          logger.info(s"Successfully deleted binary with hash $h")
-          totalLiveSuccessfulDeleteRequests.inc()
-        case Success(false) =>
-          logger.error(s"Failed to delete binary with hash $h")
-          totalLiveFailedDeleteRequests.inc()
-        case Failure(t) =>
-          logger.error("Delete request for hdfs dao failed", t)
-          totalLiveFailedDeleteRequests.inc()
-      }
-    }
+  private def deleteBinariesFromHDFS(hashes: Seq[String], recipient: ActorRef): Unit = {
+    Future.traverse(hashes)(hdfsDAO.delete(_)).onComplete {
+       case Success(allDeleteResult) =>
+         allDeleteResult.foldLeft(true)(_ && _) match {
+           case true =>
+             logger.info(s"Successfully deleted all binaries with hash $hashes")
+             totalLiveSuccessfulDeleteRequests.inc()
+             recipient ! "Proceed"
+           case false =>
+             logger.error(s"Failed to delete some binaries. Hashes: $hashes Delete status: $allDeleteResult")
+             totalLiveFailedDeleteRequests.inc()
+             recipient ! "Failed to delete binary"
+         }
+       case Failure(t) =>
+         logger.error("Delete request for hdfs dao failed", t)
+         totalLiveFailedDeleteRequests.inc()
+         recipient ! "Request timedout"
+     }
   }
 
   private def scheduleProcessNextBinaryMsg: Boolean = {
@@ -321,6 +352,12 @@ class MigrationMetaData(rootDir: String) {
         logger.warn("Did not find total_keys key in sync file")
         0
     }
+
+  def deleteConfig: Boolean = {
+    // Reset Current key since save method updates everything except current key
+    config.setProperty(MigrationMetaData.CURRENT_KEY, "1")
+    configurationFile.delete()
+  }
 
   def getCurrentIndex: String = config.getString(MigrationMetaData.CURRENT_KEY)
 }
