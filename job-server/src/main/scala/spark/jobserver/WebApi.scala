@@ -153,7 +153,6 @@ class WebApi(system: ActorSystem,
              port: Int,
              binaryManager: ActorRef,
              dataManager: ActorRef,
-             migrationActor: ActorRef,
              supervisor: ActorRef,
              jobInfoActor: ActorRef)
     extends HttpService with CommonRoutes with DataRoutes with SJSAuthenticator with CORSSupport
@@ -295,7 +294,6 @@ class WebApi(system: ActorSystem,
                         case BinaryStored =>
                           val stcode = StatusCodes.OK;
                           logger.info("StatusCode: " + stcode);
-                          migrationActor ! MigrationActor.SaveBinaryInHDFS(appName, binBytes)
                           ctx.complete(stcode)
                         case InvalidBinary => badRequest(ctx, "Binary is not of the right format")
                         case BinaryStorageFailure(ex) => logAndComplete(ctx, "Storage Failure", 500, ex);
@@ -318,21 +316,16 @@ class WebApi(system: ActorSystem,
       delete {
         path(Segment) { appName =>
           logger.info(s"DELETE /binaries/$appName");
-          // Add explicit short timeout, hdfs call shouldn't block the main function for too long
-          val deleteHDFSFuture = (migrationActor ? MigrationActor.DeleteBinaryFromHDFS(appName))(3.seconds)
+          val future = binaryManager ? DeleteBinary(appName)
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-            deleteHDFSFuture.onComplete{
-              case _ => // As soon as delete future gets its results execute the original command
-                val future = binaryManager ? DeleteBinary(appName)
-                future.map {
-                  case BinaryDeleted =>
-                    val stcode = StatusCodes.OK;
-                    logger.info("StatusCode: " + stcode);
-                    ctx.complete(stcode)
-                  case NoSuchBinary => notFound(ctx, s"can't find binary with name $appName")
-                }.recover {
-                  case e: Exception => logAndComplete(ctx, "ERROR", 500, e);
-                }
+            future.map {
+              case BinaryDeleted =>
+                val stcode = StatusCodes.OK;
+                logger.info("StatusCode: " + stcode);
+                ctx.complete(stcode)
+              case NoSuchBinary => notFound(ctx, s"can't find binary with name $appName")
+            }.recover {
+              case e: Exception => logAndComplete(ctx, "ERROR", 500, e);
             }
           }
         }

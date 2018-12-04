@@ -389,6 +389,7 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
   }
 
   override def getJobInfos(limit: Int, statusOpt: Option[String] = None): Future[Seq[JobInfo]] = {
+
     val joinQuery = for {
       bin <- binaries
       j <- jobs if (statusOpt match {
@@ -451,57 +452,6 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
     }
     for (r <- db.run(joinQuery.result)) yield {
       r.map(jobInfoFromRow).headOption
-    }
-  }
-
-  /**
-    * Generatd SQL Query
-    * select "BIN_HASH" from "BINARIES_CONTENTS"
-    * where x4 = next
-    * @return Sequence of hashes
-    */
-  override def getAllHashes(): Future[Seq[String]] = {
-    val query = binariesContents.map(bc => bc.binHash)
-    for (hashes <- db.run(query.result)) yield {
-      hashes.map(BinaryDAO.hashBytesToString(_))
-    }
-  }
-
-  override def getBinaryBytes(hash: String): Future[Array[Byte]] = {
-    if (hash.isEmpty) {
-      return Future { Array.emptyByteArray }
-    }
-
-    val query = for {
-      bc <- binariesContents.filter(_.binHash === BinaryDAO.hashStringToBytes(hash))
-    } yield bc.binary
-    db.run(query.result.headOption.map{
-      b =>
-        b match {
-          case Some(byte) => byte.getBytes(1, byte.length().toInt)
-          case None => Array.emptyByteArray
-        }
-    }.transactionally)
-  }
-
-  /**
-    * select "BIN_HASH"
-    * from "BINARIES"
-    * where
-    *   "BIN_HASH" in
-    *     (select distinct "BIN_HASH" from "BINARIES" where "APP_NAME" = 'abc')
-    * @param appName
-    * @return
-    */
-  override def getHashForApp(appName: String): Future[Seq[String]] = {
-    val allHashesForApp = binaries.filter(_.appName === appName).map(_.binHash).distinct
-    val allBinariesUsingHash = binaries.filter(_.binHash in allHashesForApp).map(_.binHash)
-
-    for (hashes <- db.run(allBinariesUsingHash.result)) yield {
-      hashes.length match {
-        case 1 => Seq(BinaryDAO.hashBytesToString(hashes(0)))
-        case 0 | _ => Seq()
-      }
     }
   }
 }
