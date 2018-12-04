@@ -176,6 +176,21 @@ class MigrationActorSpec extends JobSpecBase(MigrationActorSpec.getNewSystem) wi
     }
 
     it("should retry saving binary if save fails due to HDFS errors") {
+      val testClusterUrl = getNameNodeURI()
+      val config = Map(
+        "spark.jobserver.combineddao.binarydao.dir" -> s"$testClusterUrl/migration-test",
+        "spark.jobserver.sqldao.rootdir" -> "/tmp"
+      ).asJava
+
+      val migrationActor = system.actorOf(
+        MigrationActor.props(
+          ConfigFactory.parseMap(config),
+          daoActorProb.ref,
+          initRetry = 1.seconds,
+          syncInterval = 10.seconds,
+          autoStartSync = false))
+
+
       migrationActor ! MigrationActor.Init
 
       // Return hashes
@@ -183,13 +198,16 @@ class MigrationActorSpec extends JobSpecBase(MigrationActorSpec.getNewSystem) wi
       daoActorProb.reply(GetAllHashesSucceeded(Seq("hash_a", "hash_b")))
 
       super.shutdownHDFS()
+      println("Shutdown HDFS")
       daoActorProb.expectMsg(12.seconds, GetBinary("hash_a"))
       daoActorProb.reply(GetBinarySucceeded(Array(1, 2)))
 
       daoActorProb.expectMsg(12.seconds, GetBinary("hash_a"))
       daoActorProb.reply(GetBinarySucceeded(Array(1, 2)))
 
+      println("Starting HDFS ....")
       super.startHDFS()
+      println("Started ...")
 
       daoActorProb.expectMsg(12.seconds, GetBinary("hash_a"))
       daoActorProb.reply(GetBinarySucceeded(Array(1, 2)))
@@ -197,6 +215,7 @@ class MigrationActorSpec extends JobSpecBase(MigrationActorSpec.getNewSystem) wi
       daoActorProb.expectMsg(12.seconds, GetBinary("hash_b"))
       daoActorProb.reply(GetBinarySucceeded(Array(3, 4)))
 
+      println("Out")
       daoActorProb.expectNoMsg(2.seconds) // Verify that scheduler has stopped
 
       // Verify files in HDFS

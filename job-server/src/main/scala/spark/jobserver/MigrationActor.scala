@@ -26,7 +26,7 @@ object MigrationActor {
   case class DeleteBinaryFromHDFS(name: String)
   case object Init
   case object ProcessNextBinary
-  case object ScheduleProcessNextBinary
+  case object StartScheduler
 
   case object GetAllHashes
   sealed trait GetAllHashesResponse
@@ -84,6 +84,8 @@ class MigrationActor(config: Config,
   val syncSaveTimer = Metrics.newTimer(getClass, "sync-save-timer",
     TimeUnit.MILLISECONDS, TimeUnit.SECONDS)
 
+  var syncCancellable: Cancellable = _
+
   if (autoStartSync) {
     context.system.scheduler.scheduleOnce(3.seconds, self, Init)
   }
@@ -94,7 +96,7 @@ class MigrationActor(config: Config,
         logger.info("Sync file already exists, just starting scheduler")
         totalSyncCount.inc(metadataStore.totalKeys)
         totalSuccessfulSyncRequests.inc(metadataStore.getCurrentIndex.toInt - 1)
-        self ! ScheduleProcessNextBinary
+        self ! StartScheduler
       } else {
         daoActor ! GetAllHashes
       }
@@ -110,18 +112,18 @@ class MigrationActor(config: Config,
       metadataStore.save(hashes) match {
         case true =>
           logger.info("Saved successfully all the hashes to config file")
-          self ! ScheduleProcessNextBinary
+          self ! StartScheduler
         case false =>
           logger.error("Failed to save hashes to config file. Retrying in 30 seconds ...")
           context.system.scheduler.scheduleOnce(30.seconds, self, GetAllHashesSucceeded(hashes))
       }
 
-    case ScheduleProcessNextBinary =>
-      val isScheduled = scheduleProcessNextBinaryMsg
+    case StartScheduler =>
+      val isScheduled = startSyncScheduler
       isScheduled match {
         case false =>
           // Retry after 30 seconds, even though the chances of this failing is too low
-          context.system.scheduler.scheduleOnce(initRetryTimeInterval, self, ScheduleProcessNextBinary)
+          context.system.scheduler.scheduleOnce(initRetryTimeInterval, self, StartScheduler)
         case true =>
           logger.info("Successfully started scheduler")
       }
@@ -129,29 +131,26 @@ class MigrationActor(config: Config,
 
     case ProcessNextBinary =>
       val hashOption = metadataStore.getNext()
-      val index = metadataStore.getCurrentIndex
       hashOption match {
         case Some(binHash) =>
-          logger.info(s"[$index] Fetching next binary with hash $binHash")
-          (daoActor ? GetBinary(binHash))(20.seconds).mapTo[GetBinaryReponse].onComplete {
+          logger.info(s"Fetching next binary with hash $binHash")
+          (daoActor ? GetBinary(binHash))(10.seconds).mapTo[GetBinaryReponse].onComplete {
             case Success(GetBinarySucceeded(Array.emptyByteArray)) =>
-              logger.warn(s"[$index] Found a hash ($binHash) which doesn't exist in DB")
-              self ! ScheduleProcessNextBinary
+              logger.warn(s"Found a hash ($binHash) which doesn't exist in DB")
               metadataStore.updateIndex()
               totalDeletedBinarySyncRequests.inc()
             case Success(GetBinarySucceeded(bytes)) =>
               saveSyncBinary(binHash, bytes)
             case Success(GetBinaryFailed) =>
-              logger.error(s"[$index] Received GetBinaryFailed. Failed")
+              logger.error("Received GetBinaryFailed. Failed")
               totalFailedSyncRequests.inc()
-              self ! ScheduleProcessNextBinary
             case Failure(t) =>
-              logger.error(s"[$index] Failed to get binary $binHash", t)
+              logger.error(s"Failed to get binary $binHash", t)
               totalFailedSyncRequests.inc()
-              self ! ScheduleProcessNextBinary
           }
         case None =>
           logger.info("All binaries synced successfully.")
+          syncCancellable.cancel()
       }
   }
 
@@ -205,24 +204,20 @@ class MigrationActor(config: Config,
 
   private def saveSyncBinary(binHash: String, bytes: Array[Byte]) = {
     val timer = syncSaveTimer.time()
-    val index = metadataStore.getCurrentIndex
     hdfsDAO.save(binHash, bytes).onComplete {
       case Success(true) =>
-        timer.stop()
-        logger.info(s"[$index] Successfully saved binary with details $binHash")
+        logger.info(s"Successfully saved binary with details $binHash")
         totalSuccessfulSyncRequests.inc()
-        self ! ScheduleProcessNextBinary
         metadataStore.updateIndex()
+        timer.stop()
       case Success(false) =>
-        timer.stop()
-        logger.info(s"[$index] Failed to save binary with details $binHash")
+        logger.info(s"Failed to save binary with details $binHash")
         totalFailedSyncRequests.inc()
-        self ! ScheduleProcessNextBinary
+        timer.stop()
       case Failure(t) =>
-        timer.stop()
-        logger.error(s"[$index] Failed to save binary with details $binHash", t)
+        logger.error(s"Failed to save binary with details $binHash", t)
         totalFailedSyncRequests.inc()
-        self ! ScheduleProcessNextBinary
+        timer.stop()
     }
   }
 
@@ -242,10 +237,12 @@ class MigrationActor(config: Config,
     }
   }
 
-  private def scheduleProcessNextBinaryMsg: Boolean = {
-    Try(context.system.scheduler.scheduleOnce(syncInterval, self, ProcessNextBinary)) match {
-      case Success(_) =>
-        logger.info("Scheduled a message for processing next binary")
+  private def startSyncScheduler: Boolean = {
+    val INITIAL_DELAY = syncInterval
+    Try(context.system.scheduler.schedule(INITIAL_DELAY, syncInterval, self, ProcessNextBinary)) match {
+      case Success(cancellable) =>
+        logger.info("Scheduled a time out message for processing next binary")
+        syncCancellable = cancellable
         true
       case Failure(e) =>
         logger.error("Failed to schedule message to process next binary", e)
