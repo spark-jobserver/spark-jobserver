@@ -16,6 +16,7 @@ import scala.util.Success
   * @param config config of jobserver
   */
 class CombinedDAO(config: Config) extends JobDAO with FileCacher {
+  private val logger = LoggerFactory.getLogger(getClass)
   var binaryDAO: BinaryDAO = _
   var metaDataDAO: MetaDataDAO = _
   private val binaryDaoPath = "spark.jobserver.combineddao.binarydao.class"
@@ -46,8 +47,6 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher {
   val rootDir: String = config.getString(rootDirPath)
   val rootDirFile: File = new File(rootDir)
   private val defaultAwaitTime = 60 seconds
-
-  private val logger = LoggerFactory.getLogger(getClass)
 
   override def getApps: Future[Map[String, (BinaryType, DateTime)]] =
     metaDataDAO.getBinaries.map(
