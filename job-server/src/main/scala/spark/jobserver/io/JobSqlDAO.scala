@@ -127,20 +127,33 @@ class JobSqlDAO(config: Config, sqlCommon: SqlCommon) extends JobDAO with FileCa
   }
 
   private def deleteBinaryInfo(appName: String): Future[Int] = {
-    val deleteBinary = sqlCommon.binaries.filter(_.appName === appName)
-    val hashUsed = sqlCommon.binaries
-    .filter(_.binHash in deleteBinary.map(_.binHash)).filter(_.appName =!= appName)
-    val deleteBinariesContents = binariesContents.filter(_.binHash in deleteBinary.map(_.binHash))
+    val candidateDeleteBinaries = sqlCommon.binaries.filter(_.appName === appName)
+    val allBinariesUsingCandidateHash = sqlCommon.binaries.filter(
+      _.binHash in candidateDeleteBinaries.map(_.binHash))
+
     val dbAction = (for {
-      _ <- hashUsed.result.headOption.flatMap{
-        case None =>
-          deleteBinariesContents.delete
-        case Some(bc) =>
-          DBIO.successful(None) // no-op
-      }
-      b <- deleteBinary.delete
+      candidateBinaries <- candidateDeleteBinaries.result
+      allBinariesUsingHash <- allBinariesUsingCandidateHash.result
+      hashesToDelete = findAllHashesToDelete(appName, allBinariesUsingHash, candidateBinaries)
+      _ <- binariesContents.filter(_.binHash.inSet(hashesToDelete)).delete
+      b <- candidateDeleteBinaries.delete
     } yield b).transactionally
+
     sqlCommon.db.run(dbAction).recover(logDeleteErrors)
+  }
+
+  private def findAllHashesToDelete(appName: String,
+                                    allBinariesUsingHash: Seq[(Int, String, String, Timestamp, Array[Byte])],
+                                    candidateBinaries: Seq[(Int, String, String, Timestamp, Array[Byte])]):
+                                      Seq[Array[Byte]] = {
+    val hashOfOtherApps = allBinariesUsingHash
+                            .filter(_._2 != appName) // filter other apps
+                            .map(_._5) // hash
+                            .map(BinaryDAO.hashBytesToString(_))
+    val deleteCandidates = candidateBinaries.map( _._5).map(BinaryDAO.hashBytesToString(_))
+    deleteCandidates
+      .filterNot(hashOfOtherApps.contains(_))
+      .map(BinaryDAO.hashStringToBytes(_))
   }
 
   // Fetch the binary file from the database
