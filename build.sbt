@@ -18,7 +18,7 @@ lazy val jobServer = Project(id = "job-server", base = file("job-server"))
   .settings(
     description := "Spark as a Service: a RESTful job server for Apache Spark",
     libraryDependencies ++= sparkDeps ++ slickDeps ++ cassandraDeps ++
-    securityDeps ++ coreTestDeps ++ miscTestDeps,
+    securityDeps ++ coreTestDeps ++ zookeeperDeps ++ miscTestDeps,
     test in Test := (test in Test).dependsOn(packageBin in Compile in jobServerTestJar)
       .dependsOn(clean in Compile in jobServerTestJar)
       .dependsOn(buildPython in jobServerPython)
