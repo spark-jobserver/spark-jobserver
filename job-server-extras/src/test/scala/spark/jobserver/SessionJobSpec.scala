@@ -12,11 +12,12 @@ import scala.concurrent.duration._
 
 class TestSessionContextFactory extends SessionContextFactory {
 
-  override def makeContext(sparkConf: SparkConf, config: Config,  contextName: String): C = {
+  override def makeContext(sparkConf: SparkConf, config: Config, contextName: String): C = {
     val builder = SparkSession.builder()
     builder.config(sparkConf).appName(contextName).master("local")
     builder.config("javax.jdo.option.ConnectionURL", "jdbc:derby:memory:myDB;create=true")
     builder.config("javax.jdo.option.ConnectionDriverName", "org.apache.derby.jdbc.EmbeddedDriver")
+    builder.config("spark.sql.warehouse.dir", makeWarehouseDir().getAbsolutePath)
     try {
       builder.enableHiveSupport()
     } catch {

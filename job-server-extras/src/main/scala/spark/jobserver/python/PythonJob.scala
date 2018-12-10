@@ -1,12 +1,15 @@
 package spark.jobserver.python
 
-import com.typesafe.config.Config
-import org.scalactic.{Good, Every, Or}
-import org.slf4j.LoggerFactory
-import py4j.GatewayServer
-import spark.jobserver.api.{SparkJobBase, ValidationProblem, JobEnvironment}
+import java.security.SecureRandom
 
-import scala.sys.process.{ProcessLogger, Process}
+import com.typesafe.config.Config
+import org.apache.spark.SparkConf
+import org.scalactic.{Every, Good, Or}
+import org.slf4j.LoggerFactory
+import spark.jobserver.api.{JobEnvironment, SparkJobBase, ValidationProblem}
+import org.spark_project.guava.hash.HashCodes
+
+import scala.sys.process.{Process, ProcessLogger}
 import scala.util.{Failure, Success, Try}
 
 case class PythonJob[X <: PythonContextLike](eggPath: String,
@@ -42,6 +45,17 @@ case class PythonJob[X <: PythonContextLike](eggPath: String,
                         config: Config): Or[Config, Every[ValidationProblem]] = Good(config)
 
   /**
+    * Copied from Spark private method in 2.4.0
+    */
+  def createSecret(conf: SparkConf): String = {
+    val bits = conf.getInt("spark.authenticate.secretBitLength", 256)
+    val rnd = new SecureRandom()
+    val secretBytes = new Array[Byte](bits / java.lang.Byte.SIZE)
+    rnd.nextBytes(secretBytes)
+    HashCodes.fromBytes(secretBytes).toString()
+  }
+
+  /**
     * This is the entry point for a Spark Job Server to execute Python jobs.
     * It calls a Python subprocess to execute the relevant Python Job class.
     *
@@ -53,7 +67,12 @@ case class PythonJob[X <: PythonContextLike](eggPath: String,
   override def runJob(sc: X, runtime: JobEnvironment, data: Config): Any = {
     logger.info(s"Running $modulePath from $eggPath")
     val ep = endpoint(sc, runtime.contextConfig, runtime.jobId, data)
-    val server = new GatewayServer(ep, 0)
+    val secret = createSecret(sc.sparkContext.getConf)
+    val server = new py4j.GatewayServer.GatewayServerBuilder()
+      .entryPoint(ep)
+      .javaPort(0)
+      .authToken(secret)
+      .build()
     val pythonPathDelimiter : String = if (System.getProperty("os.name").indexOf("Win") >= 0) ";" else ":"
     val pythonPath = (eggPath +: sc.pythonPath).mkString(pythonPathDelimiter)
     logger.info(s"Using Python path of ${pythonPath}")
@@ -66,7 +85,8 @@ case class PythonJob[X <: PythonContextLike](eggPath: String,
           None,
           "EGGPATH" -> eggPath,
           "PYTHONPATH" -> pythonPath,
-          "PYSPARK_PYTHON" -> sc.pythonExecutable)
+          "PYSPARK_PYTHON" -> sc.pythonExecutable,
+          "PYSPARK_GATEWAY_SECRET" -> secret)
       val err = new StringBuffer
       val procLogger =
         ProcessLogger(

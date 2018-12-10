@@ -39,7 +39,7 @@ class PythonJobManagerSpec extends ExtrasJobSpecBase(PythonJobManagerSpec.getNew
         "example_jobs.word_count.WordCountSparkSessionJob",
         ConfigFactory.parseString("""input.strings = ["a", "b", "a"]"""),
         errorEvents ++ syncEvents)
-      expectMsgPF(3 seconds, "Expected a JobResult or JobErroredOut message!") {
+      expectMsgPF(10 seconds, "Expected a JobResult or JobErroredOut message!") {
         case JobResult(_, x) => x should matchPattern {
           case m: java.util.Map[_, _] if m.asScala == Map("b" -> 1, "a" -> 2) =>
         }

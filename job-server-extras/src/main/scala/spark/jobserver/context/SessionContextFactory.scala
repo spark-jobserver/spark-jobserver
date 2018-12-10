@@ -1,5 +1,8 @@
 package spark.jobserver.context
 
+import java.io.File
+import java.nio.file.Files
+
 import com.typesafe.config.Config
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.sql.SparkSession
@@ -18,6 +21,13 @@ class SessionContextFactory extends ScalaContextFactory {
   type C = SparkSessionContextLikeWrapper
 
   def isValidJob(job: SparkJobBase): Boolean = job.isInstanceOf[SparkSessionJob]
+
+  // creates a stub warehouse dir for derby/hive metastore
+  def makeWarehouseDir(): File = {
+    val warehouseDir = Files.createTempDirectory("warehouse").toFile()
+    warehouseDir.delete()
+    warehouseDir
+  }
 
   def makeContext(sparkConf: SparkConf, config: Config, contextName: String): C = {
     val builder = SparkSession.builder()

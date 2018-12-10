@@ -18,7 +18,7 @@ from __future__ import print_function
 import sys
 import os
 from importlib import import_module
-from py4j.java_gateway import JavaGateway, java_import, GatewayClient
+from py4j.java_gateway import JavaGateway, java_import, GatewayClient, GatewayParameters
 from pyhocon import ConfigFactory
 from pyspark.context import SparkContext, SparkConf
 from pyspark.sql import SQLContext, HiveContext, SparkSession
@@ -53,7 +53,10 @@ def import_class(cls):
 
 if __name__ == "__main__":
     port = int(sys.argv[1])
-    gateway = JavaGateway(GatewayClient(port=port), auto_convert=True)
+
+    gateway_secret = os.environ["PYSPARK_GATEWAY_SECRET"]
+    parameters = GatewayParameters(port=port, auto_convert=True, auth_token=gateway_secret)
+    gateway = JavaGateway(gateway_parameters=parameters)
     entry_point = gateway.entry_point
     imports = entry_point.getPy4JImports()
     for i in imports:

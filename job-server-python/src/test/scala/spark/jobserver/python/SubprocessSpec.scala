@@ -3,14 +3,15 @@ package spark.jobserver.python
 import java.io.File
 import java.nio.file.Files
 
-import com.typesafe.config.{ConfigRenderOptions, Config, ConfigFactory}
+import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
 import org.apache.spark.SparkContext
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.{SparkConf, SparkContext}
-import org.scalatest.{BeforeAndAfterAll, Matchers, FunSpec}
+import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
 import py4j.GatewayServer
+import py4j.GatewayServer.GatewayServerBuilder
 
 import scala.collection.JavaConverters._
 import scala.sys.process.Process
@@ -34,10 +35,10 @@ object SubprocessSpec {
   lazy val jobServerPath = getPythonDir("src/python")
 
   lazy val pysparkPath = sys.env.get("SPARK_HOME").map(d => s"$d/python/lib/pyspark.zip")
-  lazy val py4jPath = sys.env.get("SPARK_HOME").map(d => s"$d/python/lib/py4j-0.10.4-src.zip")
+  lazy val py4jPath = sys.env.get("SPARK_HOME").map(d => s"$d/python/lib/py4j-0.10.7-src.zip")
   lazy val sparkPaths = sys.env.get("SPARK_HOME").map{sh =>
     val pysparkPath = s"$sh/python/lib/pyspark.zip"
-    val py4jPath = s"$sh/python/lib/py4j-0.10.4-src.zip"
+    val py4jPath = s"$sh/python/lib/py4j-0.10.7-src.zip"
     Seq(pysparkPath, py4jPath)
   }.getOrElse(Seq())
   lazy val originalPythonPath = sys.env.get("PYTHONPATH")
@@ -93,9 +94,14 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
     val pathList = Seq(jobServerPath) ++ sparkPaths ++ originalPythonPath.toSeq
     val p = pathList.mkString(pythonPathDelimiter)
     // Scarman 10-13-2016
-    //println(p)
+    println(p)
     p
   }
+
+  lazy val env = Seq (
+    "PYTHONPATH" -> pythonPath,
+    "PYSPARK_GATEWAY_SECRET" -> secret
+  )
 
   // creates a stub warehouse dir for derby/hive metastore
   def makeWarehouseDir(): File = {
@@ -103,8 +109,13 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
     warehouseDir.delete()
     warehouseDir
   }
+  val secret = "Test"
   def buildGateway(endpoint: TestEndpoint): GatewayServer = {
-    val server = new GatewayServer(endpoint, 0)
+    val server = new GatewayServerBuilder()
+      .entryPoint(endpoint)
+      .javaPort(0)
+      .authToken(secret)
+      .build()
     //Server runs asynchronously on a dedicated thread. See Py4J source for more detail
     server.start()
     server
@@ -162,7 +173,7 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
         Process(
           Seq("python", "-m", "sparkjobserver.subprocess", gw.getListeningPort.toString),
           None,
-          "PYTHONPATH" -> pythonPath)
+          env: _*)
       val pythonExitCode = process.!
       pythonExitCode should be (0)
       endpoint.result should matchPattern {
@@ -181,7 +192,7 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
         Process(
           Seq("python", "-m", "sparkjobserver.subprocess", gw.getListeningPort.toString),
           None,
-          "PYTHONPATH" -> pythonPath)
+          env: _*)
       val pythonExitCode = process.!
       pythonExitCode should be (1)
       endpoint.validationProblems should be (Some(Seq("config input.strings not found")))
@@ -205,7 +216,7 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
         Process(
           Seq("python", "-m", "sparkjobserver.subprocess", gw.getListeningPort.toString),
           None,
-          "PYTHONPATH" -> pythonPath)
+          env: _*)
       val pythonExitCode = process.!
       pythonExitCode should be (0)
       endpoint.result should matchPattern {
@@ -235,7 +246,7 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
         Process(
           Seq("python", "-m", "sparkjobserver.subprocess", gw.getListeningPort.toString),
           None,
-          "PYTHONPATH" -> pythonPath)
+          env: _*)
       val pythonExitCode = process.!
       pythonExitCode should be (0)
       endpoint.result should matchPattern {
@@ -268,7 +279,7 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
         Process(
           Seq("python", "-m", "sparkjobserver.subprocess", gw.getListeningPort.toString),
           None,
-          "PYTHONPATH" -> pythonPath)
+          env: _*)
       val pythonExitCode = process.!
       pythonExitCode should be (0)
       endpoint.result should be ("done")
@@ -283,7 +294,7 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
         Process(
           Seq("python", "-m", "sparkjobserver.subprocess", gw2.getListeningPort.toString),
           None,
-          "PYTHONPATH" -> pythonPath)
+          env: _*)
       val pythonExitCode2 = process2.!
       pythonExitCode2 should be (0)
       endpoint2.result should matchPattern {
@@ -308,7 +319,7 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
         Process(
           Seq("python", "-m", "sparkjobserver.subprocess", gw.getListeningPort.toString),
           None,
-          "PYTHONPATH" -> pythonPath)
+          env: _*)
       val pythonExitCode = process.!
       pythonExitCode should be (2)
       stopGateway(gw)
@@ -323,7 +334,7 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
         Process(
           Seq("python", "-m", "sparkjobserver.subprocess", gw.getListeningPort.toString),
           None,
-          "PYTHONPATH" -> pythonPath)
+          env: _*)
       val pythonExitCode = process.!
       pythonExitCode should be (4)
       stopGateway(gw)
@@ -338,7 +349,7 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
         Process(
           Seq("python", "-m", "sparkjobserver.subprocess", gw.getListeningPort.toString),
           None,
-          "PYTHONPATH" -> pythonPath)
+          env: _*)
       val pythonExitCode = process.!
       pythonExitCode should be (3)
       stopGateway(gw)
@@ -356,7 +367,7 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
         Process(
           Seq("python", "-m", "sparkjobserver.subprocess", gw.getListeningPort.toString),
           None,
-          "PYTHONPATH" -> pythonPath)
+          env: _*)
       val pythonExitCode = process.!
       pythonExitCode should be (0)
       endpoint.result should be ("Hello World 3")

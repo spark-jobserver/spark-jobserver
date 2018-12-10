@@ -1,10 +1,10 @@
 import scala.util.Properties.isJavaAtLeast
 
 object Versions {
-  lazy val spark = sys.env.getOrElse("SPARK_VERSION", "2.2.0.6")
+  lazy val spark = sys.env.getOrElse("SPARK_VERSION", "2.4.0.2")
 
   lazy val akka = "2.4.9"
-  lazy val dseDriver = "1.6.2"
+  lazy val dseDriver = "1.7.0"
   lazy val cassandraUnit = "2.2.2.1"
   lazy val commons = "1.4"
   lazy val derby = "10.12.1.1"
@@ -19,7 +19,7 @@ object Versions {
   lazy val metrics = "2.2.0"
   lazy val postgres = "9.4.1209"
   lazy val mysql = "5.1.42"
-  lazy val py4j = "0.10.4"
+  lazy val py4j = "0.10.7"
   lazy val scalaTest = "2.2.6"
   lazy val scalatic = "2.2.6"
   lazy val shiro = "1.3.2"

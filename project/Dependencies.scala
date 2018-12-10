@@ -78,7 +78,7 @@ object Dependencies {
     scalaTestDep,
     "com.typesafe.akka" %% "akka-testkit" % akka % Test,
     "io.spray" %% "spray-testkit" % spray % Test,
-    "org.cassandraunit" % "cassandra-unit" % cassandraUnit % Test
+    "org.cassandraunit" % "cassandra-unit" % cassandraUnit % Test excludeAll(excludeLz4)
   )
 
   lazy val securityDeps = Seq(
