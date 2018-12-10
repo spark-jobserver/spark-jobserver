@@ -30,4 +30,7 @@ object Versions {
   lazy val scalatic = "3.0.1"
   lazy val shiro = "1.2.4"
   lazy val cassandraConnector = "2.0.5"
+
+  lazy val curator = "4.0.1"
+  lazy val zookeeper = "3.4.13"
 }
