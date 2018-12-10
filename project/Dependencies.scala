@@ -57,7 +57,10 @@ object Dependencies {
     "org.flywaydb" % "flyway-core" % flyway
   )
 
-
+  lazy val zookeeperDeps = Seq(
+    "org.apache.curator" % "apache-curator" % curator excludeAll(excludeZookeeper),
+    "org.apache.zookeeper" % "zookeeper" % zookeeper
+  )
 
   lazy val cassandraDeps = Seq(
     "com.datastax.spark" %% "spark-cassandra-connector" % cassandraConnector
