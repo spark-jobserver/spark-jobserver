@@ -293,74 +293,11 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
     }
 
     it("should not return any hash if multiple binaries have the same hash") {
-      val bytes = Array[Byte](7, 8)
-      dao.saveBinary("same", BinaryType.Jar, jarInfo.uploadTime, bytes)
-      dao.saveBinary("same1", BinaryType.Jar, DateTime.now(), bytes)
-      dao.saveBinary("same2", BinaryType.Jar, DateTime.now(), bytes)
+      dao.saveBinary("same", BinaryType.Jar, jarInfo.uploadTime, Array[Byte](7, 8))
+      dao.saveBinary("same1", BinaryType.Jar, DateTime.now(), Array[Byte](7, 8))
+      dao.saveBinary("same2", BinaryType.Jar, DateTime.now(), Array[Byte](7, 8))
 
       Await.result(dao.getHashForApp("same"), timeout) should be(Seq())
-
-      // Cross verify with H2
-      dao.deleteBinary("same")
-      Await.result(dao.getBinaryBytes(
-        BinaryDAO.calculateBinaryHashString(bytes)), timeout) should be(bytes)
-
-      // Since some app is using it, shouldn't delete from HDFS
-      Await.result(dao.getHashForApp("same1"), timeout) should be(Seq())
-
-      dao.deleteBinary("same1")
-      Await.result(dao.getBinaryBytes(
-        BinaryDAO.calculateBinaryHashString(bytes)), timeout) should be(bytes)
-
-      // Since same2 is the only app using the hash now, it should be deleted from HDFS
-      Await.result(dao.getHashForApp("same2"), timeout) should be(
-        Seq(BinaryDAO.calculateBinaryHashString(bytes)))
-
-      // Since same2 is the only app using the hash now, it should be deleted from H2
-      dao.deleteBinary("same2")
-      Await.result(dao.getBinaryBytes(
-        BinaryDAO.calculateBinaryHashString(bytes)), timeout) should be(Array.emptyByteArray)
-    }
-
-    it("should return multiple hashes if there are multiple apps with same name but different hash") {
-      val bytesA = Array[Byte](7, 8)
-      val bytesB = Array[Byte](7, 8, 9)
-      dao.saveBinary("same", BinaryType.Jar, jarInfo.uploadTime, bytesA)
-      dao.saveBinary("same", BinaryType.Jar, DateTime.now(), bytesB)
-
-      Await.result(dao.getHashForApp("same"), timeout).sorted should be(
-        Seq(BinaryDAO.calculateBinaryHashString(bytesA),
-        BinaryDAO.calculateBinaryHashString(bytesB)
-        ).sorted)
-
-      // Cross verify with H2
-      // Since no other app is using the binary. H2 will also cleanup the Binaries_content table
-      // Deletion should happen in HDFS
-      dao.deleteBinary("same")
-      Await.result(dao.getBinaryBytes(
-        BinaryDAO.calculateBinaryHashString(bytesA)), timeout) should be(Array.emptyByteArray)
-      Await.result(dao.getBinaryBytes(
-        BinaryDAO.calculateBinaryHashString(bytesB)), timeout) should be(Array.emptyByteArray)
-    }
-
-    it("should not return any hash even if only 1 hash for an app is being used") {
-      val bytesA = Array[Byte](7, 8)
-      val bytesB = Array[Byte](7, 8, 9)
-      val diffUploadTime = DateTime.now()
-      dao.saveBinary("same", BinaryType.Jar, jarInfo.uploadTime, bytesA)
-      dao.saveBinary("same", BinaryType.Jar, DateTime.now(), bytesB)
-      dao.saveBinary("different", BinaryType.Jar, diffUploadTime, bytesB)
-
-      Await.result(dao.getHashForApp("same"), timeout) should be(Seq())
-
-      // Cross verify with H2
-      // H2 should still have both binaries in Binaries_content table
-      // So, nothing should be deleted from HDFS
-      dao.deleteBinary("same")
-      Await.result(dao.getBinaryBytes(
-        BinaryDAO.calculateBinaryHashString(bytesB)), timeout) should be(bytesB)
-      Await.result(dao.getBinaryBytes(
-        BinaryDAO.calculateBinaryHashString(bytesA)), timeout) should be(bytesA)
     }
 
     it("should return hash if no other app has the same hash") {

@@ -266,7 +266,7 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
     */
   override def getAllHashes(): Future[Seq[String]] = {
     val query = binariesContents.map(bc => bc.binHash)
-    for (hashes <- sqlCommon.db.run(query.result)) yield {
+    for (hashes <- db.run(query.result)) yield {
       hashes.map(BinaryDAO.hashBytesToString(_))
     }
   }
@@ -279,7 +279,7 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
     val query = for {
       bc <- binariesContents.filter(_.binHash === BinaryDAO.hashStringToBytes(hash))
     } yield bc.binary
-    sqlCommon.db.run(query.result.headOption.map{
+    db.run(query.result.headOption.map{
       b =>
         b match {
           case Some(byte) => byte.getBytes(1, byte.length().toInt)
@@ -298,22 +298,13 @@ class JobSqlDAO(config: Config) extends JobDAO with FileCacher {
     * @return
     */
   override def getHashForApp(appName: String): Future[Seq[String]] = {
-    val allHashesForApp = sqlCommon.binaries.filter(_.appName === appName).map(_.binHash).distinct
-    val allBinariesUsingHash = sqlCommon.binaries.filter(_.binHash in allHashesForApp)
+    val allHashesForApp = binaries.filter(_.appName === appName).map(_.binHash).distinct
+    val allBinariesUsingHash = binaries.filter(_.binHash in allHashesForApp).map(_.binHash)
 
-    // Convert hash bytes to string
-    for (hashes <- sqlCommon.db.run(allBinariesUsingHash.result)) yield {
-      val appNameAndBytes = hashes.map {
-        case (_, appName, _, _, hashBytes) => (appName, BinaryDAO.hashBytesToString(hashBytes))
-      }
-
-      // Find all apps using hash whose name is not "appName"
-      val otherAppsUsingThisHash = appNameAndBytes.filter(_._1 != appName)
-      otherAppsUsingThisHash.length match {
-        case 0 =>
-          // If no other is using then return all hashes against appName
-          appNameAndBytes.map(_._2).distinct
-        case _ => Seq()
+    for (hashes <- db.run(allBinariesUsingHash.result)) yield {
+      hashes.length match {
+        case 1 => Seq(BinaryDAO.hashBytesToString(hashes(0)))
+        case 0 | _ => Seq()
       }
     }
   }

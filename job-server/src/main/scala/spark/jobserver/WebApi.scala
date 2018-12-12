@@ -319,16 +319,15 @@ class WebApi(system: ActorSystem,
         path(Segment) { appName =>
           logger.info(s"DELETE /binaries/$appName");
           // Add explicit short timeout, hdfs call shouldn't block the main function for too long
-          val hashesForAppFuture = (migrationActor ? MigrationActor.GetHashForApp(appName))(3.seconds)
+          val deleteHDFSFuture = (migrationActor ? MigrationActor.DeleteBinaryFromHDFS(appName))(3.seconds)
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-            hashesForAppFuture.onComplete{
-              case _ @ response => // As soon as delete future gets its results execute the original command
+            deleteHDFSFuture.onComplete{
+              case _ => // As soon as delete future gets its results execute the original command
                 val future = binaryManager ? DeleteBinary(appName)
                 future.map {
                   case BinaryDeleted =>
                     val stcode = StatusCodes.OK;
                     logger.info("StatusCode: " + stcode);
-                    migrationActor ! MigrationActor.DeleteBinaryFromHDFS(response)
                     ctx.complete(stcode)
                   case NoSuchBinary => notFound(ctx, s"can't find binary with name $appName")
                 }.recover {
