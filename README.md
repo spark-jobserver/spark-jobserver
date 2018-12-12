@@ -181,11 +181,8 @@ Then go ahead and start the job server using the instructions above.
 
 Let's upload the jar:
 
-    curl --data-binary @job-server-tests/target/scala-2.10/job-server-tests-$VER.jar localhost:8090/jars/test
-    {
-      "status": "SUCCESS",
-      "result": "Jar uploaded"
-    }
+    curl -X POST localhost:8090/binaries/test -H "Content-Type: application/java-archive" --data-binary @job-server-tests/target/scala-2.10/job-server-tests-$VER.jar
+    OK⏎
 
 #### Ad-hoc Mode - Single, Unrelated Jobs (Transient Context)
 The above jar is uploaded as app `test`.  Next, let's start an ad-hoc word count job, meaning that the job
