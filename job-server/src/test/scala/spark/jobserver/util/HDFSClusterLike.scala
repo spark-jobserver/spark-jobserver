@@ -1,9 +1,7 @@
 package spark.jobserver.util
 
-import java.io.{File, InputStreamReader}
-import java.net.URI
+import java.io.File
 
-import org.apache.commons.io.IOUtils.toByteArray
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hdfs.MiniDFSCluster
@@ -32,25 +30,6 @@ trait HDFSClusterLike {
     val fs = FileSystem.get(getHDFSConf())
     fs.mkdirs(new Path(hdfsDestPath))
     fs.copyFromLocalFile(new Path(srcFilePath), new Path(hdfsDestPath))
-  }
-
-  def fileExists(filePath: String): Boolean = {
-    val path = new Path(filePath)
-    val fs = path.getFileSystem(getHDFSConf())
-    fs.exists(path)
-  }
-
-  def cleanHDFS(dir: String): Unit = {
-    val path = new Path(dir)
-    val fs = path.getFileSystem(getHDFSConf())
-    val t = fs.delete(path, true)
-  }
-
-  def readFile(filePath: String): Array[Byte] = {
-    val path = new Path(filePath)
-    val fs = path.getFileSystem(getHDFSConf())
-    val t = fs.open(path)
-    toByteArray(t)
   }
 
   def getHDFSConf(): Configuration = {

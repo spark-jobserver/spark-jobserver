@@ -1,7 +1,7 @@
 package spark.jobserver.common.akka.metrics
 
 import com.yammer.metrics.Metrics
-import com.yammer.metrics.core._
+import com.yammer.metrics.core.{Histogram, Meter, Gauge, Timer}
 import java.util.concurrent.TimeUnit
 
 /**
@@ -22,7 +22,4 @@ trait YammerMetrics {
             durationUnit: TimeUnit = TimeUnit.NANOSECONDS,
             rateUnit: TimeUnit = TimeUnit.SECONDS): Timer =
     Metrics.newTimer(getClass, name, durationUnit, rateUnit)
-
-  def counter(name: String): Counter = Metrics.newCounter(getClass, name)
-
 }
