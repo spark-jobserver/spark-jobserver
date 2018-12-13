@@ -1,5 +1,17 @@
 package spark.jobserver.util
 
+case class DeleteBinaryInfoFailedException(private val appName: String) extends Exception {
+  private val message = s"can't delete meta data information for $appName";
+}
+
+case class NoStorageIdException(private val appName: String) extends Exception {
+  private val message = s"can't find hash for $appName in metadata database";
+}
+
+case class SaveBinaryException(private val appName: String) extends Exception {
+  private val message = s"can't save binary: $appName in database";
+}
+
 case class NoSuchBinaryException(private val appName: String) extends Exception {
   private val message = s"can't find binary: $appName in database";
 }

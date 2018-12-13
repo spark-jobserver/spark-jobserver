@@ -1,11 +1,12 @@
 package spark.jobserver.io
 
-import akka.actor.{ActorRef, ActorSystem}
+import akka.actor.ActorSystem
 import akka.testkit.TestProbe
 import com.typesafe.config.{Config, ConfigFactory}
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfterAll, FunSpecLike, Matchers}
 import spark.jobserver.JobServer.InvalidConfiguration
+import spark.jobserver.util.{DeleteBinaryInfoFailedException, NoSuchBinaryException, SaveBinaryException}
 
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
@@ -121,19 +122,23 @@ class CombinedDAOSpec extends CombinedDAOSpecBase with FunSpecLike with BeforeAn
       }
 
       it("should write no meta if binary file not saved") {
-        dao.saveBinary("",
-          BinaryType.Jar,
-          CombinedDAOTestHelper.defaultDate,
-          CombinedDAOTestHelper.binaryDAOBytesFail)
+        intercept[SaveBinaryException] {
+          dao.saveBinary("",
+            BinaryType.Jar,
+            CombinedDAOTestHelper.defaultDate,
+            CombinedDAOTestHelper.binaryDAOBytesFail)
+        }
         CombinedDAOTestHelper.testProbe.expectMsg("BinaryDAO: Save failed")
         CombinedDAOTestHelper.testProbe.expectNoMsg(daoTimeout)
       }
 
       it("should try to delete binary if meta data save failed") {
-        dao.saveBinary("failed",
-          BinaryType.Jar,
-          CombinedDAOTestHelper.defaultDate,
-          CombinedDAOTestHelper.binaryDAOBytesSuccess)
+        intercept[SaveBinaryException] {
+          dao.saveBinary("failed",
+            BinaryType.Jar,
+            CombinedDAOTestHelper.defaultDate,
+            CombinedDAOTestHelper.binaryDAOBytesSuccess)
+        }
         CombinedDAOTestHelper.testProbe.expectMsg("BinaryDAO: Save success")
         CombinedDAOTestHelper.testProbe.expectMsg("MetaDataDAO: Save failed")
         CombinedDAOTestHelper.testProbe.expectMsg("MetaDataDAO: getBinariesByStorageId success")
@@ -151,7 +156,9 @@ class CombinedDAOSpec extends CombinedDAOSpecBase with FunSpecLike with BeforeAn
       }
 
       it("should not delete binary if meta is not deleted") {
-        dao.deleteBinary("get-info-success-del-info-failed")
+        intercept[DeleteBinaryInfoFailedException] {
+          dao.deleteBinary("get-info-success-del-info-failed")
+        }
         CombinedDAOTestHelper.testProbe.expectMsg("MetaDataDAO: getBinary success")
         CombinedDAOTestHelper.testProbe.expectMsg("MetaDataDAO: Delete failed")
         CombinedDAOTestHelper.testProbe.expectNoMsg(daoTimeout)
@@ -174,8 +181,10 @@ class CombinedDAOSpec extends CombinedDAOSpecBase with FunSpecLike with BeforeAn
         CombinedDAOTestHelper.testProbe.expectNoMsg(daoTimeout)
       }
 
-      it("should do nothing if get info failed") {
-        dao.deleteBinary("get-info-failed")
+      it("should throw NoSuchBinaryException if get info didn't find anything") {
+        intercept[NoSuchBinaryException] {
+          dao.deleteBinary("get-info-failed")
+        }
         CombinedDAOTestHelper.testProbe.expectMsg("MetaDataDAO: getBinary failed")
         CombinedDAOTestHelper.testProbe.expectNoMsg(daoTimeout)
       }

@@ -73,6 +73,7 @@ class HadoopFSFacade(hadoopConf: Configuration = new Configuration(),
         Utils.usingResource(out) {
           out => out.write(bytes)
         }
+        logger.info(s"Saved the binary data for $filePath.")
       }
       true
     } catch {
@@ -92,6 +93,7 @@ class HadoopFSFacade(hadoopConf: Configuration = new Configuration(),
     try {
       val path = new Path(filePath)
       val fs = getFileSystem(filePath)
+      logger.info(s"Deleting file $filePath.")
       fs.delete(path, recursive)
     } catch {
       case NonFatal(e) =>
