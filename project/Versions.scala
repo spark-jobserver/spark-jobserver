@@ -28,6 +28,7 @@ object Versions {
   lazy val py4j = "0.10.4"
   lazy val scalaTest = "3.0.1"
   lazy val scalatic = "3.0.1"
+  lazy val mockito = "2.21.0"
   lazy val shiro = "1.2.4"
   lazy val cassandraConnector = "2.0.5"
 

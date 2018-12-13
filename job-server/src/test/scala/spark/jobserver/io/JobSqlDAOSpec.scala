@@ -1,6 +1,7 @@
 package spark.jobserver.io
 
-import scala.concurrent.Await
+import scala.concurrent.{Await, Future}
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 
 import java.io.File
@@ -11,6 +12,9 @@ import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, FunSpecLike, Matchers}
 import spark.jobserver.TestJarFinder
 import java.util.UUID
+
+import org.mockito.Mockito
+import slick.SlickException
 
 abstract class JobSqlDAOSpecBase {
   def config : Config
@@ -68,7 +72,7 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
   case class GenJobInfoClosure() {
     var count: Int = 0
 
-    def apply(jarInfo: BinaryInfo, isNew:Boolean, state: String,
+    def apply(jarInfo: BinaryInfo, isNew: Boolean, state: String,
         contextId: Option[String] = None): JobInfo = {
       count = count + (if (isNew) 1 else 0)
       val id: String = "test-id" + count
@@ -248,6 +252,36 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
     }
   }
 
+  describe("saveContextInfo tests") {
+    it("should throw an exception if save was unsuccessful") {
+      val dummyContext = ContextInfo("someId", "contextName", "", None, DateTime.now(), None,
+        ContextStatus.Started, None)
+      val sqlCommonMock = Mockito.spy(new SqlCommon(config))
+      val mockedDao = new JobSqlDAO(config, sqlCommonMock)
+
+      Mockito.when(sqlCommonMock.saveContext(dummyContext)).thenReturn(Future{false})
+
+      intercept[SlickException] {
+        mockedDao.saveContextInfo(dummyContext)
+      }
+    }
+  }
+
+  describe("saveJobConfig tests") {
+    it("should throw an exception if save was unsuccessful") {
+      val jobId: String = jobInfoNoEndNoErr.jobId
+      val jobConfig: Config = ConfigFactory.parseString("{marco=pollo}")
+
+      val sqlCommonMock = Mockito.spy(new SqlCommon(config))
+      val mockedDao = new JobSqlDAO(config, sqlCommonMock)
+
+      Mockito.when(sqlCommonMock.saveJobConfig(jobId, jobConfig)).thenReturn(Future{false})
+
+      intercept[SlickException] {
+        mockedDao.saveJobConfig(jobId, jobConfig)
+      }
+    }
+  }
 }
 
 class JobSqlDAODBCPSpec extends JobSqlDAOSpec {

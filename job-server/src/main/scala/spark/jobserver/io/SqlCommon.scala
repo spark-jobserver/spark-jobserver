@@ -173,8 +173,9 @@ class SqlCommon(config: Config) {
         val e = new SlickException(s"Could not update ${contextInfo.id} in the database")
         logger.error(e.getMessage, e)
         false
+      } else {
+        true
       }
-      true
     }
   }
 
@@ -213,8 +214,9 @@ class SqlCommon(config: Config) {
         val e = new SlickException(s"Could not insert $id into database")
         logger.error(e.getMessage, e)
         false
+      } else {
+        true
       }
-      true
     }
   }
 
