@@ -22,6 +22,7 @@ object Versions {
   lazy val py4j = "0.10.7"
   lazy val scalaTest = "3.0.1"
   lazy val scalatic = "3.0.1"
+  lazy val mockito = "2.21.0"
   lazy val shiro = "1.2.4"
   lazy val slick = "3.1.1"
   lazy val spray = "1.3.3"
