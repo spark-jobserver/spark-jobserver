@@ -99,6 +99,17 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher {
                           uploadTime: DateTime,
                           binaryBytes: Array[Byte]): Unit = {
     val binHash = BinaryDAO.calculateBinaryHashString(binaryBytes)
+
+    // saveBinary function is called from WebApi where as getBinaryFilePath is
+    // called from driver whose location changes based on client/cluster mode.
+    // Cache-on-upload feature is useful only for client mode because the drivers are
+    // running on the same machine as jobserver.
+    val cacheOnUploadEnabled = config.getBoolean("spark.jobserver.cache-on-upload")
+    if (cacheOnUploadEnabled) {
+      // The order is important. Save the jar file first and then log it into database.
+      cacheBinary(name, binaryType, uploadTime, binaryBytes)
+    }
+
     if (Await.result(binaryDAO.save(binHash, binaryBytes), defaultAwaitTime)) {
       if (Await.result(metaDataDAO.saveBinary(name, binaryType, uploadTime, binHash), defaultAwaitTime)) {
         logger.info(s"Successfully uploaded binary for $name")
@@ -109,10 +120,10 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher {
           ) onComplete {
             case Success(false) => binaryDAO.delete(binHash) onComplete {
               case Success(true) =>
-                logger.info(s"Successufully deleted binary for $name after failed save.")
+                logger.info(s"Successfully deleted binary for $name after failed save.")
               case _ => logger.error(s"Failed to cleanup binary for $name after failed save.")
             }
-            case _ => logger.info(s"Perfoming no cleanup, $name binary is used in meta data.")
+            case _ => logger.info(s"Performing no cleanup, $name binary is used in meta data.")
           }
           throw SaveBinaryException(name)
       }
@@ -132,10 +143,11 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher {
               if (binInfosForHash.exists(_.appName != binaryInfo.appName)) {
                 logger.error(s"$name binary is used by other applications, not deleting it from storage")
               } else {
-                  binaryDAO.delete(hash) onFailure {
-                    case _ => logger.error(s"Failed to delete binary file for $name, leaving an artifact")
-                  }
+                binaryDAO.delete(hash) onFailure {
+                  case _ => logger.error(s"Failed to delete binary file for $name, leaving an artifact")
+                }
               }
+              cleanCacheBinaries(name)
             }
             else {
               logger.error(s"Failed to delete binary meta for $name, not proceeding with file")
@@ -156,11 +168,15 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher {
       case Some(binaryInfo) =>
         val binFile = new File(rootDir, createBinaryName(name, binaryType, uploadTime))
         binaryInfo.binaryStorageId match {
-          case Some(hash) =>
+          case Some(_) =>
             if (!binFile.exists()) {
-                  val binBytes = Await.result(binaryDAO.get(binaryInfo.binaryStorageId.get), defaultAwaitTime)
-                  cacheBinary(name, binaryType, uploadTime, binBytes.getOrElse(return ""))
+              Await.result(binaryDAO.get(binaryInfo.binaryStorageId.get), defaultAwaitTime) match {
+                case Some(binBytes) => cacheBinary(name, binaryType, uploadTime, binBytes)
+                case None =>
+                  logger.warn(s"Failed to fetch bytes from binary dao for $name/$uploadTime")
+                  return ""
               }
+            }
             binFile.getAbsolutePath
           case _ =>
             logger.error(s"Failed to get binary file path for $name, hash is not found")
