@@ -18,7 +18,7 @@ class build(BuildPlugin):
         # to true.
         # -no-share: forces sbt to store all the dependencies inside the
         # project/.ivy folder.
-        self._sbtCommonConfig = '-Dsbt.repository.config=proxy_repositories -Dsbt.override.build.repos=true -no-share'
+        self._sbtCommonConfig = '-Dsbt.repository.config=proxy_repositories -Dsbt.override.build.repos=true -no-share \'-Dhttp.nonProxyHosts=localhost|127.0.0.1|*.wdf.sap.corp|*.mo.sap.corp|*.sap.corp\''
 
     # Called when the actual build step is executed.
     def run(self):

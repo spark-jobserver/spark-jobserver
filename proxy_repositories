@@ -2,3 +2,6 @@
   local
   my-ivy-proxy-releases: http://nexus.wdf.sap.corp:8081/nexus/content/groups/build.releases/, [organization]/[module]/(scala_[scalaVersion]/)(sbt_[sbtVersion]/)[revision]/[type]s/[artifact](-[classifier]).[ext]
   my-maven-proxy-releases: http://nexus.wdf.sap.corp:8081/nexus/content/groups/build.releases/
+  from-sbt-xmake-plugin-a: http://nexus.wdf.sap.corp:8081/nexus/content/groups/build.releases/, [organisation]/[module]/[revision]/[type]s/[artifact].[ext]
+  from-sbt-xmake-plugin-b: http://nexus.wdf.sap.corp:8081/nexus/content/groups/build.releases/, [organisation]/[module]/[revision]/[type]s/[artifact](-[classifier]).[ext]
+  from-sbt-xmake-plugin-c: http://nexus.wdf.sap.corp:8081/nexus/content/groups/build.releases/, [organisation]/[module]/(scala_[scalaVersion]/)(sbt_[sbtVersion]/)[revision]/[type]s/[artifact].[ext]
