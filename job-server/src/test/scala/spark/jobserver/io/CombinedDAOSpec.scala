@@ -2,7 +2,11 @@ package spark.jobserver.io
 
 import akka.actor.ActorSystem
 import akka.testkit.TestProbe
-import com.typesafe.config.{Config, ConfigFactory}
+import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
+import java.nio.file.{Files, Paths}
+import java.io.File
+
+import org.apache.commons.io.FileUtils
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfterAll, FunSpecLike, Matchers}
 import spark.jobserver.JobServer.InvalidConfiguration
@@ -37,18 +41,26 @@ object CombinedDAOTestHelper {
 class CombinedDAOSpec extends CombinedDAOSpecBase with FunSpecLike with BeforeAndAfterAll
   with Matchers{
 
+    val baseRootDir = "/tmp/spark-job-server-test"
+    val rootDir = s"$baseRootDir/combineddao"
     def config: Config = ConfigFactory.parseString(
-      """
-        |spark.jobserver.combineddao.rootdir = /tmp/spark-job-server-test/combineddao,
+      s"""
+        |spark.jobserver.combineddao.rootdir = $rootDir,
         |spark.jobserver.combineddao.binarydao.class = spark.jobserver.io.DummyBinaryDAO,
         |spark.jobserver.combineddao.metadatadao.class = spark.jobserver.io.DummyMetaDataDAO
+        |spark.jobserver.cache-on-upload = false
       """.stripMargin
     )
     val daoTimeout: FiniteDuration = 3 seconds
     var dao: CombinedDAO = new CombinedDAO(config)
 
     override def beforeAll() {
+      Files.createDirectories(Paths.get(rootDir))
       CombinedDAOTestHelper.testProbe = TestProbe()(ActorSystem("test"))
+    }
+
+    override def afterAll(): Unit = {
+      FileUtils.deleteDirectory(new File(baseRootDir))
     }
 
     describe("check config validation in constructor") {
@@ -202,6 +214,55 @@ class CombinedDAOSpec extends CombinedDAOSpecBase with FunSpecLike with BeforeAn
         ))
       }
     }
+
+  describe("cache-on-upload tests") {
+    def saveBinaryAndCheckResponse(binName: String, daoWithCacheEnabled: CombinedDAO): Unit = {
+      daoWithCacheEnabled.saveBinary(binName,
+        BinaryType.Jar,
+        CombinedDAOTestHelper.defaultDate,
+        CombinedDAOTestHelper.binaryDAOBytesSuccess)
+      CombinedDAOTestHelper.testProbe.expectMsg("BinaryDAO: Save success")
+      CombinedDAOTestHelper.testProbe.expectMsg("MetaDataDAO: Save success")
+      CombinedDAOTestHelper.testProbe.expectNoMsg(daoTimeout)
+    }
+
+    def deleteBinaryAndCheckResponse(binName: String, daoWithCacheEnabled: CombinedDAO): Unit = {
+      daoWithCacheEnabled.deleteBinary(binName)
+      CombinedDAOTestHelper.testProbe.expectMsg("MetaDataDAO: getBinary success")
+      CombinedDAOTestHelper.testProbe.expectMsg("MetaDataDAO: Delete success")
+      CombinedDAOTestHelper.testProbe.expectMsg("MetaDataDAO: getBinariesByStorageId success")
+      CombinedDAOTestHelper.testProbe.expectMsg("BinaryDAO: Delete success")
+      CombinedDAOTestHelper.testProbe.expectNoMsg(daoTimeout)
+    }
+
+    it("should create cache on save binary and delete on delete binary if enabled") {
+      val binName = "success"
+      val jarFile = new File(config.getString("spark.jobserver.combineddao.rootdir"),
+        binName + "-" + CombinedDAOTestHelper.defaultDate.toString("yyyyMMdd_hhmmss_SSS") + ".jar")
+
+      jarFile.exists() should be(false)
+
+      val daoWithCacheEnabled = new CombinedDAO(
+        config.withValue("spark.jobserver.cache-on-upload", ConfigValueFactory.fromAnyRef(true)))
+      saveBinaryAndCheckResponse(binName, daoWithCacheEnabled)
+
+      jarFile.exists() should be(true)
+
+      deleteBinaryAndCheckResponse(binName, daoWithCacheEnabled)
+
+      jarFile.exists() should be(false)
+    }
+
+    it("should not cache any binary if disabled") {
+      val binName = "success"
+      val jarFile = new File(config.getString("spark.jobserver.combineddao.rootdir"),
+        binName + "-" + CombinedDAOTestHelper.defaultDate.toString("yyyyMMdd_hhmmss_SSS") + ".jar")
+
+      saveBinaryAndCheckResponse(binName, dao)
+
+      jarFile.exists() should be(false)
+    }
+  }
 }
 
 class DummyBinaryDAO(config: Config) extends BinaryDAO {
