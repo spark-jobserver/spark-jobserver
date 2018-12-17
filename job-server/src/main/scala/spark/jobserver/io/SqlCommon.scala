@@ -7,11 +7,11 @@ import scala.concurrent.{Await, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.DurationInt
 import scala.reflect.runtime.universe
-
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigRenderOptions
 import org.apache.commons.dbcp.BasicDataSource
+import org.flywaydb.core.Flyway
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import slick.driver.JdbcProfile
@@ -110,6 +110,20 @@ class SqlCommon(config: Config) {
   } else {
     logger.info("DBCP disabled")
     Database.forURL(jdbcUrl, driver = jdbcDriverClass, user = jdbcUser, password = jdbcPassword)
+  }
+
+  def initFlyway() {
+    // TODO: migrateLocations should be removed when tests have a running configuration
+    val migrateLocations = config.getString("flyway.locations")
+    val initOnMigrate = config.getBoolean("flyway.initOnMigrate")
+
+    // Flyway migration
+    val flyway = new Flyway()
+    flyway.setDataSource(jdbcUrl, jdbcUser, jdbcPassword)
+    // TODO: flyway.setLocations(migrateLocations) should be removed when tests have a running configuration
+    flyway.setLocations(migrateLocations)
+    flyway.setBaselineOnMigrate(initOnMigrate)
+    flyway.migrate()
   }
 
   // Convert from joda DateTime to java.sql.Timestamp

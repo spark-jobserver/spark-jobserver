@@ -10,7 +10,6 @@ import scala.concurrent.duration.DurationInt
 import scala.reflect.runtime.universe
 
 import com.typesafe.config.Config
-import org.flywaydb.core.Flyway
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import slick.driver.JdbcProfile
@@ -51,25 +50,8 @@ class JobSqlDAO(config: Config, sqlCommon: SqlCommon) extends JobDAO with FileCa
   val binariesContents = TableQuery[BinariesContents]
   //scalastyle:on
 
-  // TODO: migrateLocations should be removed when tests have a running configuration
-  val migrateLocations = config.getString("flyway.locations")
-  val initOnMigrate = config.getBoolean("flyway.initOnMigrate")
-
-  // Server initialization
-  init()
-
-  private def init() {
-    // Create the data directory if it doesn't exist
-    initFileDirectory()
-
-    // Flyway migration
-    val flyway = new Flyway()
-    flyway.setDataSource(sqlCommon.jdbcUrl, sqlCommon.jdbcUser, sqlCommon.jdbcPassword)
-    // TODO: flyway.setLocations(migrateLocations) should be removed when tests have a running configuration
-    flyway.setLocations(migrateLocations)
-    flyway.setBaselineOnMigrate(initOnMigrate)
-    flyway.migrate()
-  }
+  initFileDirectory()
+  sqlCommon.initFlyway()
 
   override def saveBinary(appName: String,
                           binaryType: BinaryType,

@@ -4,6 +4,7 @@ import java.io.{BufferedOutputStream, File, FileOutputStream, FilenameFilter}
 
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
+import spark.jobserver.util.Utils
 
 trait FileCacher {
 
@@ -13,11 +14,7 @@ trait FileCacher {
   private val logger = LoggerFactory.getLogger(getClass)
 
   def initFileDirectory(): Unit = {
-    if (!rootDirFile.exists()) {
-      if (!rootDirFile.mkdirs()) {
-        throw new RuntimeException("Could not create directory " + rootDir)
-      }
-    }
+    Utils.createDirectory(rootDirFile)
   }
 
   // date format
