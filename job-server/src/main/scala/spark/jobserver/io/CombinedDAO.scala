@@ -6,8 +6,7 @@ import com.typesafe.config.Config
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import spark.jobserver.JobServer.InvalidConfiguration
-import spark.jobserver.util.{DeleteBinaryInfoFailedException, NoStorageIdException,
-  NoSuchBinaryException, SaveBinaryException}
+import spark.jobserver.util._
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
@@ -48,7 +47,10 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher {
 
   val rootDir: String = config.getString(rootDirPath)
   val rootDirFile: File = new File(rootDir)
+
   private val defaultAwaitTime = 60 seconds
+
+  initFileDirectory()
 
   override def getApps: Future[Map[String, (BinaryType, DateTime)]] =
     metaDataDAO.getBinaries.map(

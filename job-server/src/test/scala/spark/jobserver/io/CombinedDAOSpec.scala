@@ -41,11 +41,12 @@ object CombinedDAOTestHelper {
 class CombinedDAOSpec extends CombinedDAOSpecBase with FunSpecLike with BeforeAndAfterAll
   with Matchers{
 
+    val rootDirKey = "spark.jobserver.combineddao.rootdir"
     val baseRootDir = "/tmp/spark-job-server-test"
     val rootDir = s"$baseRootDir/combineddao"
     def config: Config = ConfigFactory.parseString(
       s"""
-        |spark.jobserver.combineddao.rootdir = $rootDir,
+        |$rootDirKey = $rootDir,
         |spark.jobserver.combineddao.binarydao.class = spark.jobserver.io.DummyBinaryDAO,
         |spark.jobserver.combineddao.metadatadao.class = spark.jobserver.io.DummyMetaDataDAO
         |spark.jobserver.cache-on-upload = false
@@ -62,6 +63,20 @@ class CombinedDAOSpec extends CombinedDAOSpecBase with FunSpecLike with BeforeAn
     override def afterAll(): Unit = {
       FileUtils.deleteDirectory(new File(baseRootDir))
     }
+
+  describe("verify initial setup") {
+    it("should create root dir folder on initialization") {
+      val dummyRootDir = "/tmp/dummy"
+      val rootDir = new File(dummyRootDir)
+      rootDir.exists() should be (false)
+
+      dao = new CombinedDAO(config.withValue(rootDirKey, ConfigValueFactory.fromAnyRef(dummyRootDir)))
+
+      rootDir.exists() should be (true)
+
+      rootDir.delete() // cleanup
+    }
+  }
 
     describe("check config validation in constructor") {
       it("should throw InvalidConfiguration if binaryDAO path is missing in config") {
