@@ -9,11 +9,14 @@ import java.io.File
 import org.apache.commons.io.FileUtils
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfterAll, FunSpecLike, Matchers}
+import slick.SlickException
 import spark.jobserver.JobServer.InvalidConfiguration
 import spark.jobserver.util.{DeleteBinaryInfoFailedException, NoSuchBinaryException, SaveBinaryException}
 
+import scala.collection.mutable
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
+import scala.concurrent.ExecutionContext.Implicits.global
 
 abstract class CombinedDAOSpecBase {
   def config : Config
@@ -278,6 +281,69 @@ class CombinedDAOSpec extends CombinedDAOSpecBase with FunSpecLike with BeforeAn
       jarFile.exists() should be(false)
     }
   }
+
+  describe("saveJobConfig tests") {
+    it("save should be synchronous") {
+      val jobId = "job-config-id"
+      val config = ConfigFactory.parseString("{lambo=style}")
+
+      dao.saveJobConfig(jobId, config)
+
+      Await.result(dao.getJobConfig(jobId), 5.seconds) should be(Some(config))
+    }
+
+    it("should throw an exception if save was unsuccessful") {
+      val jobId = "job-config-fail"
+      val config = ConfigFactory.parseString("{bugatti=justOk}")
+
+      intercept[SlickException] {
+        dao.saveJobConfig(jobId, config)
+      }
+    }
+  }
+
+  describe("saveContextInfo tests") {
+    val startTime = DateTime.now()
+    val contextInfoWithoutId = ContextInfo(_: String, "", "", None, startTime, None, "", None)
+
+    it("save should be synchronous") {
+      val contextId = "cid"
+
+      dao.saveContextInfo(contextInfoWithoutId(contextId))
+
+      Await.result(dao.getContextInfo(contextId), 5.seconds) should be(Some(contextInfoWithoutId(contextId)))
+    }
+
+    it("should throw an exception if save was unsuccessful") {
+      val contextId = "cid-fail"
+
+      intercept[SlickException] {
+        dao.saveContextInfo(contextInfoWithoutId(contextId))
+      }
+    }
+  }
+
+  describe("saveJobInfo tests") {
+    val date = DateTime.now()
+    val jobInfoWithoutId = JobInfo(_: String, "", "",
+      BinaryInfo("", BinaryType.Jar, date), "", "", date, None, None)
+
+    it("save should be synchronous") {
+      val jobId = "jid"
+
+      dao.saveJobInfo(jobInfoWithoutId(jobId))
+
+      Await.result(dao.getJobInfo(jobId), 5.seconds) should be(Some(jobInfoWithoutId(jobId)))
+    }
+
+    it("should throw an exception if save was unsuccessful") {
+      val jobId = "jid-fail"
+
+      intercept[SlickException] {
+        dao.saveJobInfo(jobInfoWithoutId(jobId))
+      }
+    }
+  }
 }
 
 class DummyBinaryDAO(config: Config) extends BinaryDAO {
@@ -319,6 +385,10 @@ class DummyBinaryDAO(config: Config) extends BinaryDAO {
 }
 
 class DummyMetaDataDAO(config: Config) extends MetaDataDAO {
+  val jobConfigs = mutable.HashMap.empty[String, Config]
+  val contextInfos = mutable.HashMap.empty[String, ContextInfo]
+  val jobInfos = mutable.HashMap.empty[String, JobInfo]
+
   override def saveBinary(name: String,
                           binaryType: BinaryType,
                           uploadTime: DateTime,
@@ -413,23 +483,59 @@ class DummyMetaDataDAO(config: Config) extends MetaDataDAO {
     }
   }
 
-  override def getJobConfig(jobId: String): Future[Option[Config]] = ???
+  override def getJobConfig(jobId: String): Future[Option[Config]] = {
+    Future.successful(jobConfigs.get(jobId))
+  }
 
-  override def saveJobConfig(id: String, config: Config): Future[Boolean] = ???
+  override def saveJobConfig(id: String, config: Config): Future[Boolean] = {
+    id match {
+      case "job-config-id" =>
+        Future {
+          Thread.sleep(1000) // mimic long save operation
+          jobConfigs(id) = config
+          true
+        }
+      case "job-config-fail" => Future.successful(false)
+    }
+  }
 
   override def getJobsByContextId(contextId: String, statuses: Option[Seq[String]]): Future[Seq[JobInfo]] = ???
 
   override def getJobs(limit: Int, status: Option[String]): Future[Seq[JobInfo]] = ???
 
-  override def getJob(id: String): Future[Option[JobInfo]] = ???
+  override def getJob(id: String): Future[Option[JobInfo]] = {
+    Future.successful(jobInfos.get(id))
+  }
 
-  override def saveJob(jobInfo: JobInfo): Future[Boolean] = ???
+  override def saveJob(jobInfo: JobInfo): Future[Boolean] = {
+    jobInfo.jobId match {
+      case "jid" =>
+        Future {
+          Thread.sleep(1000) // mimic long save operation
+          jobInfos(jobInfo.jobId) = jobInfo
+          true
+        }
+      case "jid-fail" => Future.successful(false)
+    }
+  }
 
   override def getContexts(limit: Option[Int], statuses: Option[Seq[String]]): Future[Seq[ContextInfo]] = ???
 
   override def getContextByName(name: String): Future[Option[ContextInfo]] = ???
 
-  override def getContext(id: String): Future[Option[ContextInfo]] = ???
+  override def getContext(id: String): Future[Option[ContextInfo]] = {
+    Future.successful(contextInfos.get(id))
+  }
 
-  override def saveContext(contextInfo: ContextInfo): Future[Boolean] = ???
+  override def saveContext(contextInfo: ContextInfo): Future[Boolean] = {
+    contextInfo.id match {
+      case "cid" =>
+        Future {
+          Thread.sleep(1000) // mimic long save operation
+          contextInfos(contextInfo.id) = contextInfo
+          true
+        }
+      case "cid-fail" => Future.successful(false)
+    }
+  }
 }

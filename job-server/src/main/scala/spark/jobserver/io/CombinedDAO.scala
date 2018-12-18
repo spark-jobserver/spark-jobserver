@@ -5,6 +5,7 @@ import java.io.File
 import com.typesafe.config.Config
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
+import slick.SlickException
 import spark.jobserver.JobServer.InvalidConfiguration
 import spark.jobserver.util._
 
@@ -57,7 +58,12 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher {
       binaryInfos => binaryInfos.map(info => info.appName -> (info.binaryType, info.uploadTime)).toMap
     )
 
-  override def saveContextInfo(contextInfo: ContextInfo): Unit = metaDataDAO.saveContext(contextInfo)
+  override def saveContextInfo(contextInfo: ContextInfo): Unit = {
+    val isSaved = Await.result(metaDataDAO.saveContext(contextInfo), defaultAwaitTime)
+    if(!isSaved) {
+      throw new SlickException(s"Could not update ${contextInfo.id} in the database")
+    }
+  }
 
   override def getContextInfo(id: String): Future[Option[ContextInfo]] = metaDataDAO.getContext(id)
 
@@ -70,7 +76,12 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher {
     metaDataDAO.getContexts(limit, statuses)
   }
 
-  override def saveJobInfo(jobInfo: JobInfo): Unit = metaDataDAO.saveJob(jobInfo)
+  override def saveJobInfo(jobInfo: JobInfo): Unit = {
+    val isSaved = Await.result(metaDataDAO.saveJob(jobInfo), defaultAwaitTime)
+    if(!isSaved) {
+      throw new SlickException(s"Could not update ${jobInfo.jobId} in the database")
+    }
+  }
 
   override def getJobInfo(jobId: String): Future[Option[JobInfo]] = metaDataDAO.getJob(jobId)
 
@@ -84,7 +95,10 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher {
   }
 
   override def saveJobConfig(jobId: String, jobConfig: Config): Unit = {
-    metaDataDAO.saveJobConfig(jobId, jobConfig)
+    val isSaved = Await.result(metaDataDAO.saveJobConfig(jobId, jobConfig), defaultAwaitTime)
+    if(!isSaved) {
+      throw new SlickException(s"Could not save job config into database for $jobId")
+    }
   }
 
   override def getJobConfig(jobId: String): Future[Option[Config]] = {
