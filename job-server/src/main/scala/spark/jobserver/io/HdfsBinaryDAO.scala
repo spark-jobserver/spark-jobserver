@@ -1,7 +1,7 @@
 package spark.jobserver.io
 
 import com.typesafe.config.Config
-import org.apache.commons.io.IOUtils.toByteArray
+import org.apache.commons.io.IOUtils
 import org.slf4j.LoggerFactory
 import spark.jobserver.JobServer.InvalidConfiguration
 import spark.jobserver.util.{HadoopFSFacade, Utils}
@@ -41,8 +41,8 @@ class HdfsBinaryDAO(config: Config) extends BinaryDAO {
   override def get(id: String): Future[Option[Array[Byte]]] = {
     Future {
       hdfsFacade.get(extendPath(id)) match {
-        case Some(bytesArray) =>
-          Some(Utils.usingResource(bytesArray)(toByteArray))
+        case Some(inputStream) =>
+          Some(Utils.usingResource(inputStream)(IOUtils.toByteArray))
         case None =>
           logger.error(s"Failed to get a file $id from HDFS.")
           None
