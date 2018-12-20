@@ -1,6 +1,7 @@
 package spark.jobserver.io
 
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 import com.typesafe.config.Config
 import org.joda.time.DateTime
@@ -13,12 +14,25 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
 import scala.util.Success
+import spark.jobserver.common.akka.metrics.YammerMetrics
 
 /**
   * @param config config of jobserver
   */
-class CombinedDAO(config: Config) extends JobDAO with FileCacher {
+class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetrics {
   private val logger = LoggerFactory.getLogger(getClass)
+
+  // Metrics
+  private val saveTimerMs = timer("total-save-time", TimeUnit.MILLISECONDS)
+  private val totalSuccessfulSaveRequests = counter("total-save-binary-success")
+  private val totalFailedSaveBinaryDAORequests = counter("total-binary-save-binary-dao-failed")
+  private val totalFailedSaveMetadataDAORequests = counter("total-binary-save-metadata-dao-failed")
+
+  private val deleteTimerMs = timer("total-delete-time", TimeUnit.MILLISECONDS)
+  private val totalSuccessfulDeleteRequests = counter("total-delete-binary-success")
+  private val totalFailedDeleteBinaryDAORequests = counter("total-binary-delete-binary-dao-failed")
+  private val totalFailedDeleteMetadataDAORequests = counter("total-binary-delete-metadata-dao-failed")
+
   var binaryDAO: BinaryDAO = _
   var metaDataDAO: MetaDataDAO = _
   private val binaryDaoPath = "spark.jobserver.combineddao.binarydao.class"
@@ -126,30 +140,37 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher {
       cacheBinary(name, binaryType, uploadTime, binaryBytes)
     }
 
+    val saveTimer = saveTimerMs.time()
     if (Await.result(binaryDAO.save(binHash, binaryBytes), defaultAwaitTime)) {
       if (Await.result(metaDataDAO.saveBinary(name, binaryType, uploadTime, binHash), defaultAwaitTime)) {
+        saveTimer.stop()
+        totalSuccessfulSaveRequests.inc()
         logger.info(s"Successfully uploaded binary for $name")
       } else {
-          logger.error(s"Failed to save binary meta for $name, will try to delete file")
-          metaDataDAO.getBinariesByStorageId(binHash).map(
-            binaryInfos => binaryInfos.nonEmpty
-          ) onComplete {
-            case Success(false) => binaryDAO.delete(binHash) onComplete {
-              case Success(true) =>
-                logger.info(s"Successfully deleted binary for $name after failed save.")
-              case _ => logger.error(s"Failed to cleanup binary for $name after failed save.")
-            }
-            case _ => logger.info(s"Performing no cleanup, $name binary is used in meta data.")
+        totalFailedSaveMetadataDAORequests.inc()
+        logger.error(s"Failed to save binary meta for $name, will try to delete file")
+        metaDataDAO.getBinariesByStorageId(binHash).map(
+          binaryInfos => binaryInfos.nonEmpty
+        ) onComplete {
+          case Success(false) => binaryDAO.delete(binHash) onComplete {
+            case Success(true) => logger.info(s"Successfully deleted binary for $name after failed save.")
+            case _ => logger.error(s"Failed to cleanup binary for $name after failed save.")
           }
-          throw SaveBinaryException(name)
+          case _ => logger.info(s"Performing no cleanup, $name binary is used in meta data.")
+        }
+        saveTimer.stop()
+        throw SaveBinaryException(name)
       }
     } else {
+      saveTimer.stop()
+      totalFailedSaveBinaryDAORequests.inc()
       logger.error(s"Failed to save binary data for $name, not proceeding with meta")
       throw SaveBinaryException(name)
     }
   }
 
   override def deleteBinary(name: String): Unit = {
+    val deleteTimer = deleteTimerMs.time()
     Await.result(metaDataDAO.getBinary(name), defaultAwaitTime) match {
       case Some(binaryInfo) =>
         binaryInfo.binaryStorageId match {
@@ -159,21 +180,32 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher {
               if (binInfosForHash.exists(_.appName != binaryInfo.appName)) {
                 logger.error(s"$name binary is used by other applications, not deleting it from storage")
               } else {
-                binaryDAO.delete(hash) onFailure {
-                  case _ => logger.error(s"Failed to delete binary file for $name, leaving an artifact")
+                binaryDAO.delete(hash).map {_ =>
+                  totalSuccessfulDeleteRequests.inc()
+                } onFailure {
+                  case _ =>
+                    totalFailedDeleteBinaryDAORequests.inc()
+                    logger.error(s"Failed to delete binary file for $name, leaving an artifact")
                 }
               }
+              deleteTimer.stop()
               cleanCacheBinaries(name)
             }
             else {
+              deleteTimer.stop()
+              totalFailedDeleteMetadataDAORequests.inc()
               logger.error(s"Failed to delete binary meta for $name, not proceeding with file")
               throw DeleteBinaryInfoFailedException(name)
             }
           case _ =>
+            deleteTimer.stop()
+            totalFailedDeleteMetadataDAORequests.inc()
             logger.error(s"Failed to delete binary meta for $name, hash is not found")
             throw NoStorageIdException(name)
         }
       case None =>
+        deleteTimer.stop()
+        totalFailedDeleteMetadataDAORequests.inc()
         logger.warn(s"Couldn't find meta data information for $name")
         throw NoSuchBinaryException(name)
     }
