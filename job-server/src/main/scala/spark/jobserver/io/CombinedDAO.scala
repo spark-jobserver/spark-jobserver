@@ -179,6 +179,7 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
               val binInfosForHash = Await.result(metaDataDAO.getBinariesByStorageId(hash), defaultAwaitTime)
               if (binInfosForHash.exists(_.appName != binaryInfo.appName)) {
                 logger.error(s"$name binary is used by other applications, not deleting it from storage")
+                totalSuccessfulDeleteRequests.inc()
               } else {
                 binaryDAO.delete(hash).map {_ =>
                   totalSuccessfulDeleteRequests.inc()
