@@ -8,7 +8,7 @@ import collection.JavaConverters._
 import java.io.File
 import org.apache.spark.launcher.{SparkLauncher, SparkAppHandle}
 
-class ManagerLauncherSpec extends FunSpec with Matchers with BeforeAndAfter with HDFSClusterLike {
+class ManagerLauncherSpec extends FunSpec with Matchers with BeforeAndAfter with HDFSCluster {
     val stubbedSparkLauncher = new StubbedSparkLauncher()
     val environment = new InMemoryEnvironment
 

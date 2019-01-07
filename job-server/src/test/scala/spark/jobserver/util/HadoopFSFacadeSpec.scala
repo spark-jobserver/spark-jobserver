@@ -7,7 +7,7 @@ import org.apache.commons.io.IOUtils
 import org.apache.hadoop.conf.Configuration
 import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
 
-class HadoopFSFacadeSpec extends FunSpec with Matchers with BeforeAndAfterAll with HDFSClusterLike {
+class HadoopFSFacadeSpec extends FunSpec with Matchers with BeforeAndAfterAll with HDFSCluster {
   private var config: Config = _
   private var testClusterUrl: String = _
   private var hdfsFacade: HadoopFSFacade = _
