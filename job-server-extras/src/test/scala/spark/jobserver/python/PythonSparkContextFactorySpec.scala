@@ -70,7 +70,7 @@ object PythonSparkContextFactorySpec {
   lazy val jobServerAPIExamplePath = jobServerPaths.find(_.getAbsolutePath.contains("examples"))
 
   lazy val pysparkPath = sys.env.get("SPARK_HOME").map(d => s"$d/python/lib/pyspark.zip")
-  lazy val py4jPath = sys.env.get("SPARK_HOME").map(d => s"$d/python/lib/py4j-0.10.4-src.zip")
+  lazy val py4jPath = sys.env.get("SPARK_HOME").map(d => s"$d/python/lib/py4j-0.10.7-src.zip")
   lazy val originalPythonPath = sys.env.get("PYTHONPATH")
 
   case object DummyJobCache extends JobCache {
