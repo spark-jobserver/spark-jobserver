@@ -82,7 +82,9 @@ object Dependencies {
   lazy val miscTestDeps = Seq(
     "org.apache.hadoop" % "hadoop-hdfs" % hadoop % Test classifier "tests",
     "org.apache.hadoop" % "hadoop-common" % hadoop % Test classifier "tests",
-    "org.apache.hadoop" % "hadoop-minicluster" % hadoop % Test
+    "org.apache.hadoop" % "hadoop-minicluster" % hadoop % Test,
+    "org.apache.curator" % "curator-test" % curator % Test,
+    "org.apache.curator" % "curator-test-zk34" % curator % Test
   )
 
   lazy val securityDeps = Seq(
