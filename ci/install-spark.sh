@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 set -e
-curl -L -o /tmp/spark.tgz http://d3kbcqa49mib13.cloudfront.net/spark-2.2.0-bin-hadoop2.7.tgz
+curl -L -o /tmp/spark.tgz http://apache.lauf-forum.at/spark/spark-2.3.2/spark-2.3.2-bin-hadoop2.7.tgz
 tar -xvzf /tmp/spark.tgz -C /tmp
