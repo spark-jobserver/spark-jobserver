@@ -31,6 +31,7 @@ import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.Try
 import org.slf4j.LoggerFactory
 import org.apache.http.HttpStatus
+import spark.jobserver.util.MeteredHttpService
 
 object WebApi {
   val StatusKey = "status"
@@ -155,7 +156,7 @@ class WebApi(system: ActorSystem,
              dataManager: ActorRef,
              supervisor: ActorRef,
              jobInfoActor: ActorRef)
-    extends HttpService with CommonRoutes with DataRoutes with SJSAuthenticator with CORSSupport
+    extends MeteredHttpService with CommonRoutes with DataRoutes with SJSAuthenticator with CORSSupport
                         with ChunkEncodedStreamingSupport {
   import CommonMessages._
   import ContextSupervisor._
