@@ -21,7 +21,7 @@ trait FileCacher {
   val Pattern = "\\d{8}_\\d{6}_\\d{3}".r
 
   def createBinaryName(appName: String, binaryType: BinaryType, uploadTime: DateTime): String = {
-    appName + "-" + uploadTime.toString("yyyyMMdd_hhmmss_SSS") + s".${binaryType.extension}"
+    appName + "-" + uploadTime.toString("yyyyMMdd_HHmmss_SSS") + s".${binaryType.extension}"
   }
 
   protected def getPath(appName: String, binaryType: BinaryType, uploadTime: DateTime): Option[String] = {

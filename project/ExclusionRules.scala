@@ -5,8 +5,8 @@ object ExclusionRules {
   val excludeJackson = ExclusionRule(organization = "org.codehaus.jackson")
   val excludeScalaTest = ExclusionRule(organization = "org.scalatest")
   val excludeScala = ExclusionRule(organization = "org.scala-lang")
-  val excludeNettyIo = ExclusionRule(organization = "io.netty", artifact = "netty-all")
+  val excludeNettyIo = ExclusionRule(organization = "io.netty").withArtifact("netty-all")
   val excludeAsm = ExclusionRule(organization = "asm")
   val excludeQQ = ExclusionRule(organization = "org.scalamacros")
-  val excludeZookeeper = ExclusionRule(organization = "org.apache.zookeeper", artifact = "zookeeper")
+  val excludeZookeeper = ExclusionRule(organization = "org.apache.zookeeper").withArtifact("zookeeper")
 }

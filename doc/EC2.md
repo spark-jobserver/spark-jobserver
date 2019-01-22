@@ -1,3 +1,12 @@
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
+
+- [Setting Up The EC2 Cluster](#setting-up-the-ec2-cluster)
+- [Using The Example](#using-the-example)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 ## Setting Up The EC2 Cluster
 
 1. Sign up for an Amazon AWS account.

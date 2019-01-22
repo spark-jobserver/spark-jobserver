@@ -1,3 +1,17 @@
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
+
+- [Step by step instruction on how to run Spark Job Server on EMR 4.2.0 (Spark 1.6.0)](#step-by-step-instruction-on-how-to-run-spark-job-server-on-emr-420-spark-160)
+  - [Create EMR 4.2.0 cluster](#create-emr-420-cluster)
+  - [Configure master box](#configure-master-box)
+  - [Build spark-jobserver distribution](#build-spark-jobserver-distribution)
+  - [Deploy spark-jobserver](#deploy-spark-jobserver)
+  - [Test spark-jobserver](#test-spark-jobserver)
+  - [Troubleshooting](#troubleshooting)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 ## Step by step instruction on how to run Spark Job Server on EMR 4.2.0 (Spark 1.6.0)
 
 See also running in [cluster mode](cluster.md), running [YARN in client mode](yarn.md) and running on [Mesos](Mesos.md).
@@ -40,7 +54,7 @@ InstanceCount=10,BidPrice=2.99,Name=sparkSlave,InstanceGroupType=CORE,InstanceTy
 
 ### Build spark-jobserver distribution
 
-1. Install sbt 0.13.9 as described here http://www.scala-sbt.org/0.13/tutorial/Manual-Installation.html
+1. Install sbt as described here https://www.scala-sbt.org/download.html
 2. Install jdk 1.7.0 and git
  ```
  sudo yum install java-1.7.0-openjdk-devel git

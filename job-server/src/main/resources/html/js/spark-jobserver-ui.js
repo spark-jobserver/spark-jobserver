@@ -44,9 +44,9 @@ function getContexts() {
                     function (contextDetail) {
                         var items = [];
                         items.push(
-                            "<tr><td>" + contextDetail.context + "</td>" +
+                            "<tr><td>" + contextDetail.name + "</td>" +
                             "<td><a href='" + contextDetail.url + "' target='_blank'>" + contextDetail.url + "</a></td>" +
-                            "<td><a href='#' id=" + contextDetail.context + " onclick='deleteContext(this.id);return false;'>kill</a></td>" +
+                            "<td><a href='#' id=" + contextDetail.name + " onclick='deleteContext(this.id);return false;'>kill</a></td>" +
                             "</tr>");
                         $('#contextsTable > tbody:last').append(items.join(""));
                         console.log(items);

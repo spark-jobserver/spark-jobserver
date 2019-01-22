@@ -631,7 +631,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
     }
 
     it("should be able to list running/restarting/stopping contexts") {
-      val contextName = "test-context8"
+      val contextName = "test-context9"
       supervisor ! AddContext(contextName, contextConfig)
       expectMsg(contextInitTimeout, ContextInitialized)
 
@@ -749,22 +749,6 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       dao.saveContextInfo(contextInfoPF(ContextStatus.Finished)) // cleanup
     }
 
-    it("should return JVM initialization timeout if context JVM doesn't join cluster within timout") {
-      val failingContextName = "test-context-cluster-fail-join"
-      val wrongConfig = ConfigFactory.parseString("driver.cluster.join.fail=true").withFallback(contextConfig)
-
-      supervisor ! AddContext(failingContextName, wrongConfig)
-
-      val timeoutExceptionMessage = ContextJVMInitializationTimeout().getMessage
-      val msg = expectMsgClass((SparkJobUtils.getForkedJVMInitTimeout(system.settings.config) + 1).seconds,
-          classOf[ContextInitError])
-      msg.t.getMessage should be(timeoutExceptionMessage)
-
-      val timedOutContext = Await.result(dao.getContextInfoByName(failingContextName), daoTimeout)
-      timedOutContext.get.state should be(ContextStatus.Error)
-      timedOutContext.get.error.get.getMessage should be(timeoutExceptionMessage)
-    }
-
     it("should not change final state to STOPPING state") {
       val daoProbe = TestProbe()
       val latch = new CountDownLatch(1)
@@ -823,6 +807,22 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
 
       contextToTest.state should be(ContextStatus.Stopping)
       expectMsg(contextInitTimeout, NoSuchContext)
+    }
+
+    it("should return JVM initialization timeout if context JVM doesn't join cluster within timout") {
+      val failingContextName = "test-context-cluster-fail-join"
+      val wrongConfig = ConfigFactory.parseString("driver.cluster.join.fail=true").withFallback(contextConfig)
+
+      supervisor ! AddContext(failingContextName, wrongConfig)
+
+      val timeoutExceptionMessage = ContextJVMInitializationTimeout().getMessage
+      val msg = expectMsgClass((SparkJobUtils.getForkedJVMInitTimeout(system.settings.config) + 1).seconds,
+          classOf[ContextInitError])
+      msg.t.getMessage should be(timeoutExceptionMessage)
+
+      val timedOutContext = Await.result(dao.getContextInfoByName(failingContextName), daoTimeout)
+      timedOutContext.get.state should be(ContextStatus.Error)
+      timedOutContext.get.error.get.getMessage should be(timeoutExceptionMessage)
     }
 
     it("should raise Terminated event even if the watch was added through RegainWatchOnExistingContexts message") {

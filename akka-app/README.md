@@ -1,3 +1,13 @@
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
+
+- [The included Akka Stack](#the-included-akka-stack)
+- [Useful Traits and Utilities](#useful-traits-and-utilities)
+- [For more info](#for-more-info)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 akka_app defines a standard stack for Akka applications, as well as traits and utilities for Akka Actors.
 
 ## The included Akka Stack
