@@ -63,7 +63,28 @@ case class ContextInfo(id: String, name: String,
                        config: String, actorAddress: Option[String],
                        startTime: DateTime, endTime: Option[DateTime],
                        state: String, error: Option[Throwable])
-  extends ContextUnModifiableAttributes with ContextModifiableAttributes
+  extends ContextUnModifiableAttributes with ContextModifiableAttributes with Equals {
+
+  // Meaningful comparison of contextInfos with throwables
+  override def hashCode(): Int = {
+    val prime = 41
+    prime * (prime * (prime * (prime * (prime * (prime * (prime * (prime
+      + id.hashCode) + name.hashCode) + config.hashCode) + actorAddress.hashCode)
+      + startTime.hashCode) + endTime.hashCode) + state.hashCode) + error.hashCode
+  }
+
+  override def equals(other: Any): Boolean = {
+    other match {
+      case that: spark.jobserver.io.ContextInfo => (id == that.id
+        && name == that.name && config == that.config
+        && actorAddress == that.actorAddress && startTime == that.startTime
+        && endTime == that.endTime && state == that.state
+        && error.map(e => e.getMessage) == that.error.map(e => e.getMessage))
+      case _ => false
+    }
+  }
+
+}
 
 object ContextInfoModifiable {
   def apply(state: String): ContextInfoModifiable = new ContextInfoModifiable(state)
