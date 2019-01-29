@@ -30,18 +30,16 @@ object Dependencies {
   )
 
   lazy val sparkDeps = Seq(
-    "org.apache.spark" %% "spark-core" % spark % "provided" excludeAll(excludeNettyIo, excludeQQ),
-    // Force netty version.  This avoids some Spark netty dependency problem.
-    "io.netty" % "netty-all" % netty
+    "org.apache.spark" %% "spark-core" % spark % "provided" excludeAll excludeQQ
   )
 
   lazy val sparkExtraDeps = Seq(
-    "org.apache.hadoop" % "hadoop-client" % hadoop % Provided excludeAll(excludeNettyIo, excludeQQ),
-    "org.apache.spark" %% "spark-mllib" % spark % Provided excludeAll(excludeNettyIo, excludeQQ),
-    "org.apache.spark" %% "spark-sql" % spark % Provided excludeAll(excludeNettyIo, excludeQQ),
-    "org.apache.spark" %% "spark-streaming" % spark % Provided excludeAll(excludeNettyIo, excludeQQ),
+    "org.apache.hadoop" % "hadoop-client" % hadoop % Provided excludeAll excludeQQ,
+    "org.apache.spark" %% "spark-mllib" % spark % Provided excludeAll excludeQQ,
+    "org.apache.spark" %% "spark-sql" % spark % Provided excludeAll excludeQQ,
+    "org.apache.spark" %% "spark-streaming" % spark % Provided excludeAll excludeQQ,
     "org.apache.spark" %% "spark-hive" % spark % Provided excludeAll(
-      excludeNettyIo, excludeQQ, excludeScalaTest
+      excludeQQ, excludeScalaTest
       )
   )
 
