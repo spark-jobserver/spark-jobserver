@@ -1,3 +1,13 @@
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
+
+- [Configuring Job Server for Mesos](#configuring-job-server-for-mesos)
+  - [Mesos client mode](#mesos-client-mode)
+  - [Mesos cluster mode](#mesos-cluster-mode)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 ## Configuring Job Server for Mesos
 
 See also running on [cluster](cluster.md), YARN in [client mode](yarn.md) and running on [EMR](EMR.md).

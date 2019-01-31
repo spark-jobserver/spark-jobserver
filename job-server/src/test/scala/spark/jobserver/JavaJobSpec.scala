@@ -69,7 +69,7 @@ class JavaJobSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) {
       uploadTestJar()
       manager ! JobManagerActor.StartJob("demo", failedJob, config, errorEvents)
       expectMsgPF(6 seconds, "Gets correct exception"){
-        case JobErroredOut(_, _, ex) => ex.getMessage should equal("java.lang.RuntimeException: fail")
+        case JobErroredOut(_, _, ex) => ex.getMessage should equal("fail")
       }
     }
   }

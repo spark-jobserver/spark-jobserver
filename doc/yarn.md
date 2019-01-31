@@ -1,3 +1,16 @@
+<!-- START doctoc generated TOC please keep comment here to allow auto update -->
+<!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
+**Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
+
+- [Configuring Job Server for YARN in client mode with docker](#configuring-job-server-for-yarn-in-client-mode-with-docker)
+  - [Configuring the Spark-Jobserver Docker package to run in Yarn-Client Mode](#configuring-the-spark-jobserver-docker-package-to-run-in-yarn-client-mode)
+  - [Modifying the start-server.sh script](#modifying-the-start-serversh-script)
+  - [Modifying the &lt;environment&gt;.sh script](#modifying-the-ltenvironmentgtsh-script)
+  - [Important Context Settings for yarn](#important-context-settings-for-yarn)
+  - [ClassNotFoundException: org.apache.spark.deploy.yarn.YarnSparkHadoopUtil](#classnotfoundexception-orgapachesparkdeployyarnyarnsparkhadooputil)
+
+<!-- END doctoc generated TOC please keep comment here to allow auto update -->
+
 ## Configuring Job Server for YARN in client mode with docker
 
 See also running in [cluster mode](cluster.md), running [YARN on EMR](EMR.md) and running on [Mesos](mesos.md).

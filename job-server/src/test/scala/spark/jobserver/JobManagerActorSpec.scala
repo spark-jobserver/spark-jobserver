@@ -14,8 +14,8 @@ import spark.jobserver.CommonMessages.{JobRestartFailed, JobStarted, JobValidati
 import spark.jobserver.io._
 import spark.jobserver.ContextSupervisor.{SparkContextStopped, ContextStopError, ContextStopInProgress}
 import spark.jobserver.io.JobDAOActor.SavedSuccessfully
-import spark.jobserver.util.{NoJobConfigFoundException, StandaloneForcefulKill, NotStandaloneModeException,
-  ContextKillingItselfException}
+import spark.jobserver.util.{ContextKillingItselfException, NoJobConfigFoundException,
+  StandaloneForcefulKill, NotStandaloneModeException}
 
 import scala.collection.mutable
 import scala.concurrent.duration.FiniteDuration
@@ -222,7 +222,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       uploadTestJar()
       manager ! JobManagerActor.StartJob("demo", classPrefix + "MyErrorJob", emptyConfig, errorEvents)
       val errorMsg = expectMsgClass(startJobWait, classOf[JobErroredOut])
-      errorMsg.err.getClass should equal (classOf[RuntimeException])
+      errorMsg.err.getClass should equal (classOf[IllegalArgumentException])
     }
 
     it("job should get jobConfig passed in to StartJob message") {

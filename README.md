@@ -354,7 +354,7 @@ object WordCountExampleNewApi extends NewSparkJob {
 }
 ```
 
-It is much more type safe, separates context configuration, job ID, named objects, and other environment variables into a separate JobEnvironment input, and allows the validation method to return specific data for the runJob method.  See the [WordCountExample](job-server-tests/src/spark.jobserver/WordCountExample.scala) and [LongPiJob](job-server-tests/src/spark.jobserver/LongPiJob.scala) for examples.
+It is much more type safe, separates context configuration, job ID, named objects, and other environment variables into a separate JobEnvironment input, and allows the validation method to return specific data for the runJob method.  See the [WordCountExample](job-server-tests/src/main/scala/spark/jobserver/WordCountExample.scala) and [LongPiJob](job-server-tests/src/main/scala/spark/jobserver/LongPiJob.scala) for examples.
 
 Let's try running our sample job with an invalid configuration:
 
