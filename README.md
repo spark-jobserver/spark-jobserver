@@ -69,7 +69,7 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
 
 (Please add yourself to this list!)
 
-Spark Job Server is now included in Datastax Enterprise 4.8!
+Spark Job Server is included in Datastax Enterprise!
 
 - [Ooyala](http://www.ooyala.com)
 - [Netflix](http://www.netflix.com)
