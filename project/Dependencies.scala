@@ -58,7 +58,7 @@ object Dependencies {
   )
 
   lazy val zookeeperDeps = Seq(
-    "org.apache.curator" % "apache-curator" % curator excludeAll(excludeZookeeper),
+    "org.apache.curator" % "curator-framework" % curator excludeAll excludeZookeeper,
     "org.apache.zookeeper" % "zookeeper" % zookeeper
   )
 
@@ -83,8 +83,7 @@ object Dependencies {
     "org.apache.hadoop" % "hadoop-hdfs" % hadoop % Test classifier "tests",
     "org.apache.hadoop" % "hadoop-common" % hadoop % Test classifier "tests",
     "org.apache.hadoop" % "hadoop-minicluster" % hadoop % Test,
-    "org.apache.curator" % "curator-test" % curator % Test,
-    "org.apache.curator" % "curator-test-zk34" % curator % Test
+    "org.apache.curator" % "curator-test" % curatorTest % Test
   )
 
   lazy val securityDeps = Seq(

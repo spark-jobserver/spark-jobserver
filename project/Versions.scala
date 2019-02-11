@@ -30,5 +30,6 @@ object Versions {
   lazy val typeSafeConfig = if (isJavaAtLeast("1.8")) "1.3.0" else "1.2.1"
   lazy val cassandraConnector = "2.3.2"
   lazy val curator = "4.0.1"
+  lazy val curatorTest = "2.12.0"
   lazy val zookeeper = "3.4.13"
 }
