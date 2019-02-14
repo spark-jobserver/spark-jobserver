@@ -9,6 +9,7 @@ import spark.jobserver.TestJarFinder
 
 import scala.concurrent.Await
 import scala.concurrent.duration.DurationInt
+import spark.jobserver.util.Utils
 
 class MetaDataZookeeperDAOSpec extends FunSpec with TestJarFinder with FunSpecLike
       with Matchers with BeforeAndAfter {
@@ -31,7 +32,10 @@ class MetaDataZookeeperDAOSpec extends FunSpec with TestJarFinder with FunSpecLi
 
   before {
     testServer.createBaseDir(testDir)
-    zkUtils.delete("/")
+    Utils.usingResource(zkUtils.getClient) {
+      client =>
+        zkUtils.delete(client, "/")
+    }
   }
 
   /*
