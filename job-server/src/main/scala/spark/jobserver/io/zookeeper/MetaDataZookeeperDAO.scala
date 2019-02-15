@@ -52,26 +52,26 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
    */
 
   override def saveContext(contextInfo: ContextInfo): Future[Boolean] = {
+    logger.debug("Saving new context")
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
           val id = contextInfo.id
-          logger.debug(s"Saving or updating context under: $contextsDir/$id")
           zookeeperUtils.write(client, contextInfo, s"$contextsDir/$id")
       }
     }
   }
 
   override def getContext(id: String): Future[Option[ContextInfo]] = {
+    logger.debug(s"Retrieving context $id")
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
-          logger.debug(s"Reading context from $contextsDir/$id")
           zookeeperUtils.read[ContextInfo](client, s"$contextsDir/$id") match {
             case Some(contextInfo) =>
               Some(contextInfo)
             case None =>
-              logger.info(s"Didn't find any context information for the path: $contextsDir/$id")
+              logger.debug(s"Didn't find any context information for the path: $contextsDir/$id")
               None
           }
       }
@@ -79,6 +79,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
   }
 
   override def getContextByName(name: String): Future[Option[ContextInfo]] = {
+    logger.debug(s"Retrieving context by name $name")
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
@@ -92,6 +93,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
   }
 
   override def getContexts(limit: Option[Int], statuses: Option[Seq[String]]): Future[Seq[ContextInfo]] = {
+    logger.debug("Retrieving multiple contexts")
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
@@ -116,17 +118,18 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
    */
 
   override def saveJob(jobInfo: JobInfo): Future[Boolean] = {
+    logger.debug("Saving job")
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
           val jobId = jobInfo.jobId
-          logger.debug(s"Saving or updating job under: $jobsDir/$jobId")
           zookeeperUtils.write(client, jobInfo, s"$jobsDir/$jobId")
       }
     }
   }
 
   override def getJob(id: String): Future[Option[JobInfo]] = {
+    logger.debug(s"Retrieving job $id")
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
@@ -136,6 +139,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
   }
 
   override def getJobs(limit: Int, status: Option[String]): Future[Seq[JobInfo]] = {
+    logger.debug("Retrieving multiple jobs")
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
@@ -154,6 +158,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
   }
 
   override def getJobsByContextId(contextId: String, statuses: Option[Seq[String]]): Future[Seq[JobInfo]] = {
+    logger.debug(s"Retrieving jobs by contextId $contextId")
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
@@ -178,9 +183,8 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
   private def readJobInfo(client: CuratorFramework, jobId: String): Option[JobInfo] = {
     zookeeperUtils.read[JobInfo](client, s"$jobsDir/$jobId") match {
       case None =>
-        logger.info(s"Didn't find any job information for the path: $jobsDir/$jobId")
+        logger.debug(s"Didn't find any job information for the path: $jobsDir/$jobId")
         None
-
       case Some(j) => {
         Some(j)
       }
@@ -206,7 +210,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
             None
         }
       case None =>
-        logger.info(s"Didn't find a binary for name " + j.binaryInfo.appName)
+        logger.debug(s"Didn't find a binary for name " + j.binaryInfo.appName)
         None
     }
   }
@@ -216,17 +220,18 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
    */
 
   override def saveJobConfig(jobId: String, config: Config): Future[Boolean] = {
+    logger.debug("Saving job config")
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
           val configRender = config.root().render(ConfigRenderOptions.concise())
-          logger.debug(s"Saving or updating job config under: $jobsDir/$jobId/config")
           zookeeperUtils.write(client, configRender, s"$jobsDir/$jobId/config")
       }
     }
   }
 
   override def getJobConfig(jobId: String): Future[Option[Config]] = {
+    logger.debug(s"Retrieving job config for $jobId")
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
@@ -241,6 +246,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
    */
 
   override def getBinary(name: String): Future[Option[BinaryInfo]] = {
+    logger.debug(s"Retrieving binary $name")
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
@@ -248,7 +254,6 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
             case Some(infoForBinary) =>
               Some(infoForBinary.sortWith(_.uploadTime.getMillis > _.uploadTime.getMillis).head)
             case None =>
-              logger.info(s"Didn't find any information for the path: $binariesDir/$name")
               None
           }
       }
@@ -256,6 +261,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
   }
 
   override def getBinaries: Future[Seq[BinaryInfo]] = {
+    logger.debug("Retrieving all binaries")
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
@@ -268,6 +274,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
   }
 
   override def getBinariesByStorageId(storageId: String): Future[Seq[BinaryInfo]] = {
+    logger.debug(s"Retrieving binaries for storage id $storageId")
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
@@ -282,6 +289,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
 
   override def saveBinary(name: String, binaryType: BinaryType,
                           uploadTime: DateTime, binaryStorageId: String): Future[Boolean] = {
+    logger.debug("Saving binary")
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
@@ -295,6 +303,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
   }
 
   override def deleteBinary(name: String): Future[Boolean] = {
+    logger.debug(s"Deleting binary $name")
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
