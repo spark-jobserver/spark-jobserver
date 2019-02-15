@@ -51,9 +51,7 @@ class ZookeeperUtils(connectString: String, baseFolder: String, retries: Int = 5
 
   def write[T: JsonWriter](client: CuratorFramework, data: T, path: String): Boolean = {
     try {
-      if (client.checkExists().forPath(path) != null) {
-        logger.info(s"Directory $path already exists. Setting new data value.")
-      } else {
+      if (client.checkExists().forPath(path) == null) {
         logger.info(s"Directory $path doesn't exists. Making dirs.")
         ZKPaths.mkdirs(client.getZookeeperClient.getZooKeeper, ZKPaths.fixForNamespace(baseFolder, path))
       }
