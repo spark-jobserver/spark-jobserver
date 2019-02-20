@@ -82,13 +82,13 @@ object JobDAOActorSpec {
       Future.successful(Seq())
 
     override def getJobInfosByContextId(
-        contextId: String, jobStatuses: Option[Seq[String]] = None): Future[Seq[JobInfo]] = ???
+        contextId: String, jobStatuses: Option[Seq[String]] = None): Future[Seq[JobInfo]] = Future.successful(Seq())
 
     override def getJobInfo(jobId: String): Future[Option[JobInfo]] = ???
 
     override def saveJobInfo(jobInfo: JobInfo): Unit = ???
 
-    override def getJobConfig(jobId: String): Future[Option[Config]] = ???
+    override def getJobConfig(jobId: String): Future[Option[Config]] = Future.successful(None)
 
     override def getLastUploadTimeAndType(appName: String): Option[(DateTime, BinaryType)] = ???
 
@@ -102,6 +102,10 @@ object JobDAOActorSpec {
     override def cleanRunningJobInfosForContext(contextName: String, endTime: DateTime): Future[Unit] = {
       cleanupProbe.ref ! contextName
       Future.successful(())
+    }
+
+    override def getAllJobIdsToSync: Future[Seq[String]] = {
+      Future.successful(Seq.empty[String])
     }
   }
 }

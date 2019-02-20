@@ -155,4 +155,32 @@ trait JobDAO {
    * @return Some(lastUploadedTime) if the app exists and the list of times is nonempty, None otherwise
    */
   def getLastUploadTimeAndType(appName: String): Option[(DateTime, BinaryType)]
+
+
+
+  /**
+    * START: TEMPORARY FUNCTIONS DEFINED ONLY FOR A TIME OF MIGRATION TO ZOOKEEPER
+    */
+
+  import scala.concurrent.ExecutionContext.Implicits.global
+
+  def getAllContextsIds: Future[Seq[String]] = Future {
+    Seq.empty[String]
+  }
+
+  def getAllBinaryInfoForName(name: String): Future[Seq[BinaryInfo]] = Future {
+    Seq.empty[BinaryInfo]
+  }
+
+  def getJobsWithoutBinaries: Future[Seq[String]] = Future {
+    Seq.empty[String]
+  }
+
+  def getAllJobIdsToSync: Future[Seq[String]] = Future {
+    Seq.empty[String]
+  }
+
+  /**
+    * END: TEMPORARY FUNCTIONS DEFINED ONLY FOR A TIME OF MIGRATION TO ZOOKEEPER
+    */
 }

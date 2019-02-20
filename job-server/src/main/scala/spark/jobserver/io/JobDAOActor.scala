@@ -63,11 +63,11 @@ object JobDAOActor {
   case object SavedSuccessfully extends SaveResponse
   case class SaveFailed(error: Throwable) extends SaveResponse
 
-  def props(dao: JobDAO, migrationActor: ActorRef): Props =
-    Props(classOf[JobDAOActor], dao, migrationActor)
+  def props(dao: JobDAO, migrationActor: ActorRef, migrationAddress: String = ""): Props =
+    Props(classOf[JobDAOActor], dao, migrationActor, migrationAddress)
 }
 
-class JobDAOActor(dao: JobDAO, migrationActor: ActorRef) extends InstrumentedActor {
+class JobDAOActor(dao: JobDAO, migrationActor: ActorRef, migrationAddress: String) extends InstrumentedActor {
   import JobDAOActor._
   import akka.pattern.pipe
   import context.dispatcher
@@ -93,7 +93,12 @@ class JobDAOActor(dao: JobDAO, migrationActor: ActorRef) extends InstrumentedAct
 
     case SaveContextInfo(contextInfo) =>
       saveContextAndRespond(sender, contextInfo)
-      migrationActor ! ZookeeperMigrationActor.SaveContextInfoInZK(contextInfo)
+      if (migrationAddress == "") {
+        migrationActor ! ZookeeperMigrationActor.SaveContextInfoInZK(contextInfo)
+      } else {
+        logger.debug(s"[Zookeeper] Resolving migration address")
+        context.actorSelection(migrationAddress) ! ZookeeperMigrationActor.SaveContextInfoInZK(contextInfo)
+      }
 
     case GetContextInfo(id) =>
       dao.getContextInfo(id).map(ContextResponse).pipeTo(sender)
@@ -106,7 +111,12 @@ class JobDAOActor(dao: JobDAO, migrationActor: ActorRef) extends InstrumentedAct
 
     case SaveJobInfo(jobInfo) =>
       sender ! dao.saveJobInfo(jobInfo)
-      migrationActor ! ZookeeperMigrationActor.SaveJobInfoInZK(jobInfo)
+      if (migrationAddress == "") {
+        migrationActor ! ZookeeperMigrationActor.SaveJobInfoInZK(jobInfo)
+      } else {
+        logger.debug(s"[Zookeeper] Resolving migration address")
+        context.actorSelection(migrationAddress) ! ZookeeperMigrationActor.SaveJobInfoInZK(jobInfo)
+      }
 
     case GetJobInfos(limit) =>
       dao.getJobInfos(limit).map(JobInfos).pipeTo(sender)

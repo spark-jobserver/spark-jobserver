@@ -236,4 +236,28 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
         ""
     }
   }
+
+  /**
+    * START: TEMPORARY FUNCTIONS DEFINED ONLY FOR A TIME OF MIGRATION TO ZOOKEEPER
+    */
+
+  override def getAllContextsIds: Future[Seq[String]] = {
+    metaDataDAO.getAllContextsIds
+  }
+
+  override def getAllBinaryInfoForName(name: String): Future[Seq[BinaryInfo]] = {
+    metaDataDAO.getAllBinaryInfoForName(name)
+  }
+
+  override def getJobsWithoutBinaries: Future[Seq[String]] = {
+    metaDataDAO.getJobsWithoutBinaries
+  }
+
+  override def getAllJobIdsToSync: Future[Seq[String]] = {
+    metaDataDAO.getAllJobIdsToSync
+  }
+
+  /**
+    * END: TEMPORARY FUNCTIONS DEFINED ONLY FOR A TIME OF MIGRATION TO ZOOKEEPER
+    */
 }
