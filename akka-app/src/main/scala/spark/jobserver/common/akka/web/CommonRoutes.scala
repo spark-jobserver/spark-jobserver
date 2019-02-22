@@ -89,7 +89,8 @@ object MetricsSerializer {
       case h: Histogram => Map("type" -> "histogram") ++ histogramToMap(h)
       case t: Timer =>
         Map("type" -> "timer", "rate" -> meterToMap(t),
-            "duration" -> (histogramToMap(t) ++ Map("units" -> t.durationUnit.toString.toLowerCase)))
+            "duration" -> (histogramToMap(t) ++ Map("units" -> t.durationUnit.toString.toLowerCase)
+                                             ++ Map("mean" -> t.mean())))
 
     }
   }
