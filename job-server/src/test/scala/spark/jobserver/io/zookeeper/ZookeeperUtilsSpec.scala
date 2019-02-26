@@ -64,14 +64,14 @@ class ZookeeperUtilsSpec extends FunSpec with Matchers with BeforeAndAfter {
 
   describe("test zookeeper connection") {
     it("should return false for write operation if connection is lost") {
-      new ZookeeperUtils("ip_address_doesnt_exist", testPath, 1).
-        write[BinaryInfo](client, testInfo, "/testfile1") should equal(false)
+      val zkUtils2 = new ZookeeperUtils("ip_address_doesnt_exist", testPath, 1)
+      zkUtils2.write[BinaryInfo](zkUtils2.getClient, testInfo, "/testfile1") should equal(false)
     }
 
     it("should not see other namespaces") {
       zookeeperUtils.list(client, "/").sorted should equal(Seq())
-      new ZookeeperUtils(testServer.getConnectString, "", 1).
-        list(client, "/") should equal(Seq("zookeeper", testPath))
+      val zkUtils2 = new ZookeeperUtils(testServer.getConnectString, "", 1)
+      zkUtils2.list(zkUtils2.getClient, "/") should equal(Seq("zookeeper"))
     }
   }
 }
