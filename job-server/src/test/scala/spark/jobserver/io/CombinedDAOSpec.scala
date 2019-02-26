@@ -256,7 +256,7 @@ class CombinedDAOSpec extends CombinedDAOSpecBase with FunSpecLike with BeforeAn
     it("should create cache on save binary and delete on delete binary if enabled") {
       val binName = "success"
       val jarFile = new File(config.getString("spark.jobserver.combineddao.rootdir"),
-        binName + "-" + CombinedDAOTestHelper.defaultDate.toString("yyyyMMdd_hhmmss_SSS") + ".jar")
+        binName + "-" + CombinedDAOTestHelper.defaultDate.toString("yyyyMMdd_HHmmss_SSS") + ".jar")
 
       jarFile.exists() should be(false)
 
@@ -274,7 +274,7 @@ class CombinedDAOSpec extends CombinedDAOSpecBase with FunSpecLike with BeforeAn
     it("should not cache any binary if disabled") {
       val binName = "success"
       val jarFile = new File(config.getString("spark.jobserver.combineddao.rootdir"),
-        binName + "-" + CombinedDAOTestHelper.defaultDate.toString("yyyyMMdd_hhmmss_SSS") + ".jar")
+        binName + "-" + CombinedDAOTestHelper.defaultDate.toString("yyyyMMdd_HHmmss_SSS") + ".jar")
 
       saveBinaryAndCheckResponse(binName, dao)
 
