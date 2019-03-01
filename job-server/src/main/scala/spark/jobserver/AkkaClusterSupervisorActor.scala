@@ -210,7 +210,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
         case Some(JobDAOActor.ContextResponse(Some(contextInfo))) =>
           val contextActorRef = getActorRef(contextInfo)
           contextActorRef match {
-            case Some(ref) => val future = (ref ? GetContexData)(30.seconds)
+            case Some(ref) => val future = (ref ? GetContexData)(10.seconds)
               future.collect {
                 case ContexData(appId, Some(webUi)) =>
                   originator ! SparkContexData(contextInfo, Some(appId), Some(webUi))
@@ -480,7 +480,6 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
 
   private def startContext(name: String, contextConfig: Config, isAdHoc: Boolean)
                           (successFunc: ActorRef => Unit)(failureFunc: Throwable => Unit): Unit = {
-
 
     val contextId = java.util.UUID.randomUUID().toString
     val contextActorName = AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX + contextId

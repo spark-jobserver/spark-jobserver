@@ -407,7 +407,7 @@ class WebApi(system: ActorSystem,
       logger.info("User authentication");
       (get & path(Segment)) { (contextName) =>
         respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-          val future = (supervisor ? GetSparkContexData(contextName))
+          val future = (supervisor ? GetSparkContexData(contextName))(15.seconds)
           future.map {
             case SparkContexData(context, appId, url) =>
               val stcode = 200;
