@@ -114,10 +114,12 @@ object JobServer {
 
     val ctor = jobDaoClass.getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
     val jobDAO = ctor.newInstance(config).asInstanceOf[JobDAO]
-    val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO), "dao-manager")
+    val migrationActorRef = system.actorOf(ZookeeperMigrationActor.props(config), "migration-actor")
+    val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO, migrationActorRef), "dao-manager")
     val dataFileDAO = new DataFileDAO(config)
     val dataManager = system.actorOf(Props(classOf[DataManagerActor], dataFileDAO), "data-manager")
-    val binManager = system.actorOf(Props(classOf[BinaryManager], daoActor), "binary-manager")
+    val binManager = system.actorOf(Props(classOf[BinaryManager],
+      daoActor, migrationActorRef), "binary-manager")
 
     // Add initial job JARs, if specified in configuration.
     storeInitialBinaries(config, binManager)
@@ -128,7 +130,7 @@ object JobServer {
         val supervisor = system.actorOf(Props(classOf[LocalContextSupervisorActor],
             daoActor, dataManager), AkkaClusterSupervisorActor.ACTOR_NAME)
         supervisor ! ContextSupervisor.AddContextsFromConfig  // Create initial contexts
-        startWebApi(system, supervisor, jobDAO, webApiPF)
+        startWebApi(system, supervisor, jobDAO, webApiPF, migrationActorRef)
       case true =>
         val cluster = Cluster(system)
 
@@ -149,14 +151,15 @@ object JobServer {
           }
 
           supervisor ! ContextSupervisor.AddContextsFromConfig  // Create initial contexts
-          startWebApi(system, supervisor, jobDAO, webApiPF)
+          startWebApi(system, supervisor, jobDAO, webApiPF, migrationActorRef)
         }
     }
   }
 
   def startWebApi(system: ActorSystem, supervisor: ActorRef, jobDAO: JobDAO,
-      webApiPF: (ActorRef, ActorRef) => WebApi) {
-    val jobInfo = system.actorOf(Props(classOf[JobInfoActor], jobDAO, supervisor), "job-info")
+      webApiPF: (ActorRef, ActorRef) => WebApi, migrationActorRef: ActorRef) {
+    val jobInfo = system.actorOf(Props(classOf[JobInfoActor],
+      jobDAO, supervisor, migrationActorRef), "job-info")
     webApiPF(supervisor, jobInfo).start()
   }
 

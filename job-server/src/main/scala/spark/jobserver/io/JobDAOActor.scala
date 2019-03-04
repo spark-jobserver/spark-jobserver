@@ -3,6 +3,7 @@ package spark.jobserver.io
 import akka.actor.{ActorRef, Props}
 import com.typesafe.config.Config
 import org.joda.time.DateTime
+import spark.jobserver.ZookeeperMigrationActor
 
 import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
@@ -62,10 +63,11 @@ object JobDAOActor {
   case object SavedSuccessfully extends SaveResponse
   case class SaveFailed(error: Throwable) extends SaveResponse
 
-  def props(dao: JobDAO): Props = Props(classOf[JobDAOActor], dao)
+  def props(dao: JobDAO, migrationActor: ActorRef): Props =
+    Props(classOf[JobDAOActor], dao, migrationActor)
 }
 
-class JobDAOActor(dao: JobDAO) extends InstrumentedActor {
+class JobDAOActor(dao: JobDAO, migrationActor: ActorRef) extends InstrumentedActor {
   import JobDAOActor._
   import akka.pattern.pipe
   import context.dispatcher
@@ -91,6 +93,7 @@ class JobDAOActor(dao: JobDAO) extends InstrumentedActor {
 
     case SaveContextInfo(contextInfo) =>
       saveContextAndRespond(sender, contextInfo)
+      migrationActor ! ZookeeperMigrationActor.SaveContextInfoInZK(contextInfo)
 
     case GetContextInfo(id) =>
       dao.getContextInfo(id).map(ContextResponse).pipeTo(sender)
@@ -103,6 +106,7 @@ class JobDAOActor(dao: JobDAO) extends InstrumentedActor {
 
     case SaveJobInfo(jobInfo) =>
       sender ! dao.saveJobInfo(jobInfo)
+      migrationActor ! ZookeeperMigrationActor.SaveJobInfoInZK(jobInfo)
 
     case GetJobInfos(limit) =>
       dao.getJobInfos(limit).map(JobInfos).pipeTo(sender)

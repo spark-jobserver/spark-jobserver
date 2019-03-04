@@ -18,7 +18,8 @@ object JobInfoActor {
   case object JobConfigStored
 }
 
-class JobInfoActor(jobDao: JobDAO, contextSupervisor: ActorRef) extends InstrumentedActor {
+class JobInfoActor(jobDao: JobDAO, contextSupervisor: ActorRef,
+                   migrationActor: ActorRef) extends InstrumentedActor {
   import scala.concurrent.duration._
   import scala.util.control.Breaks._
 
@@ -71,6 +72,7 @@ class JobInfoActor(jobDao: JobDAO, contextSupervisor: ActorRef) extends Instrume
 
     case StoreJobConfig(jobId, jobConfig) =>
       jobDao.saveJobConfig(jobId, jobConfig)
+      migrationActor ! ZookeeperMigrationActor.SaveJobConfigInZK(jobId, jobConfig)
       sender ! JobConfigStored
   }
 }

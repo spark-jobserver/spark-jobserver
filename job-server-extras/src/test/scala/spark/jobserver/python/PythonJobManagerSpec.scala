@@ -1,10 +1,12 @@
 package spark.jobserver.python
 
+import akka.testkit.TestProbe
 import com.typesafe.config.ConfigFactory
 import spark.jobserver.CommonMessages.{JobErroredOut, JobResult}
 import spark.jobserver.io.JobDAOActor
 import spark.jobserver._
 import org.scalatest._
+
 import scala.concurrent.duration._
 import scala.collection.JavaConverters._
 
@@ -17,7 +19,7 @@ class PythonJobManagerSpec extends ExtrasJobSpecBase(PythonJobManagerSpec.getNew
 
   before {
     dao = new InMemoryDAO
-    daoActor = system.actorOf(JobDAOActor.props(dao))
+    daoActor = system.actorOf(JobDAOActor.props(dao, TestProbe().ref))
   }
 
   describe("PythonContextFactory used with JobManager") {

@@ -38,7 +38,7 @@ class StreamingJobSpec extends JobSpecBase(StreamingJobSpec.getNewSystem) {
 
   before {
     dao = new InMemoryDAO
-    daoActor = system.actorOf(JobDAOActor.props(dao))
+    daoActor = system.actorOf(JobDAOActor.props(dao, TestProbe().ref))
     manager = system.actorOf(JobManagerActor.props(daoActor))
   }
 

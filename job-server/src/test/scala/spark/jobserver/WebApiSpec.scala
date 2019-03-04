@@ -1,7 +1,7 @@
 package spark.jobserver
 
 import akka.actor.{Actor, ActorSystem, Props}
-import akka.testkit.TestKit
+import akka.testkit.{TestKit, TestProbe}
 import com.typesafe.config.ConfigFactory
 import org.joda.time.DateTime
 import org.scalatest.concurrent.ScalaFutures
@@ -52,7 +52,7 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
   // See http://doc.akka.io/docs/akka/2.2.4/scala/actors.html#Deprecated_Variants;
   // for actors declared as inner classes we need to pass this as first arg
   val dummyActor = system.actorOf(Props(classOf[DummyActor], this))
-  val jobDaoActor = system.actorOf(JobDAOActor.props(new InMemoryDAO))
+  val jobDaoActor = system.actorOf(JobDAOActor.props(new InMemoryDAO, TestProbe().ref))
   val statusActor = system.actorOf(JobStatusActor.props(jobDaoActor))
 
   val api = new WebApi(system, config, dummyPort, dummyActor, dummyActor, dummyActor, dummyActor)
