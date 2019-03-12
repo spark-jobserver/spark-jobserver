@@ -67,11 +67,13 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
-          zookeeperUtils.read[ContextInfo](client, s"$contextsDir/$id") match {
+          val path = s"$contextsDir/$id"
+          zookeeperUtils.sync(client, path)
+          zookeeperUtils.read[ContextInfo](client, path) match {
             case Some(contextInfo) =>
               Some(contextInfo)
             case None =>
-              logger.debug(s"Didn't find any context information for the path: $contextsDir/$id")
+              logger.info(s"Didn't find any context information for the path: $path")
               None
           }
       }
@@ -83,6 +85,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
+          zookeeperUtils.sync(client, contextsDir)
           zookeeperUtils.list(client, contextsDir)
             .flatMap(id => zookeeperUtils.read[ContextInfo](client, s"$contextsDir/$id"))
             .filter(_.name == name)
@@ -97,6 +100,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
+          zookeeperUtils.sync(client, contextsDir)
           lazy val allContexts = zookeeperUtils.list(client, contextsDir)
             .flatMap(id => zookeeperUtils.read[ContextInfo](client, s"$contextsDir/$id"))
           lazy val filteredContexts = statuses match {
@@ -133,6 +137,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
+          zookeeperUtils.sync(client, s"$jobsDir/$id")
           readJobInfo(client, id).flatMap(j => refreshBinary(client, j))
       }
     }
@@ -143,6 +148,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
+          zookeeperUtils.sync(client, jobsDir)
           lazy val allJobs = zookeeperUtils.list(client, jobsDir)
             .flatMap(id => readJobInfo(client, id))
           lazy val filteredJobs =
@@ -162,6 +168,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
+          zookeeperUtils.sync(client, jobsDir)
           lazy val allJobs = zookeeperUtils.list(client, jobsDir)
             .flatMap(id => readJobInfo(client, id))
             .filter(_.contextId == contextId)
@@ -183,7 +190,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
   private def readJobInfo(client: CuratorFramework, jobId: String): Option[JobInfo] = {
     zookeeperUtils.read[JobInfo](client, s"$jobsDir/$jobId") match {
       case None =>
-        logger.debug(s"Didn't find any job information for the path: $jobsDir/$jobId")
+        logger.info(s"Didn't find any job information for the path: $jobsDir/$jobId")
         None
       case Some(j) => {
         Some(j)
@@ -194,7 +201,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
 
   /**
    * Within JobInfo only an initial copy of the binary info is stored
-   * to identify the original BinaryInfo stored elsewhere
+   * to identify the original BinaryInfo stored in another ZK dir
    *
    * The jobInfo shall only be returned if the BinaryInfo elsewhere still exists
    */
@@ -235,7 +242,9 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
-          zookeeperUtils.read[String](client, s"$jobsDir/$jobId/config")
+          val path = s"$jobsDir/$jobId/config"
+          zookeeperUtils.sync(client, path)
+          zookeeperUtils.read[String](client, path)
             .flatMap(render => Some(ConfigFactory.parseString(render)))
       }
     }
@@ -250,7 +259,9 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
-          zookeeperUtils.read[Seq[BinaryInfo]](client, s"$binariesDir/$name") match {
+          val path = s"$binariesDir/$name"
+          zookeeperUtils.sync(client, path)
+          zookeeperUtils.read[Seq[BinaryInfo]](client, path) match {
             case Some(infoForBinary) =>
               Some(infoForBinary.sortWith(_.uploadTime.getMillis > _.uploadTime.getMillis).head)
             case None =>
@@ -265,6 +276,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
+          zookeeperUtils.sync(client, binariesDir)
           zookeeperUtils.list(client, binariesDir).map(
             name => zookeeperUtils.read[Seq[BinaryInfo]](client, s"$binariesDir/$name"))
             .filter(_.isDefined)
@@ -278,6 +290,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
+          zookeeperUtils.sync(client, binariesDir)
           zookeeperUtils.list(client, binariesDir).flatMap(
             name => zookeeperUtils.read[Seq[BinaryInfo]](client, s"$binariesDir/$name")
             .getOrElse(Seq.empty[BinaryInfo]))
