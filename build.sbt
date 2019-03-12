@@ -186,7 +186,7 @@ lazy val dockerSettings = Seq(
       run("mkdir", "-p", "/database")
       runRaw(
         s"""
-           |wget http://apache.lauf-forum.at/spark/$sparkBuild/$sparkBuild.tgz && \\
+           |wget http://archive.apache.org/dist/spark/$sparkBuild/$sparkBuild.tgz && \\
            |tar -xvf $sparkBuild.tgz && \\
            |cd $sparkBuild && \\
            |$sparkBuildCmd && \\
