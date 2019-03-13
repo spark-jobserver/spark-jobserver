@@ -5,7 +5,7 @@ object Versions {
   lazy val metrics = "2.2.0"
   lazy val jodaTime = "2.9.3"
   lazy val jodaConvert = "1.8.1"
-  lazy val spark = sys.env.getOrElse("SPARK_VERSION", "2.2.1")
+  lazy val spark = sys.env.getOrElse("SPARK_VERSION", "2.3.2")
 
   lazy val akka = "2.4.9"
   lazy val spray = "1.3.3"
@@ -25,7 +25,7 @@ object Versions {
   lazy val logback = "1.0.7"
 
   lazy val mysql = "5.1.42"
-  lazy val py4j = "0.10.4"
+  lazy val py4j = "0.10.7"
   lazy val scalaTest = "3.0.1"
   lazy val scalatic = "3.0.1"
   lazy val mockito = "2.21.0"
@@ -36,3 +36,4 @@ object Versions {
   lazy val curatorTest = "2.12.0"
   lazy val zookeeper = "3.4.13"
 }
+
