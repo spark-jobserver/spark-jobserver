@@ -27,13 +27,13 @@ class SqlCommonSpec extends SqlCommonSpecBase with TestJarFinder with FunSpecLik
   val throwable: Throwable = new Throwable("test-error")
 
   // jar test data
-  val jarInfo: BinaryInfo = genJarInfo(false, false)
   val jarBytes: Array[Byte] = Files.toByteArray(testJar)
+  val jarInfo: BinaryInfo = genJarInfo(false, false)
   val eggInfo: BinaryInfo = BinaryInfo("myEggBinary", BinaryType.Egg, time)
 
   // jobInfo test data
-  val jobInfoNoEndNoErr:JobInfo = genJobInfo(jarInfo, false, JobStatus.Running)
-  val expectedJobInfo = jobInfoNoEndNoErr
+  val jobInfoNoEndNoErr: JobInfo = genJobInfo(jarInfo, false, JobStatus.Running)
+  val expectedJobInfo: JobInfo = jobInfoNoEndNoErr
   val jobInfoSomeEndNoErr: JobInfo = genJobInfo(jarInfo, false, JobStatus.Finished)
   val jobInfoSomeEndSomeErr: JobInfo = genJobInfo(jarInfo, false, ContextStatus.Error)
 
@@ -55,7 +55,7 @@ class SqlCommonSpec extends SqlCommonSpecBase with TestJarFinder with FunSpecLik
       val app = "test-appName" + appCount
       val upload = if (newTime) time.plusMinutes(timeCount) else time
 
-      BinaryInfo(app, BinaryType.Jar, upload)
+      BinaryInfo(app, BinaryType.Jar, upload, Some(BinaryDAO.calculateBinaryHashString(jarBytes)))
     }
 
     genTestJarInfo _
@@ -64,7 +64,7 @@ class SqlCommonSpec extends SqlCommonSpecBase with TestJarFinder with FunSpecLik
   case class GenJobInfoClosure() {
     var count: Int = 0
 
-    def apply(jarInfo: BinaryInfo, isNew:Boolean, state: String,
+    def apply(jarInfo: BinaryInfo, isNew: Boolean, state: String,
         contextId: Option[String] = None): JobInfo = {
       count = count + (if (isNew) 1 else 0)
       val id: String = "test-id" + count
