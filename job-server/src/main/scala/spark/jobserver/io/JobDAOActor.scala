@@ -3,7 +3,7 @@ package spark.jobserver.io
 import akka.actor.{ActorRef, Props}
 import com.typesafe.config.Config
 import org.joda.time.DateTime
-import spark.jobserver.ZookeeperMigrationActor
+import spark.jobserver.MigrationActor
 
 import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
@@ -64,11 +64,11 @@ object JobDAOActor {
   case object SavedSuccessfully extends SaveResponse
   case class SaveFailed(error: Throwable) extends SaveResponse
 
-  def props(dao: JobDAO, migrationActor: ActorRef): Props =
-    Props(classOf[JobDAOActor], dao, migrationActor)
+  def props(dao: JobDAO, migrationActor: ActorRef, migrationAddress: String = ""): Props =
+    Props(classOf[JobDAOActor], dao, migrationActor, migrationAddress)
 }
 
-class JobDAOActor(dao: JobDAO, migrationActor: ActorRef) extends InstrumentedActor {
+class JobDAOActor(dao: JobDAO, migrationActor: ActorRef, migrationAddress: String) extends InstrumentedActor {
   import JobDAOActor._
   import akka.pattern.pipe
   import context.dispatcher
@@ -97,7 +97,12 @@ class JobDAOActor(dao: JobDAO, migrationActor: ActorRef) extends InstrumentedAct
 
     case SaveContextInfo(contextInfo) =>
       saveContextAndRespond(sender, contextInfo)
-      migrationActor ! ZookeeperMigrationActor.SaveContextInfoInZK(contextInfo)
+      if (migrationAddress == "") {
+        migrationActor ! MigrationActor.SaveContextInfoH2(contextInfo)
+      } else {
+        logger.debug(s"Resolving migration actor address")
+        context.actorSelection(migrationAddress) ! MigrationActor.SaveContextInfoH2(contextInfo)
+      }
 
     case GetContextInfo(id) =>
       dao.getContextInfo(id).map(ContextResponse).pipeTo(sender)
@@ -110,7 +115,12 @@ class JobDAOActor(dao: JobDAO, migrationActor: ActorRef) extends InstrumentedAct
 
     case SaveJobInfo(jobInfo) =>
       sender ! dao.saveJobInfo(jobInfo)
-      migrationActor ! ZookeeperMigrationActor.SaveJobInfoInZK(jobInfo)
+      if (migrationAddress == "") {
+        migrationActor ! MigrationActor.SaveJobInfoH2(jobInfo)
+      } else {
+        logger.debug(s"Resolving migration actor address")
+        context.actorSelection(migrationAddress) ! MigrationActor.SaveJobInfoH2(jobInfo)
+      }
 
     case GetJobInfos(limit) =>
       dao.getJobInfos(limit).map(JobInfos).pipeTo(sender)

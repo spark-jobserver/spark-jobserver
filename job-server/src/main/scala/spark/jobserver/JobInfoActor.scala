@@ -72,7 +72,7 @@ class JobInfoActor(jobDao: JobDAO, contextSupervisor: ActorRef,
 
     case StoreJobConfig(jobId, jobConfig) =>
       jobDao.saveJobConfig(jobId, jobConfig)
-      migrationActor ! ZookeeperMigrationActor.SaveJobConfigInZK(jobId, jobConfig)
+      migrationActor ! MigrationActor.SaveJobConfigH2(jobId, jobConfig)
       sender ! JobConfigStored
   }
 }
