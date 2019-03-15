@@ -315,6 +315,7 @@ class WebApi(system: ActorSystem,
     authenticate(authenticator) { authInfo =>
       // GET /jars route returns a JSON map of the app name and the last time a jar was uploaded.
       get { ctx =>
+        logger.info(s"GET /jars")
         val future = (binaryManager ? ListBinaries(Some(BinaryType.Jar))).
           mapTo[collection.Map[String, (BinaryType, DateTime)]].map(_.mapValues(_._2))
         future.map { jarTimeMap =>
@@ -328,6 +329,7 @@ class WebApi(system: ActorSystem,
         // The <appName> needs to be unique; uploading a jar with the same appName will replace it.
         post {
           path(Segment) { appName =>
+            logger.info(s"POST /jars/$appName")
             entity(as[Array[Byte]]) { jarBytes =>
               val future = binaryManager ? StoreBinary(appName, BinaryType.Jar, jarBytes)
               respondWithMediaType(MediaTypes.`application/json`) { ctx =>
@@ -372,7 +374,8 @@ class WebApi(system: ActorSystem,
 
     // user authentication
     authenticate(authenticator) { authInfo =>
-      (get & path(Segment)) { (contextName) =>
+      (get & path(Segment)) { contextName =>
+        logger.info(s"GET /contexts/$contextName")
         respondWithMediaType(MediaTypes.`application/json`) { ctx =>
           val future = (supervisor ? GetSparkContexData(contextName))(15.seconds)
           future.map {
@@ -389,8 +392,8 @@ class WebApi(system: ActorSystem,
         }
       } ~
       get { ctx =>
-        logger.info("GET /contexts");
-        val future = (supervisor ? ListContexts)
+        logger.info("GET /contexts")
+        val future = supervisor ? ListContexts
         future.map {
           case UnexpectedError => ctx.complete(500, errMap("UNEXPECTED ERROR OCCURRED"))
           case contexts =>
@@ -416,7 +419,8 @@ class WebApi(system: ActorSystem,
          * @return the string "OK", or error if context exists or could not be initialized
          */
         entity(as[String]) { configString =>
-          path(Segment) { (contextName) =>
+          path(Segment) { contextName =>
+            logger.info(s"POST /contexts/$contextName");
             // Enforce user context name to start with letters
             if (!contextName.head.isLetter) {
               complete(StatusCodes.BadRequest, errMap("context name must start with letters"))
@@ -444,15 +448,15 @@ class WebApi(system: ActorSystem,
           }
         }
       } ~
-        (delete & path(Segment)) { (contextName) =>
+        (delete & path(Segment)) { contextName =>
           //  DELETE /contexts/<contextName>
           //  Stop the context with the given name.  Executors will be shut down and all cached RDDs
           //  and currently running jobs will be lost.  Use with care!
           //  If force=true flag is provided, will kill the job forcefully
           parameters('force.as[Boolean] ?) {
-            (forceOpt) => {
+            forceOpt => {
               val force = forceOpt.getOrElse(false)
-              logger.info(s"DELETE /contexts/$contextName");
+              logger.info(s"DELETE /contexts/$contextName (force=$forceOpt)")
               val (cName, _) = determineProxyUser(config, authInfo, contextName)
               val future = (supervisor ?
                 StopContext(cName, force))(contextDeletionTimeout.seconds + 1.seconds)
@@ -654,6 +658,7 @@ class WebApi(system: ActorSystem,
             }
             val future = (jobInfoActor ? GetJobStatuses(Some(limit), statusUpperCaseOpt)).mapTo[Seq[JobInfo]]
             respondWithMediaType(MediaTypes.`application/json`) { ctx =>
+              logger.info(s"GET /jobs (limit=$limit, status=$statusUpperCaseOpt)")
               future.map { infos =>
                 val jobReport = infos.map { info =>
                   getJobReport(info)
