@@ -5,6 +5,7 @@
 - [Configuring Job Server for YARN cluster mode](#configuring-job-server-for-yarn-cluster-mode)
   - [Job Server configuration](#job-server-configuration)
   - [Reading files uploaded via frontend](#reading-files-uploaded-via-frontend)
+- [Configuring Job Server for supervised cluster mode](#configuring-job-server-for-supervised-cluster-mode)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
