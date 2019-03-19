@@ -6,6 +6,7 @@ import akka.pattern.ask
 import akka.cluster.Cluster
 import akka.cluster.ClusterEvent.{InitialStateAsEvents, MemberEvent}
 import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
+
 import java.io.File
 import java.util.concurrent.{TimeUnit, TimeoutException}
 
@@ -15,7 +16,7 @@ import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
-import scala.concurrent.{Await, ExecutionContext}
+import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 import scala.collection.mutable.ListBuffer

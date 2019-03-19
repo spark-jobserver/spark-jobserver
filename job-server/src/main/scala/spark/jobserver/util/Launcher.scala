@@ -1,11 +1,10 @@
 package spark.jobserver.util
 
-import scala.util.Try
 import com.typesafe.config.Config
+import org.apache.spark.launcher.{SparkAppHandle, SparkLauncher}
 import org.slf4j.LoggerFactory
-import org.apache.spark.launcher.SparkLauncher
-import org.apache.spark.launcher.SparkAppHandle
 
+import scala.util.Try
 /**
  * This class aims to eliminate the need to call spark-submit
  * through scripts.
@@ -65,7 +64,7 @@ abstract class Launcher(config: Config, sparkLauncher: SparkLauncher, enviornmen
     }
 
     protected def validate(): (Boolean, String) = {
-      new HadoopFSFacade().isFile(sjsJarPath) match {
+      new HadoopFSFacade(defaultFS = "file:///").isFile(sjsJarPath) match {
         case Some(true) => (true, "")
         case Some(false) => (false, s"job-server jar file doesn't exist at $sjsJarPath")
         case None => (false, "Unexpected error occurred while reading file. Check logs")
