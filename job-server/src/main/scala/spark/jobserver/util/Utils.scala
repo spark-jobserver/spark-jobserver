@@ -1,6 +1,7 @@
 package spark.jobserver.util
 
 import java.io.{Closeable, File}
+import com.yammer.metrics.core.{Stoppable, Timer}
 
 object Utils {
   def usingResource[A <: Closeable, B](resource: A)(f: A => B): B = {
@@ -21,6 +22,15 @@ object Utils {
       if (!folder.mkdirs()) {
         throw new RuntimeException(s"Could not create directory $folder")
       }
+    }
+  }
+
+  def usingTimer[B](timer: Timer)(f: () => B): B = {
+    val tc = timer.time()
+    try {
+        f()
+    } finally {
+       tc.stop()
     }
   }
 }
