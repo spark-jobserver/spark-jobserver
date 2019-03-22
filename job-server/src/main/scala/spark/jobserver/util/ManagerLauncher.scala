@@ -120,7 +120,8 @@ class ManagerLauncher(systemConfig: Config, contextConfig: Config, masterAddress
     getStringSeq(contextConfig, "jars").foreach(launcher.addJar)
     getStringSeq(contextConfig, "files").foreach(launcher.addFile)
 
-    if (contextConfig.getString("context-factory").contains("python")) {
+    if (contextConfig.hasPath("context-factory") &&
+      contextConfig.getString("context-factory").contains("python")){
       // Since `--py-files` in not available in Java applications,
       // we distribute pyFiles to cluster var `--files`
       launcher.setConf("spark.yarn.isPython", "true")
@@ -141,7 +142,7 @@ class ManagerLauncher(systemConfig: Config, contextConfig: Config, masterAddress
     for (e <- Try(contextConfig.getConfig("launcher"))) {
       e.entrySet().asScala.map { c =>
         // Supervise mode was already handled above, no need to do it here again
-        if (c.getKey.startsWith("spark") && c.getKey != "spark.driver.supervise") {
+        if (c.getKey != "spark.driver.supervise") {
           launcher.addSparkArg("--conf", s"${c.getKey}=${c.getValue.unwrapped.toString}")
         }
       }
