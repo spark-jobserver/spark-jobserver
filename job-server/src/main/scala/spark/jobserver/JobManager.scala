@@ -1,5 +1,6 @@
 package spark.jobserver
 
+import java.io.File
 import java.nio.file.Files
 import java.util.concurrent.TimeUnit
 
@@ -29,7 +30,9 @@ object JobManager {
   // Allow custom function to wait for termination. Useful in tests.
   def start(args: Array[String], makeSystem: Config => ActorSystem,
             waitForTermination: (ActorSystem, String, String) => Unit) {
-
+    sys.props.get("spark.jobserver.tmpDir").foreach{ tmpDir =>
+      FileUtils.forceDeleteOnExit(new File(tmpDir))
+    }
     val clusterAddress = AddressFromURIString.parse(args(0))
     val managerName = args(1)
     val loadedConfig = getConfFromFS(args(2)).getOrElse(exitJVM)

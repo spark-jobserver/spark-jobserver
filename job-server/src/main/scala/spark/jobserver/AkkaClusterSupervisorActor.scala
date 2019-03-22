@@ -1,7 +1,6 @@
 package spark.jobserver
 
 import java.nio.file.{Files, Paths}
-import java.nio.charset.Charset
 import java.util.concurrent.TimeUnit
 
 import akka.actor._
@@ -20,12 +19,10 @@ import spark.jobserver.common.akka.InstrumentedActor
 
 import scala.concurrent.Await
 import org.joda.time.DateTime
-import org.slf4j.LoggerFactory
 import spark.jobserver.JobManagerActor.{GetContexData, ContexData, SparkContextDead, RestartExistingJobs}
-import spark.jobserver.JobManagerActor.ContextTerminatedException
 import spark.jobserver.io.{JobDAOActor, ContextInfo, ContextStatus, JobStatus, ErrorData}
 import spark.jobserver.util.{InternalServerErrorException, NoCallbackFoundException,
-  ContextJVMInitializationTimeout, ContextForcefulKillTimeout}
+  ContextJVMInitializationTimeout}
 import com.google.common.annotations.VisibleForTesting
 
 object AkkaClusterSupervisorActor {
@@ -527,9 +524,8 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
     }.getOrElse(Files.createTempDirectory("jobserver"))
     logger.info("Created working directory {} for context {}", contextDir: Any, name)
 
-    val launcher = new ManagerLauncher(config, contextConfig,
-        selfAddress.toString, encodedContextName, contextActorName, contextDir.toString)
-
+    val launcher = ManagerLauncher(config, contextConfig,
+      selfAddress.toString, encodedContextName, contextActorName, contextDir.toString)
     launcher.start()
   }
 
