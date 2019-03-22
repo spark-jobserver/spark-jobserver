@@ -75,7 +75,6 @@ class ZookeeperMigrationActorSpec extends JobSpecBase(MigrationActorSpec.getNewS
   val sampleContextId = "contextName"
 
   before {
-    testServer.createBaseDir(testDir)
     daoActorProb = TestProbe()
     migrationActor = system.actorOf(ZookeeperMigrationActor.props(config, DummyDao))
   }

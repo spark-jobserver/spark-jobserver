@@ -16,7 +16,6 @@ class ZookeeperUtilsSpec extends FunSpec with Matchers with BeforeAndAfter {
   import JsonProtocols._
 
   before {
-    testServer.createBaseDir(testPath)
     client = zookeeperUtils.getClient
     zookeeperUtils.delete(client, "/")
   }
