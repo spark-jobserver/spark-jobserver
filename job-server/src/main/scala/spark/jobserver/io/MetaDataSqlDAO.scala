@@ -6,12 +6,11 @@ import scala.concurrent.{Await, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.DurationInt
 import scala.reflect.runtime.universe
-
 import com.typesafe.config.Config
-import org.flywaydb.core.Flyway
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import slick.driver.JdbcProfile
+import spark.jobserver.util.Utils
 
 class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
   private val logger = LoggerFactory.getLogger(getClass)
@@ -22,12 +21,7 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
 
   import profile.api._
 
-  // TODO: migrateLocations should be removed when tests have a running configuration
-  val migrateLocations = config.getString("flyway.locations")
-  val initOnMigrate = config.getBoolean("flyway.initOnMigrate")
-
-  // Server initialization
-  init()
+  sqlCommon.initFlyway()
 
   /** Persist a context info.
     *
@@ -215,16 +209,6 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
   def deleteBinary(name: String): Future[Boolean] = {
     val deleteBinary = sqlCommon.binaries.filter(_.appName === name).delete
     sqlCommon.db.run(deleteBinary).map(_ > 0).recover(logDeleteErrors)
-  }
-
-  private def init() {
-    // Flyway migration
-    val flyway = new Flyway()
-    flyway.setDataSource(sqlCommon.jdbcUrl, sqlCommon.jdbcUser, sqlCommon.jdbcPassword)
-    // TODO: flyway.setLocations(migrateLocations) should be removed when tests have a running configuration
-    flyway.setLocations(migrateLocations)
-    flyway.setBaselineOnMigrate(initOnMigrate)
-    flyway.migrate()
   }
 
   private def binaryInfoFromRow(row: (Int, String, String, Timestamp, Array[Byte])): BinaryInfo = row match {

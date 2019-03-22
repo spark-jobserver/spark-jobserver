@@ -1,8 +1,9 @@
 package spark.jobserver.util
 
-import java.io.{BufferedReader, File, Reader}
+import java.io.{File, InputStream}
 
 import com.typesafe.config.Config
+import org.apache.commons.io.IOUtils
 import org.apache.hadoop.conf.Configuration
 import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
 
@@ -24,10 +25,24 @@ class HadoopFSFacadeSpec extends FunSpec with Matchers with BeforeAndAfterAll wi
   }
 
   describe("write, delete and save the data") {
+    // Jobserver needs to read config files and jars files from HDFS.
+    // This test makes sure that HadoopFSFacade can save and get any type of data.
+    it("should work for all input types for save and get (local FS)") {
+      val invalidUTF8Input = Seq("Ḽơᶉëᶆ ȋṕšᶙṁ", "� � � � ")
+        invalidUTF8Input.foreach{ input =>
+        new File(testFilePath).exists() should equal(false)
+        hdfsFacade.save(testFilePath, input.toCharArray.map(_.toByte))
+        streamToByteArray(hdfsFacade.get(testFilePath).get) should be(input.toCharArray.map(_.toByte))
+        new File(testFilePath).exists() should equal(true)
+        hdfsFacade.delete(testFilePath) should equal(true)
+        hdfsFacade.get(testFilePath) should equal(None)
+      }
+    }
+
     it("should write, get and delete the file without schema (local FS)") {
       new File(testFilePath).exists() should equal(false)
       hdfsFacade.save(testFilePath, "test".toCharArray.map(_.toByte))
-      readerToString(hdfsFacade.get(testFilePath).get) should equal("test")
+      streamToString(hdfsFacade.get(testFilePath).get) should equal("test")
       new File(testFilePath).exists() should equal(true)
       hdfsFacade.delete(testFilePath) should equal(true)
       hdfsFacade.get(testFilePath) should equal(None)
@@ -38,13 +53,31 @@ class HadoopFSFacadeSpec extends FunSpec with Matchers with BeforeAndAfterAll wi
       config.set("fs.defaultFS", testClusterUrl)
       hdfsFacade = new HadoopFSFacade(config)
       hdfsFacade.save(testFilePath, "test".toCharArray.map(_.toByte))
-      readerToString(hdfsFacade.get(testFilePath).get) should equal("test")
+      streamToString(hdfsFacade.get(testFilePath).get) should equal("test")
       // check operations with full uri as well, to be sure that it's hdfs, not local system
-      readerToString(hdfsFacade.get(s"$testClusterUrl/$testFilePath").get) should equal("test")
+      streamToString(hdfsFacade.get(s"$testClusterUrl/$testFilePath").get) should equal("test")
       hdfsFacade.delete(testFilePath) should equal(true)
       hdfsFacade.delete(s"$testClusterUrl/$testFilePath") should equal(false)
       hdfsFacade.get(testFilePath) should equal(None)
       hdfsFacade.get(s"$testClusterUrl/$testFilePath") should equal(None)
+    }
+
+    it("should work for all input types for write, get and delete the file (HDFS)") {
+      val invalidUTF8Input = Seq("Ḽơᶉëᶆ ȋṕšᶙṁ", "� � � � ")
+      invalidUTF8Input.foreach { input =>
+        val config = new Configuration()
+        config.set("fs.defaultFS", testClusterUrl)
+        hdfsFacade = new HadoopFSFacade(config)
+        hdfsFacade.save(testFilePath, input.toCharArray.map(_.toByte))
+        streamToByteArray(hdfsFacade.get(testFilePath).get) should equal(input.toCharArray.map(_.toByte))
+        // check operations with full uri as well, to be sure that it's hdfs, not local system
+        streamToByteArray(hdfsFacade.get(s"$testClusterUrl/$testFilePath").get) should be(
+          input.toCharArray.map(_.toByte))
+        hdfsFacade.delete(testFilePath) should equal(true)
+        hdfsFacade.delete(s"$testClusterUrl/$testFilePath") should equal(false)
+        hdfsFacade.get(testFilePath) should equal(None)
+        hdfsFacade.get(s"$testClusterUrl/$testFilePath") should equal(None)
+      }
     }
 
     it("should overwrite default scheme if specified") {
@@ -53,8 +86,8 @@ class HadoopFSFacadeSpec extends FunSpec with Matchers with BeforeAndAfterAll wi
       hdfsFacade = new HadoopFSFacade(config, defaultFS = testClusterUrl)
       hdfsFacade.get(s"$testClusterUrl/$testFilePath") should equal(None)
       hdfsFacade.save(testFilePath, "test".toCharArray.map(_.toByte))
-      readerToString(hdfsFacade.get(testFilePath).get) should equal("test")
-      readerToString(hdfsFacade.get(s"$testClusterUrl/$testFilePath").get) should equal("test")
+      streamToString(hdfsFacade.get(testFilePath).get) should equal("test")
+      streamToString(hdfsFacade.get(s"$testClusterUrl/$testFilePath").get) should equal("test")
       hdfsFacade.delete(testFilePath) should equal(true)
     }
 
@@ -63,8 +96,8 @@ class HadoopFSFacadeSpec extends FunSpec with Matchers with BeforeAndAfterAll wi
       config.set("fs.defaultFS", testClusterUrl)
       hdfsFacade = new HadoopFSFacade(config, defaultFS = "file:///")
       hdfsFacade.save(s"hdfs://$testFilePath", "test".toCharArray.map(_.toByte))
-      readerToString(hdfsFacade.get(s"hdfs://$testFilePath").get) should equal("test")
-      readerToString(hdfsFacade.get(s"$testClusterUrl/$testFilePath").get) should equal("test")
+      streamToString(hdfsFacade.get(s"hdfs://$testFilePath").get) should equal("test")
+      streamToString(hdfsFacade.get(s"$testClusterUrl/$testFilePath").get) should equal("test")
       hdfsFacade.delete(s"hdfs://$testFilePath") should equal(true)
     }
   }
@@ -80,8 +113,11 @@ class HadoopFSFacadeSpec extends FunSpec with Matchers with BeforeAndAfterAll wi
     }
   }
 
-  private def readerToString(is: Reader): String = {
-    val bufferedReader = new BufferedReader(is)
-    Iterator.continually(bufferedReader.readLine).takeWhile(_ != null).mkString
+  private def streamToString(is: InputStream): String = {
+    scala.io.Source.fromInputStream(is).mkString
+  }
+
+  private def streamToByteArray(is: InputStream): Array[Byte] = {
+    IOUtils.toByteArray(is)
   }
 }

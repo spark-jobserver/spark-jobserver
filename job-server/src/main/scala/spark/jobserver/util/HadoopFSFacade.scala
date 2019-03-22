@@ -1,7 +1,6 @@
 package spark.jobserver.util
 
-import java.io.{InputStreamReader, Reader}
-
+import java.io.InputStream
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.slf4j.LoggerFactory
@@ -42,12 +41,11 @@ class HadoopFSFacade(hadoopConf: Configuration = new Configuration(),
     * @param filePath absolute path of the file with any supported protocol file/hdfs/s3
     * @return file stream
     */
-  def get(filePath: String): Option[Reader] = {
+  def get(filePath: String): Option[InputStream] = {
     try {
       val path = new Path(filePath)
       val fs = getFileSystem(filePath)
-      val stream = fs.open(path)
-      Some(new InputStreamReader(stream))
+      Some(fs.open(path))
     } catch {
       case NonFatal(e) =>
         logger.error(e.getMessage)
