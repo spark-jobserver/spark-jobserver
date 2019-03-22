@@ -1,6 +1,6 @@
 package spark.jobserver
 
-import java.io.File
+import java.io.{File, InputStreamReader}
 import java.nio.file.Files
 import java.util.concurrent.TimeUnit
 
@@ -97,7 +97,10 @@ object JobManager {
   private def getConfFromFS(path: String): Option[Config] = {
     new HadoopFSFacade(defaultFS = "file:///").get(path) match {
       case Some(stream) =>
-          Try(Utils.usingResource(stream)(ConfigFactory.parseReader)) match {
+        // Since config contains characters, we convert the input stream
+        // to InputStreamReader.
+        val reader = new InputStreamReader(stream)
+        Try(Utils.usingResource(reader)(ConfigFactory.parseReader)) match {
           case Success(config) => Some(config)
           case Failure(t) =>
             logger.error(t.getMessage)

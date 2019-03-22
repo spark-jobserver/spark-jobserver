@@ -6,7 +6,6 @@ import spark.jobserver.util.HadoopFSFacade
 import spark.jobserver.JobServer.InvalidConfiguration
 import spark.jobserver.util.HDFSClusterLike
 
-
 import scala.concurrent.Await
 import scala.concurrent.duration._
 
@@ -41,11 +40,11 @@ class HdfsBinaryDAOSpec extends FunSpec with Matchers with BeforeAndAfterAll wit
 
   describe("write, get, delete binary data") {
     it("should write, get, delete the file from hdfs") {
-      val testArray: Array[Byte] = Array(1, 4, 4, 1)
+      val validInvalidInput = "Ḽơᶉëᶆ ȋṕšᶙṁ � � � � test 1 4 4 1".toCharArray.map(_.toByte)
       Await.result(
         hdfsDAO.get(testFileName), timeout) should equal (None) // ensure there is no file before
-      Await.result(hdfsDAO.save(testFileName, testArray), timeout) should equal (true)
-      Await.result(hdfsDAO.get(testFileName), timeout).get should equal (testArray)
+      Await.result(hdfsDAO.save(testFileName, validInvalidInput), timeout) should equal (true)
+      Await.result(hdfsDAO.get(testFileName), timeout).get should equal (validInvalidInput)
       Await.result(hdfsDAO.delete(testFileName), timeout) should equal (true)
       Await.result(
         hdfsDAO.get(testFileName), timeout) should equal (None) // ensure there is no file after

@@ -110,6 +110,22 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
     eggFile.delete()
   }
 
+  describe("verify initial setup") {
+    it("should create root dir folder on initialization") {
+      val dummyRootDir = "/tmp/dummy"
+
+      val rootDir = new File(dummyRootDir)
+      rootDir.exists() should be (false)
+
+      dao = new JobSqlDAO(config.withValue("spark.jobserver.sqldao.rootdir",
+        ConfigValueFactory.fromAnyRef(dummyRootDir)))
+
+      rootDir.exists() should be (true)
+
+      rootDir.delete() // cleanup
+    }
+  }
+
   describe("save and get the jars") {
     it("should be able to save one jar and get it back") {
       jarFile.exists() should equal (false)

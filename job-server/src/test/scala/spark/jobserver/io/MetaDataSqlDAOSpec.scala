@@ -2,11 +2,10 @@ package spark.jobserver.io
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
-
 import java.io.File
 
 import com.google.common.io.Files
-import com.typesafe.config.{Config, ConfigFactory}
+import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, FunSpecLike, Matchers}
 import spark.jobserver.TestJarFinder
@@ -25,20 +24,21 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
   val time: DateTime = new DateTime()
   val throwable: Throwable = new Throwable("test-error")
   // jar test data
+  val rootDirKey = "spark.jobserver.combineddao.rootdir"
   val jarInfo: BinaryInfo = genJarInfo(false, false)
   val jarBytes: Array[Byte] = Files.toByteArray(testJar)
   var jarFile: File = new File(
-      config.getString("spark.jobserver.sqldao.rootdir"),
+      config.getString(rootDirKey),
       jarInfo.appName + "-" + jarInfo.uploadTime.toString("yyyyMMdd_hhmmss_SSS") + ".jar"
   )
 
   val eggBytes: Array[Byte] = Files.toByteArray(emptyEgg)
   val eggInfo: BinaryInfo = BinaryInfo("myEggBinary", BinaryType.Egg, time)
-  val eggFile: File = new File(config.getString("spark.jobserver.sqldao.rootdir"),
+  val eggFile: File = new File(config.getString(rootDirKey),
     eggInfo.appName + "-" + jarInfo.uploadTime.toString("yyyyMMdd_hhmmss_SSS") + ".egg")
 
   // jobInfo test data
-  val jobInfoNoEndNoErr:JobInfo = genJobInfo(jarInfo, false, JobStatus.Running)
+  val jobInfoNoEndNoErr: JobInfo = genJobInfo(jarInfo, false, JobStatus.Running)
   val expectedJobInfo = jobInfoNoEndNoErr
   val jobInfoSomeEndNoErr: JobInfo = genJobInfo(jarInfo, false, JobStatus.Finished)
   val jobInfoSomeEndSomeErr: JobInfo = genJobInfo(jarInfo, false, ContextStatus.Error)

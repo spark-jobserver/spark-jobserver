@@ -36,4 +36,17 @@ object Utils {
     }
     new File(path).getAbsoluteFile().toURI()
   }
+  
+  def createDirectory(folderPath: String): Unit = {
+    val folder = new File(folderPath)
+    createDirectory(folder)
+  }
+
+  def createDirectory(folder: File): Unit = {
+    if (!folder.exists()) {
+      if (!folder.mkdirs()) {
+        throw new RuntimeException(s"Could not create directory $folder")
+      }
+    }
+  }
 }
