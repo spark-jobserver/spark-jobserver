@@ -64,7 +64,6 @@ object ManagerLauncher {
       env.put("SJSPYTHONPATH", sjsPythonPath)
     }
     val sparkLauncher = new SparkLauncher(env.asJava)
-    sparkLauncher.setMaster(contextSparkMaster)
     new ManagerLauncher(config, contextConfig, masterAddress,
       contextName, contextActorName, contextDir.toString, sparkLauncher)
   }
@@ -97,6 +96,9 @@ class ManagerLauncher(systemConfig: Config, contextConfig: Config, masterAddress
       gcOPTS += s" -Xloggc:$gcFileName"
     }
 
+    val contextSparkMaster = Try(contextConfig.getString("launcher.spark.master"))
+      .getOrElse(SparkMasterProvider.fromConfig(systemConfig).getSparkMaster(systemConfig))
+    launcher.setMaster(contextSparkMaster)
     launcher.setMainClass("spark.jobserver.JobManager")
     launcher.addAppArgs(masterAddress, contextActorName, getEnvironmentVariable("MANAGER_CONF_FILE"))
     launcher.addSparkArg("--conf", s"spark.executor.extraJavaOptions=$loggingOpts")
