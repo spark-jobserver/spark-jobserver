@@ -36,7 +36,7 @@ object Utils {
     }
     new File(path).getAbsoluteFile().toURI()
   }
-  
+
   def createDirectory(folderPath: String): Unit = {
     val folder = new File(folderPath)
     createDirectory(folder)
