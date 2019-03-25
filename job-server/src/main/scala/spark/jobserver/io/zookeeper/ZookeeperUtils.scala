@@ -11,18 +11,19 @@ import scala.util.control.NonFatal
 // Fix type mismatch: java.util.List[String] in curator results
 import scala.collection.JavaConversions._ // scalastyle:ignore
 
-class ZookeeperUtils(connectString: String, baseFolder: String, retries: Int = 5) {
+class ZookeeperUtils(connectString: String, baseFolder: String, retries: Int = 3) {
   private val logger = LoggerFactory.getLogger(getClass)
 
   def getClient: CuratorFramework = {
-      val client = CuratorFrameworkFactory.builder.
-        connectString(connectString).
-        retryPolicy(new RetryNTimes(retries, 500)).
-        namespace(baseFolder).
-        connectionTimeoutMs(1000).
-        build
-      client.start()
-      client
+    val client = CuratorFrameworkFactory.builder.
+      connectString(connectString).
+      retryPolicy(new RetryNTimes(retries, 1000)).
+      namespace(baseFolder).
+      connectionTimeoutMs(2350).
+      sessionTimeoutMs(10000).
+      build
+    client.start()
+    client
   }
 
   def list(client: CuratorFramework, dir: String): Seq[String] = {
