@@ -1,6 +1,6 @@
 package spark.jobserver
 
-import java.io.InputStreamReader
+import java.io.{File, InputStreamReader}
 import java.nio.file.Files
 import java.util.concurrent.TimeUnit
 
@@ -31,6 +31,9 @@ object JobManager {
   def start(args: Array[String], makeSystem: Config => ActorSystem,
             waitForTermination: (ActorSystem, String, String) => Unit) {
 
+    sys.props.get("spark.jobserver.tmpDir").foreach{ tmpDir =>
+      FileUtils.forceDeleteOnExit(new File(tmpDir))
+    }
     val clusterAddress = AddressFromURIString.parse(args(0))
     val managerName = args(1)
     val loadedConfig = getConfFromFS(args(2)).getOrElse(exitJVM)

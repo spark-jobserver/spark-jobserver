@@ -134,10 +134,18 @@ trait DefaultContextLikeImplementations {
   override lazy val pythonPath: Seq[String] = pythonPaths(config)
 
   protected def pythonPaths(config: Config): Seq[String] = {
-    val envPaths = sys.env.get("PYTHONPATH").map(_.split(":").toSeq).getOrElse(Seq())
+    // If Spark driver not in cluster, we use SJSPYTHONPATH
+    val pythonPath = if (!sparkContext.deployMode.equals("cluster")) {
+      sys.env.get("SJSPYTHONPATH")
+    } else {
+      sys.env.get("PYTHONPATH")
+    }
+    val pyFiles = sparkContext.getConf.getOption("spark.submit.pyFiles").
+      map(_.split(",").toSeq).getOrElse(Seq())
+    val envPaths = pythonPath.map(_.split(":").toSeq).getOrElse(Seq())
     val configPaths = config.getStringList("python.paths").asScala
     //Allow relative paths in config:
-    val pyPaths = (envPaths ++ configPaths).map(p => new File(p).getAbsolutePath)
+    val pyPaths = (envPaths ++ configPaths ++ pyFiles).map(p => new File(p).getAbsolutePath)
     logger.info(s"Python paths for context: ${pyPaths.mkString("[", ", ", "]")}")
     pyPaths
   }

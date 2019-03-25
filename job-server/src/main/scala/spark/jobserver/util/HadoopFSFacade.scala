@@ -1,6 +1,7 @@
 package spark.jobserver.util
 
-import java.io.InputStream
+import java.io.{File, InputStream}
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.slf4j.LoggerFactory
@@ -122,6 +123,26 @@ class HadoopFSFacade(hadoopConf: Configuration = new Configuration(),
       }
     }
     FileSystem.get(new Path(filePath).toUri, hadoopConf)
+  }
+
+
+  /**
+    * Download a file from the remote to a local temporary directory. If the input path points to
+    * a local path, returns it with no operation.
+    */
+  def downloadFile(path: String, dist: File): String = {
+    require(path != null, "path cannot be null.")
+    val uri = Utils.resolveURI(path)
+    uri.getScheme match {
+      case "file" | "local" =>
+        path
+      case _ =>
+        val fs = FileSystem.get(uri, hadoopConf)
+        val localFile = new File(dist, uri.getPath)
+        logger.info(s"Downloading ${uri.toString} to ${localFile.getAbsolutePath}.")
+        fs.copyToLocalFile(new Path(uri), new Path(localFile.getAbsolutePath))
+        Utils.resolveURI(localFile.getAbsolutePath).toString
+    }
   }
 }
 

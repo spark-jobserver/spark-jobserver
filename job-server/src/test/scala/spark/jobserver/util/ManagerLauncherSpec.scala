@@ -95,14 +95,14 @@ class ManagerLauncherSpec extends FunSpec with Matchers with BeforeAndAfter with
        stubbedSparkLauncher.getLauncherConfig().containsValue("--conf","spark.driver.memory=1000000") should be (true)
      }
 
-     it("should pass any spark configuration specified in launcher section to SparkLauncher") {
+     it("should pass any spark configuration specified which 'key' must start with 'spark.' in launcher section to SparkLauncher") {
        val contextConfMap = baseContextMap + ("launcher.test.spark.config" -> "dummy")
 
        val launcher = managerLauncherFunc(buildConfig(contextConfMap))
 
        launcher.start()._1 should be (true)
        stubbedSparkLauncher.getLauncherConfig().containsValue("--conf", "spark.driver.memory=1g") should be (true)
-       stubbedSparkLauncher.getLauncherConfig().containsValue("--conf", "test.spark.config=dummy") should be (true)
+       stubbedSparkLauncher.getLauncherConfig().containsValue("--conf", "test.spark.config=dummy") should be (false)
      }
 
      it("should pass spark.proxy.user to SparkLauncher if specified") {
