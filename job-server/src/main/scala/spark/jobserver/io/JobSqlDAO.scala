@@ -99,11 +99,18 @@ class JobSqlDAO(config: Config, sqlCommon: SqlCommon) extends JobDAO with FileCa
     }
   }
 
-  override def getLastUploadTimeAndType(appName: String): Option[(DateTime, BinaryType)] = {
+  override def getBinaryInfo(appName: String): Option[BinaryInfo] = {
     val query = sqlCommon.binaries.filter(_.appName === appName)
       .sortBy(_.uploadTime.desc)
-      .map(b => (b.uploadTime, b.binaryType)).result
-      .map{_.headOption.map(b => (sqlCommon.convertDateSqlToJoda(b._1), BinaryType.fromString(b._2)))}
+      .map(b => (b.binaryType, b.uploadTime, b.binHash)).result
+      .map{_.headOption.map(
+        b => BinaryInfo(
+          appName,
+          BinaryType.fromString(b._1),
+          sqlCommon.convertDateSqlToJoda(b._2),
+          Some(BinaryDAO.hashBytesToString(b._3))
+        )
+      )}
     Await.result(sqlCommon.db.run(query), futureTimeout)
   }
 

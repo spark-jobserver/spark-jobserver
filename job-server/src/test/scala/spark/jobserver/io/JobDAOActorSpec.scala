@@ -90,7 +90,7 @@ object JobDAOActorSpec {
 
     override def getJobConfig(jobId: String): Future[Option[Config]] = ???
 
-    override def getLastUploadTimeAndType(appName: String): Option[(DateTime, BinaryType)] = ???
+    override def getBinaryInfo(appName: String): Option[BinaryInfo] = ???
 
     override def deleteBinary(appName: String): Unit = {
       appName match {
