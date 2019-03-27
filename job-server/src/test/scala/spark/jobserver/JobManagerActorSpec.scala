@@ -823,8 +823,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val contextName = "context-name"
       val daoProbe = TestProbe()
       uploadTestJar("test-jar")
-      val binInfo = dao.getLastUploadTimeAndType("test-jar")
-      val binaryInfo = BinaryInfo("test-jar", binInfo.get._2, binInfo.get._1)
+      val binaryInfo = dao.getBinaryInfo("test-jar").get
       val jobInfo = JobInfo("jobId", contextId, contextName,
           binaryInfo, wordCountClass, JobStatus.Running, DateTime.now(), None, None)
       manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, spyProbe))

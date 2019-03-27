@@ -154,7 +154,7 @@ trait JobDAO {
    * Returns the last upload time for a given app name.
    * @return Some(lastUploadedTime) if the app exists and the list of times is nonempty, None otherwise
    */
-  def getLastUploadTimeAndType(appName: String): Option[(DateTime, BinaryType)]
+  def getBinaryInfo(appName: String): Option[BinaryInfo]
 
 
 
