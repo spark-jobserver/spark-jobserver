@@ -82,7 +82,7 @@ class ZookeeperMigrationActorSpec extends JobSpecBase(MigrationActorSpec.getNewS
   after {
     migrationActor ! PoisonPill
     Utils.usingResource(zkUtils.getClient) {
-      client => zkUtils.delete(client, "/")
+      client => zkUtils.delete(client, "")
     }
     FileUtils.deleteQuietly(new File(migration_file_path, migration_file_name))
   }

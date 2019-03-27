@@ -33,7 +33,7 @@ class MetaDataZookeeperDAOSpec extends FunSpec with TestJarFinder with FunSpecLi
   before {
     Utils.usingResource(zkUtils.getClient) {
       client =>
-        zkUtils.delete(client, "/")
+        zkUtils.delete(client, "")
     }
   }
 

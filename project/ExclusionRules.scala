@@ -10,4 +10,5 @@ object ExclusionRules {
   val excludeQQ = ExclusionRule(organization = "org.scalamacros")
   val excludeJpountz = ExclusionRule(organization = "net.jpountz.lz4", name = "lz4")
   val excludeZookeeper = ExclusionRule(organization = "org.apache.zookeeper", name = "zookeeper")
+  val excludeCurator = ExclusionRule(organization = "org.apache.curator")
 }
