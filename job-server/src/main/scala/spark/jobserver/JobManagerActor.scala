@@ -510,42 +510,45 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
 
     val daoAskTimeout = Timeout(3 seconds)
     // TODO: refactor so we don't need Await, instead flatmap into more futures
-    val resp = Await.result(
-      (daoActor ? JobDAOActor.GetLastUploadTimeAndType(appName))(daoAskTimeout).
-        mapTo[JobDAOActor.LastUploadTimeAndType],
-      daoAskTimeout.duration)
+    val binInfo = Await.result(
+      (daoActor ? JobDAOActor.GetLastBinaryInfo(appName))(daoAskTimeout).
+        mapTo[JobDAOActor.LastBinaryInfo],
+      daoAskTimeout.duration).lastBinaryInfo
 
-    val lastUploadTimeAndType = resp.uploadTimeAndType
-    if (!lastUploadTimeAndType.isDefined) return failed(NoSuchApplication)
-    val (lastUploadTime, binaryType) = lastUploadTimeAndType.get
+      if (binInfo.isEmpty) {
+        failed(NoSuchApplication)
+      }
+      else {
+        val binaryInfo = binInfo.get
 
-    val (jobId, startDateTime) = existingJobInfo match {
-      case Some(info) =>
-        logger.info(s"Restarting a previously terminated job with id ${info.jobId}" +
-            s" and context ${info.contextName}")
-        (info.jobId, info.startTime)
-      case None =>
-        logger.info(s"Creating new JobId for current job")
-        (java.util.UUID.randomUUID().toString(), DateTime.now())
-    }
+        val (jobId, startDateTime) = existingJobInfo match {
+          case Some(info) =>
+            logger.info(s"Restarting a previously terminated job with id ${info.jobId}" +
+              s" and context ${info.contextName}")
+            (info.jobId, info.startTime)
+          case None =>
+            logger.info(s"Creating new JobId for current job")
+            (java.util.UUID.randomUUID().toString, DateTime.now())
+        }
 
-    val jobContainer = factory.loadAndValidateJob(appName, lastUploadTime,
-                                                  classPath, jobCache) match {
-      case Good(container) => container
-      case Bad(JobClassNotFound) => return failed(NoSuchClass)
-      case Bad(JobWrongType) => return failed(WrongJobType)
-      case Bad(JobLoadError(ex)) => return failed(JobLoadingError(ex))
-    }
+        val jobContainer = factory.loadAndValidateJob(appName, binaryInfo.uploadTime,
+          classPath, jobCache) match {
+          case Good(container) => container
+          case Bad(JobClassNotFound) => return failed(NoSuchClass)
+          case Bad(JobWrongType) => return failed(WrongJobType)
+          case Bad(JobLoadError(ex)) => return failed(JobLoadingError(ex))
+        }
 
-    // Automatically subscribe the sender to events so it starts getting them right away
-    resultActor ! Subscribe(jobId, sender, events)
-    statusActor ! Subscribe(jobId, sender, events)
+        // Automatically subscribe the sender to events so it starts getting them right away
+        resultActor ! Subscribe(jobId, sender, events)
+        statusActor ! Subscribe(jobId, sender, events)
 
-    val binInfo = BinaryInfo(appName, binaryType, lastUploadTime)
-    val jobInfo = JobInfo(jobId, contextId, contextName, binInfo, classPath,
-        JobStatus.Running, startDateTime, None, None)
+        val jobInfo = JobInfo(jobId, contextId, contextName, binaryInfo, classPath,
+          JobStatus.Running, startDateTime, None, None)
 
-    Some(getJobFuture(jobContainer, jobInfo, jobConfig, sender, jobContext, sparkEnv))
+        Some(getJobFuture(jobContainer, jobInfo, jobConfig, sender, jobContext, sparkEnv))
+      }
+
   }
 
   private def getJobFuture(container: JobContainer,
