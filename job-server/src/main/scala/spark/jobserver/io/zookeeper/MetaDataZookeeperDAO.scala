@@ -329,4 +329,35 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
       }
     }
   }
+
+  /**
+    * Gets the jobs by binary name.
+    *
+    * The behavior of this function differs from other dao implementations.
+    * In other dao's, if user deletes a binary and then tries to fetch the
+    * associated job then jobserver will not return anything. This is due to
+    * the join between Jobs & binaries table. This behavior is not correct.
+    *
+    * Whereas in Zookeeper dao, user can still get the jobs even if the
+    * binaries are deleted.
+    * @param binName Name of binary
+    * @param statuses List of job statuses
+    * @return Sequence of all job infos matching query
+    */
+  override def getJobsByBinaryName(binName: String, statuses: Option[Seq[String]] = None):
+      Future[Seq[JobInfo]] = {
+    Future {
+      Utils.usingResource(zookeeperUtils.getClient) {
+        client =>
+          zookeeperUtils.sync(client, binariesDir)
+          lazy val jobsUsingBinName = zookeeperUtils.list(client, jobsDir)
+                                        .flatMap(id => readJobInfo(client, id))
+                                        .filter(_.binaryInfo.appName == binName)
+          statuses match {
+            case None => jobsUsingBinName
+            case Some(states) => jobsUsingBinName.filter(j => states.contains(j.state))
+          }
+      }
+    }
+  }
 }

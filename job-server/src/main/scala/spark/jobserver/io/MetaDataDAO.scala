@@ -71,6 +71,14 @@ trait MetaDataDAO {
   def getJobsByContextId(contextId: String, statuses: Option[Seq[String]] = None): Future[Seq[JobInfo]]
 
   /**
+    * Return all jobs using a certain binary
+    * @param binName Name of binary
+    * @param statuses List of job statuses
+    * @return Sequence of all job infos matching query
+    */
+  def getJobsByBinaryName(binName: String, statuses: Option[Seq[String]] = None): Future[Seq[JobInfo]]
+
+  /**
     * Persist a job configuration along with provided job id.
     *
     * @param id
