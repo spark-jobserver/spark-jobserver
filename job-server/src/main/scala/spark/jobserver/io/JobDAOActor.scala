@@ -45,6 +45,7 @@ object JobDAOActor {
   case class GetContextInfoByName(name: String) extends JobDAORequest
   case class GetContextInfos(limit: Option[Int] = None,
       statuses: Option[Seq[String]] = None) extends JobDAORequest
+  case class GetJobsByBinaryName(appName: String, statuses: Option[Seq[String]] = None) extends JobDAORequest
 
   //Responses
   sealed trait JobDAOResponse
@@ -90,6 +91,9 @@ class JobDAOActor(dao: JobDAO, migrationActor: ActorRef, migrationAddress: Strin
 
     case GetBinaryPath(appName, binType, uploadTime) =>
       sender() ! BinaryPath(dao.getBinaryFilePath(appName, binType, uploadTime))
+
+    case GetJobsByBinaryName(binName, statuses) =>
+      dao.getJobsByBinaryName(binName, statuses).map(JobInfos).pipeTo(sender)
 
     case SaveContextInfo(contextInfo) =>
       saveContextAndRespond(sender, contextInfo)

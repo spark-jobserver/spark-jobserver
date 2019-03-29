@@ -10,7 +10,6 @@ import com.typesafe.config.Config
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import slick.driver.JdbcProfile
-import spark.jobserver.util.Utils
 
 class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
   private val logger = LoggerFactory.getLogger(getClass)
@@ -209,6 +208,10 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
   def deleteBinary(name: String): Future[Boolean] = {
     val deleteBinary = sqlCommon.binaries.filter(_.appName === name).delete
     sqlCommon.db.run(deleteBinary).map(_ > 0).recover(logDeleteErrors)
+  }
+
+  def getJobsByBinaryName(binName: String, statuses: Option[Seq[String]] = None): Future[Seq[JobInfo]] = {
+    sqlCommon.getJobsByBinaryName(binName, statuses)
   }
 
   private def binaryInfoFromRow(row: (Int, String, String, Timestamp, Array[Byte])): BinaryInfo = row match {

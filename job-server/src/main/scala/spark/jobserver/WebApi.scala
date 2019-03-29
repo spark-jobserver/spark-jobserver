@@ -171,6 +171,7 @@ class WebApi(system: ActorSystem,
   implicit val ShortTimeout =
     Timeout(config.getDuration("spark.jobserver.short-timeout", TimeUnit.MILLISECONDS), TimeUnit.MILLISECONDS)
   val DefaultSyncTimeout = Timeout(10 seconds)
+  val DefaultBinaryDeletionTimeout = Timeout(10.seconds)
   val DefaultJobLimit = 50
   val StatusKey = "status"
   val ResultKey = "result"
@@ -316,17 +317,25 @@ class WebApi(system: ActorSystem,
       // DELETE /binaries/<appName>
       delete {
         path(Segment) { appName =>
-          logger.info(s"DELETE /binaries/$appName");
-          val future = binaryManager ? DeleteBinary(appName)
+          logger.info(s"DELETE /binaries/$appName")
+          val future = (binaryManager ? DeleteBinary(appName))(DefaultBinaryDeletionTimeout)
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
             future.map {
               case BinaryDeleted =>
-                val stcode = StatusCodes.OK;
-                logger.info("StatusCode: " + stcode);
+                val stcode = StatusCodes.OK
+                logger.info("StatusCode: " + stcode)
                 ctx.complete(stcode)
+              case BinaryInUse(jobs) =>
+                logAndComplete(ctx,
+                              s"Binary is in use by job(s): ${jobs.mkString(", ")}",
+                              StatusCodes.Forbidden)
               case NoSuchBinary => notFound(ctx, s"can't find binary with name $appName")
+              case BinaryDeletionFailure(ex) =>
+                logAndComplete(ctx,
+                              s"Failed to delete binary due to internal error. Check logs.",
+                              StatusCodes.InternalServerError)
             }.recover {
-              case e: Exception => logAndComplete(ctx, "ERROR", 500, e);
+              case e: Exception => logAndComplete(ctx, "ERROR", 500, e)
             }
           }
         }

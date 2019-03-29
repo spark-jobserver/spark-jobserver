@@ -63,6 +63,14 @@ trait JobDAO {
   def getBinaryFilePath(appName: String, binaryType: BinaryType, uploadTime: DateTime): String
 
   /**
+    * Return all jobs using a certain binary
+    * @param binName Name of binary
+    * @param statuses List of job statuses
+    * @return Sequence of all job infos matching query
+    */
+  def getJobsByBinaryName(binName: String, statuses: Option[Seq[String]] = None): Future[Seq[JobInfo]]
+
+  /**
    * Persist a context info.
    *
    * @param contextInfo

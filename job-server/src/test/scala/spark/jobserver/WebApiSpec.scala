@@ -152,6 +152,8 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
       case StoreBinary(_, _, _)         => sender ! BinaryStored
 
       case DeleteBinary("badbinary") => sender ! NoSuchBinary
+      case DeleteBinary("active") => sender ! BinaryInUse(Seq("job-active"))
+      case DeleteBinary("failure") => sender ! BinaryDeletionFailure(new Exception("deliberate"))
       case DeleteBinary(_) => sender ! BinaryDeleted
 
       case DataManagerActor.StoreData("errorfileToRemove", _) => sender ! DataManagerActor.Error

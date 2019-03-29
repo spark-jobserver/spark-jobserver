@@ -7,7 +7,7 @@ import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfterAll, FunSpecLike, Matchers}
 import spark.jobserver.common.akka.{AkkaTestUtils, InstrumentedActor}
-import spark.jobserver.io.BinaryType
+import spark.jobserver.io.{BinaryInfo, BinaryType, JobInfo, JobStatus}
 
 object BinaryManagerSpec {
   val system = ActorSystem("binary-manager-test")
@@ -18,6 +18,9 @@ object BinaryManagerSpec {
 
     import spark.jobserver.io.JobDAOActor._
 
+    val jobInfo = JobInfo("bar", "cid", "context", BinaryInfo("demo", BinaryType.Egg, DateTime.now),
+        "com.abc.meme", JobStatus.Running, DateTime.now, None, None)
+
     override def wrappedReceive: Receive = {
       case GetApps(_) =>
         sender ! Apps(Map("app1" -> (BinaryType.Jar, dt)))
@@ -27,6 +30,12 @@ object BinaryManagerSpec {
         sender ! SaveBinaryResult(Success({}))
       case DeleteBinary(_) =>
         sender ! DeleteBinaryResult(Success({}))
+      case GetJobsByBinaryName(appName, statuses) =>
+        appName match {
+          case "empty" => sender ! JobInfos(Seq())
+          case "running" => sender ! JobInfos(Seq(jobInfo))
+          case "fail" =>
+        }
     }
   }
 }
@@ -65,9 +74,19 @@ class BinaryManagerSpec extends TestKit(BinaryManagerSpec.system) with ImplicitS
       expectMsgPF(3 seconds){case BinaryStorageFailure(ex) if ex.getMessage == "deliberate failure" => }
     }
 
-    it("should respond when deleted successfully") {
-      binaryManager ! DeleteBinary("valid")
-      expectMsg(BinaryDeleted)
+    it("should respond when deleted successfully if no active job is using the binary") {
+      binaryManager ! DeleteBinary("empty")
+      expectMsg(3.seconds, BinaryDeleted)
+    }
+
+    it("should not delete if binary is still in use") {
+      binaryManager ! DeleteBinary("running")
+      expectMsg(3.seconds, BinaryInUse(Seq("bar")))
+    }
+
+    it("should handle failures during deletion of binary and within timeout") {
+      binaryManager ! DeleteBinary("fail")
+      expectMsgType[BinaryDeletionFailure](BinaryManager.DELETE_TIMEOUT + 1.seconds)
     }
   }
 }

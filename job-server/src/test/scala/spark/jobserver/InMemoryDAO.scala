@@ -126,7 +126,12 @@ class InMemoryDAO extends JobDAO {
     Await.result(getApps, 60 seconds).get(appName).map(t => BinaryInfo(appName, t._1, t._2))
   }
 
-override def deleteBinary(appName: String): Unit = {
+  override def deleteBinary(appName: String): Unit = {
     binaries = binaries.filter { case ((name, _, _), _) => appName != name }
+  }
+
+  override def getJobsByBinaryName(binName: String, statuses: Option[Seq[String]] = None):
+      Future[Seq[JobInfo]] = {
+    throw new NotImplementedError()
   }
 }

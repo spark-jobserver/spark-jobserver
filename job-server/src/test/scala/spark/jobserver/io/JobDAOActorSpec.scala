@@ -99,6 +99,21 @@ object JobDAOActorSpec {
       }
     }
 
+    override def getJobsByBinaryName(binName: String, statuses: Option[Seq[String]] = None):
+        Future[Seq[JobInfo]] = {
+      binName match {
+        case "empty" => Future.successful(Seq.empty)
+        case "multiple" =>
+          val dt = DateTime.parse("2013-05-29T00Z")
+          val jobInfo =
+            JobInfo("bar", "cid", "context", BinaryInfo("demo", BinaryType.Egg, dt),
+              "com.abc.meme", JobStatus.Running, dt, None, None)
+
+          Future.successful(Seq(jobInfo, jobInfo.copy(jobId = "kaboom")))
+        case _ => Future.failed(new Exception("Unknown message"))
+      }
+    }
+
     override def cleanRunningJobInfosForContext(contextName: String, endTime: DateTime): Future[Unit] = {
       cleanupProbe.ref ! contextName
       Future.successful(())
@@ -257,6 +272,19 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       daoActor ! UpdateContextById(contextId3, ContextInfoModifiable(
         ContextStatus.Started))
       expectMsgType[SaveFailed].error.getMessage() should be("deliberate failure")
+    }
+
+    it("should get empty list of jobs if binary name is invalid") {
+      daoActor ! GetJobsByBinaryName("empty")
+      expectMsg(JobInfos(Seq()))
+    }
+
+    it("should get jobs by binary name") {
+      daoActor ! GetJobsByBinaryName("multiple")
+
+      expectMsgPF(5.seconds, "Get the jobs") {
+        case JobInfos(jobs) => jobs.map(_.jobId) should contain allOf("bar", "kaboom")
+      }
     }
   }
 }

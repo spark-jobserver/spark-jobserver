@@ -11,16 +11,14 @@ import scala.collection.convert.Wrappers.JListWrapper
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.DurationInt
 import scala.util.Try
-
 import com.datastax.driver.core._
-import com.datastax.driver.core.querybuilder.{Insert, QueryBuilder => QB }
+import com.datastax.driver.core.querybuilder.{Insert, QueryBuilder => QB}
 import com.datastax.driver.core.querybuilder.QueryBuilder._
 import com.datastax.driver.core.schemabuilder.{Create, SchemaBuilder}
 import com.datastax.driver.core.schemabuilder.SchemaBuilder.Direction
 import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
-
 import spark.jobserver.cassandra.Cassandra.Resultset.toFuture
 
 object Metadata {
@@ -178,6 +176,11 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
     session.execute(fillInsert(insertInto(ContextsTable)))
     session.execute(fillInsert(insertInto(OrderedContextsByNameTable)))
     session.execute(fillInsert(insertInto(OrderedContextsByStateTable)))
+  }
+
+  override def getJobsByBinaryName(binName: String, statuses: Option[Seq[String]] = None):
+      Future[Seq[JobInfo]] = {
+    throw new NotImplementedError()
   }
 
   override def getContextInfo(id: String): Future[Option[ContextInfo]] = {

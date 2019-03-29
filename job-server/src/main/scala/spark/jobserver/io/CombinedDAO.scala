@@ -301,6 +301,11 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
     }
   }
 
+  override def getJobsByBinaryName(binName: String, statuses: Option[Seq[String]] = None):
+      Future[Seq[JobInfo]] = {
+    metaDataDAO.getJobsByBinaryName(binName, statuses)
+  }
+
   /**
     * START: TEMPORARY FUNCTIONS DEFINED ONLY FOR A TIME OF MIGRATION TO ZOOKEEPER
     */

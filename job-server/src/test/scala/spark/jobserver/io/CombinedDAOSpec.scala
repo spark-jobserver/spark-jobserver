@@ -503,6 +503,9 @@ class DummyMetaDataDAO(config: Config) extends MetaDataDAO {
 
   override def getJobs(limit: Int, status: Option[String]): Future[Seq[JobInfo]] = ???
 
+  override def getJobsByBinaryName(binName: String, statuses: Option[Seq[String]] = None):
+    Future[Seq[JobInfo]] = ???
+
   override def getJob(id: String): Future[Option[JobInfo]] = {
     Future.successful(jobInfos.get(id))
   }
