@@ -14,6 +14,7 @@ import spark.jobserver.TestJarFinder
 import scala.concurrent.duration._
 import scala.concurrent.Await
 import org.scalatest._
+import spark.jobserver.util.Utils
 
 @Ignore
 class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers with BeforeAndAfter
@@ -155,7 +156,7 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
       // save job config
       dao.saveJobConfig(jobId, jobConfig)
 
-      val config = Await.result(dao.getJobConfig(jobId), timeout).get
+      val config = Utils.retry(3, retryDelayInMs = 1000)(Await.result(dao.getJobConfig(jobId), timeout).get)
 
       // test
       config should equal (expectedConfig)
