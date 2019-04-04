@@ -38,6 +38,7 @@ trait JobSpecConfig {
       "spark.master" -> "local[*]",
       "context-factory" -> contextFactory,
       "spark.context-settings.test" -> "",
+      "akka.test.timefactor" -> 2,
       "spark.driver.allowMultipleContexts" -> true
     )
     ConfigFactory.parseMap(ConfigMap.asJava).withFallback(ConfigFactory.defaultOverrides())
