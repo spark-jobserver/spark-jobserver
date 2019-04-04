@@ -1,13 +1,12 @@
 package spark.jobserver
 
 import java.nio.file.{Files, Paths}
-import java.nio.charset.Charset
 import java.util.concurrent.TimeUnit
 
 import akka.actor._
 import akka.pattern.ask
 import akka.cluster.Cluster
-import akka.cluster.ClusterEvent.{MemberUp, CurrentClusterState}
+import akka.cluster.ClusterEvent.{MemberEvent, MemberUp, CurrentClusterState}
 import akka.util.Timeout
 
 import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
@@ -20,17 +19,31 @@ import spark.jobserver.common.akka.InstrumentedActor
 
 import scala.concurrent.Await
 import org.joda.time.DateTime
-import org.slf4j.LoggerFactory
 import spark.jobserver.JobManagerActor.{GetContexData, ContexData, SparkContextDead, RestartExistingJobs}
-import spark.jobserver.JobManagerActor.ContextTerminatedException
 import spark.jobserver.io.{JobDAOActor, ContextInfo, ContextStatus, JobStatus, ErrorData}
 import spark.jobserver.util.{InternalServerErrorException, NoCallbackFoundException,
   ContextJVMInitializationTimeout, ContextForcefulKillTimeout, ResolutionFailedOnStopContextException}
 import com.google.common.annotations.VisibleForTesting
+import akka.cluster.singleton.{ClusterSingletonProxy, ClusterSingletonManager, ClusterSingletonProxySettings,
+  ClusterSingletonManagerSettings}
 
 object AkkaClusterSupervisorActor {
   val MANAGER_ACTOR_PREFIX = "jobManager-"
   val ACTOR_NAME = "context-supervisor"
+
+  def props(daoActor : ActorRef, dataManager : ActorRef, cluster : Cluster) : Props =
+    Props(classOf[AkkaClusterSupervisorActor], daoActor, dataManager, cluster)
+
+  def managerProps(daoActor : ActorRef, dataManager : ActorRef, cluster : Cluster) : Props =
+    ClusterSingletonManager.props(
+    singletonProps = props(daoActor, dataManager, cluster),
+    terminationMessage = PoisonPill,
+    settings = ClusterSingletonManagerSettings(cluster.system))
+
+  def proxyProps(system: ActorSystem) : Props = ClusterSingletonProxy.props(
+    singletonManagerPath = "/user/singleton",
+    settings = ClusterSingletonProxySettings(system))
+
 }
 
 /**
@@ -49,6 +62,9 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
   import ContextSupervisor._
   import scala.collection.JavaConverters._
   import scala.concurrent.duration._
+
+  logger.info("Subscribing to MemberUp event")
+  cluster.subscribe(self, classOf[MemberEvent])
 
   val config = context.system.settings.config
   val defaultContextConfig = config.getConfig("spark.context-settings")

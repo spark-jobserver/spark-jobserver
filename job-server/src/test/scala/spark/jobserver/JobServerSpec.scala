@@ -72,7 +72,13 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
     return None
   }
 
-  def makeSupervisorSystem(config: Config): ActorSystem = actorSystem
+  def makeSupervisorSystem(config: Config): ActorSystem = {
+    val configWithRole = config.withValue("akka.cluster.roles",
+      ConfigValueFactory.fromIterable(List("supervisor").asJava))
+    actorSystem = ActorSystem("JobServerSpec", configWithRole)
+    actorSystem
+  }
+
   implicit val timeout: Timeout = 3 seconds
 
   describe("Fails on invalid configuration") {
@@ -193,7 +199,9 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
       resolveActorRef("/user/dao-manager") shouldNot be(None)
       resolveActorRef("/user/data-manager") shouldNot be(None)
       resolveActorRef("/user/binary-manager") shouldNot be(None)
-      resolveActorRef("/user/context-supervisor") shouldNot be (None)
+      resolveActorRef("/user/singleton") shouldNot be (None)
+      resolveActorRef("/user/singleton/context-supervisor") shouldNot be (None)
+      resolveActorRef("/user/context-supervisor-proxy") shouldNot be (None)
       resolveActorRef("/user/job-info") shouldNot be(None)
     }
 

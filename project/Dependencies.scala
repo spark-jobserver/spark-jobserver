@@ -20,6 +20,7 @@ object Dependencies {
     // to use this one
     "com.typesafe.akka" %% "akka-slf4j" % akka,
     "com.typesafe.akka" %% "akka-cluster" % akka exclude("com.typesafe.akka", "akka-remote"),
+    "com.typesafe.akka" %% "akka-cluster-tools" % akka,
     "io.spray" %% "spray-json" % sprayJson,
     "io.spray" %% "spray-can" % spray,
     "io.spray" %% "spray-caching" % spray,

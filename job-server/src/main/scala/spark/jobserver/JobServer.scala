@@ -115,6 +115,7 @@ object JobServer {
       logger.info("Embeded H2 server started with base dir {} and URL {}", rootDir, h2.getURL: Any)
     }
 
+    // Start actors and managers
     val ctor = jobDaoClass.getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
     val jobDAO = ctor.newInstance(config).asInstanceOf[JobDAO]
     val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO), "dao-manager")
@@ -144,18 +145,17 @@ object JobServer {
         // We don't want to read all the old events that happened in the cluster
         // So, we remove the initialStateMode parameter
         cluster.registerOnMemberUp {
-          val supervisor = system.actorOf(Props(classOf[AkkaClusterSupervisorActor],
-            daoActor, dataManager, cluster), "context-supervisor")
-
-          logger.info("Subscribing to MemberUp event")
-          cluster.subscribe(supervisor, classOf[MemberEvent])
+          system.actorOf(AkkaClusterSupervisorActor.managerProps(daoActor, dataManager, cluster),
+              "singleton")
+          val proxy = system.actorOf(AkkaClusterSupervisorActor.proxyProps(system),
+              "context-supervisor-proxy")
 
           if (existingManagerActorRefs.length > 0) {
-            supervisor ! ContextSupervisor.RegainWatchOnExistingContexts(existingManagerActorRefs)
+            proxy ! ContextSupervisor.RegainWatchOnExistingContexts(existingManagerActorRefs)
           }
 
-          supervisor ! ContextSupervisor.AddContextsFromConfig  // Create initial contexts
-          startWebApi(system, supervisor, jobDAO, webApiPF)
+          proxy ! ContextSupervisor.AddContextsFromConfig  // Create initial contexts
+          startWebApi(system, proxy, jobDAO, webApiPF)
         }
     }
   }

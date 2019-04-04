@@ -74,7 +74,13 @@ object JobManager {
       config.getConfig("spark").root.render())
 
     val masterAddress = systemConfig.getBoolean("spark.jobserver.kill-context-on-supervisor-down") match {
-      case true => clusterAddress.toString + "/user/context-supervisor"
+      /*
+       * TODO
+       * Note: This zombie killing logic has to be replaced by a proper split brain
+       * resolver, since the fix of resolving the AkkaClusterSupervisor no longer works
+       * when there is more than one Jobserver in the cluster (as it might be there or not).
+       */
+      case true => clusterAddress.toString + "/user/singleton/context-supervisor"
       case false => ""
     }
 
@@ -161,4 +167,3 @@ object JobManager {
         TimeUnit.MILLISECONDS), TimeUnit.MILLISECONDS)
   }
 }
-
