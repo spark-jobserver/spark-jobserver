@@ -229,39 +229,4 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
       logger.error(e.getMessage, e)
       false
   }
-
-  /**
-    * START: TEMPORARY FUNCTIONS DEFINED ONLY FOR A TIME OF MIGRATION TO ZOOKEEPER
-    */
-
-  override def getAllContextsIds: Future[Seq[String]] = {
-    val query = sqlCommon.contexts.map(_.id).result
-    sqlCommon.db.run(query)
-  }
-
-  override def getAllBinaryInfoForName(name: String): Future[Seq[BinaryInfo]] = {
-    val query = sqlCommon.binaries.filter(_.appName === name).result
-    for (m <- sqlCommon.db.run(query)) yield {
-      m.map(binaryInfoFromRow)
-    }
-  }
-
-  override def getAllJobIdsToSync: Future[Seq[String]] = {
-    val query = sqlCommon.jobs.map(_.jobId).result
-    sqlCommon.db.run(query)
-  }
-
-  override def getJobsWithoutBinaries: Future[Seq[String]] = {
-    // SELECT JOBS.JOB_ID FROM JOBS LEFT JOIN BINARIES ON (BINARIES.BIN_ID = JOBS.BIN_ID)
-    // WHERE BINARIES.BIN_ID IS NULL;
-    val jobWithoutBinaries = for {
-      (job, bin) <- sqlCommon.jobs.joinLeft(sqlCommon.binaries).on(_.binId === _.binId)
-      if bin.isEmpty
-    } yield job.jobId
-    sqlCommon.db.run(jobWithoutBinaries.result)
-  }
-
-  /**
-    * END: TEMPORARY FUNCTIONS DEFINED ONLY FOR A TIME OF MIGRATION TO ZOOKEEPER
-    */
 }

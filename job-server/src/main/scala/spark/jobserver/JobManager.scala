@@ -81,11 +81,10 @@ object JobManager {
       case NonFatal(e) =>
         logger.error(s"Failed to obtain ActorRef for Zookeeper migration actor: ${e.getMessage}")
         logger.error(s"Creating own instance of Migration Actor:")
-        system.actorOf(ZookeeperMigrationActor.props(config, jobDAO), "dao-manager-migration-actor")
+        system.actorOf(ZookeeperMigrationActor.props(config), "dao-manager-migration-actor")
     }
 
-    val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO,
-      zookeeperMigrationActor, clusterAddress.toString + "/user/migration-actor"),
+    val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO, zookeeperMigrationActor),
       "dao-manager-jobmanager")
 
     logger.info("Starting JobManager named " + managerName + " with config {}",

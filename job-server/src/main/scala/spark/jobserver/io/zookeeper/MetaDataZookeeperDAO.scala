@@ -360,27 +360,4 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
       }
     }
   }
-
-  /**
-    * START: TEMPORARY FUNCTIONS DEFINED ONLY FOR A TIME OF MIGRATION TO ZOOKEEPER
-    */
-
-  /**
-    * To avoid writing each version of binary in a separate call (introduces concurrency,
-    * opens too many connections to Zookeeper), write all binaryInfo belonging to one name
-    * in one call
-    */
-  def saveBinaryList(name: String, binaries: Seq[BinaryInfo]): Future[Boolean] = {
-    logger.debug("Saving binary")
-    Future {
-      Utils.usingResource(zookeeperUtils.getClient) {
-        client =>
-          zookeeperUtils.write[Seq[BinaryInfo]](client, binaries, s"$binariesDir/$name")
-      }
-    }
-  }
-
-  /**
-    * END: TEMPORARY FUNCTIONS DEFINED ONLY FOR A TIME OF MIGRATION TO ZOOKEEPER
-    */
 }

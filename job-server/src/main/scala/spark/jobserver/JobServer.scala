@@ -114,9 +114,8 @@ object JobServer {
 
     val ctor = jobDaoClass.getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
     val jobDAO = ctor.newInstance(config).asInstanceOf[JobDAO]
-    val migrationActorRef = system.actorOf(
-      ZookeeperMigrationActor.props(config, jobDAO, dumpH2 = true), "migration-actor")
-    val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO, migrationActorRef, ""), "dao-manager")
+    val migrationActorRef = system.actorOf(ZookeeperMigrationActor.props(config), "migration-actor")
+    val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO, migrationActorRef), "dao-manager")
     val dataFileDAO = new DataFileDAO(config)
     val dataManager = system.actorOf(Props(classOf[DataManagerActor], dataFileDAO), "data-manager")
     val binManager = system.actorOf(Props(classOf[BinaryManager],
