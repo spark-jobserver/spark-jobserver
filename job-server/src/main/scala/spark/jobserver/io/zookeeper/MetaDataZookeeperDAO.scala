@@ -380,26 +380,6 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
     }
   }
 
-  def saveFindBinaryStorageIdAndSave(jobInfo: JobInfo): Future[Boolean] = {
-      Utils.usingResource(zookeeperUtils.getClient) {
-        client =>
-          zookeeperUtils.read[Seq[BinaryInfo]](client, s"$binariesDir/" + jobInfo.binaryInfo.appName) match {
-            case Some(infoForBinary) =>
-              // identified by name AND uploadTime
-              infoForBinary.find(_.uploadTime.getMillis == jobInfo.binaryInfo.uploadTime.getMillis) match {
-                case Some(binInfo) => saveJob(jobInfo.copy(binaryInfo = binInfo))
-                case None =>
-                  logger.debug(s"Didn't find a binary ${jobInfo.binaryInfo.appName} and " +
-                    s"upload time ${jobInfo.binaryInfo.uploadTime}. Saving job as it is.")
-                  saveJob(jobInfo)
-              }
-            case None =>
-              logger.debug(s"Didn't find a binary ${jobInfo.binaryInfo.appName}. Saving job as it is.")
-              saveJob(jobInfo)
-          }
-    }
-  }
-
   /**
     * END: TEMPORARY FUNCTIONS DEFINED ONLY FOR A TIME OF MIGRATION TO ZOOKEEPER
     */

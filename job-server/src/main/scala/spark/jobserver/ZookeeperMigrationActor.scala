@@ -383,7 +383,7 @@ class ZookeeperMigrationActor(config: Config,
       totalLiveRequests.inc()
       logger.info(s"Saving job info with id: ${jobInfo.jobId}")
       val timer = liveSaveTimer.time()
-      zkDao.saveFindBinaryStorageIdAndSave(jobInfo) onComplete {
+      zkDao.saveJob(jobInfo) onComplete {
         case Success(true) =>
           timer.stop()
           totalLiveSuccessfulSaveJobRequests.inc()
@@ -396,6 +396,7 @@ class ZookeeperMigrationActor(config: Config,
           logger.error(s"Got exception trying to save job info with id: ${jobInfo.jobId}", t)
           totalLiveFailedSaveJobRequests.inc()
       }
+
   }
 
   override def wrappedReceive: Receive = liveRequestHandlers.orElse(syncHandlers)
