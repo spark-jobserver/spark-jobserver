@@ -44,19 +44,12 @@ object CombinedDAOTestHelper {
 class CombinedDAOSpec extends CombinedDAOSpecBase with FunSpecLike with BeforeAndAfterAll
   with Matchers{
 
-    val rootDirKey = "spark.jobserver.combineddao.rootdir"
-    val baseRootDir = "/tmp/spark-job-server-test"
-    val rootDir = s"$baseRootDir/combineddao"
-    def config: Config = ConfigFactory.parseString(
-      s"""
-        |$rootDirKey = $rootDir,
-        |spark.jobserver.combineddao.binarydao.class = spark.jobserver.io.DummyBinaryDAO,
-        |spark.jobserver.combineddao.metadatadao.class = spark.jobserver.io.DummyMetaDataDAO
-        |spark.jobserver.cache-on-upload = false
-      """.stripMargin
-    )
-    val daoTimeout: FiniteDuration = 3 seconds
-    var dao: CombinedDAO = new CombinedDAO(config)
+    def config: Config = ConfigFactory.load("local.test.combineddao.conf")
+    private val rootDirKey = "spark.jobserver.combineddao.rootdir"
+    private val baseRootDir = config.getString(rootDirKey)
+    private val rootDir = s"$baseRootDir/combineddao"
+    private val daoTimeout: FiniteDuration = 3 seconds
+    private var dao: CombinedDAO = new CombinedDAO(config)
 
     override def beforeAll() {
       Files.createDirectories(Paths.get(rootDir))

@@ -1,15 +1,25 @@
 package spark.jobserver.io.zookeeper
 
+import com.typesafe.config.{Config, ConfigFactory}
 import org.joda.time.DateTime
 import spark.jobserver.io.{BinaryInfo, BinaryType}
 import org.scalatest.{BeforeAndAfter, FunSpec, Matchers}
 import spark.jobserver.util.{CuratorTestCluster, JsonProtocols}
 import org.apache.curator.framework.CuratorFramework
+import spark.jobserver.JobServer.InvalidConfiguration
 
 class ZookeeperUtilsSpec extends FunSpec with Matchers with BeforeAndAfter {
-  private val testPath = "sjstest"
   private val testServer = new CuratorTestCluster()
-  private val zookeeperUtils = new ZookeeperUtils(testServer.getConnectString, testPath, 1)
+
+  def config: Config = ConfigFactory.parseString(
+    s"""
+       |spark.jobserver.zookeeperdao.connection-string = "${testServer.getConnectString}",
+       |""".stripMargin
+  ).withFallback(
+    ConfigFactory.load("local.test.combineddao.conf")
+  )
+
+  private val zookeeperUtils = new ZookeeperUtils(config)
   private val testInfo = BinaryInfo("test", BinaryType.Jar, DateTime.now())
   private var client: CuratorFramework = _
 
@@ -63,14 +73,40 @@ class ZookeeperUtilsSpec extends FunSpec with Matchers with BeforeAndAfter {
 
   describe("test zookeeper connection") {
     it("should return false for write operation if connection is lost") {
-      val zkUtils2 = new ZookeeperUtils("ip_address_doesnt_exist", testPath, 1)
+      def modifiedConfig: Config = ConfigFactory.parseString(
+        "spark.jobserver.zookeeperdao.connection-string = ip_address_doesnt_exist"
+      )
+      val zkUtils2 = new ZookeeperUtils(modifiedConfig.withFallback(config))
       zkUtils2.write[BinaryInfo](zkUtils2.getClient, testInfo, "/testfile1") should equal(false)
     }
 
     it("should not see other namespaces") {
       zookeeperUtils.list(client, "").sorted should equal(Seq())
-      val zkUtils2 = new ZookeeperUtils(testServer.getConnectString, "", 1)
+      def modifiedConfig: Config = ConfigFactory.parseString(
+        """
+          spark.jobserver.zookeeperdao.dir = ""
+        """
+      )
+      val zkUtils2 = new ZookeeperUtils(modifiedConfig.withFallback(config))
       zkUtils2.list(zkUtils2.getClient, "") should equal(Seq("zookeeper"))
+    }
+  }
+
+  describe("should validate that configuration has all parameteres") {
+    it("should throw InvalidConfiguration if zookeeper connection string is missing in config") {
+      assertThrows[InvalidConfiguration] {
+        new ZookeeperUtils (
+          config.withoutPath("spark.jobserver.zookeeperdao.connection-string")
+        )
+      }
+    }
+
+    it("should throw InvalidConfiguration if zookeeper directory string is missing in config") {
+      assertThrows[InvalidConfiguration] {
+        new ZookeeperUtils (
+          config.withoutPath("spark.jobserver.zookeeperdao.dir")
+        )
+      }
     }
   }
 }

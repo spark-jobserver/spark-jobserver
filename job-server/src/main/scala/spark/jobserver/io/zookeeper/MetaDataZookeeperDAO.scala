@@ -5,7 +5,6 @@ import com.typesafe.config.ConfigRenderOptions
 import com.typesafe.config.ConfigFactory
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
-import spark.jobserver.JobServer.InvalidConfiguration
 import spark.jobserver.io._
 import spark.jobserver.util.JsonProtocols
 import spark.jobserver.util.Utils
@@ -15,8 +14,6 @@ import scala.concurrent.Future
 import org.apache.curator.framework.CuratorFramework
 
 object MetaDataZookeeperDAO {
-  private val baseDirPath = "spark.jobserver.zookeeperdao.dir"
-  private val connectionStringPath = "spark.jobserver.zookeeperdao.connection-string"
   private val binariesDir = "/binaries"
   private val contextsDir = "/contexts"
   private val jobsDir = "/jobs"
@@ -27,25 +24,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
   import JsonProtocols._
 
   private val logger = LoggerFactory.getLogger(getClass)
-
-  /*
-   * Configuration
-   */
-
-  if (!config.hasPath(baseDirPath)) {
-    throw new InvalidConfiguration(
-      s"To use ZooKeeperDAO please specify ZK root dir for DAO in configuration file: $baseDirPath"
-    )
-  }
-
-  if (!config.hasPath(connectionStringPath)) {
-    throw new InvalidConfiguration(
-      s"To use ZooKeeperDAO please specify ZooKeeper connection string: $connectionStringPath"
-    )
-  }
-
-  private val connectionString = config.getString(connectionStringPath)
-  private val zookeeperUtils = new ZookeeperUtils(connectionString, config.getString(baseDirPath))
+  private val zookeeperUtils = new ZookeeperUtils(config)
 
   /*
    * Contexts
