@@ -21,7 +21,7 @@ object ZookeeperUtils {
     "retries" -> "spark.jobserver.zookeeperdao.curator.retries",
     "sleepBetweenRetries" -> "spark.jobserver.zookeeperdao.curator.sleepMsBetweenRetries",
     "connectionTimeout" -> "spark.jobserver.zookeeperdao.curator.connectionTimeoutMs",
-    "sessionTimeout" -> "spark.jobserver.zookeeperdao.curator.sessionTimeuoutMs"
+    "sessionTimeout" -> "spark.jobserver.zookeeperdao.curator.sessionTimeoutMs"
   )
 }
 
