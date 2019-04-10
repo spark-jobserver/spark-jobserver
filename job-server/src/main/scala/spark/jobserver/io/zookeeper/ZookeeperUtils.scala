@@ -7,6 +7,7 @@ import org.apache.curator.retry.RetryNTimes
 import org.apache.curator.utils.ZKPaths
 import org.slf4j.LoggerFactory
 import spark.jobserver.JobServer.InvalidConfiguration
+import spark.jobserver.util.Utils
 import spray.json._
 
 import scala.util.control.NonFatal
@@ -24,7 +25,6 @@ object ZookeeperUtils {
     "sessionTimeout" -> "spark.jobserver.zookeeperdao.curator.sessionTimeoutMs"
   )
 }
-
 
 class ZookeeperUtils(config: Config) {
   import ZookeeperUtils._
@@ -89,7 +89,7 @@ class ZookeeperUtils(config: Config) {
       }
     } catch {
       case NonFatal(e) =>
-        logger.error(e.getMessage)
+        Utils.logStackTrace(logger, e)
         None
     }
   }
@@ -105,7 +105,7 @@ class ZookeeperUtils(config: Config) {
       true
     } catch {
       case NonFatal(e) =>
-        logger.error(e.getMessage)
+        Utils.logStackTrace(logger, e)
         false
     }
   }
@@ -124,7 +124,7 @@ class ZookeeperUtils(config: Config) {
       true
     } catch {
       case NonFatal(e) =>
-        logger.error(e.getMessage)
+        Utils.logStackTrace(logger, e)
         false
     }
   }
