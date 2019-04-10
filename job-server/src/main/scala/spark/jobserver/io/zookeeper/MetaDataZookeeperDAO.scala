@@ -31,7 +31,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
    */
 
   override def saveContext(contextInfo: ContextInfo): Future[Boolean] = {
-    logger.debug("Saving new context")
+    logger.debug(s"Saving context ${contextInfo.id} (state: ${contextInfo.state})")
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
@@ -101,7 +101,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
    */
 
   override def saveJob(jobInfo: JobInfo): Future[Boolean] = {
-    logger.debug("Saving job")
+    logger.debug(s"Saving job ${jobInfo.jobId} (state: ${jobInfo.state})")
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
@@ -206,7 +206,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
    */
 
   override def saveJobConfig(jobId: String, config: Config): Future[Boolean] = {
-    logger.debug("Saving job config")
+    logger.debug(s"Saving job config for job $jobId")
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
@@ -281,7 +281,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
 
   override def saveBinary(name: String, binaryType: BinaryType,
                           uploadTime: DateTime, binaryStorageId: String): Future[Boolean] = {
-    logger.debug("Saving binary")
+    logger.debug(s"Saving binary $name")
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
