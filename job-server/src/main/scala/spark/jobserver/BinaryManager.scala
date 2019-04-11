@@ -39,7 +39,7 @@ case class BinaryStorageFailure(ex: Throwable)
 case class BinaryDeletionFailure(ex: Throwable)
 
 object BinaryManager {
-  val DELETE_TIMEOUT = 3.seconds
+  val DELETE_TIMEOUT = 5.seconds
 }
 
 /**
@@ -77,7 +77,6 @@ class BinaryManager(jobDao: ActorRef, migrationActor: ActorRef) extends Instrume
       val requestor = sender
       val resp = (jobDao ? JobDAOActor.GetApps(filterOpt)).mapTo[JobDAOActor.Apps]
       resp.map { msg => msg.apps } pipeTo requestor
-
 
     case StoreLocalBinaries(localBinaries) =>
       val successF =
