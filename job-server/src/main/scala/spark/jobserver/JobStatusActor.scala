@@ -37,8 +37,11 @@ class JobStatusActor(jobDao: ActorRef) extends InstrumentedActor with YammerMetr
   val metricStatusRates = mutable.HashMap.empty[String, Meter]
 
   override def postStop(): Unit = {
+    super.postStop()
+
     val stopTime = DateTime.now()
     val stoppedInfos = infos.values.map { info =>
+      logger.info(s"Setting job state to ${JobStatus.Error} for ${info.jobId}")
       val errorData = ErrorData(s"Context (${info.contextName}) for this job was terminated", "", "")
       info.copy(endTime = Some(stopTime), error = Some(errorData), state = JobStatus.Error)
     }
