@@ -403,6 +403,7 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
 
       val updatedJobInfo = Await.result(dao.getJobInfo(jobInfo.jobId), timeout)
       updatedJobInfo shouldBe defined
+      updatedJobInfo.get.state shouldBe JobStatus.Error
       updatedJobInfo.get.endTime shouldBe defined
       updatedJobInfo.get.error shouldBe defined
     }
