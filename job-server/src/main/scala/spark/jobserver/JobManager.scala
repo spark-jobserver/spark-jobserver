@@ -137,7 +137,10 @@ object JobManager {
   /**
     * 0 is used as exit code to avoid restart of JVM by Spark in supervise mode
     */
-  private def exitJVM = sys.exit(0)
+  private def exitJVM = {
+    logger.warn("Exiting the JVM with status code of 0")
+    sys.exit(0)
+  }
 
   def main(args: Array[String]) {
     import scala.collection.JavaConverters._
