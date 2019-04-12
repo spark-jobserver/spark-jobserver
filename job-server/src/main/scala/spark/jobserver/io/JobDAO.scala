@@ -133,10 +133,12 @@ trait JobDAO {
     */
   def cleanRunningJobInfosForContext(contextId: String, endTime: DateTime): Future[Unit] = {
     import spark.jobserver.JobManagerActor.ContextTerminatedException
-    getJobInfosByContextId(contextId, Some(Seq(JobStatus.Running))).map { infos =>
-      JobDAO.logger.info("cleaning {} running jobs for {}", infos.size, contextId)
+    getJobInfosByContextId(contextId, Some(JobStatus.getNonFinalStates())).map { infos =>
+      JobDAO.logger.info("cleaning {} non-final state job(s) {} for context {}",
+        infos.size.toString, infos.map(_.jobId).mkString(", "), contextId)
       for (info <- infos) {
         val updatedInfo = info.copy(
+          state = JobStatus.Error,
           endTime = Some(endTime),
           error = Some(ErrorData(ContextTerminatedException(contextId))))
         saveJobInfo(jobInfo = updatedInfo)

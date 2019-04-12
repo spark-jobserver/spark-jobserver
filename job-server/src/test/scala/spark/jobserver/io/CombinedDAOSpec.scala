@@ -10,6 +10,7 @@ import org.apache.commons.io.FileUtils
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfterAll, FunSpecLike, Matchers}
 import slick.SlickException
+import spark.jobserver.JobManagerActor.ContextTerminatedException
 import spark.jobserver.JobServer.InvalidConfiguration
 import spark.jobserver.util.{DeleteBinaryInfoFailedException, NoSuchBinaryException, SaveBinaryException}
 
@@ -337,6 +338,29 @@ class CombinedDAOSpec extends CombinedDAOSpecBase with FunSpecLike with BeforeAn
       }
     }
   }
+
+  describe("cleanRunningJobsForContext tests") {
+    it("should set jobs to error state if running") {
+      val date = DateTime.now()
+      val contextId = "ctxId"
+      val jobId = "dummy"
+      val endTime = DateTime.now()
+      val terminatedException = Some(ErrorData(ContextTerminatedException(contextId)))
+      val runningJob = JobInfo(jobId, contextId, "",
+        BinaryInfo("", BinaryType.Jar, date), "", JobStatus.Running, date, None, None)
+
+      dao.saveJobInfo(runningJob) // synchronous call
+
+      Await.result(dao.cleanRunningJobInfosForContext(contextId, endTime), 3.seconds)
+
+      val fetchedJob = Await.result(dao.getJobInfo(jobId), 5.seconds).get
+      fetchedJob.contextId should be (contextId)
+      fetchedJob.jobId should be (jobId)
+      fetchedJob.state should be (JobStatus.Error)
+      fetchedJob.endTime.get should be(endTime)
+      fetchedJob.error.get.message should be (terminatedException.get.message)
+    }
+  }
 }
 
 class DummyBinaryDAO(config: Config) extends BinaryDAO {
@@ -492,7 +516,16 @@ class DummyMetaDataDAO(config: Config) extends MetaDataDAO {
     }
   }
 
-  override def getJobsByContextId(contextId: String, statuses: Option[Seq[String]]): Future[Seq[JobInfo]] = ???
+  override def getJobsByContextId(contextId: String, statuses: Option[Seq[String]]): Future[Seq[JobInfo]] = {
+    Future {
+      val jobsAgainstContextId = jobInfos.filter(_._2.contextId == contextId)
+      val filteredJobs = statuses match {
+        case None => jobsAgainstContextId
+        case Some(status) => jobsAgainstContextId.filter(j => status.contains(j._2.state))
+      }
+      filteredJobs.map(_._2).toSeq
+    }
+  }
 
   override def getJobs(limit: Int, status: Option[String]): Future[Seq[JobInfo]] = ???
 
@@ -505,7 +538,7 @@ class DummyMetaDataDAO(config: Config) extends MetaDataDAO {
 
   override def saveJob(jobInfo: JobInfo): Future[Boolean] = {
     jobInfo.jobId match {
-      case "jid" =>
+      case "jid" | "dummy" =>
         Future {
           Thread.sleep(1000) // mimic long save operation
           jobInfos(jobInfo.jobId) = jobInfo
