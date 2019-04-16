@@ -358,11 +358,11 @@ class MetaDataZookeeperDAOSpec extends FunSpec with TestJarFinder with FunSpecLi
       jobs should equal(Seq(minimalJob))
     }
 
-    it("should not retrieve jobs with missing binaries") {
+    it("should retrieve jobs with missing binaries") {
       val success = Await.result(dao.saveJob(normalJob), timeout)
       success should equal(true)
-      Await.result(dao.getJob("someJobId"), timeout) should equal(None)
-      Await.result(dao.getJobs(100, None), timeout).size should equal(0)
+      Await.result(dao.getJob("someJobId"), timeout) should equal(Some(normalJob))
+      Await.result(dao.getJobs(100, None), timeout).size should equal(1)
     }
 
     it("should be able to access data after DAO recreation") {
