@@ -191,7 +191,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
         infoForBinary.find(_.uploadTime.getMillis == j.binaryInfo.uploadTime.getMillis) match {
           case Some(_) => Some(j)
           case None =>
-            logger.info(s"Didn't find a binary for name and uploadtime: ("
+            logger.trace(s"Didn't find a binary for name and uploadtime: ("
               + j.binaryInfo.appName + "," + j.binaryInfo.uploadTime + ")")
             None
         }
