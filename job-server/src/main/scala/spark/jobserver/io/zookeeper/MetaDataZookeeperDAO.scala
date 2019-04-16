@@ -151,7 +151,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO with YammerMetric
         Utils.usingResource(zookeeperUtils.getClient) {
           client =>
             zookeeperUtils.sync(client, s"$jobsDir/$id")
-            readJobInfo(client, id).flatMap(j => refreshBinary(client, j))
+            readJobInfo(client, id)
         }
       }
     }
@@ -173,7 +173,6 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO with YammerMetric
               }
             filteredJobs.sortBy(_.startTime.getMillis)(Ordering[Long].reverse)
               .take(limit)
-              .flatMap(j => refreshBinary(client, j))
         }
       }
     }
@@ -195,7 +194,6 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO with YammerMetric
                 case Some(allowed) => allJobs.filter(j => allowed.contains(j.state))
               }
             filteredJobs.sortBy(_.startTime.getMillis)(Ordering[Long].reverse)
-              .flatMap(j => refreshBinary(client, j))
         }
       }
     }
@@ -215,29 +213,6 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO with YammerMetric
       }
     }
 
-  }
-
-  /**
-   * Within JobInfo only an initial copy of the binary info is stored
-   * to identify the original BinaryInfo stored in another ZK dir
-   *
-   * The jobInfo shall only be returned if the BinaryInfo elsewhere still exists
-   */
-  private def refreshBinary(client: CuratorFramework, j: JobInfo): Option[JobInfo] = {
-    zookeeperUtils.read[Seq[BinaryInfo]](client, s"$binariesDir/" + j.binaryInfo.appName) match {
-      case Some(infoForBinary) =>
-        // identified by name AND uploadTime
-        infoForBinary.find(_.uploadTime.getMillis == j.binaryInfo.uploadTime.getMillis) match {
-          case Some(_) => Some(j)
-          case None =>
-            logger.trace(s"Didn't find a binary for name and uploadtime: ("
-              + j.binaryInfo.appName + "," + j.binaryInfo.uploadTime + ")")
-            None
-        }
-      case None =>
-        logger.debug(s"Didn't find a binary for name " + j.binaryInfo.appName)
-        None
-    }
   }
 
   /*
