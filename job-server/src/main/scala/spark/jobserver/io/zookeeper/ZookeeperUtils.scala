@@ -1,12 +1,14 @@
 package spark.jobserver.io.zookeeper
 
 import com.typesafe.config.Config
+import java.util.concurrent.TimeUnit
 import org.apache.curator.framework.{CuratorFramework, CuratorFrameworkFactory}
 import org.apache.curator.framework.api.{BackgroundCallback, CuratorEvent}
 import org.apache.curator.retry.RetryNTimes
 import org.apache.curator.utils.ZKPaths
 import org.slf4j.LoggerFactory
 import spark.jobserver.JobServer.InvalidConfiguration
+import spark.jobserver.common.akka.metrics.YammerMetrics
 import spark.jobserver.util.Utils
 import spray.json._
 
@@ -26,10 +28,11 @@ object ZookeeperUtils {
   )
 }
 
-class ZookeeperUtils(config: Config) {
+class ZookeeperUtils(config: Config) extends YammerMetrics {
   import ZookeeperUtils._
 
   private val logger = LoggerFactory.getLogger(getClass)
+  private val syncTimer = timer("zk-sync-duration", TimeUnit.MILLISECONDS)
 
   for (path <- settings.values) {
     if (!config.hasPath(path)) {
@@ -68,10 +71,12 @@ class ZookeeperUtils(config: Config) {
   }
 
   def sync(client: CuratorFramework, path: String): Unit = {
+    val timer = syncTimer.time()
     logger.debug(s"Starting a sync for $path")
     val callback = new BackgroundCallback(){
       def processResult(client : CuratorFramework, event : CuratorEvent) {
         logger.debug(s"Sync for $path completed.")
+        timer.stop()
       }
     }
     client.sync().inBackground(callback).forPath(path)

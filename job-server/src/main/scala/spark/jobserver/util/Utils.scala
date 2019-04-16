@@ -3,6 +3,8 @@ package spark.jobserver.util
 import java.io.{Closeable, File, StringWriter, PrintWriter}
 import com.yammer.metrics.core.Timer
 import scala.util.{Failure, Success, Try}
+import scala.concurrent.Future
+import scala.concurrent.ExecutionContext
 import org.slf4j.Logger
 
 object Utils {
@@ -34,6 +36,14 @@ object Utils {
     } finally {
        tc.stop()
     }
+  }
+
+  def timedFuture[T](timer: Timer)(future: Future[T])
+      (implicit executor: ExecutionContext): Future[T] = {
+    timer.time()
+    future.andThen({
+      case _ => timer.stop()
+    })
   }
 
   def retry[T](n: Int, retryDelayInMs: Int = 500)(fn: => T): T = {
