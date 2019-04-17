@@ -30,8 +30,10 @@ import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.Try
 import org.slf4j.LoggerFactory
 import spark.jobserver.util.MeteredHttpService
+import spark.jobserver.util.Utils
 
 object WebApi {
+
   val StatusKey = "status"
   val ResultKey = "result"
   val ResultKeyStartBytes = "{\n".getBytes
@@ -180,6 +182,21 @@ class WebApi(system: ActorSystem,
 
   private val maxSprayLogMessageLength = 400
 
+  // Timer metrics
+  private val binGet = timer("binary-get-duration", TimeUnit.MILLISECONDS)
+  private val binPost = timer("binary-post-duration", TimeUnit.MILLISECONDS)
+  private val binDelete = timer("binary-delete-duration", TimeUnit.MILLISECONDS)
+  private val contextGet = timer("context-get-duration", TimeUnit.MILLISECONDS)
+  private val contextGetSingle = timer("context-get-single-duration", TimeUnit.MILLISECONDS)
+  private val contextPost = timer("context-post-duration", TimeUnit.MILLISECONDS)
+  private val contextDelete = timer("context-delete-duration", TimeUnit.MILLISECONDS)
+  private val contextPut = timer("context-put-duration", TimeUnit.MILLISECONDS)
+  private val jobGet = timer("job-get-duration", TimeUnit.MILLISECONDS)
+  private val jobGetSingle = timer("job-get-single-duration", TimeUnit.MILLISECONDS)
+  private val jobPost = timer("job-post-duration", TimeUnit.MILLISECONDS)
+  private val jobDelete = timer("job-delete-duration", TimeUnit.MILLISECONDS)
+  private val configGet = timer("config-get-duration", TimeUnit.MILLISECONDS)
+
   val accessLogger: LoggingMagnet[HttpRequest => Any => Unit] = LoggingMagnet {
     request: HttpRequest =>
       logger.info(s"[${request.method}] ${request.uri}")
@@ -279,6 +296,7 @@ class WebApi(system: ActorSystem,
       // GET /binaries route returns a JSON map of the app name
       // and the type of and last upload time of a binary.
       get { ctx =>
+        val timer = binGet.time()
         val future = (binaryManager ? ListBinaries(None)).
           mapTo[collection.Map[String, (BinaryType, DateTime)]]
         future.map { binTimeMap =>
@@ -289,6 +307,8 @@ class WebApi(system: ActorSystem,
           ctx.complete(stringTimeMap)
         }.recover {
           case e: Exception => logAndComplete(ctx, "ERROR", 500, e)
+        }.andThen {
+          case _ => timer.stop()
         }
       } ~
       // POST /binaries/<appName>
@@ -296,6 +316,7 @@ class WebApi(system: ActorSystem,
       // requires a recognised content-type header
       post {
         path(Segment) { appName =>
+          val timer = binPost.time()
           entity(as[Array[Byte]]) { binBytes =>
             contentType {
               case Some(x) =>
@@ -311,11 +332,16 @@ class WebApi(system: ActorSystem,
                         case BinaryStorageFailure(ex) => logAndComplete(ctx, "Storage Failure", 500, ex)
                       }.recover {
                         case e: Exception => logAndComplete(ctx, "ERROR", 500, e)
+                      }.andThen {
+                        case _ => timer.stop()
                       }
-                    case None => logAndComplete(ctx, s"Unsupported binary type $x", 415)
+                    case None =>
+                        logAndComplete(ctx, s"Unsupported binary type $x", 415)
+                        timer.stop()
                   }
                 }
               case None =>
+                timer.stop()
                 complete(415, s"Content-Type header must be set to indicate binary type")
             }
           }
@@ -324,6 +350,7 @@ class WebApi(system: ActorSystem,
       // DELETE /binaries/<appName>
       delete {
         path(Segment) { appName =>
+          val timer = binDelete.time()
           val future = (binaryManager ? DeleteBinary(appName))(DefaultBinaryDeletionTimeout)
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
             future.map {
@@ -340,6 +367,8 @@ class WebApi(system: ActorSystem,
                               StatusCodes.InternalServerError)
             }.recover {
               case e: Exception => logAndComplete(ctx, "ERROR", 500, e)
+            }.andThen {
+              case _ => timer.stop()
             }
           }
         }
@@ -418,6 +447,7 @@ class WebApi(system: ActorSystem,
     // user authentication
     authenticate(authenticator) { authInfo =>
       (get & path(Segment)) { contextName =>
+        val timer = contextGetSingle.time()
         respondWithMediaType(MediaTypes.`application/json`) { ctx =>
           val future = (supervisor ? GetSparkContexData(contextName))(15.seconds)
           future.map {
@@ -429,10 +459,13 @@ class WebApi(system: ActorSystem,
           }.recover {
             case e: Exception =>
               logAndComplete(ctx, "ERROR", 500, e)
+          }.andThen{
+            case _ => timer.stop()
           }
         }
       } ~
       get { ctx =>
+        val timer = contextGet.time()
         val future = supervisor ? ListContexts
         future.map {
           case UnexpectedError => logAndComplete(ctx, "UNEXPECTED ERROR OCCURRED", 500)
@@ -444,6 +477,8 @@ class WebApi(system: ActorSystem,
         }.recover {
           case e: Exception =>
             logAndComplete(ctx, "ERROR", 500, e)
+        }.andThen {
+          case _ => timer.stop()
         }
       } ~
       post {
@@ -461,8 +496,10 @@ class WebApi(system: ActorSystem,
          */
         entity(as[String]) { configString =>
           path(Segment) { contextName =>
+            val timer = contextPost.time()
             // Enforce user context name to start with letters
             if (!contextName.head.isLetter) {
+              timer.stop()
               complete(StatusCodes.BadRequest, errMap("context name must start with letters"))
             } else {
               parameterMap { (params) =>
@@ -481,6 +518,8 @@ class WebApi(system: ActorSystem,
                   }.recover {
                     case e: Exception =>
                       logAndComplete(ctx, "ERROR", 500, e)
+                  }.andThen {
+                    case _ => timer.stop()
                   }
                 }
               }
@@ -496,6 +535,7 @@ class WebApi(system: ActorSystem,
           parameters('force.as[Boolean] ?) {
             forceOpt => {
               val force = forceOpt.getOrElse(false)
+              val timer = contextDelete.time()
               val (cName, _) = determineProxyUser(config, authInfo, contextName)
               val future = (supervisor ?
                 StopContext(cName, force))(contextDeletionTimeout.seconds + 1.seconds)
@@ -513,6 +553,8 @@ class WebApi(system: ActorSystem,
                 }.recover {
                   case e: Exception =>
                     logAndComplete(ctx, "ERROR", 500, e)
+                }.andThen {
+                  case _ => timer.stop()
                 }
               }
             }
@@ -521,6 +563,7 @@ class WebApi(system: ActorSystem,
         put {
           parameters("reset", 'sync.as[Boolean] ?) { (reset, sync) =>
             respondWithMediaType(MediaTypes.`application/json`) { ctx =>
+              val timer = contextPut.time()
               reset match {
                 case "reboot" =>
                   import ContextSupervisor._
@@ -545,11 +588,14 @@ class WebApi(system: ActorSystem,
                     }
                     ctx.complete(StatusCodes.OK, successMap("Context reset"))
                   }
-                case _ => ctx.complete("ERROR")
+                timer.stop()
+                case _ =>
+                  ctx.complete("ERROR")
+                  timer.stop()
+              }
             }
           }
         }
-      }
     }
   }
 
@@ -597,6 +643,7 @@ class WebApi(system: ActorSystem,
        * @required @param jobId
        */
       (get & path(Segment / "config")) { jobId =>
+        val timer = configGet.time()
         val renderOptions = ConfigRenderOptions.defaults().setComments(false).setOriginComments(false)
 
         val future = jobInfoActor ? GetJobConfig(jobId)
@@ -609,6 +656,8 @@ class WebApi(system: ActorSystem,
           }.recover {
             case e: Exception =>
               logAndComplete(ctx, "ERROR", 500, e)
+          }.andThen {
+            case _ => timer.stop()
           }
         }
       } ~
@@ -617,6 +666,7 @@ class WebApi(system: ActorSystem,
         // If the job isn't finished yet, then {"status": "RUNNING" | "ERROR"} is returned.
         // Returned JSON contains result attribute if status is "FINISHED"
         (get & path(Segment)) { jobId =>
+          val timer = jobGetSingle.time()
           val statusFuture = jobInfoActor ? GetJobStatus(jobId)
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
             statusFuture.map {
@@ -642,6 +692,8 @@ class WebApi(system: ActorSystem,
             }.recover {
               case e: Exception =>
                 logAndComplete(ctx, "ERROR", 500, e)
+            }.andThen {
+              case _ => timer.stop()
             }
           }
         } ~
@@ -649,6 +701,7 @@ class WebApi(system: ActorSystem,
         //  Stop the current job. All other jobs submitted with this spark context
         //  will continue to run
         (delete & path(Segment)) { jobId =>
+          val timer = jobDelete.time()
           val future = jobInfoActor ? GetJobStatus(jobId)
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
             future.map {
@@ -671,6 +724,8 @@ class WebApi(system: ActorSystem,
             }.recover {
               case e: Exception =>
                 logAndComplete(ctx, "ERROR", 500, e)
+            }.andThen {
+              case _ => timer.stop()
             }
           }
         } ~
@@ -690,6 +745,7 @@ class WebApi(system: ActorSystem,
          */
         get {
           parameters('limit.as[Int] ?, 'status.as[String] ?) { (limitOpt, statusOpt) =>
+            val timer = jobGet.time()
             val limit = limitOpt.getOrElse(DefaultJobLimit)
             val statusUpperCaseOpt = statusOpt match {
               case Some(status) => Some(status.toUpperCase())
@@ -702,6 +758,8 @@ class WebApi(system: ActorSystem,
                   getJobReport(info)
                 }
                 ctx.complete(jobReport)
+              }.andThen {
+                case _ => timer.stop()
               }
             }
           }
@@ -727,6 +785,7 @@ class WebApi(system: ActorSystem,
             parameters('appName, 'classPath,
               'context ?, 'sync.as[Boolean] ?, 'timeout.as[Int] ?, SparkJobUtils.SPARK_PROXY_USER_PARAM ?) {
                 (appName, classPath, contextOpt, syncOpt, timeoutOpt, sparkProxyUser) =>
+                  val timer = jobPost.time()
                   try {
                     val async = !syncOpt.getOrElse(false)
                     val postedJobConfig = ConfigFactory.parseString(configString)
@@ -778,14 +837,19 @@ class WebApi(system: ActorSystem,
                         case ContextInitError(e) => logAndComplete(ctx, "CONTEXT INIT FAILED", 500, e)
                       }.recover {
                         case e: Exception => logAndComplete(ctx, "ERROR", 500, e)
+                      }.andThen {
+                        case _ => timer.stop()
                       }
                     }
                   } catch {
                     case e: NoSuchElementException =>
+                      timer.stop()
                       complete(StatusCodes.NotFound, errMap("context " + contextOpt.get + " not found"))
                     case e: ConfigException =>
+                      timer.stop()
                       complete(StatusCodes.BadRequest, errMap("Cannot parse config: " + e.getMessage))
                     case e: Exception =>
+                      timer.stop()
                       complete(500, errMap(e, "ERROR"))
                   }
               }
