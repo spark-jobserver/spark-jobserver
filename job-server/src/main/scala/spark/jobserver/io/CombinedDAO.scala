@@ -1,7 +1,6 @@
 package spark.jobserver.io
 
 import java.io.File
-import java.util.concurrent.TimeUnit
 
 import com.typesafe.config.Config
 import org.joda.time.DateTime
@@ -21,17 +20,6 @@ import spark.jobserver.common.akka.metrics.YammerMetrics
   */
 class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetrics {
   private val logger = LoggerFactory.getLogger(getClass)
-
-  // Timer metrics
-  private val binRead = timer("binary-read-duration", TimeUnit.MILLISECONDS)
-  private val binWrite = timer("binary-write-duration", TimeUnit.MILLISECONDS)
-  private val binDelete = timer("binary-delete-duration", TimeUnit.MILLISECONDS)
-  private val contextRead = timer("context-read-duration", TimeUnit.MILLISECONDS)
-  private val contextWrite = timer("context-write-duration", TimeUnit.MILLISECONDS)
-  private val jobRead = timer("job-read-duration", TimeUnit.MILLISECONDS)
-  private val jobWrite = timer("job-write-duration", TimeUnit.MILLISECONDS)
-  private val confRead = timer("config-read-duration", TimeUnit.MILLISECONDS)
-  private val confWrite = timer("config-write-duration", TimeUnit.MILLISECONDS)
 
   // Counter metrics
   private val totalSuccessfulSaveRequests = counter("total-save-binary-success")
@@ -85,31 +73,23 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
    */
 
   override def saveContextInfo(contextInfo: ContextInfo): Unit = {
-    val isSaved = Utils.usingTimer(contextWrite){ () =>
-       Await.result(metaDataDAO.saveContext(contextInfo), defaultAwaitTime)
-    }
+    val isSaved = Await.result(metaDataDAO.saveContext(contextInfo), defaultAwaitTime)
     if(!isSaved) {
       throw new SlickException(s"Could not update ${contextInfo.id} in the database")
     }
   }
 
   override def getContextInfo(id: String): Future[Option[ContextInfo]] = {
-    Utils.usingTimer(contextRead){ () =>
-      metaDataDAO.getContext(id)
-    }
+    metaDataDAO.getContext(id)
   }
 
   override def getContextInfoByName(name: String): Future[Option[ContextInfo]] = {
-    Utils.usingTimer(contextRead){ () =>
-      metaDataDAO.getContextByName(name)
-    }
+    metaDataDAO.getContextByName(name)
   }
 
   override def getContextInfos(limit: Option[Int],
                                statuses: Option[Seq[String]]): Future[Seq[ContextInfo]] = {
-    Utils.usingTimer(contextRead){ () =>
-      metaDataDAO.getContexts(limit, statuses)
-    }
+    metaDataDAO.getContexts(limit, statuses)
   }
 
   /*
@@ -117,32 +97,23 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
    */
 
   override def saveJobInfo(jobInfo: JobInfo): Unit = {
-    val isSaved = Utils.usingTimer(jobWrite){ () =>
-      // Note: metric not exposed when running in cluster mode, since timed on slave
-      Await.result(metaDataDAO.saveJob(jobInfo), defaultAwaitTime)
-    }
+    val isSaved = Await.result(metaDataDAO.saveJob(jobInfo), defaultAwaitTime)
     if(!isSaved) {
       throw new SlickException(s"Could not update ${jobInfo.jobId} in the database")
     }
   }
 
   override def getJobInfo(jobId: String): Future[Option[JobInfo]] = {
-    Utils.usingTimer(jobRead){ () =>
-      metaDataDAO.getJob(jobId)
-    }
+    metaDataDAO.getJob(jobId)
   }
 
   override def getJobInfos(limit: Int, status: Option[String]): Future[Seq[JobInfo]] = {
-    Utils.usingTimer(jobRead){ () =>
-      metaDataDAO.getJobs(limit, status)
-    }
+    metaDataDAO.getJobs(limit, status)
   }
 
   override def getJobInfosByContextId(contextId: String,
                                       jobStatuses: Option[Seq[String]]): Future[Seq[JobInfo]] = {
-    Utils.usingTimer(jobRead){ () =>
-      metaDataDAO.getJobsByContextId(contextId, jobStatuses)
-    }
+    metaDataDAO.getJobsByContextId(contextId, jobStatuses)
   }
 
   /*
@@ -150,18 +121,14 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
    */
 
   override def saveJobConfig(jobId: String, jobConfig: Config): Unit = {
-    val isSaved = Utils.usingTimer(confWrite){ () =>
-      Await.result(metaDataDAO.saveJobConfig(jobId, jobConfig), defaultAwaitTime)
-    }
+    val isSaved = Await.result(metaDataDAO.saveJobConfig(jobId, jobConfig), defaultAwaitTime)
     if(!isSaved) {
       throw new SlickException(s"Could not save job config into database for $jobId")
     }
   }
 
   override def getJobConfig(jobId: String): Future[Option[Config]] = {
-    Utils.usingTimer(confRead){ () =>
-      metaDataDAO.getJobConfig(jobId)
-    }
+    metaDataDAO.getJobConfig(jobId)
   }
 
   /*
@@ -169,17 +136,13 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
    */
 
   override def getApps: Future[Map[String, (BinaryType, DateTime)]] = {
-    Utils.usingTimer(binRead){ () =>
-      metaDataDAO.getBinaries.map(
-        binaryInfos => binaryInfos.map(info => info.appName -> (info.binaryType, info.uploadTime)).toMap
-      )
-    }
+    metaDataDAO.getBinaries.map(
+      binaryInfos => binaryInfos.map(info => info.appName -> (info.binaryType, info.uploadTime)).toMap
+    )
   }
 
   override def getBinaryInfo(name: String): Option[BinaryInfo] = {
-    val binaryInfo = Utils.usingTimer(binRead){ () =>
-      Await.result(metaDataDAO.getBinary(name), defaultAwaitTime).getOrElse(return None)
-    }
+  val binaryInfo = Await.result(metaDataDAO.getBinary(name), defaultAwaitTime).getOrElse(return None)
     Some(binaryInfo)
   }
 
@@ -199,10 +162,8 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
       cacheBinary(name, binaryType, uploadTime, binaryBytes)
     }
 
-    val timer = binWrite.time()
     if (Await.result(binaryDAO.save(binHash, binaryBytes), defaultAwaitTime)) {
       if (Await.result(metaDataDAO.saveBinary(name, binaryType, uploadTime, binHash), defaultAwaitTime)) {
-        timer.stop()
         totalSuccessfulSaveRequests.inc()
         logger.info(s"Successfully uploaded binary for $name")
       } else {
@@ -217,11 +178,9 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
           }
           case _ => logger.info(s"Performing no cleanup, $name binary is used in meta data.")
         }
-        timer.stop()
         throw SaveBinaryException(name)
       }
     } else {
-      timer.stop()
       totalFailedSaveBinaryDAORequests.inc()
       logger.error(s"Failed to save binary data for $name, not proceeding with meta")
       throw SaveBinaryException(name)
@@ -229,7 +188,6 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
   }
 
   override def deleteBinary(name: String): Unit = {
-    val timer = binDelete.time()
     Await.result(metaDataDAO.getBinary(name), defaultAwaitTime) match {
       case Some(binaryInfo) =>
         binaryInfo.binaryStorageId match {
@@ -248,23 +206,19 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
                     logger.error(s"Failed to delete binary file for $name, leaving an artifact")
                 }
               }
-              timer.stop()
               cleanCacheBinaries(name)
             }
             else {
-              timer.stop()
               totalFailedDeleteMetadataDAORequests.inc()
               logger.error(s"Failed to delete binary meta for $name, not proceeding with file")
               throw DeleteBinaryInfoFailedException(name)
             }
           case _ =>
-            timer.stop()
             totalFailedDeleteMetadataDAORequests.inc()
             logger.error(s"Failed to delete binary meta for $name, hash is not found")
             throw NoStorageIdException(name)
         }
       case None =>
-        timer.stop()
         totalFailedDeleteMetadataDAORequests.inc()
         logger.warn(s"Couldn't find meta data information for $name")
         throw NoSuchBinaryException(name)
@@ -272,7 +226,6 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
   }
 
   override def getBinaryFilePath(name: String, binaryType: BinaryType, uploadTime: DateTime): String = {
-    val timer = binRead.time()
     Await.result(metaDataDAO.getBinary(name), defaultAwaitTime) match {
       case Some(binaryInfo) =>
         val binFile = new File(rootDir, createBinaryName(name, binaryType, uploadTime))
@@ -282,20 +235,16 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
               Await.result(binaryDAO.get(binaryInfo.binaryStorageId.get), defaultAwaitTime) match {
                 case Some(binBytes) => cacheBinary(name, binaryType, uploadTime, binBytes)
                 case None =>
-                  timer.stop()
                   logger.warn(s"Failed to fetch bytes from binary dao for $name/$uploadTime")
                   return ""
               }
             }
-            timer.stop()
             binFile.getAbsolutePath
           case _ =>
-            timer.stop()
             logger.error(s"Failed to get binary file path for $name, hash is not found")
             ""
         }
       case None =>
-        timer.stop()
         logger.warn(s"Couldn't find meta data information for $name")
         ""
     }
