@@ -18,9 +18,9 @@ import java.util.concurrent.TimeUnit
 import org.apache.curator.framework.CuratorFramework
 
 object MetaDataZookeeperDAO {
-  private val binariesDir = "/binaries"
-  private val contextsDir = "/contexts"
-  private val jobsDir = "/jobs"
+  val binariesDir = "/binaries"
+  val contextsDir = "/contexts"
+  val jobsDir = "/jobs"
 }
 
 class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO with YammerMetrics {

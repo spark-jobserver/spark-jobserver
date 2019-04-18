@@ -21,6 +21,7 @@ import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 import scala.collection.mutable.ListBuffer
 import com.google.common.annotations.VisibleForTesting
+import spark.jobserver.io.zookeeper.AutoPurgeActor
 
 /**
  * The Spark Job Server is a web service that allows users to submit and run Spark jobs, check status,
@@ -118,6 +119,7 @@ object JobServer {
     val dataFileDAO = new DataFileDAO(config)
     val dataManager = system.actorOf(Props(classOf[DataManagerActor], dataFileDAO), "data-manager")
     val binManager = system.actorOf(Props(classOf[BinaryManager], daoActor), "binary-manager")
+    startAutoPurge(system, daoActor, config)
 
     // Add initial job JARs, if specified in configuration.
     storeInitialBinaries(config, binManager)
@@ -297,6 +299,20 @@ object JobServer {
       superviseModeEnabled: Boolean, akkaTcpPort: Int) {
     if (driverMode == "cluster" && superviseModeEnabled == true && akkaTcpPort == 0) {
       throw new InvalidConfiguration("Supervise mode requires akka.remote.netty.tcp.port to be hardcoded")
+    }
+  }
+
+  private def startAutoPurge(system: ActorSystem, daoActor: ActorRef, config : Config) : Unit = {
+    val enabled = AutoPurgeActor.isEnabled(config)
+
+    if (enabled){
+      val age = config.getInt("spark.jobserver.zookeeperdao.autopurge_after_hours")
+      val actor = system.actorOf(AutoPurgeActor.props(config, daoActor, age))
+      val initialPurge = (actor ? AutoPurgeActor.PurgeOldData)(AutoPurgeActor.maxPurgeDuration)
+      Await.result(initialPurge, AutoPurgeActor.maxPurgeDuration) match {
+        case AutoPurgeActor.PurgeComplete => logger.info("Initial auto purge completed successfully.")
+        case _ => logger.error("Initial auto purge unsuccessful.")
+      }
     }
   }
 
