@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+
+JUMPBOX_IP=""
+
+if [[ ${USER} == "" ]]; then
+    echo "[ERROR] Before using this script please setup your user id!"
+    exit 1
+fi
+
+case "$1" in
+      dev-amin)
+        JUMPBOX_IP="172.18.104.157"
+        ;;
+      dev-gcp)
+        JUMPBOX_IP="104.155.91.162"
+        ;;
+      dev-azure)
+        JUMPBOX_IP="52.136.231.79"
+        ;;
+      aws-staging)
+        JUMPBOX_IP="34.195.139.205"
+        ;;
+      aws-canary)
+        JUMPBOX_IP="52.58.138.97"
+        ;;
+      aws-eu-live)
+        JUMPBOX_IP="52.57.232.171"
+        ;;
+      aws-us-live)
+        JUMPBOX_IP="34.193.149.238"
+        ;;
+      azure-staging)
+        JUMPBOX_IP="51.144.225.27"
+        ;;
+      gcp-staging)
+        JUMPBOX_IP="35.193.214.40"
+        ;;
+      sc7-live)
+        JUMPBOX_IP="172.18.113.24"
+        ;;
+      sc7-staging)
+        JUMPBOX_IP="172.18.116.109"
+        ;;
+      *)
+        echo "Usage: $0 {dev-amin|dev-gcp|dev-azure|aws-staging|aws-canary|aws-eu-live|aws-us-live|azure-staging|gcp-staging|sc7-staging|sc7-live}"
+        exit 1
+esac
+
+
+echo Connecting to $USER@$JUMPBOX_IP
+SPARK_CLUSTERS=$(ssh -q $USER@$JUMPBOX_IP "sudo -iu cassandra bosh2 deployments| grep spark-cluster | awk '{print \$1}'")
+echo Available spark clusters: $SPARK_CLUSTERS
+
+for cluster in $SPARK_CLUSTERS; do
+    while true; do
+        read -p "Do you wish to download logs for $cluster? [y/n]" yn
+        case $yn in
+            [Yy]* ) echo "Downloading logs for $cluster..";
+                NEW_UUID=$(cat /dev/urandom | env LC_CTYPE=C tr -dc 'a-zA-Z0-9' | fold -w 32 | head -n 1)
+                ssh -q $JUMPBOX_IP "
+                sudo -iu cassandra mkdir -p /tmp/logs/$NEW_UUID
+                sudo -iu cassandra bosh2 -d $cluster instances | grep spark-jobserver | awk '{print \$1}' |
+                xargs -I {} sudo -iu cassandra bosh2 -d $cluster scp -r '{}:/var/vcap/store/log/spark-jobserver/spark-job-server*' /tmp/logs/$NEW_UUID
+                "
+                mkdir jobserver-logs
+                scp -r $USER@$JUMPBOX_IP:/tmp/logs/$cluster ./jobserver-logs/
+                break;;
+            [Nn]* ) break;;
+            * ) echo "Please answer yes or no.";;
+        esac
+    done
+done

@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+
+SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+DESTINATION_DIR="/tmp"
+JUMPBOX_IP=""
+
+if [[ ${USER} == "" ]]; then
+    echo "[ERROR] Before using this script please setup your user id!"
+    exit 1
+fi
+
+case "$1" in
+      dev-amin)
+        JUMPBOX_IP="172.18.104.157"
+        ;;
+      dev-gcp)
+        JUMPBOX_IP="104.155.91.162"
+        ;;
+      dev-azure)
+        JUMPBOX_IP="52.136.231.79"
+        ;;
+      aws-staging)
+        JUMPBOX_IP="34.195.139.205"
+        ;;
+      aws-canary)
+        JUMPBOX_IP="52.58.138.97"
+        ;;
+      aws-eu-live)
+        JUMPBOX_IP="52.57.232.171"
+        ;;
+      aws-us-live)
+        JUMPBOX_IP="34.193.149.238"
+        ;;
+      azure-staging)
+        JUMPBOX_IP="51.144.225.27"
+        ;;
+      gcp-staging)
+        JUMPBOX_IP="35.193.214.40"
+        ;;
+      sc7-live)
+        JUMPBOX_IP="172.18.113.24"
+        ;;
+      sc7-staging)
+        JUMPBOX_IP="172.18.116.109"
+        ;;
+      *)
+        echo "Usage: $0 {dev-amin|dev-gcp|dev-azure|aws-staging|aws-canary|aws-eu-live|aws-us-live|azure-staging|gcp-staging|sc7-staging|sc7-live}"
+        exit 1
+esac
+
+echo Uploading jobserver scripts to ${JUMPBOX_IP}, folder: ${DESTINATION_DIR}
+scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -r ${SCRIPTS_DIR} ${USER}@${JUMPBOX_IP}:${DESTINATION_DIR}
