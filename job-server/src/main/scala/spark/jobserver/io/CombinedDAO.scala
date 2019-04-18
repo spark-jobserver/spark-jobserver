@@ -8,12 +8,19 @@ import org.slf4j.LoggerFactory
 import slick.SlickException
 import spark.jobserver.JobServer.InvalidConfiguration
 import spark.jobserver.util._
+import spark.jobserver.io.CombinedDAO._
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
 import scala.util.Success
 import spark.jobserver.common.akka.metrics.YammerMetrics
+
+object CombinedDAO {
+  val binaryDaoPath = "spark.jobserver.combineddao.binarydao.class"
+  val metaDataDaoPath = "spark.jobserver.combineddao.metadatadao.class"
+  val rootDirPath = "spark.jobserver.combineddao.rootdir"
+}
 
 /**
   * @param config config of jobserver
@@ -36,9 +43,6 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
 
   var binaryDAO: BinaryDAO = _
   var metaDataDAO: MetaDataDAO = _
-  private val binaryDaoPath = "spark.jobserver.combineddao.binarydao.class"
-  private val metaDataDaoPath = "spark.jobserver.combineddao.metadatadao.class"
-  private val rootDirPath = "spark.jobserver.combineddao.rootdir"
   if (!(config.hasPath(binaryDaoPath) && config.hasPath(metaDataDaoPath) && config.hasPath(rootDirPath))) {
     throw new InvalidConfiguration(
       "To use CombinedDAO root directory and BinaryDAO, MetaDataDAO classes should be specified"
