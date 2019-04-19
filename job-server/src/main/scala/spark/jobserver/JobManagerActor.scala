@@ -600,11 +600,13 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
         case e: java.lang.AbstractMethodError => {
           logger.error("Oops, there's an AbstractMethodError... maybe you compiled " +
             "your code with an older version of SJS? here's the exception:", e)
-          throw e
+          // wrap so it can complete as Failure even if not a scala.util.control.NonFatal
+          throw new RuntimeException(e)
         }
         case e: Throwable => {
           logger.error("Got Throwable", e)
-          throw e
+          // wrap so it can complete as Failure even if not a scala.util.control.NonFatal
+          throw new RuntimeException(e)
         };
       }
     }(executionContext).andThen {
@@ -620,7 +622,9 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
         // with context-per-jvm=true configuration
         resultActor ! JobResult(jobId, result)
         statusActor ! JobFinished(jobId, DateTime.now())
-      case Failure(error: Throwable) =>
+      case Failure(wrapped: Throwable) =>
+        // actual error was wrapped so we could process fatal errors, see #1161
+        val error = wrapped.getCause
         // If and only if job validation fails, JobErroredOut message is dropped silently in JobStatusActor.
         statusActor ! JobErroredOut(jobId, DateTime.now(), error)
         logger.error("Exception from job " + jobId + ": ", error)
