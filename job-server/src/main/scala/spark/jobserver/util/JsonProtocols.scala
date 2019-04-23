@@ -7,7 +7,8 @@ import spray.json.{DefaultJsonProtocol, JsNull, JsObject, JsString, JsValue, Roo
                    deserializationError, pimpAny}
 
 object JsonProtocols extends DefaultJsonProtocol {
-  val df: SimpleDateFormat = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss SS Z")
+
+  val DATE_PATTERN = "yyyy-MM-dd HH-mm-ss SS Z"
 
   /*
    * BinaryInfo
@@ -111,6 +112,7 @@ object JsonProtocols extends DefaultJsonProtocol {
    * Helpers
    */
 
+  private def df : SimpleDateFormat = new SimpleDateFormat(DATE_PATTERN)
   private def fromJoda(dt: DateTime): String = df.format(dt.getMillis)
   private def toJoda(s: String): DateTime = new DateTime(df.parse(s).getTime)
   private def readOpt[A](j: JsValue, f: JsValue => A): Option[A] = {

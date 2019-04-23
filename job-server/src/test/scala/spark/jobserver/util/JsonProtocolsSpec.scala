@@ -13,6 +13,7 @@ import spark.jobserver.util.JsonProtocols._
 import spray.json.pimpAny
 import spray.json.pimpString
 import spark.jobserver.io.ContextInfo
+import java.text.SimpleDateFormat
 
 class JsonProtocolsSpec extends FunSpec with Matchers with BeforeAndAfter {
 
@@ -21,10 +22,11 @@ class JsonProtocolsSpec extends FunSpec with Matchers with BeforeAndAfter {
    */
 
   // Date formatting
+  val df = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss SS Z")
   val earlyDate = new DateTime().minusHours(1)
   val date = new DateTime()
-  val earlyDateStr = JsonProtocols.df.format(earlyDate.getMillis)
-  val dateStr = JsonProtocols.df.format(date.getMillis)
+  val earlyDateStr = df.format(earlyDate.getMillis)
+  val dateStr = df.format(date.getMillis)
 
   // BinaryInfo
   val testBinaryInfo = BinaryInfo("SomeName", BinaryType.Jar, earlyDate, Some("SomeStorId"))
