@@ -136,6 +136,7 @@ class JobDAOActor(dao: JobDAO, migrationActor: ActorRef, migrationAddress: Strin
 
     case CleanContextJobInfos(contextId, endTime) =>
       dao.cleanRunningJobInfosForContext(contextId, endTime)
+      migrationActor ! MigrationActor.CleanContextJobInfosInH2(contextId, endTime)
 
     case GetJobInfosByContextId(contextId, jobStatuses) =>
       dao.getJobInfosByContextId(contextId, jobStatuses).map(JobInfos).pipeTo(sender)

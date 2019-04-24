@@ -8,6 +8,7 @@ import spark.jobserver.MigrationActor._
 import spark.jobserver.common.akka.InstrumentedActor
 import spark.jobserver.common.akka.metrics.YammerMetrics
 import spark.jobserver.io._
+import spark.jobserver.JobManagerActor.ContextTerminatedException
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.{Failure, Success}
@@ -20,6 +21,7 @@ object MigrationActor {
   case class SaveJobInfoH2(jobInfo: JobInfo)
   case class SaveJobConfigH2(jobId: String, jobConfig: Config)
   case class SaveContextInfoH2(contextInfo: ContextInfo)
+  case class CleanContextJobInfosInH2(contextId: String, endTime: DateTime)
 
   def props(config: Config): Props = Props(classOf[MigrationActor], config)
 }
@@ -132,6 +134,24 @@ class MigrationActor(config: Config) extends InstrumentedActor
           totalLiveFailedSaveJobRequests.inc()
       }
 
+    // This function uses H2 DAO to pull all the jobs in non-final state instead of ZK dao because
+    // if migrationActor also uses ZK dao then it can happen that we don't get any non-final jobs because
+    // the saveJob function is already executed in JobDaoActor.
+    case CleanContextJobInfosInH2(contextId, endTime) =>
+      logger.info(s"Cleanup: Cleaning jobs for context $contextId")
+      dao.getJobsByContextId(contextId, Some(JobStatus.getNonFinalStates())).map { infos =>
+        logger.info(s"Cleanup: Found jobs to cleanup: ${infos.map(_.jobId).mkString(", ")}")
+        for (info <- infos) {
+          val updatedInfo = info.copy(
+            state = JobStatus.Error,
+            endTime = Some(endTime),
+            error = Some(ErrorData(ContextTerminatedException(contextId))))
+          logger.info(s"Cleanup: Sending save job info message to self. Job id is ${updatedInfo.jobId}")
+
+          // Sending message to self instead of dao.saveJob() to update timer + counters
+          self ! SaveJobInfoH2(updatedInfo)
+        }
+      }
   }
 
   override def wrappedReceive: Receive = liveRequestHandlers
