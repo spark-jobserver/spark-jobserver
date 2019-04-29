@@ -16,26 +16,6 @@
 LocalClusterSupervisor (context-per-jvm=false)
 ==========
 
-Jar routes
-----------
-- get a list of mapping from appName to uploadTime for all the known job jars:
-
-        user->WebApi: GET /jars
-        WebApi->JarManager: ListJars
-        JarManager->WebApi: Map(appName -> uploadTime)
-        WebApi->user: 200 + JSON
-
-- upload a job jar file with an appName
-
-        user->WebApi: POST /jars/<appName> jarFile
-        WebApi->JarManager: StoreJar(appName, jarBytes)
-        opt if Jar validation fails
-          JarManager->WebApi: InvalidJar
-          WebApi->user: 400
-        end
-        JarManager->WebApi: JarStored
-        WebApi->user: 200
-
 Context routes
 ----------
 - get a list of all known contextNames

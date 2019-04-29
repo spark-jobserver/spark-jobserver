@@ -203,7 +203,7 @@ class WebApi(system: ActorSystem,
 
   val myRoutes = cors {
     overrideMethodWithParameter("_method") {
-      binaryRoutes ~ jarRoutes ~ contextRoutes ~ jobRoutes ~
+      binaryRoutes ~ contextRoutes ~ jobRoutes ~
         dataRoutes ~ healthzRoutes ~ otherRoutes
     }
   }
@@ -369,51 +369,6 @@ class WebApi(system: ActorSystem,
           }
         }
       }
-    }
-  }
-
-  /**
-   * Routes for listing and uploading jars
-   *    GET /jars              - lists all current jars
-   *    POST /jars/<appName>   - upload a new jar file
-   *
-   * NB these routes are kept for legacy purposes but are deprecated in favour
-   *  of the /binaries routes.
-   */
-  def jarRoutes: Route = pathPrefix("jars") {
-    // user authentication
-    authenticate(authenticator) { authInfo =>
-      // GET /jars route returns a JSON map of the app name and the last time a jar was uploaded.
-      get { ctx =>
-        logger.info(s"GET /jars")
-        val future = (binaryManager ? ListBinaries(Some(BinaryType.Jar))).
-          mapTo[collection.Map[String, (BinaryType, DateTime)]].map(_.mapValues(_._2))
-        future.map { jarTimeMap =>
-          val stringTimeMap = jarTimeMap.map { case (app, dt) => (app, dt.toString()) }.toMap
-          ctx.complete(stringTimeMap)
-        }.recover {
-          case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
-        }
-      } ~
-        // POST /jars/<appName>
-        // The <appName> needs to be unique; uploading a jar with the same appName will replace it.
-        post {
-          path(Segment) { appName =>
-            logger.info(s"POST /jars/$appName")
-            entity(as[Array[Byte]]) { jarBytes =>
-              val future = binaryManager ? StoreBinary(appName, BinaryType.Jar, jarBytes)
-              respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-                future.map {
-                  case BinaryStored => ctx.complete(StatusCodes.OK, successMap("Jar uploaded"))
-                  case InvalidBinary => badRequest(ctx, "Jar is not of the right format")
-                  case BinaryStorageFailure(ex) => ctx.complete(500, errMap(ex, "Storage Failure"))
-                }.recover {
-                  case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
-                }
-              }
-            }
-          }
-        }
     }
   }
 
