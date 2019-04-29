@@ -158,27 +158,6 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
     }
   }
 
-  describe("jars routes") {
-    it("should allow user with valid authorization") {
-      Get("/jars").withHeaders(authorization) ~> sealRoute(routesWithProxyUser) ~> check {
-        status should be(OK)
-      }
-    }
-
-    it("should not allow user with invalid password") {
-      Post("/jars/foobar", Array[Byte](0, 1, 2)).
-        withHeaders(authorizationInvalidPassword) ~> sealRoute(routesWithProxyUser) ~> check {
-        status should be(Unauthorized)
-      }
-    }
-
-    it("should not allow unknown user") {
-      Get("/jars").withHeaders(authorizationUnknownUser) ~> sealRoute(routesWithProxyUser) ~> check {
-        status should be(Unauthorized)
-      }
-    }
-  }
-
   describe("binaries routes") {
 
     it("should allow user with valid authorization") {
@@ -474,13 +453,6 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
     it("jobs should not allow user with valid authorization when timeout") {
       Get("/jobs/foobar").withHeaders(authorization) ~>
         sealRoute(routesWithTimeout(true, 0)) ~> check {
-          status should be(InternalServerError)
-        }
-    }
-
-    it("jars should not allow user with valid authorization when timeout") {
-      Get("/jars").withHeaders(authorization) ~>
-        sealRoute(routesWithTimeout(false, 0)) ~> check {
           status should be(InternalServerError)
         }
     }
