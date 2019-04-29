@@ -26,30 +26,6 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       StatusKey -> JobStatus.Finished)
   }
 
-  describe("jars routes") {
-    it("should list all jars") {
-      Get("/jars") ~> sealRoute(routes) ~> check {
-        status should be (OK)
-        responseAs[Map[String, String]] should be (Map("demo1" -> "2013-05-29T00:00:00.000Z",
-                                                     "demo2" -> "2013-05-29T01:00:00.000Z"))
-      }
-    }
-
-    it("should respond with OK and meaningful message if jar uploaded successfully") {
-      Post("/jars/foobar", Array[Byte](0, 1, 2)) ~> sealRoute(routes) ~> check {
-        status should be (OK)
-        val result = responseAs[Map[String, String]]
-        result(ResultKey) should equal("Jar uploaded")
-      }
-    }
-
-    it("should respond with bad request if jar formatted incorrectly") {
-      Post("/jars/badjar", Array[Byte](0, 1, 2)) ~> sealRoute(routes) ~> check {
-        status should be (BadRequest)
-      }
-    }
-  }
-
   describe("binaries routes") {
     it("should list all binaries") {
       Get("/binaries") ~> sealRoute(routes) ~> check {
