@@ -35,12 +35,16 @@ else
   echo "Please specify SCALA_VERSION in ${configFile}"
   exit 1
 fi
+
+if [ -z "${SBT_BIN}" ]; then
+  export SBT_BIN="sbt"
+fi
 set -u
 
 echo "Packaging job-server for environment ${ENV}..."
 
 pushd "${bin}/.." > /dev/null
-  if ! sbt ++"${SCALA_VERSION}" job-server-extras/assembly; then
+  if ! "$SBT_BIN" ++"${SCALA_VERSION}" job-server-extras/assembly; then
     echo "Assembly failed"
     exit 1
   fi

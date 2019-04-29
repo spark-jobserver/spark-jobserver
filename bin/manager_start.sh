@@ -59,7 +59,11 @@ if [ -n "$JOBSERVER_KEYTAB" ]; then
   SPARK_SUBMIT_OPTIONS="$SPARK_SUBMIT_OPTIONS --keytab $JOBSERVER_KEYTAB"
 fi
 
-cmd='$SPARK_HOME/bin/spark-submit --class $MAIN --driver-memory $JOBSERVER_MEMORY
+if [ -z "${SJS_LAUNCHER}" ]; then
+  export SJS_LAUNCHER="$SPARK_HOME/bin/spark-submit"
+fi
+
+cmd='$SJS_LAUNCHER --class $MAIN --driver-memory $JOBSERVER_MEMORY
       --conf "spark.executor.extraJavaOptions=$LOGGING_OPTS"
       $SPARK_SUBMIT_OPTIONS
       --driver-java-options "$GC_OPTS $JAVA_OPTS $LOGGING_OPTS $CONFIG_OVERRIDES $SPARK_SUBMIT_JAVA_OPTIONS"
