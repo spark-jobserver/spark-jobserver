@@ -19,6 +19,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
   override def config: Config = ConfigFactory.load("local.test.metadatasqldao.conf")
   val timeout = 60 seconds
   var dao: MetaDataSqlDAO = _
+  private val helper: SqlTestHelpers = new SqlTestHelpers(config)
 
   // *** TEST DATA ***
   val time: DateTime = new DateTime()
@@ -104,11 +105,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
   }
 
   after {
-    val bins = Await.result(dao.getBinaries, timeout)
-    bins.foreach {
-      b => val del = Await.result(dao.deleteBinary(b.appName), timeout)
-           del should equal (true)
-    }
+    Await.result(helper.cleanupMetadataTables(), timeout)
   }
 
   describe("binaries") {

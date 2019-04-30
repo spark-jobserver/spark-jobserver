@@ -24,6 +24,7 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
   override def config: Config = ConfigFactory.load("local.test.jobsqldao.conf")
   val timeout = 60 seconds
   var dao: JobSqlDAO = _
+  private val helper: SqlTestHelpers = new SqlTestHelpers(config)
 
   // *** TEST DATA ***
   val time: DateTime = new DateTime()
@@ -109,6 +110,11 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
     eggFile.delete()
   }
 
+  after {
+    Await.result(helper.cleanupMetadataTables(), timeout)
+    Await.result(helper.cleanupBinariesContentsTable(config), timeout)
+  }
+
   describe("verify initial setup") {
     it("should create root dir folder on initialization") {
       val dummyRootDir = "/tmp/dummy"
@@ -125,12 +131,6 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
     }
   }
 
-  after {
-    val bins = Await.result(dao.getApps, timeout)
-    bins.foreach {
-      b => dao.deleteBinary(b._1)
-    }
-  }
 
   describe("save and get the jars") {
     it("should be able to save one jar and get it back") {

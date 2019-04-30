@@ -21,6 +21,7 @@ class SqlCommonSpec extends SqlCommonSpecBase with TestJarFinder with FunSpecLik
   val timeout = 60 seconds
   var dao: SqlCommon = _
   var helperJobSqlDao: JobSqlDAO = _
+  private val helper: SqlTestHelpers = new SqlTestHelpers(config)
 
   val time: DateTime = new DateTime()
   val throwable: Throwable = new Throwable("test-error")
@@ -102,7 +103,7 @@ class SqlCommonSpec extends SqlCommonSpecBase with TestJarFinder with FunSpecLik
   }
 
   override def afterAll() {
-    helperJobSqlDao.deleteBinary(jarInfo.appName)
+    Await.result(helper.cleanupMetadataTables(), timeout)
   }
 
   describe("saveJobConfig() tests") {
@@ -131,7 +132,6 @@ class SqlCommonSpec extends SqlCommonSpecBase with TestJarFinder with FunSpecLik
 
       val jobIdConfig = Await.result(dao.getJobConfig(jobId), timeout).get
       val jobId2Config = Await.result(dao.getJobConfig(jobId2), timeout).get
-
       jobIdConfig should equal (expectedConfig)
       jobId2Config should equal (expectedConfig2)
     }
