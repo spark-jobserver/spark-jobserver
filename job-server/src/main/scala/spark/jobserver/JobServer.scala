@@ -136,13 +136,14 @@ object JobServer {
     // Add initial job JARs, if specified in configuration.
     storeInitialBinaries(config, binManager)
 
-    val webApiPF = new WebApi(system, config, port, binManager, dataManager, _: ActorRef, _: ActorRef)
+    val webApiPF = new WebApi(system, config, port, binManager, dataManager, _: ActorRef, _: ActorRef,
+        _: ActorRef)
     contextPerJvm match {
       case false =>
         val supervisor = system.actorOf(Props(classOf[LocalContextSupervisorActor],
             daoActor, dataManager), AkkaClusterSupervisorActor.ACTOR_NAME)
         supervisor ! ContextSupervisor.AddContextsFromConfig  // Create initial contexts
-        startWebApi(system, supervisor, jobDAO, webApiPF)
+        startWebApi(system, supervisor, jobDAO, webApiPF, daoActor)
       case true =>
         val cluster = Cluster(system)
 
@@ -158,15 +159,15 @@ object JobServer {
               "context-supervisor-proxy")
 
           proxy ! ContextSupervisor.AddContextsFromConfig  // Create initial contexts
-          startWebApi(system, proxy, jobDAO, webApiPF)
+          startWebApi(system, supervisor, jobDAO, webApiPF, daoActor)
         }
     }
   }
 
   def startWebApi(system: ActorSystem, supervisor: ActorRef, jobDAO: JobDAO,
-      webApiPF: (ActorRef, ActorRef) => WebApi) {
+      webApiPF: (ActorRef, ActorRef, ActorRef) => WebApi, daoActor: ActorRef) {
     val jobInfo = system.actorOf(Props(classOf[JobInfoActor], jobDAO, supervisor), "job-info")
-    webApiPF(supervisor, jobInfo).start()
+    webApiPF(supervisor, jobInfo, daoActor).start()
   }
 
   /**
