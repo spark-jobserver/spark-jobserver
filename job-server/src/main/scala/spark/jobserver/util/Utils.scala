@@ -40,9 +40,9 @@ object Utils {
 
   def timedFuture[T](timer: Timer)(future: Future[T])
       (implicit executor: ExecutionContext): Future[T] = {
-    timer.time()
+    val tc = timer.time()
     future.andThen({
-      case _ => timer.stop()
+      case _ => tc.stop()
     })
   }
 
