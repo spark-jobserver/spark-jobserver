@@ -7,18 +7,21 @@ import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hdfs.MiniDFSCluster
 import org.apache.hadoop.test.PathUtils
 
-class HDFSCluster extends HDFSClusterLike
-
-trait HDFSClusterLike {
-  private var hdfsCluster: MiniDFSCluster = null
+/**
+  * Provides a test HDFS Cluster.
+  * Attention! MiniDFSCluster can cause unexpected side effects due to sharing of config.
+  * For more info: https://issues.apache.org/jira/browse/HDFS-6360
+  */
+trait HDFSCluster {
+  private var hdfsCluster: MiniDFSCluster = _
 
   def startHDFS(): Unit = {
-    val baseDir = new File(PathUtils.getTestDir(getClass()), "miniHDFS")
+    val baseDir = new File(PathUtils.getTestDir(getClass), "miniHDFS")
     val conf = new Configuration()
-    conf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR, baseDir.getAbsolutePath())
+    conf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR, baseDir.getAbsolutePath)
 
     val builder = new MiniDFSCluster.Builder(conf)
-    hdfsCluster = builder.nameNodePort(8020).format(true).build()
+    hdfsCluster = builder.format(true).build()
     hdfsCluster.waitClusterUp()
   }
 

@@ -241,7 +241,7 @@ class SqlCommonSpec extends SqlCommonSpecBase with TestJarFinder with FunSpecLik
     it("should save a new ContextInfo and get the same ContextInfo") {
       val dummyContext = ContextInfo("someId", "contextName", "", None, DateTime.now(), None,
           ContextStatus.Started, None)
-      dao.saveContext(dummyContext)
+      Await.result(dao.saveContext(dummyContext), timeout)
 
       val context = Await.result(dao.getContext("someId"), timeout)
       context.head should equal (dummyContext)
@@ -250,11 +250,11 @@ class SqlCommonSpec extends SqlCommonSpecBase with TestJarFinder with FunSpecLik
     it("should get the latest ContextInfo by name") {
       val dummyContextOld = ContextInfo("someIdOld", "contextName", "", None, DateTime.now(), None,
           ContextStatus.Finished, None)
-      dao.saveContext(dummyContextOld)
+      Await.result(dao.saveContext(dummyContextOld), timeout)
 
       val dummyContext = ContextInfo("someId", "contextName", "", None, DateTime.now().plusHours(2), None,
           ContextStatus.Started, None)
-      dao.saveContext(dummyContext)
+      Await.result(dao.saveContext(dummyContext), timeout)
 
       val context = Await.result(dao.getContextByName("contextName"), timeout)
       context.head should equal (dummyContext)
@@ -263,15 +263,15 @@ class SqlCommonSpec extends SqlCommonSpecBase with TestJarFinder with FunSpecLik
     it("should get all ContextInfos if no limit is given") {
       val dummyContextOld = ContextInfo("someIdOld", "contextName", "", None, DateTime.now().plusHours(2),
           None, ContextStatus.Finished, None)
-      dao.saveContext(dummyContextOld)
+      Await.result(dao.saveContext(dummyContextOld), timeout)
 
       val dummyContext = ContextInfo("someId", "contextName", "", None, DateTime.now().plusHours(1), None,
           ContextStatus.Finished, None)
-      dao.saveContext(dummyContext)
+      Await.result(dao.saveContext(dummyContext), timeout)
 
       val dummyContextNew = ContextInfo("someIdNew", "contextNameNew", "", None, DateTime.now(), None,
           ContextStatus.Started, None)
-      dao.saveContext(dummyContextNew)
+      Await.result(dao.saveContext(dummyContextNew), timeout)
 
       val contexts: Seq[ContextInfo] = Await.result(dao.getContexts(), timeout)
       contexts.size should equal (3)
@@ -281,15 +281,15 @@ class SqlCommonSpec extends SqlCommonSpecBase with TestJarFinder with FunSpecLik
     it("should get the 2 latest ContextInfos for limit = 2") {
       val dummyContextOld = ContextInfo("someIdOld", "contextName", "", None, DateTime.now(), None,
           ContextStatus.Finished, None)
-      dao.saveContext(dummyContextOld)
+      Await.result(dao.saveContext(dummyContextOld), timeout)
 
       val dummyContext = ContextInfo("someId", "contextName", "", None, DateTime.now().plusHours(1), None,
           ContextStatus.Finished, None)
-      dao.saveContext(dummyContext)
+      Await.result(dao.saveContext(dummyContext), timeout)
 
       val dummyContextNew = ContextInfo("someIdNew", "contextNameNew", "", None, DateTime.now().plusHours(2),
           None, ContextStatus.Started, None)
-      dao.saveContext(dummyContextNew)
+      Await.result(dao.saveContext(dummyContextNew), timeout)
 
       val contexts: Seq[ContextInfo] = Await.result(dao.getContexts(Some(2)), timeout)
       contexts.size should equal (2)
@@ -299,15 +299,15 @@ class SqlCommonSpec extends SqlCommonSpecBase with TestJarFinder with FunSpecLik
     it("should get ContextInfos of all contexts with state FINISHED") {
       val dummyContextOld = ContextInfo("someIdOld", "contextName", "", None, DateTime.now().plusHours(2),
           None, ContextStatus.Finished, None)
-      dao.saveContext(dummyContextOld)
+      Await.result(dao.saveContext(dummyContextOld), timeout)
 
       val dummyContext = ContextInfo("someId", "contextName", "", None, DateTime.now().plusHours(1), None,
           ContextStatus.Finished, None)
-      dao.saveContext(dummyContext)
+      Await.result(dao.saveContext(dummyContext), timeout)
 
       val dummyContextNew = ContextInfo("someIdNew", "contextNameNew", "", None, DateTime.now(), None,
           ContextStatus.Started, None)
-      dao.saveContext(dummyContextNew)
+      Await.result(dao.saveContext(dummyContextNew), timeout)
 
       val contexts: Seq[ContextInfo] = Await.result(dao.getContexts(
           None, Some(Seq(ContextStatus.Finished))), timeout)
@@ -318,19 +318,19 @@ class SqlCommonSpec extends SqlCommonSpecBase with TestJarFinder with FunSpecLik
     it("should get ContextInfos of all contexts with state Finished OR Running") {
       val dummyContextOld = ContextInfo("someIdOld", "contextName", "", None, DateTime.now().plusHours(2),
           None, ContextStatus.Finished, None)
-      dao.saveContext(dummyContextOld)
+      Await.result(dao.saveContext(dummyContextOld), timeout)
 
       val dummyContext = ContextInfo("someId", "contextName", "", None, DateTime.now().plusHours(1), None,
           ContextStatus.Finished, None)
-      dao.saveContext(dummyContext)
+      Await.result(dao.saveContext(dummyContext), timeout)
 
       val dummyContextNew = ContextInfo("someIdNew", "contextNameNew", "", None, DateTime.now(), None,
           ContextStatus.Started, None)
-      dao.saveContext(dummyContextNew)
+      Await.result(dao.saveContext(dummyContextNew), timeout)
 
       val dummyContextRestarting = ContextInfo("someIdRestarting", "contextNameRestarting", "", None,
           DateTime.now(), None, ContextStatus.Restarting, None)
-      dao.saveContext(dummyContextRestarting)
+      Await.result(dao.saveContext(dummyContextRestarting), timeout)
 
       val contexts: Seq[ContextInfo] = Await.result(dao.getContexts(
           None, Some(Seq(ContextStatus.Restarting, ContextStatus.Started))), timeout)
@@ -341,11 +341,11 @@ class SqlCommonSpec extends SqlCommonSpecBase with TestJarFinder with FunSpecLik
     it("should update the context, if id is the same for two saveContextInfo requests") {
       val dummyContext = ContextInfo("context2", "dummy-name", "", None, DateTime.now().plusHours(1), None,
           ContextStatus.Started, None)
-      dao.saveContext(dummyContext)
+      Await.result(dao.saveContext(dummyContext), timeout)
 
       val dummyContext2 = ContextInfo("context2", "new-name", "", Some("akka:tcp//test"),
           DateTime.now(), None, ContextStatus.Running, None)
-      dao.saveContext(dummyContext2)
+      Await.result(dao.saveContext(dummyContext2), timeout)
 
       val context = Await.result(dao.getContext("context2"), timeout)
       context.head should equal (dummyContext2)
@@ -354,7 +354,7 @@ class SqlCommonSpec extends SqlCommonSpecBase with TestJarFinder with FunSpecLik
     it("ContextInfo should still exist after db restart") {
       val dummyContext = ContextInfo("context3", "dummy-name", "", None, DateTime.now(), None,
           ContextStatus.Started, None)
-      dao.saveContext(dummyContext)
+      Await.result(dao.saveContext(dummyContext), timeout)
 
       // Destroy and bring up the DB again
       helperJobSqlDao = null

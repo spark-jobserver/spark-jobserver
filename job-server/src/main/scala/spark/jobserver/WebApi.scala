@@ -30,6 +30,7 @@ import spray.routing.{HttpService, RequestContext, Route}
 
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.Try
+import spark.jobserver.util.MeteredHttpService
 
 object WebApi {
   val StatusKey = "status"
@@ -137,7 +138,7 @@ class WebApi(system: ActorSystem,
              supervisor: ActorRef,
              jobInfoActor: ActorRef,
              daoActor: ActorRef)
-    extends HttpService with CommonRoutes with DataRoutes with SJSAuthenticator with CORSSupport
+    extends MeteredHttpService with CommonRoutes with DataRoutes with SJSAuthenticator with CORSSupport
                         with ChunkEncodedStreamingSupport {
   import CommonMessages._
   import ContextSupervisor._
@@ -374,7 +375,7 @@ class WebApi(system: ActorSystem,
     authenticate(authenticator) { authInfo =>
       (get & path(Segment)) { (contextName) =>
         respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-          val future = (supervisor ? GetSparkContexData(contextName))
+          val future = (supervisor ? GetSparkContexData(contextName))(15.seconds)
           future.map {
             case SparkContexData(context, appId, url) =>
               val stcode = 200;
