@@ -17,7 +17,7 @@ import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import spark.jobserver.JobManagerActor.JobKilledException
 import spark.jobserver.auth._
-import spark.jobserver.io.{BinaryType, ContextInfo, ErrorData, JobInfo, JobStatus}
+import spark.jobserver.io.{BinaryType, ContextInfo, ErrorData, JobInfo, JobStatus, JobDAOActor}
 import spark.jobserver.routes.DataRoutes
 import spark.jobserver.util.{SSLContextFactory, SparkJobUtils}
 import spray.http.HttpHeaders.{Location, `Content-Type`}
@@ -135,7 +135,8 @@ class WebApi(system: ActorSystem,
              binaryManager: ActorRef,
              dataManager: ActorRef,
              supervisor: ActorRef,
-             jobInfoActor: ActorRef)
+             jobInfoActor: ActorRef,
+             daoActor: ActorRef)
     extends HttpService with CommonRoutes with DataRoutes with SJSAuthenticator with CORSSupport
                         with ChunkEncodedStreamingSupport {
   import CommonMessages._
@@ -513,10 +514,47 @@ class WebApi(system: ActorSystem,
    *    GET /healthz              - return OK or error message
    */
   def healthzRoutes: Route = pathPrefix("healthz") {
+    import ContextSupervisor._
+    import JobManagerActor._
+    import JobInfoActor._
+    import JobDAOActor._
     //no authentication required
     get { ctx =>
       logger.info("Receiving healthz check request")
-      ctx.complete("OK")
+      var actorsAlive: Int = 0
+      val supervisorFuture = (supervisor ? GetContext("dummycontext")).mapTo[NoSuchContext.type]
+      val jobInfofuture = (jobInfoActor ? GetJobStatus("dummyjobid")).mapTo[NoSuchJobId.type]
+      val jobDaofuture = (daoActor ? GetJobInfos(1)).mapTo[JobInfos]
+      val statusActor = system.actorOf(JobStatusActor.props(daoActor))
+      val jobStatusfuture = (statusActor ? Unsubscribe("dummyjobid", null)).mapTo[NoSuchJobId.type]
+      val resultActor = GetResultActor("dummycontext")
+      val jobResultfuture = (jobInfoActor ? GetJobResult("dummyjobid")).mapTo[NoSuchJobId.type]
+
+      val listOfFutures = Seq(supervisorFuture, jobInfofuture, jobDaofuture, jobStatusfuture, jobResultfuture)
+      val futureOfList = Future.sequence(listOfFutures)
+
+      try {
+        val results = Await.result(futureOfList, 60 seconds)
+        for (result <- results) {
+          result match {
+            case NoSuchContext => actorsAlive += 1
+            case NoSuchJobId => actorsAlive += 1
+            case JobInfos(jobInfos) => actorsAlive += 1
+            case _ => logger.error("Unexpected response!")
+         }
+        }
+      } catch {
+        case ex: Exception => logger.error(ex.getMessage())
+      }
+
+      if (actorsAlive == 5) {
+        logger.info("Required actors alive")
+        ctx.complete(StatusCodes.OK)
+      }
+      else {
+        logger.error("Required actors not alive")
+        ctx.complete(500, errMap("Required actors not alive"))
+      }
     }
   }
 
