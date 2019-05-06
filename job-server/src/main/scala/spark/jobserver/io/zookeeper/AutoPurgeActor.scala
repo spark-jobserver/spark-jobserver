@@ -73,7 +73,7 @@ class AutoPurgeActor(config: Config, daoActor: ActorRef, purgeOlderThanHours: In
         val contexts = Await.result((daoActor ? GetContextInfos(None, None))
             .mapTo[ContextInfos], awaitDuration).contextInfos
         val purgePaths = contexts.filter(c => ContextStatus.getFinalStates().contains(c.state))
-          .filter(c => c.endTime.get.getMillis < (now - olderThanMillis))
+          .filter(c => c.endTime.isDefined && c.endTime.get.getMillis < (now - olderThanMillis))
           .map(c => s"${MetaDataZookeeperDAO.contextsDir}/${c.id}")
         logger.info(s"Purging ${purgePaths.size}/${contexts.size} contexts.")
         deletePaths(purgePaths)
@@ -88,7 +88,7 @@ class AutoPurgeActor(config: Config, daoActor: ActorRef, purgeOlderThanHours: In
       try{
         val jobs = Await.result((daoActor ? GetJobInfos(10000)).mapTo[JobInfos], awaitDuration).jobInfos
         val purgePaths = jobs.filter(j => JobStatus.getFinalStates().contains(j.state))
-          .filter(j => j.endTime.get.getMillis < (now - olderThanMillis))
+          .filter(j => j.endTime.isDefined && j.endTime.get.getMillis < (now - olderThanMillis))
           .map(j => s"${MetaDataZookeeperDAO.jobsDir}/${j.jobId}")
         logger.info(s"Purging ${purgePaths.size}/${jobs.size} jobs.")
         deletePaths(purgePaths)
