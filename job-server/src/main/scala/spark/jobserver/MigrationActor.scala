@@ -1,7 +1,7 @@
 package spark.jobserver
 
 import akka.actor.Props
-import com.typesafe.config.Config
+import com.typesafe.config.{Config, ConfigRenderOptions}
 import com.yammer.metrics.core.Counter
 import org.joda.time.DateTime
 import spark.jobserver.MigrationActor._
@@ -10,8 +10,13 @@ import spark.jobserver.common.akka.InstrumentedActor
 import spark.jobserver.common.akka.metrics.YammerMetrics
 import spark.jobserver.io._
 import spark.jobserver.JobManagerActor.ContextTerminatedException
+import spark.jobserver.io.zookeeper.{MetaDataZookeeperDAO, ZookeeperUtils}
+import spark.jobserver.util.{JsonProtocols, Utils}
 
+import scala.concurrent.{Await, TimeoutException}
+import scala.concurrent.duration.DurationInt
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.util.control.NonFatal
 import scala.util.{Failure, Success}
 
 object MigrationActor {
@@ -24,6 +29,10 @@ object MigrationActor {
   case class SaveContextInfoH2(contextInfo: ContextInfo)
   case class CleanContextJobInfosInH2(contextId: String, endTime: DateTime)
 
+  object SyncDatabases
+  object DatabasesSynced
+  object DatabasesSyncFailed
+
   def props(config: Config): Props = Props(classOf[MigrationActor], config)
 }
 
@@ -34,11 +43,11 @@ class MigrationActor(config: Config) extends InstrumentedActor
   with YammerMetrics{
 
   val dao = new MetaDataSqlDAO(config)
-  val currentDao: JobDAO = Class.forName(
+  val currentDao: CombinedDAO = Class.forName(
     config.getString("spark.jobserver.jobdao")
   ).getDeclaredConstructor(
     Class.forName("com.typesafe.config.Config")
-  ).newInstance(config).asInstanceOf[JobDAO]
+  ).newInstance(config).asInstanceOf[CombinedDAO]
 
   val totalLiveRequests: Counter = counter("live-total-count")
 
@@ -69,6 +78,72 @@ class MigrationActor(config: Config) extends InstrumentedActor
     case SaveContextInfoInZK(contextInfo) =>
       logger.info(s"ZK Migration request: Saving in context info with: ${contextInfo.id}")
       currentDao.saveContextInfo(contextInfo)
+
+    case SyncDatabases =>
+      import JsonProtocols._
+      import MetaDataZookeeperDAO._
+      val zookeeperUtils = new ZookeeperUtils(config)
+      val awaitTimeout = 10.seconds
+
+      logger.info(s"Checking that ZK and H2 are in sync (only for non final states)")
+      try {
+        var isSyncSuccess: Boolean = true
+        val contexts = Await.result(
+          dao.getContexts(None, Some(ContextStatus.getNonFinalStates())), awaitTimeout)
+        Utils.usingResource(zookeeperUtils.getClient) {
+          client =>
+            contexts.foreach { context =>
+              val contextId = context.id
+              logger.info(s"Copying context $contextId")
+              val contextIsSaved = zookeeperUtils.write(client, context, s"$contextsDir/$contextId")
+              logger.info(s"Context  saved: $contextIsSaved")
+              try {
+                Await.result(dao.getJobsByContextId(
+                  contextId, Some(JobStatus.getNonFinalStates())), awaitTimeout
+                ).foreach(
+                  job => {
+                    val jobId = job.jobId
+                    logger.info(s"Copying job $jobId for ${context.id}")
+                    val jobIsSaved = zookeeperUtils.write(client, job, s"$jobsDir/$jobId")
+                    logger.info(s"Job saved: $jobIsSaved")
+                    Await.result(dao.getJobConfig(jobId), awaitTimeout) match {
+                      case Some(job_config) =>
+                        logger.info(s"Saving job config for $jobId")
+                        val configRender = job_config.root().render(ConfigRenderOptions.concise())
+                        zookeeperUtils.write(client, configRender, s"$jobsDir/$jobId/config")
+                      case None => logger.info(s"No job config for job $jobId")
+                    }
+                    dao.getBinary(job.binaryInfo.appName) onComplete {
+                      case Success(Some(binInfo)) =>
+                        currentDao.metaDataDAO.saveBinary(binInfo.appName, binInfo.binaryType,
+                          binInfo.uploadTime, binInfo.binaryStorageId.get) onComplete {
+                            case Success(true) => logger.info(s"Binary ${binInfo.appName} is saved.")
+                            case _ => logger.error(s"Failed to save ${binInfo.appName} binary info.")
+                          }
+                      case _ => logger.error(s"Failed to fetch binary for $jobId")
+                    }
+                  }
+                )
+              } catch {
+                case _: TimeoutException =>
+                  logger.error(s"Failed to sync jobs for $contextId on time!")
+                  isSyncSuccess = false
+                case NonFatal(e) =>
+                  logger.error(s"Error syncing jobs for $contextId: ${e.getMessage}")
+                  isSyncSuccess = false
+              }
+          }
+        }
+        if (isSyncSuccess) {
+          sender ! DatabasesSynced
+        } else {
+          sender ! DatabasesSyncFailed
+        }
+      } catch {
+        case NonFatal(e) =>
+          logger.error(e.getMessage)
+          sender ! DatabasesSyncFailed
+      }
   }
 
   val liveRequestHandlers: Receive = {
