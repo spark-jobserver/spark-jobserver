@@ -295,7 +295,7 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
       val daoActorProbe = TestProbe()
 
       val (ctxRunning, _) = createContext("ctxRunning", ContextStatus.Running, true)
-      JobServer.setReconnectionFailedForContextAndJobs(ctxRunning, daoActorProbe.ref)
+      JobServer.setReconnectionFailedForContextAndJobs(ctxRunning, daoActorProbe.ref, timeout)
 
       // Check if context is updated correctly
       val saveContextMsg = daoActorProbe.expectMsgType[JobDAOActor.SaveContextInfo]

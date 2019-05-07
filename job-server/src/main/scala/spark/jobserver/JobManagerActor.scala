@@ -61,8 +61,6 @@ object JobManagerActor {
   case object SparkContextAlive
   case object SparkContextDead
 
-
-
   // Akka 2.2.x style actor props for actor creation
   def props(daoActor: ActorRef, supervisorActorAddress: String = "", contextId: String = "",
       initializationTimeout: FiniteDuration = 40.seconds): Props =
@@ -506,8 +504,6 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
       postEachJob()
       Future.successful()
     }
-
-    val daoAskTimeout = Timeout(3 seconds)
 
     (daoActor ? JobDAOActor.GetLastBinaryInfo(appName))(daoAskTimeout).
       mapTo[JobDAOActor.LastBinaryInfo].flatMap{

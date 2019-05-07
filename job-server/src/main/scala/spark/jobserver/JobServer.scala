@@ -200,8 +200,7 @@ object JobServer {
 
   @VisibleForTesting
   def setReconnectionFailedForContextAndJobs(contextInfo: ContextInfo,
-      jobDaoActor: ActorRef) {
-    val finiteDuration = FiniteDuration(3, SECONDS)
+      jobDaoActor: ActorRef, timeout: Timeout) {
     val ctxName = contextInfo.name
     val logMsg = s"Reconnecting to context $ctxName failed ->" +
       s"updating status of context $ctxName and related jobs to error"
@@ -210,7 +209,7 @@ object JobServer {
         state = ContextStatus.Error, error = Some(ContextReconnectFailedException()))
     jobDaoActor ! JobDAOActor.SaveContextInfo(updatedContextInfo)
     (jobDaoActor ? JobDAOActor.GetJobInfosByContextId(
-        contextInfo.id, Some(JobStatus.getNonFinalStates())))(finiteDuration).onComplete {
+        contextInfo.id, Some(JobStatus.getNonFinalStates())))(timeout).onComplete {
       case Success(JobDAOActor.JobInfos(jobInfos)) =>
         jobInfos.foreach(jobInfo => {
         jobDaoActor ! JobDAOActor.SaveJobInfo(jobInfo.copy(state = JobStatus.Error,
@@ -236,7 +235,7 @@ object JobServer {
 
     resp.contextInfos.map{ contextInfo =>
       getManagerActorRef(contextInfo, system) match {
-        case None => setReconnectionFailedForContextAndJobs(contextInfo, jobDaoActor)
+        case None => setReconnectionFailedForContextAndJobs(contextInfo, jobDaoActor, daoAskTimeout)
         case Some(actorRef) => validManagerRefs += actorRef
       }
     }
