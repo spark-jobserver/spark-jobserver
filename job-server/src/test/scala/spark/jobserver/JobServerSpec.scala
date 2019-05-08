@@ -18,7 +18,8 @@ import spark.jobserver.io.{
 import spark.jobserver.util.ContextReconnectFailedException
 
 import scala.concurrent.Await
-import scala.concurrent.duration.TimeUnit;
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 import java.util.UUID
 import org.joda.time.DateTime
 import java.util.concurrent.{TimeUnit, CountDownLatch}
@@ -300,8 +301,12 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
     it("should update the status of context and jobs if reconnection failed") {
       val daoActorProbe = TestProbe()
 
+      // Run setReconnectionFailedForContextAndJobs in separate thread
+      // to be able to probe the ongoing communication properly (especially due to blocking awaits)
       val (ctxRunning, _) = createContext("ctxRunning", ContextStatus.Running, true)
-      JobServer.setReconnectionFailedForContextAndJobs(ctxRunning, daoActorProbe.ref, timeout)
+      Future{
+        JobServer.setReconnectionFailedForContextAndJobs(ctxRunning, daoActorProbe.ref, timeout)
+      }
 
       // Check if context is updated correctly
       val saveContextMsg = daoActorProbe.expectMsgType[JobDAOActor.SaveContextInfo]
