@@ -52,16 +52,11 @@ class JobWithNamedRddsSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem)
     }
 
     it("get() should respect timeout when rdd is known, but not yet available") {
-
       var rdd : Option[RDD[Int]] = None
       val thread = new Thread {
         override def run() {
           namedTestRdds.getOrElseCreate("rdd-sleep", {
-            val t1 = System.currentTimeMillis()
-            var x = 0d
-            for (i <- 1 to 1000000) { x = x + Math.exp(1d + i) }
-            val t2 = System.currentTimeMillis()
-            //System.err.println("waking up: " + x + ", duration: " + (t2 - t1))
+            Thread.sleep(2000)
             val r = sc.parallelize(Seq(1, 2, 3))
             rdd = Some(r)
             r
@@ -69,13 +64,13 @@ class JobWithNamedRddsSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem)
         }
       }
       thread.start()
-      Thread.sleep(11)
-      //don't wait
+      Thread.sleep(10) // Wait for the thread to start calculations. 10.millis chosen randomly
+      // RDD is still computing, check that without waiting (1.millisecond) timeout exception is raised
       val err = intercept[TimeoutException] { namedTestRdds.get[Int]("rdd-sleep")(1.milliseconds) }
       err.getClass should equal(classOf[TimeoutException])
-      //now wait
+      // now wait for RDD to be computed
       namedTestRdds.get[Int]("rdd-sleep")(FiniteDuration(5, SECONDS)) should equal(Some(rdd.get))
-      //clean-up
+      // clean-up
       namedTestRdds.destroy("rdd-sleep")
     }
 
