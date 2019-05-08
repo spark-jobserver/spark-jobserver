@@ -41,13 +41,14 @@ object AkkaClusterSupervisorActorSpec {
         warn-about-java-serializer-usage = off
       }
       remote.netty.tcp.hostname = "127.0.0.1"
+      cluster.auto-down-unreachable-after = 3s
     }
     spark {
       master = "local[4]"
       driver.supervise = false
       temp-contexts {
-        num-cpu-cores = 4           # Number of cores to allocate.  Required.
-        memory-per-node = 512m      # Executor memory per node, -Xmx style eg 512m, 1G, etc.
+        num-cpu-cores = 1           # Number of cores to allocate.  Required.
+        memory-per-node = 256m      # Executor memory per node, -Xmx style eg 512m, 1G, etc.
       }
       jobserver.job-result-cache-size = 100
       jobserver.context-creation-timeout = 5 s
@@ -61,8 +62,8 @@ object AkkaClusterSupervisorActorSpec {
         }
       }
       context-settings {
-        num-cpu-cores = 2
-        memory-per-node = 512m
+        num-cpu-cores = 1
+        memory-per-node = 256m
         context-init-timeout = 2 s
         forked-jvm-init-timeout = 10s
         context-factory = spark.jobserver.context.DefaultSparkContextFactory
@@ -240,15 +241,15 @@ class StubbedJobManagerActor(contextConfig: Config) extends Actor {
 class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorSpec.system)
   with ImplicitSender with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
-  val daoTimeout = 5.seconds.dilated
-  val contextInitTimeout = 10.seconds.dilated
-  var supervisor: ActorRef = _
-  var dao: JobDAO = _
-  var daoActor: ActorRef = _
-  var managerProbe = TestProbe()
-  val contextConfig = AkkaClusterSupervisorActorSpec.config.getConfig("spark.context-settings")
-  val unusedDummyInput = 1
-  val visitedContextIsFinalStatePath = new AtomicInteger(0)
+  private val daoTimeout = 5.seconds.dilated
+  private val contextInitTimeout = 10.seconds.dilated
+  private var supervisor: ActorRef = _
+  private var dao: JobDAO = _
+  private var daoActor: ActorRef = _
+  private var managerProbe = TestProbe()
+  private val contextConfig = AkkaClusterSupervisorActorSpec.config.getConfig("spark.context-settings")
+  private val unusedDummyInput = 1
+  private val visitedContextIsFinalStatePath = new AtomicInteger(0)
   // This is needed to help tests pass on some MBPs when working from home
   System.setProperty("spark.driver.host", "localhost")
 
