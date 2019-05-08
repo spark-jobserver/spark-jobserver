@@ -208,18 +208,21 @@ object JobServer {
     val updatedContextInfo = contextInfo.copy(endTime = Option(DateTime.now()),
         state = ContextStatus.Error, error = Some(ContextReconnectFailedException()))
     jobDaoActor ! JobDAOActor.SaveContextInfo(updatedContextInfo)
-    (jobDaoActor ? JobDAOActor.GetJobInfosByContextId(
-        contextInfo.id, Some(JobStatus.getNonFinalStates())))(timeout).onComplete {
-      case Success(JobDAOActor.JobInfos(jobInfos)) =>
-        jobInfos.foreach(jobInfo => {
-        jobDaoActor ! JobDAOActor.SaveJobInfo(jobInfo.copy(state = JobStatus.Error,
-            endTime = Some(DateTime.now()), error = Some(ErrorData(ContextReconnectFailedException()))))
-        })
-      case Failure(e: Exception) =>
-        logger.error(s"Exception occurred while fetching jobs for context (${contextInfo.id})", e)
-      case unexpectedMsg @ _ =>
-        logger.error(
-            s"$unexpectedMsg message received while fetching jobs for context (${contextInfo.id})")
+    try{
+      Await.ready((jobDaoActor ? JobDAOActor.GetJobInfosByContextId(
+          contextInfo.id, Some(JobStatus.getNonFinalStates())))(timeout), timeout.duration).value.get match {
+        case Success(JobDAOActor.JobInfos(jobInfos)) =>
+          jobInfos.foreach(jobInfo => {
+          jobDaoActor ! JobDAOActor.SaveJobInfo(jobInfo.copy(state = JobStatus.Error,
+              endTime = Some(DateTime.now()), error = Some(ErrorData(ContextReconnectFailedException()))))
+          })
+        case Failure(e: Exception) =>
+          logger.error(s"Exception occurred while fetching jobs for context (${contextInfo.id})", e)
+      }
+    } catch {
+      case _ : TimeoutException =>
+        logger.error(s"Fetching job infos for context ${contextInfo.id} timed out. "
+            + "Not updating jobs to error state.")
     }
   }
 
