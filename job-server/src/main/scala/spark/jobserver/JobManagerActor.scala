@@ -785,11 +785,13 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
 
   @VisibleForTesting
   protected def scheduleContextStopTimeoutMsg(sender: ActorRef): Option[Cancellable] = {
+    logger.info("Scheduling a timeout message for context stop")
     val stopTimeoutMsg = ContextStopScheduledMsgTimeout(sender)
     contextStopTimeoutMsgHelper(stopTimeoutMsg)
   }
 
   private def scheduleContextStopForcefullyTimeoutMsg(sender: ActorRef): Option[Cancellable] = {
+    logger.info("Scheduling a timeout message for forceful context stop")
     val stopTimeoutMsg = ContextStopForcefullyScheduledMsgTimeout(sender)
     contextStopTimeoutMsgHelper(stopTimeoutMsg)
   }
@@ -801,10 +803,10 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
     val msgTimeoutSeconds = (contextDeletionTimeout - 2).seconds
     Try(context.system.scheduler.scheduleOnce(msgTimeoutSeconds, self, stopTimeoutMsg)) match {
       case Success(timeoutMsgHandler) =>
-        logger.info("Scheduled a time out message for forceful context stop")
+        logger.info("Scheduled a timeout message")
         Some(timeoutMsgHandler)
       case Failure(e) =>
-        logger.error("Failed to schedule a time out message for forceful context stop", e)
+        logger.error("Failed to schedule a timeout message", e)
         None
     }
   }
