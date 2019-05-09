@@ -146,7 +146,10 @@ object JobManager {
         // Spark Standalone Cluster Mode:
         // We have to call System.exit(0) otherwise the driver process keeps running
         // after the context has been stopped.
-        system.registerOnTermination(System.exit(0))
+        system.registerOnTermination {
+          logger.info("Actor system terminated. Exiting the JVM with exit code 0.")
+          System.exit(0)
+        }
       }
     }
 
