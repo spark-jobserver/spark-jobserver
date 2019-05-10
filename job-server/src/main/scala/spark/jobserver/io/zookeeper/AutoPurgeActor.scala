@@ -59,7 +59,7 @@ class AutoPurgeActor(config: Config, daoActor: ActorRef, purgeOlderThanHours: In
   private val awaitDuration = maxPurgeDuration / 2
   private implicit val timeout = new Timeout(awaitDuration)
 
-  context.system.scheduler.scheduleOnce(1 hour, self, AutoPurgeActor.PurgeOldData)
+  context.system.scheduler.schedule(1 hour, 1 hour, self, AutoPurgeActor.PurgeOldData)
 
   override def wrappedReceive: Receive = {
     case PurgeOldData =>
