@@ -3,26 +3,28 @@ package spark.jobserver
 import java.nio.charset.Charset
 
 import scala.util.Try
-import akka.actor.{ActorRef, ActorSystem, Props, Actor}
+import akka.actor.{Actor, ActorRef, ActorSystem, Props}
 import akka.pattern.ask
 import akka.util.Timeout
-import akka.testkit.{TestKit, TestProbe, TestActor}
+import akka.testkit.{TestActor, TestKit, TestProbe}
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 import java.nio.file.{Files, Path}
 
 import scala.concurrent.duration._
 import spark.jobserver.JobServer.InvalidConfiguration
 import spark.jobserver.common.akka
-import spark.jobserver.io.{
-  JobDAOActor, JobDAO, ContextInfo, ContextStatus, JobInfo, BinaryInfo, BinaryType, JobStatus}
-import spark.jobserver.util.ContextReconnectFailedException
+import spark.jobserver.io.{BinaryInfo, BinaryType, ContextInfo, ContextStatus, JobDAO, JobDAOActor, JobInfo, JobStatus}
+import spark.jobserver.util.{ContextReconnectFailedException, DAOCleanup}
 
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import java.util.UUID
+
 import org.joda.time.DateTime
-import java.util.concurrent.{TimeUnit, CountDownLatch}
+import java.util.concurrent.{CountDownLatch, TimeUnit}
+
+import com.typesafe.config.Config
 
 object JobServerSpec {
   val system = ActorSystem("test")
@@ -339,5 +341,35 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
 
       JobServer.getManagerActorRef(ctxInvalidAddress, actorSystem) should be(None)
     }
+  }
+
+  describe("Dao cleanup tests") {
+    it("should correctly find if the cleanup is enabled or not") {
+      JobServer.isCleanupEnabled(ConfigFactory.parseString("")) should be(false)
+      JobServer.isCleanupEnabled(
+        ConfigFactory.parseString("spark.jobserver.startup_dao_cleanup_class=\"\"")) should be(false)
+      JobServer.isCleanupEnabled(ConfigFactory.parseString(
+        "spark.jobserver.startup_dao_cleanup_class=spark.jobserver.util.ZKCleanup")) should be(true)
+    }
+
+    it("should create an instance of DAOCleanup correctly") {
+      val config = ConfigFactory.parseString(
+        s"spark.jobserver.startup_dao_cleanup_class=${classOf[dummyCleanup].getName}")
+      JobServer.doStartupCleanup(config) should be(true)
+    }
+
+    it("should fail if wrong class is passed in") {
+      val config = ConfigFactory.parseString(
+        s"spark.jobserver.startup_dao_cleanup_class=wrongClass")
+      intercept[ClassNotFoundException] {
+        JobServer.doStartupCleanup(config)
+      }
+    }
+  }
+}
+
+class dummyCleanup(config: Config) extends DAOCleanup {
+  override def cleanup(): Boolean = {
+    true
   }
 }

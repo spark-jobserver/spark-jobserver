@@ -52,3 +52,6 @@ final case class NoIPAddressFoundException() extends
 
 final case class UnsupportedNetworkAddressStrategy(name: String) extends
   Exception(s"Unsupported network address strategy $name specified.")
+
+final case class NoCorrespondingContextAliveException(jobId: String) extends
+  Exception(s"No context is alive against running job ($jobId). Cleaning the job.")

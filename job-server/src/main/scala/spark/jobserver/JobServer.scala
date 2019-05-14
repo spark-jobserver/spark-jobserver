@@ -11,7 +11,7 @@ import java.io.File
 import java.util.concurrent.{TimeUnit, TimeoutException}
 
 import spark.jobserver.io._
-import spark.jobserver.util.ContextReconnectFailedException
+import spark.jobserver.util.{ContextReconnectFailedException, DAOCleanup}
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 
@@ -22,6 +22,8 @@ import scala.util.{Failure, Success, Try}
 import scala.collection.mutable.ListBuffer
 import com.google.common.annotations.VisibleForTesting
 import spark.jobserver.io.zookeeper.AutoPurgeActor
+
+import scala.util.control.NonFatal
 
 /**
  * The Spark Job Server is a web service that allows users to submit and run Spark jobs, check status,
@@ -119,6 +121,8 @@ object JobServer {
     val dataFileDAO = new DataFileDAO(config)
     val dataManager = system.actorOf(Props(classOf[DataManagerActor], dataFileDAO), "data-manager")
     val binManager = system.actorOf(Props(classOf[BinaryManager], daoActor), "binary-manager")
+
+    startCleanupIfEnabled(config)
     startAutoPurge(system, daoActor, config)
 
     // Add initial job JARs, if specified in configuration.
@@ -317,6 +321,33 @@ object JobServer {
         case _ => logger.error("Initial auto purge unsuccessful.")
       }
     }
+  }
+
+  private def startCleanupIfEnabled(config: Config): Unit = {
+    isCleanupEnabled(config) match {
+      case true =>
+        logger.info("Cleanup of dao is enabled. Instantiating the class.")
+        Try(doStartupCleanup(config)) match {
+          case Success(true) => logger.info("Cleaned the dao successfully.")
+          case Success(false) => logger.error("Dao cleanup failed.")
+          case Failure(e) => logger.error("Failed to cleanup", e)
+        }
+      case false => logger.info("Startup dao cleanup is disabled.")
+    }
+  }
+
+  @VisibleForTesting
+  def isCleanupEnabled(config: Config): Boolean = {
+    val daoClassProperty = "spark.jobserver.startup_dao_cleanup_class"
+    (config.hasPath(daoClassProperty) && config.getString(daoClassProperty) != "")
+  }
+
+  @VisibleForTesting
+  def doStartupCleanup(config: Config): Boolean = {
+    val daoCleanupClass = Class.forName(config.getString("spark.jobserver.startup_dao_cleanup_class"))
+    val ctor = daoCleanupClass.getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
+    val daoCleanup = ctor.newInstance(config).asInstanceOf[DAOCleanup]
+    daoCleanup.cleanup()
   }
 
   def main(args: Array[String]) {
