@@ -5,16 +5,13 @@ import java.util.concurrent.TimeUnit
 import scala.concurrent.Await
 import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
-
 import org.slf4j.LoggerFactory
-
 import com.typesafe.config.Config
-
 import JsonProtocols.ContextInfoJsonFormat
 import JsonProtocols.JobInfoJsonFormat
-import spark.jobserver.io.ContextInfo
-import spark.jobserver.io.JobInfo
-import spark.jobserver.io.JobStatus
+import com.google.common.annotations.VisibleForTesting
+import org.joda.time.DateTime
+import spark.jobserver.io._
 import spark.jobserver.io.zookeeper.MetaDataZookeeperDAO
 import spark.jobserver.io.zookeeper.ZookeeperUtils
 import spark.jobserver.io.ContextStatus
@@ -23,15 +20,20 @@ trait DAOCleanup {
   def cleanup(): Boolean
 }
 
-class ZKCleanup(config: Config) extends DAOCleanup {
+object ZKCleanup {
+  val JOBS_LIMIT = 10000
+}
 
+class ZKCleanup(config: Config) extends DAOCleanup {
   private val logger = LoggerFactory.getLogger(getClass)
   private val hugeTimeout = FiniteDuration(1, TimeUnit.MINUTES)
-  implicit val ec = scala.concurrent.ExecutionContext.Implicits.global
+  val daoAskTimeout = FiniteDuration(
+    config.getDuration("spark.jobserver.dao-timeout", TimeUnit.SECONDS), TimeUnit.SECONDS)
 
   override def cleanup(): Boolean = {
     cleanUpContextsNoEndTime()
     cleanUpJobsNoEndTime()
+    cleanupNonFinalJobsWithFinalContext()
   }
 
   private val dao = new MetaDataZookeeperDAO(config)
@@ -90,4 +92,59 @@ class ZKCleanup(config: Config) extends DAOCleanup {
       true
   }
 
+  @VisibleForTesting
+  def cleanupNonFinalJobsWithFinalContext(): Boolean = {
+    logger.info("Cleaning all jobs whose contexts are in final state.")
+    try {
+      val jobs = getJobs(JobStatus.getNonFinalStates())
+
+      Utils.usingResource(zkUtils.getClient) { client =>
+        jobs.map { job =>
+          isContextStateFinal(job.contextId) match {
+              case true =>
+                val updatedJob = job.copy(endTime = Some(DateTime.now()),
+                    state = JobStatus.Error,
+                    error = Some(ErrorData(NoCorrespondingContextAliveException(job.jobId))))
+
+                logger.info(s"Context ${job.contextId} is in final state. " +
+                  s"Cleaning up job ${job.jobId} from state ${job.state} to ${JobStatus.Error}")
+                val path = s"${MetaDataZookeeperDAO.jobsDir}/${updatedJob.jobId}"
+                zkUtils.write(client, updatedJob, path)
+              case false =>
+                logger.info(s"Context ${job.contextId} is in non-final state. Not cleaning jobs.")
+            }
+        }
+        logger.info("Cleaned all non-final jobs with contexts in final state.")
+      }
+      true
+    } catch {
+      case NonFatal(e) =>
+        logger.error("Failed to cleanup non-final jobs", e)
+        false
+    }
+  }
+
+  private def getJobs(states: Seq[String]): Seq[JobInfo] = {
+    logger.info(s"Fetching jobs in state ${states.mkString(",")} for cleanup.")
+    val matchingJobs = states.map { state =>
+      (dao.getJobs(ZKCleanup.JOBS_LIMIT, Some(state))).mapTo[Seq[JobInfo]]
+    }.flatMap { jobsByStateFuture =>
+      Utils.retry(3, retryDelayInMs = 50)(Await.result(jobsByStateFuture, daoAskTimeout))
+    }
+
+    logger.info(s"Total jobs found in state ${states.mkString(",")} are ${matchingJobs.length}.")
+    matchingJobs
+  }
+
+  @VisibleForTesting
+  def isContextStateFinal(contextId: String): Boolean = {
+    val contextInfo = Utils.retry(2, retryDelayInMs = 10) {
+      Await.result(dao.getContext(contextId), hugeTimeout)
+    }
+
+    contextInfo match {
+      case Some(info) => ContextStatus.getFinalStates().contains(info.state)
+      case None => true
+    }
+  }
 }
