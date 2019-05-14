@@ -492,23 +492,25 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
     ).withFallback(contextConfig)
     val contextInfo = ContextInfo(contextId, name,
         mergedContextConfig.root().render(ConfigRenderOptions.concise()), None,
-        DateTime.now(), None, _: String, _: Option[Throwable])
+        DateTime.now(), _: Option[DateTime] , _: String, _: Option[Throwable])
     launchDriver(name, contextConfig, contextActorName) match {
       case (false, error) => val e = new Exception(error)
         failureFunc(e)
-        daoActor ! JobDAOActor.SaveContextInfo(contextInfo(ContextStatus.Error, Some(e)))
+        daoActor ! JobDAOActor.SaveContextInfo(
+            contextInfo(Some(DateTime.now()), ContextStatus.Error, Some(e)))
       case (true, _) =>
         val timeoutMsg = ForkedJVMInitTimeout(contextActorName,
-             contextInfo(ContextStatus.Error, Some(ContextJVMInitializationTimeout())))
+             contextInfo(Some(DateTime.now()), ContextStatus.Error, Some(ContextJVMInitializationTimeout())))
         // Scheduler can throw IllegalStateException
         Try(context.system.scheduler.scheduleOnce(forkedJVMInitTimeout.seconds, self, timeoutMsg)) match {
           case Success(timeoutMsgCancelHandler) =>
             logger.info("Scheduling a time out message for forked JVM")
-            daoActor ! JobDAOActor.SaveContextInfo(contextInfo(ContextStatus.Started, None))
+            daoActor ! JobDAOActor.SaveContextInfo(contextInfo(None, ContextStatus.Started, None))
             contextInitInfos(contextActorName) = (successFunc, failureFunc, timeoutMsgCancelHandler)
           case Failure(e) =>
             logger.error("Failed to schedule a time out message for forked JVM", e)
-            daoActor ! JobDAOActor.SaveContextInfo(contextInfo(ContextStatus.Error, Some(e)))
+            daoActor ! JobDAOActor.SaveContextInfo(
+                contextInfo(Some(DateTime.now()), ContextStatus.Error, Some(e)))
             val unusedCancellable = new Cancellable {
               def cancel(): Boolean = { return false }
               def isCancelled: Boolean = { return false }
