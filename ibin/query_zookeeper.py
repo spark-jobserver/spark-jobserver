@@ -13,11 +13,13 @@ MAPPING = {
     "binaries": "binaries",
 }
 ALLOWED_FILTERS = {
-    "jobs": {"statuses", "binary", "context-name", "job"},
+    "jobs": {"statuses", "binary", "context-name", "job", "context-id"},
     "contexts": {"statuses", "context-name", "context-id"},
     "binaries": {"binary"},
 }
 ALLOWED_STATUSES = {"RUNNING", "ERROR", "STOPPING", "FINISHED", "STARTED", "KILLED", "RESTARTING"}
+PROHIBITED_FOR_UPDATE = {"id", "jobId", "contextName", "name"}
+NODE_TYPES_TO_CHANGE = {"contexts", "jobs"}
 
 
 class ZookeeperClient(object):
@@ -85,31 +87,83 @@ def extract_filters(arg_parser):
 
 def apply_filters(data, filters):
     for f in filters:
+        filter_value = filters[f]
         if f == "statuses":
-            data = [node for node in data if node["state"] in filters[f]]
+            data = [node for node in data if node["state"] in filter_value]
         if f == "binary":
             if node_type == "binaries":
                 for bin_info in data:
-                    if bin_info[0]["appName"] == filters[f]:
+                    if bin_info[0]["appName"] == filter_value:
                         data = bin_info
                         break
             else:
-                data = [node for node in data if node["binaryInfo"]["appName"] == filters[f]]
+                data = [node for node in data if node["binaryInfo"]["appName"] == filter_value]
         if f == "context-name":
             if node_type == "contexts":
-                data = [node for node in data if node["name"] == filters[f]]
+                data = [node for node in data if node["name"] == filter_value]
             else:
-                data = [node for node in data if node["contextName"] == filters[f]]
+                data = [node for node in data if node["contextName"] == filter_value]
         if f == "context-id":
-            data = [node for node in data if node["id"] == filters[f]]
+            if node_type == "contexts":
+                data = [node for node in data if node["id"] == filter_value]
+            elif node_type == "jobs":
+                data = [node for node in data if node["contextId"] == filter_value]
         if f == "job":
             if node_type == "jobs":
-                data = [node for node in data if node["jobId"] == filters[f]]
+                data = [node for node in data if node["jobId"] == filter_value]
     return data
 
 
-def print_json(data):
-    print(json.dumps(data, indent=4, sort_keys=True))
+def print_json(data, only_names=False):
+    if only_names:
+        if node_type == "binaries":
+            print([d[0]["appName"] for d in data])  # each node is a list of binaries, e.g. [{..}, .. ,{..}]
+        elif node_type == "contexts":
+            print([d["id"] for d in data])
+        elif node_type == "jobs":
+            print([d["jobId"] for d in data])
+    else:
+        print(json.dumps(data, indent=4, sort_keys=True))
+
+
+def get_user_confirmation(question_text):
+    user_answer = raw_input(question_text).lower()
+    return user_answer == "y" or user_answer == "yes"
+
+
+def update_nodes(nodes, field_to_update, new_value):
+    if nodes and field_to_update and new_value:
+        if node_type not in NODE_TYPES_TO_CHANGE:
+            raise Exception("Only node types {} are allowed to be updated.".format(NODE_TYPES_TO_CHANGE))
+        if field_to_update not in nodes[0].keys():
+            raise Exception("Selected node type has only following fields: {}".format(nodes[0].keys()))
+        if field_to_update == "state" and not {new_value}.issubset(ALLOWED_STATUSES):
+            raise Exception("Only following states can be used for update: {}".format(ALLOWED_STATUSES))
+        if field_to_update in PROHIBITED_FOR_UPDATE:
+            raise Exception("Following fields are not allowed to be changed: {}".format(PROHIBITED_FOR_UPDATE))
+        if get_user_confirmation("Would you like to update status for found entities? [Yes/No]"):
+            print("Got it. Please revise updated content: ")
+            for n in nodes:
+                n[field_to_update] = new_value
+            print_json(nodes)
+            if get_user_confirmation("Would you STILL like to update {} for found entities? [Yes/No]".format(
+                    field_to_update
+            )):
+                for node in nodes:
+                    node_id = node.get("id", node.get("jobId"))
+                    if node_id:
+                        print("Updating node id: {}".format(node_id))
+                        client.set_node(node_path + "/" + node.get("id", node.get("jobId")), node)
+                    else:
+                        raise Exception("Failed to find node id field (checked for id and jobId fields)")
+            else:
+                print("Didn't get confirmation. Aborting operation.")
+        else:
+            print("Didn't get confirmation. Aborting operation.")
+    elif field_to_update and not new_value:
+        print("No new value for the update field was given.")
+    elif new_value and not field_to_update:
+        print("Please specify which field to update with new value.")
 
 
 parser = argparse.ArgumentParser(description="Connect and query Jobserver's Zookeeper.")
@@ -129,7 +183,14 @@ parser.add_argument('--binary', type=str, dest='filter_binary',
                     help='binary name to filter on')
 parser.add_argument('--only-names', action='store_true', dest='only_names',
                     help='show only names of the nodes')
-parser.add_argument('--update-state', type=str, dest='update_state', help='new status for selected nodes')
+parser.add_argument('--update-field', dest='update_field',
+                    help='field to update, should be used together with --update-value')
+parser.add_argument('--update-value', dest='update_value',
+                    help='new value for selected field')
+parser.add_argument('--update-end-time-string', type=str, dest='update_end_time',
+                    help='new end time for selected nodes')
+parser.add_argument('--limit', type=int, dest='limit', help='limit number of results')
+parser.add_argument('--sort-by', type=str, dest='sort_by', help='name of the field to sort by. Not for binaries!')
 
 args = parser.parse_args()
 try:
@@ -139,43 +200,34 @@ except KeyError:
 
 node_path = JOBSERVER_DB.format(node_type)
 filters = extract_filters(args)
-if filters and not set(filters.keys()).issubset(ALLOWED_FILTERS[node_type]):
-    raise Exception("Unknown node type! Please set up --node-type flag properly. Allowed values: {}".format(MAPPING.keys()))
+sort_by = args.sort_by
+
+if filters and not set(filters.keys()).issubset(ALLOWED_FILTERS.get(node_type, [])):
+    raise Exception("Filter is not allowed for this node-type! Allowed values: {}".format(
+        ALLOWED_FILTERS.get(node_type, []))
+    )
 
 client = ZookeeperClient(args.conn_string)
 try:
     client.connect()
-    if not filters and args.only_names:
-        print(client.get_children_list(node_path))
-    else:
+    nodes = []
+    try:
         nodes = client.get_children(node_path)
-        if filters:
-            nodes = apply_filters(nodes, filters)
-        print_json(nodes)
-
-        if nodes and args.update_state and node_type in ["jobs", "contexts"]:
-            if not {args.update_state}.issubset(ALLOWED_STATUSES):
-                raise Exception("Only following statuses can be used for update: {}".format(ALLOWED_STATUSES))
-            modify = raw_input("Would you like to update status for found entities? [Yes/No]")
-            if modify.lower() == "yes":
-                print("Got it. Please revise updated content: ")
-                for node in nodes:
-                    node["state"] = args.update_state
-                print_json(nodes)
-                update = raw_input("Would you STILL like to update status for found entities? [Yes/No]")
-                if update.lower() == "yes":
-                    for node in nodes:
-                        node_id = node.get("id", node.get("jobId"))
-                        if node_id:
-                            print("Updating node id: {}".format(node_id))
-                            client.set_node(node_path + "/" + node.get("id", node.get("jobId")), node)
-                        else:
-                            raise Exception("Failed to find node id field (checked for id and jobId fields)")
-                else:
-                    print("{} is not yes. You seem unsure, will better cancel operation.".format(update))
+    except kazoo.exceptions.NoNodeError:
+        print("No nodes of this type found")
+    if filters:
+        nodes = apply_filters(nodes, filters)
+    if nodes:
+        if sort_by:
+            if node_type == "binaries":
+                raise Exception("Can't sort binaries, sorry.")
+            elif sort_by not in nodes[0].keys():
+                raise Exception("Selected nodes can be sorted only by following fields: {}".format(nodes[0].keys()))
             else:
-                print("{} is not yes. Exiting:)".format(modify))
-        elif args.update_state:
-            print("Only jobs and contexts can be updated (with a new state).")
+                nodes = sorted(nodes, key=lambda x: x[sort_by])
+        if args.limit:
+            nodes = nodes[:args.limit]
+    print_json(nodes, args.only_names)
+    update_nodes(nodes, args.update_field, args.update_value)
 finally:
     client.close()
