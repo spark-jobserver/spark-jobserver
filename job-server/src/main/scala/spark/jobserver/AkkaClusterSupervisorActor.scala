@@ -276,37 +276,29 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
       val resp = getContextByName(name)
       resp match {
         case Some(JobDAOActor.ContextResponse(Some(c))) =>
-          logger.info("Shutting down context {}", name)
+          logger.info(s"Shutting down context $name with force=$force")
           val state = if (ContextStatus.getFinalStates() contains c.state) c.state else ContextStatus.Stopping
           val contextInfo = ContextInfo(c.id, c.name, c.config, c.actorAddress, c.startTime,
             c.endTime, state, c.error)
           daoActor ! JobDAOActor.SaveContextInfo(contextInfo)
           val contextActorRef = getActorRef(c)
           contextActorRef match {
-            case Some(ref) if force =>
-              val originalSender = sender
-               (ref ? JobManagerActor.StopContextForcefully)(contextDeletionTimeout seconds)
-                  .mapTo[ContextSupervisor.StopForcefullyContextResponse].onComplete {
-                case Success(SparkContextStopped) =>
-                  logger.info("Spark context stopped successfully. Shutting down the driver actor system")
-                  originalSender ! ContextStopped
-                case Success(ContextStopError(e)) =>
-                  logger.error(s"Context stopped forcefully failed with message ${e.getMessage}")
-                  originalSender ! ContextStopError(e)
-                case Failure(t) =>
-                  logger.error(s"Context stopped forcefully failed unexpectedly with message ${t.getMessage}")
-                  originalSender ! ContextStopError(t)
-              }
             case Some(ref) =>
               val originalSender = sender
-              (ref ? JobManagerActor.StopContextAndShutdown)(contextDeletionTimeout seconds)
-                  .mapTo[ContextSupervisor.StopContextResponse].onComplete {
+              val msg = force match {
+                case true => JobManagerActor.StopContextForcefully
+                case false => JobManagerActor.StopContextAndShutdown
+              }
+              (ref ? msg)(contextDeletionTimeout seconds).onComplete {
                 case Success(SparkContextStopped) =>
                   logger.info("Spark context stopped successfully. Shutting down the driver actor system")
                   originalSender ! ContextStopped
                 case Success(ContextStopInProgress) =>
                   logger.info("Failed to stop context within timeout. Stop is still in progress")
                   originalSender ! ContextStopInProgress
+                case Success(ContextStopError(e)) =>
+                  logger.error(s"Context stopped (force=${force}) failed with message ${e.getMessage}")
+                  originalSender ! ContextStopError(e)
                 case Failure(t) =>
                   logger.error(s"Context stopped failed with message ${t.getMessage}")
                   originalSender ! ContextStopError(t)
