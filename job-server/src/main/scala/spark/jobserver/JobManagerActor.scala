@@ -209,19 +209,8 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
       become(stoppingStateReceive)
       stopRequestSender ! ContextStopError(new ContextForcefulKillTimeout())
 
-    case SparkContextStopped =>
-      logger.info(s"Context $contextId stopped successfully")
-      val (stopContextSender, stopContextForcefullyTimeoutMsgHandler) = stopContextSenderAndHandler
-      stopContextForcefullyTimeoutMsgHandler.foreach{ handler =>
-        handler.isCancelled match {
-          case true =>
-            // The response to stop request already sent. No need to send any response back.
-          case false =>
-            stopContextForcefullyTimeoutMsgHandler.foreach(_.cancel())
-            stopContextSender.foreach(_ ! SparkContextStopped)
-        }
-      }
-      self ! PoisonPill
+    case SparkContextStopped => cleanupAndRespond()
+
   }
 
   def stoppingStateReceive: Receive = commonHandlers.orElse {
@@ -238,19 +227,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
       stopContextForcefullyHelper(originalSender)
     }
 
-    case SparkContextStopped =>
-      logger.info(s"Context $contextId stopped successfully")
-      val (stopContextSender, stopContextTimeoutMsgHandler) = stopContextSenderAndHandler
-      stopContextTimeoutMsgHandler.foreach{ handler =>
-        handler.isCancelled match {
-          case true =>
-            // The response to stop request already sent. No need to send any response back.
-          case false =>
-            stopContextTimeoutMsgHandler.foreach(_.cancel())
-            stopContextSender.foreach(_ ! SparkContextStopped)
-        }
-      }
-      self ! PoisonPill
+    case SparkContextStopped => cleanupAndRespond()
 
     case StopContextAndShutdown =>
       logger.info("Context stop already in progress")
@@ -841,5 +818,20 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
   @VisibleForTesting
   protected def forcefulKillCaller(forcefulKill: StandaloneForcefulKill) = {
     forcefulKill.kill()
+  }
+
+  private def cleanupAndRespond(): Unit = {
+    logger.info(s"Context $contextId stopped successfully")
+    val (stopContextSender, timeoutHandler) = stopContextSenderAndHandler
+    timeoutHandler.foreach{ handler =>
+      handler.isCancelled match {
+        case true =>
+        // The response to stop request already sent. No need to send any response back.
+        case false =>
+          timeoutHandler.foreach(_.cancel())
+          stopContextSender.foreach(_ ! SparkContextStopped)
+      }
+    }
+    self ! PoisonPill
   }
 }
