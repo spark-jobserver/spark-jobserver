@@ -15,6 +15,7 @@ import spark.jobserver.common.akka.metrics.YammerMetrics
 import spark.jobserver.io.{ErrorData, JobDAOActor, JobInfo, JobStatus}
 
 object JobStatusActor {
+  val NAME = "status-actor"
   case class JobInit(jobInfo: JobInfo)
   case class GetRunningJobStatus()
 

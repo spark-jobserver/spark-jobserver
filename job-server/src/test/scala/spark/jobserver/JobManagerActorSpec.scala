@@ -12,10 +12,10 @@ import spark.jobserver.JobManagerActor.KillJob
 import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.CommonMessages.{JobRestartFailed, JobStarted, JobValidationFailed, Subscribe}
 import spark.jobserver.io._
-import spark.jobserver.ContextSupervisor.{SparkContextStopped, ContextStopError, ContextStopInProgress}
+import spark.jobserver.ContextSupervisor.{ContextStopError, ContextStopInProgress, SparkContextStopped}
 import spark.jobserver.io.JobDAOActor.SavedSuccessfully
 import spark.jobserver.util.{ContextKillingItselfException, NoJobConfigFoundException,
-  StandaloneForcefulKill, NotStandaloneModeException}
+  NotStandaloneModeException, StandaloneForcefulKill}
 
 import scala.collection.mutable
 import scala.concurrent.duration.FiniteDuration
@@ -25,6 +25,7 @@ object JobManagerActorSpec extends JobSpecConfig
 object JobManagerActorSpy {
   case object TriggerExternalKill
   case object UnhandledException
+  case object GetStatusActorRef
 
   def props(daoActor: ActorRef, supervisorActorAddress: String,
       initializationTimeout: FiniteDuration,
@@ -58,6 +59,8 @@ class JobManagerActorSpy(daoActor: ActorRef, supervisorActorAddress: String,
       sender ! "Stopped"
 
     case JobManagerActorSpy.UnhandledException => throw new Exception("I am unhandled")
+
+    case JobManagerActorSpy.GetStatusActorRef => sender ! statusActor
   }
 
   override def wrappedReceive: Receive = {
@@ -892,6 +895,23 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       deathWatcher.expectTerminated(manager)
     }
 
+    it("should stop context, kill status actor and shutdown itself (in order)") {
+      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, TestProbe(), 1))
+      watch(manager)
+      manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+
+      manager ! JobManagerActorSpy.GetStatusActorRef
+      val statusActorRef = expectMsgType[ActorRef]
+      watch(statusActorRef)
+
+      manager ! JobManagerActor.StopContextAndShutdown
+
+      expectTerminated(statusActorRef)
+      expectMsg(SparkContextStopped)
+      expectTerminated(manager)
+    }
+
     it("should update DAO if an external kill event is fired to stop the context") {
       manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, TestProbe(), 1))
       val deathWatcher = TestProbe()
@@ -978,6 +998,23 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobManagerActor.StopContextForcefully
       expectMsg(SparkContextStopped)
       deathWatcher.expectTerminated(manager)
+    }
+
+    it("should forcefully stop context, kill status actor and shutdown itself (in order)") {
+      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, TestProbe(), 1))
+      watch(manager)
+      manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+
+      manager ! JobManagerActorSpy.GetStatusActorRef
+      val statusActorRef = expectMsgType[ActorRef]
+      watch(statusActorRef)
+
+      manager ! JobManagerActor.StopContextForcefully
+
+      expectTerminated(statusActorRef)
+      expectMsg(SparkContextStopped)
+      expectTerminated(manager)
     }
 
     it("should send ContextStopError in case of an exception for forceful context stop") {
