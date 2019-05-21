@@ -14,8 +14,6 @@ import org.apache.shiro.SecurityUtils
 import org.apache.shiro.config.IniSecurityManagerFactory
 import org.apache.http.HttpStatus
 import org.joda.time.DateTime
-import org.slf4j.LoggerFactory
-import spark.jobserver.JobManagerActor.JobKilledException
 import spark.jobserver.auth._
 import spark.jobserver.io.{BinaryType, ContextInfo, ErrorData, JobInfo, JobStatus}
 import spark.jobserver.routes.DataRoutes
@@ -25,11 +23,12 @@ import spray.http._
 import spray.httpx.SprayJsonSupport.sprayJsonMarshaller
 import spray.io.ServerSSLEngineProvider
 import spray.json.DefaultJsonProtocol._
-import spray.routing.directives.AuthMagnet
-import spray.routing.{HttpService, RequestContext, Route}
+import spray.routing.directives.{AuthMagnet, LoggingMagnet}
+import spray.routing.{RequestContext, Route}
 
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.Try
+import org.slf4j.LoggerFactory
 import spark.jobserver.util.MeteredHttpService
 
 object WebApi {
@@ -162,12 +161,30 @@ class WebApi(system: ActorSystem,
   val contextDeletionTimeout = SparkJobUtils.getContextDeletionTimeout(config)
   val bindAddress = config.getString("spark.jobserver.bind-address")
 
+  private val maxSprayLogMessageLength = 400
+
+  val accessLogger: LoggingMagnet[HttpRequest => Any => Unit] = LoggingMagnet {
+    request: HttpRequest =>
+      logger.info(s"[${request.method}] ${request.uri}")
+      _ match {
+        case res: HttpResponse =>
+          val resMessage = res.entity.toString.
+            replace('\n', ' ').replaceAll(" +", " ")
+          logger.info(s"Response: ${res.status} " +
+            s"${resMessage.substring(0, Math.min(resMessage.length(), maxSprayLogMessageLength))}(...) " +
+            s"to request: ${request.uri}")
+        case _ => logger.info("Unknown response")
+      }
+  }
+
   val logger = LoggerFactory.getLogger(getClass)
 
-  val myRoutes = cors {
-    overrideMethodWithParameter("_method") {
-      binaryRoutes ~ jarRoutes ~ contextRoutes ~ jobRoutes ~
-        dataRoutes ~ healthzRoutes ~ otherRoutes
+  val myRoutes = logRequestResponse(accessLogger) {
+    cors {
+      overrideMethodWithParameter("_method") {
+        binaryRoutes ~ jarRoutes ~ contextRoutes ~ jobRoutes ~
+          dataRoutes ~ healthzRoutes ~ otherRoutes
+      }
     }
   }
 
@@ -271,7 +288,8 @@ class WebApi(system: ActorSystem,
                       val future = binaryManager ? StoreBinary(appName, binaryType, binBytes)
 
                       future.map {
-                        case BinaryStored => ctx.complete(StatusCodes.OK)
+                        case BinaryStored =>
+                          ctx.complete(StatusCodes.OK)
                         case InvalidBinary => badRequest(ctx, "Binary is not of the right format")
                         case BinaryStorageFailure(ex) => ctx.complete(500, errMap(ex, "Storage Failure"))
                       }.recover {
@@ -280,7 +298,8 @@ class WebApi(system: ActorSystem,
                     case None => ctx.complete(415, s"Unsupported binary type $x")
                   }
                 }
-              case None => complete(415, s"Content-Type header must be set to indicate binary type")
+              case None =>
+                complete(415, s"Content-Type header must be set to indicate binary type")
             }
           }
         }
@@ -315,7 +334,6 @@ class WebApi(system: ActorSystem,
     authenticate(authenticator) { authInfo =>
       // GET /jars route returns a JSON map of the app name and the last time a jar was uploaded.
       get { ctx =>
-        logger.info(s"GET /jars")
         val future = (binaryManager ? ListBinaries(Some(BinaryType.Jar))).
           mapTo[collection.Map[String, (BinaryType, DateTime)]].map(_.mapValues(_._2))
         future.map { jarTimeMap =>
@@ -329,7 +347,6 @@ class WebApi(system: ActorSystem,
         // The <appName> needs to be unique; uploading a jar with the same appName will replace it.
         post {
           path(Segment) { appName =>
-            logger.info(s"POST /jars/$appName")
             entity(as[Array[Byte]]) { jarBytes =>
               val future = binaryManager ? StoreBinary(appName, BinaryType.Jar, jarBytes)
               respondWithMediaType(MediaTypes.`application/json`) { ctx =>
@@ -375,15 +392,12 @@ class WebApi(system: ActorSystem,
     // user authentication
     authenticate(authenticator) { authInfo =>
       (get & path(Segment)) { contextName =>
-        logger.info(s"GET /contexts/$contextName")
         respondWithMediaType(MediaTypes.`application/json`) { ctx =>
           val future = (supervisor ? GetSparkContexData(contextName))(15.seconds)
           future.map {
             case SparkContexData(context, appId, url) =>
-              val stcode = 200;
               val contextMap = getContextReport(context, appId, url)
-              logger.info("StatusCode: " + stcode + ", " + contextMap)
-              ctx.complete(stcode, contextMap)
+              ctx.complete(200, contextMap)
             case NoSuchContext => notFound(ctx, s"can't find context with name $contextName")
             case UnexpectedError => ctx.complete(500, errMap("UNEXPECTED ERROR OCCURRED"))
           }.recover {
@@ -392,7 +406,6 @@ class WebApi(system: ActorSystem,
         }
       } ~
       get { ctx =>
-        logger.info("GET /contexts")
         val future = supervisor ? ListContexts
         future.map {
           case UnexpectedError => ctx.complete(500, errMap("UNEXPECTED ERROR OCCURRED"))
@@ -420,7 +433,6 @@ class WebApi(system: ActorSystem,
          */
         entity(as[String]) { configString =>
           path(Segment) { contextName =>
-            logger.info(s"POST /contexts/$contextName");
             // Enforce user context name to start with letters
             if (!contextName.head.isLetter) {
               complete(StatusCodes.BadRequest, errMap("context name must start with letters"))
@@ -456,13 +468,13 @@ class WebApi(system: ActorSystem,
           parameters('force.as[Boolean] ?) {
             forceOpt => {
               val force = forceOpt.getOrElse(false)
-              logger.info(s"DELETE /contexts/$contextName (force=$forceOpt)")
               val (cName, _) = determineProxyUser(config, authInfo, contextName)
               val future = (supervisor ?
                 StopContext(cName, force))(contextDeletionTimeout.seconds + 1.seconds)
               respondWithMediaType(MediaTypes.`application/json`) { ctx =>
                 future.map {
-                  case ContextStopped => ctx.complete(StatusCodes.OK, successMap("Context stopped"))
+                  case ContextStopped =>
+                    ctx.complete(StatusCodes.OK, successMap("Context stopped"))
                   case ContextStopInProgress =>
                     val response = HttpResponse(
                       status = StatusCodes.Accepted, headers = List(Location(ctx.request.uri)))
@@ -520,7 +532,6 @@ class WebApi(system: ActorSystem,
   def healthzRoutes: Route = pathPrefix("healthz") {
     //no authentication required
     get { ctx =>
-      logger.info("Receiving healthz check request")
       ctx.complete("OK")
     }
   }
@@ -658,7 +669,6 @@ class WebApi(system: ActorSystem,
             }
             val future = (jobInfoActor ? GetJobStatuses(Some(limit), statusUpperCaseOpt)).mapTo[Seq[JobInfo]]
             respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-              logger.info(s"GET /jobs (limit=$limit, status=$statusUpperCaseOpt)")
               future.map { infos =>
                 val jobReport = infos.map { info =>
                   getJobReport(info)
@@ -710,16 +720,18 @@ class WebApi(system: ActorSystem,
                           res match {
                             case s: Stream[_] => sendStreamingResponse(ctx, ResultChunkSize,
                               resultToByteIterator(Map.empty, s.toIterator))
-                            case _ => ctx.complete(Map[String, Any]("jobId" -> jobId) ++ resultToTable(res))
+                            case _ =>
+                              ctx.complete(Map[String, Any]("jobId" -> jobId) ++ resultToTable(res))
                           }
-                        case JobErroredOut(jobId, _, ex) => ctx.complete(
-                          Map[String, String]("jobId" -> jobId) ++ errMap(ex, "ERROR")
+                        case JobErroredOut(jobId, _, ex) =>
+                          ctx.complete(Map[String, String]("jobId" -> jobId) ++ errMap(ex, "ERROR")
                         )
                         case JobStarted(_, jobInfo) =>
                           val future = jobInfoActor ? StoreJobConfig(jobInfo.jobId, postedJobConfig)
                           future.map {
                             case JobConfigStored =>
-                              ctx.complete(202, getJobReport(jobInfo, jobStarted = true))
+                              val jobReport = getJobReport(jobInfo, jobStarted = true)
+                              ctx.complete(202, jobReport)
                           }.recover {
                             case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
                           }
