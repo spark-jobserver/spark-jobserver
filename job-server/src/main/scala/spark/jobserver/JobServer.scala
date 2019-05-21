@@ -6,6 +6,7 @@ import akka.pattern.ask
 import akka.cluster.Cluster
 import akka.cluster.ClusterEvent.{InitialStateAsEvents, MemberEvent}
 import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
+
 import java.io.File
 import java.util.concurrent.{TimeUnit, TimeoutException}
 
@@ -20,7 +21,6 @@ import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 import scala.collection.mutable.ListBuffer
 import com.google.common.annotations.VisibleForTesting
-import spark.jobserver.MigrationActor.SyncDatabases
 import spark.jobserver.io.zookeeper.AutoPurgeActor
 
 import scala.util.control.NonFatal
@@ -126,7 +126,6 @@ object JobServer {
 
     startCleanupIfEnabled(config)
     startAutoPurge(system, daoActor, config)
-    syncDatabases(migrationActorRef)
 
     // Add initial job JARs, if specified in configuration.
     storeInitialBinaries(config, binManager)
@@ -352,20 +351,6 @@ object JobServer {
     val ctor = daoCleanupClass.getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
     val daoCleanup = ctor.newInstance(config).asInstanceOf[DAOCleanup]
     daoCleanup.cleanup()
-  }
-
-  private def syncDatabases(migrationActor: ActorRef): Unit = {
-    try {
-      val awaitTimeout = 5.minutes
-      Await.result((migrationActor ? SyncDatabases) (awaitTimeout), awaitTimeout) match {
-        case MigrationActor.DatabasesSynced =>
-          logger.info("Successfully synced H2 and Zookeeper.")
-        case _ => logger.error("H2 and Zookeeper sync was unsuccessful.")
-      }
-    } catch {
-      case _: TimeoutException =>
-        logger.error("Failed get a response from database sync.")
-    }
   }
 
   def main(args: Array[String]) {

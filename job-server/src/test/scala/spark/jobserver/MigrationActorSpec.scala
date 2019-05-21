@@ -1,12 +1,10 @@
 package spark.jobserver
 
-import akka.pattern.ask
 import akka.actor.ActorRef
 import akka.testkit.TestProbe
 import com.typesafe.config.{Config, ConfigFactory}
 import org.joda.time.DateTime
 import org.scalatest.BeforeAndAfter
-import spark.jobserver.MigrationActor.{SyncDatabases, DatabasesSynced}
 import spark.jobserver.io._
 import spark.jobserver.io.zookeeper.{MetaDataZookeeperDAO, ZookeeperUtils}
 import spark.jobserver.util.{CuratorTestCluster, Utils}
@@ -39,7 +37,6 @@ class MigrationActorSpec extends JobSpecBase(MigrationActorSpec.getNewSystem) wi
   private val sqlDao = new MetaDataSqlDAO(config)
   private val zkUtils = new ZookeeperUtils(config)
   private val zkDao = new MetaDataZookeeperDAO(config)
-  private val helper: SqlTestHelpers = new SqlTestHelpers(config)
 
   private val binary = "Some test bin".toCharArray.map(_.toByte)
   private val testInfo = BinaryInfo("test", BinaryType.Jar, DateTime.now(),
@@ -55,30 +52,6 @@ class MigrationActorSpec extends JobSpecBase(MigrationActorSpec.getNewSystem) wi
     Utils.usingResource(zkUtils.getClient) {
       client =>
         zkUtils.delete(client, "")
-    }
-    Await.result(helper.cleanupMetadataTables(), timeout)
-  }
-
-  describe("Should sync Zookeeper and H2") {
-    it("should mirror contexts and jobs in non-final states") {
-      // Prepare data: save jobs, contexts and configs in H2
-      Await.result(sqlDao.saveContext(testContextInfo), timeout)
-      Await.result(sqlDao.saveContext(
-        testContextInfo.copy(state = ContextStatus.Finished, id = "TestId")), timeout)
-      Await.result(sqlDao.saveBinary(testInfo.appName, BinaryType.Jar,
-        testInfo.uploadTime, testInfo.binaryStorageId.get), timeout)
-      Await.result(sqlDao.saveJob(testJobInfo), timeout)
-      Await.result(sqlDao.saveJobConfig(testJobInfo.jobId, testJobConfig), timeout)
-      Await.result(sqlDao.saveJob(testJobInfo.copy(state = JobStatus.Error, jobId = "1234")), timeout)
-
-      Await.result((migrationActor ? SyncDatabases) (timeout), timeout) should be(DatabasesSynced)
-
-      // Check that data was written to Zookeeper
-      Await.result(zkDao.getContexts(), timeout) should be(Seq(testContextInfo))
-      Await.result(zkDao.getJobs(10), timeout) should be(Seq(testJobInfo))
-      Await.result(zkDao.getJobConfig(testJobInfo.jobId), timeout) should be(Some(testJobConfig))
-      Thread.sleep(200) // Binaries are saved in future. Prevent flaky test :)
-      Await.result(zkDao.getBinary(testInfo.appName), timeout).get should be(testInfo)
     }
   }
 
