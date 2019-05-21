@@ -126,7 +126,7 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
 
   import JobDAOActorSpec._
 
-  val daoActor = system.actorOf(JobDAOActor.props(DummyDao, TestProbe().ref))
+  val daoActor = system.actorOf(JobDAOActor.props(DummyDao))
 
   override def afterAll() {
     AkkaTestUtils.shutdownAndWait(system)

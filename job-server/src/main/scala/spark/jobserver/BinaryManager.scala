@@ -46,16 +46,16 @@ object BinaryManager {
  * An Actor that manages the jars stored by the job server.   It's important that threads do not try to
  * load a class from a jar as a new one is replacing it, so using an actor to serialize requests is perfect.
  */
-class BinaryManager(jobDao: ActorRef, migrationActor: ActorRef) extends InstrumentedActor {
+class BinaryManager(jobDao: ActorRef) extends InstrumentedActor {
+  import scala.concurrent.duration._
   import akka.pattern.{ask, pipe}
   import context.dispatcher
   implicit val daoAskTimeout = Timeout(60 seconds)
-  private var uploadTime: DateTime = _
 
   private def saveBinary(appName: String,
                          binaryType: BinaryType,
                          binBytes: Array[Byte]): Future[Try[Unit]] = {
-    uploadTime = DateTime.now()
+    val uploadTime = DateTime.now()
     (jobDao ? JobDAOActor.SaveBinary(appName, binaryType, uploadTime, binBytes)).
       mapTo[SaveBinaryResult].map(_.outcome)
   }
@@ -113,11 +113,7 @@ class BinaryManager(jobDao: ActorRef, migrationActor: ActorRef) extends Instrume
         sender ! InvalidBinary
       } else {
         saveBinary(appName, binaryType, binBytes).map{
-          case Success(_) => {
-            migrationActor ! ZookeeperMigrationActor.SaveBinaryInfoInZK(appName, binaryType,
-              uploadTime, binBytes)
-            BinaryStored
-          }
+          case Success(_) => BinaryStored
           case Failure(ex) => BinaryStorageFailure(ex)
         }.pipeTo(sender)
       }
@@ -130,7 +126,6 @@ class BinaryManager(jobDao: ActorRef, migrationActor: ActorRef) extends Instrume
           logger.info(s"No active job found for binary $appName. Deleting binary.")
           deleteBinary(appName).map {
             case Success(_) => {
-              migrationActor ! ZookeeperMigrationActor.DeleteBinaryInfoFromZK(appName)
               BinaryDeleted
             }
             case Failure(ex) => ex match {

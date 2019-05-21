@@ -295,7 +295,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
 
   override def beforeAll() {
     dao = new InMemoryDAO
-    daoActor = system.actorOf(JobDAOActor.props(dao, TestProbe().ref))
+    daoActor = system.actorOf(JobDAOActor.props(dao))
     val cluster = Cluster(system)
     supervisor = system.actorOf(Props(classOf[StubbedAkkaClusterSupervisorActor], daoActor, TestProbe().ref,
         managerProbe, cluster, visitedContextIsFinalStatePath), "supervisor")

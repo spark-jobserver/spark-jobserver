@@ -288,7 +288,7 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
     }
 
     it("should return empty list if no context is available to reconnect") {
-      val daoActor = actorSystem.actorOf(JobDAOActor.props(new InMemoryDAO, TestProbe().ref))
+      val daoActor = actorSystem.actorOf(JobDAOActor.props(new InMemoryDAO))
 
       val existingManagerActorRefs = JobServer.getExistingManagerActorRefs(actorSystem, daoActor)
       existingManagerActorRefs should be(List())

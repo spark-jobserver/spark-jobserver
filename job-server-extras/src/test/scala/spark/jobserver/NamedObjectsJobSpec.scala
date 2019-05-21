@@ -12,7 +12,7 @@ class NamedObjectsJobSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
   override def beforeAll() {
     dao = new InMemoryDAO
-    daoActor = system.actorOf(JobDAOActor.props(dao, TestProbe().ref))
+    daoActor = system.actorOf(JobDAOActor.props(dao))
     manager = system.actorOf(JobManagerActor.props(daoActor))
     supervisor = TestProbe().ref
 

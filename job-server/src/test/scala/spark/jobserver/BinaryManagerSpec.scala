@@ -2,8 +2,9 @@ package spark.jobserver
 
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
+
 import akka.actor.{ActorSystem, Props}
-import akka.testkit.{ImplicitSender, TestKit, TestProbe}
+import akka.testkit.{ImplicitSender, TestKit}
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfterAll, FunSpecLike, Matchers}
 import spark.jobserver.common.akka.{AkkaTestUtils, InstrumentedActor}
@@ -50,7 +51,7 @@ class BinaryManagerSpec extends TestKit(BinaryManagerSpec.system) with ImplicitS
   }
 
   val daoActor = system.actorOf(Props[DummyDAOActor])
-  val binaryManager = system.actorOf(Props(classOf[BinaryManager], daoActor, TestProbe().ref))
+  val binaryManager = system.actorOf(Props(classOf[BinaryManager], daoActor))
 
   describe("BinaryManager") {
 

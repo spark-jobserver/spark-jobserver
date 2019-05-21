@@ -1,6 +1,5 @@
 package spark.jobserver
 
-import akka.testkit.TestProbe
 import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.sql.{Row, SparkSession}
@@ -47,7 +46,7 @@ class SessionJobSpec extends ExtrasJobSpecBase(SessionJobSpec.getNewSystem) {
 
   before {
     dao = new InMemoryDAO
-    daoActor = system.actorOf(JobDAOActor.props(dao, TestProbe().ref))
+    daoActor = system.actorOf(JobDAOActor.props(dao))
     manager = system.actorOf(JobManagerActor.props(daoActor))
   }
 

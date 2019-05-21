@@ -1,13 +1,13 @@
 package spark.jobserver
 
 import akka.actor.{ActorRef, ActorSystem, Props}
-import akka.testkit.{ImplicitSender, TestKit, TestProbe}
+import akka.testkit.{ImplicitSender, TestKit}
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 import org.joda.time.DateTime
-
 import scala.concurrent._
 import scala.concurrent.duration._
+
 import spark.jobserver.common.akka
 import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.io._
@@ -37,10 +37,10 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
   before {
     dao = new InMemoryDAO
-    daoActor = system.actorOf(JobDAOActor.props(dao, TestProbe().ref))
+    daoActor = system.actorOf(JobDAOActor.props(dao))
     dataManager = system.actorOf(Props.empty)
     val supervisor = system.actorOf(Props(classOf[LocalContextSupervisorActor], daoActor, dataManager))
-    actor = system.actorOf(Props(classOf[JobInfoActor], dao, supervisor, TestProbe().ref))
+    actor = system.actorOf(Props(classOf[JobInfoActor], dao, supervisor))
   }
 
   after {

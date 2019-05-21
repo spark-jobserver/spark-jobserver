@@ -14,9 +14,7 @@ import spark.jobserver.common.akka.actor.Reaper.WatchMe
 import spark.jobserver.io.{JobDAO, JobDAOActor}
 import spark.jobserver.util.{HadoopFSFacade, NetworkAddressFactory, Utils}
 
-import scala.concurrent.Await
-import scala.concurrent.duration.{FiniteDuration, SECONDS}
-import scala.util.control.NonFatal
+import scala.concurrent.duration.FiniteDuration
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -70,22 +68,7 @@ object JobManager {
     val clazz = Class.forName(config.getString("spark.jobserver.jobdao"))
     val ctor = clazz.getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
     val jobDAO = ctor.newInstance(config).asInstanceOf[JobDAO]
-
-    val zookeeperMigrationActor = try {
-      val duration = FiniteDuration(3, SECONDS)
-      Await.result(system.actorSelection(
-        clusterAddress.toString + "/user/migration-actor"
-      ).resolveOne(duration), duration)
-    } catch {
-      // Failing to find migration worker shouldn't fail JobManager creation
-      case NonFatal(e) =>
-        logger.error(s"Failed to obtain ActorRef for Zookeeper migration actor: ${e.getMessage}")
-        logger.error(s"Creating own instance of Migration Actor:")
-        system.actorOf(ZookeeperMigrationActor.props(config), "dao-manager-migration-actor")
-    }
-
-    val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO, zookeeperMigrationActor),
-      "dao-manager-jobmanager")
+    val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO), "dao-manager-jobmanager")
 
     logger.info("Starting JobManager named " + managerName + " with config {}",
       config.getConfig("spark").root.render())
