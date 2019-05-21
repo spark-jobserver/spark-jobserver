@@ -114,7 +114,7 @@ class BinaryManager(jobDao: ActorRef, migrationActor: ActorRef) extends Instrume
       } else {
         saveBinary(appName, binaryType, binBytes).map{
           case Success(_) => {
-            migrationActor ! MigrationActor.SaveBinaryInfoH2(appName, binaryType,
+            migrationActor ! ZookeeperMigrationActor.SaveBinaryInfoInZK(appName, binaryType,
               uploadTime, binBytes)
             BinaryStored
           }
@@ -130,7 +130,7 @@ class BinaryManager(jobDao: ActorRef, migrationActor: ActorRef) extends Instrume
           logger.info(s"No active job found for binary $appName. Deleting binary.")
           deleteBinary(appName).map {
             case Success(_) => {
-              migrationActor ! MigrationActor.DeleteBinaryInfoH2(appName)
+              migrationActor ! ZookeeperMigrationActor.DeleteBinaryInfoFromZK(appName)
               BinaryDeleted
             }
             case Failure(ex) => ex match {
