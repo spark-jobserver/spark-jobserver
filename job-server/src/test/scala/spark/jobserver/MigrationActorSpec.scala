@@ -6,8 +6,7 @@ import com.typesafe.config.{Config, ConfigFactory}
 import org.joda.time.DateTime
 import org.scalatest.BeforeAndAfter
 import spark.jobserver.io._
-import spark.jobserver.io.zookeeper.{MetaDataZookeeperDAO, ZookeeperUtils}
-import spark.jobserver.util.{CuratorTestCluster, Utils}
+import spark.jobserver.util.CuratorTestCluster
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -19,24 +18,18 @@ class MigrationActorSpec extends JobSpecBase(MigrationActorSpec.getNewSystem) wi
   var daoActorProb: TestProbe = _
   private val testServer = new CuratorTestCluster()
   private val timeout = 60 seconds
+
   private val testDir = "db/jobserver-test"
 
   def config: Config = ConfigFactory.parseString(
     s"""
        |spark.jobserver.sqldao.jdbc.url = "jdbc:h2:mem:jobserver-migration-test;DATABASE_TO_UPPER=false;DB_CLOSE_DELAY=-1",
-       |spark.jobserver.zookeeperdao.connection-string = "${testServer.getConnectString}",
-       |spark.jobserver.jobdao = spark.jobserver.io.CombinedDAO,
-       |spark.jobserver.combineddao.metadatadao.class = spark.jobserver.io.zookeeper.MetaDataZookeeperDAO
        |""".stripMargin
-  ).withFallback(
-    ConfigFactory.load("local.test.combineddao.conf")
   ).withFallback(
     ConfigFactory.load("local.test.jobsqldao.conf")
   )
 
   private val sqlDao = new MetaDataSqlDAO(config)
-  private val zkUtils = new ZookeeperUtils(config)
-  private val zkDao = new MetaDataZookeeperDAO(config)
 
   private val binary = "Some test bin".toCharArray.map(_.toByte)
   private val testInfo = BinaryInfo("test", BinaryType.Jar, DateTime.now(),
@@ -49,34 +42,6 @@ class MigrationActorSpec extends JobSpecBase(MigrationActorSpec.getNewSystem) wi
 
   before {
     migrationActor = system.actorOf(MigrationActor.props(config))
-    Utils.usingResource(zkUtils.getClient) {
-      client =>
-        zkUtils.delete(client, "")
-    }
-  }
-
-  describe("Support request from previous migration") {
-    it("should save job info in Zookeeper (which is in main DAO)") {
-      Await.result(zkDao.saveBinary(testInfo.appName, BinaryType.Jar,
-        testInfo.uploadTime, testInfo.binaryStorageId.get), timeout) should be(true)
-      migrationActor ! ZookeeperMigrationActor.SaveJobInfoInZK(testJobInfo)
-      Thread.sleep(2000)
-      Await.result(zkDao.getJob(testJobInfo.jobId), timeout).get should be(testJobInfo)
-    }
-
-    it("should save job config in Zookeeper (which is in main DAO)") {
-      Await.result(zkDao.saveBinary(testInfo.appName, BinaryType.Jar,
-        testInfo.uploadTime, testInfo.binaryStorageId.get), timeout) should be(true)
-      migrationActor ! ZookeeperMigrationActor.SaveJobConfigInZK(testJobInfo.jobId, testJobConfig)
-      Thread.sleep(2000)
-      Await.result(zkDao.getJobConfig(testJobInfo.jobId), timeout).get should be(testJobConfig)
-    }
-
-    it("should save context info in Zookeeper (which is in main DAO)") {
-      migrationActor ! ZookeeperMigrationActor.SaveContextInfoInZK(testContextInfo)
-      Thread.sleep(2000)
-      Await.result(zkDao.getContext(testContextInfo.id), timeout).get should be(testContextInfo)
-    }
   }
 
   describe("Test live requests") {

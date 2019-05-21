@@ -5,7 +5,6 @@ import com.typesafe.config.Config
 import com.yammer.metrics.core.Counter
 import org.joda.time.DateTime
 import spark.jobserver.MigrationActor._
-import spark.jobserver.ZookeeperMigrationActor._
 import spark.jobserver.common.akka.InstrumentedActor
 import spark.jobserver.common.akka.metrics.YammerMetrics
 import spark.jobserver.io._
@@ -34,11 +33,6 @@ class MigrationActor(config: Config) extends InstrumentedActor
   with YammerMetrics{
 
   val dao = new MetaDataSqlDAO(config)
-  val currentDao: JobDAO = Class.forName(
-    config.getString("spark.jobserver.jobdao")
-  ).getDeclaredConstructor(
-    Class.forName("com.typesafe.config.Config")
-  ).newInstance(config).asInstanceOf[JobDAO]
 
   val totalLiveRequests: Counter = counter("live-total-count")
 
@@ -58,18 +52,6 @@ class MigrationActor(config: Config) extends InstrumentedActor
 
   val totalLiveSuccessfulSaveContextRequests: Counter = counter("live-total-save-context-success")
   val totalLiveFailedSaveContextRequests: Counter = counter("live-total-save-context-failed")
-
-  val oldMigrationHandler: Receive = {
-    case SaveJobInfoInZK(jobInfo) =>
-      logger.info(s"ZK Migration request: Saving job info with id: ${jobInfo.jobId}")
-      currentDao.saveJobInfo(jobInfo)
-    case SaveJobConfigInZK(jobId, jobConfig) =>
-      logger.info(s"ZK Migration request: Saving job config with id: $jobId")
-      currentDao.saveJobConfig(jobId, jobConfig)
-    case SaveContextInfoInZK(contextInfo) =>
-      logger.info(s"ZK Migration request: Saving in context info with: ${contextInfo.id}")
-      currentDao.saveContextInfo(contextInfo)
-  }
 
   val liveRequestHandlers: Receive = {
     case SaveBinaryInfoH2(name, binaryType, uploadTime, binaryBytes) =>
@@ -172,5 +154,5 @@ class MigrationActor(config: Config) extends InstrumentedActor
       }
   }
 
-  override def wrappedReceive: Receive = liveRequestHandlers.orElse(oldMigrationHandler)
+  override def wrappedReceive: Receive = liveRequestHandlers
 }
