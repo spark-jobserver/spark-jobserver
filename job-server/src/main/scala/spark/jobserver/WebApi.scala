@@ -13,8 +13,6 @@ import spark.jobserver.common.akka.web.{CommonRoutes, WebService}
 import org.apache.shiro.SecurityUtils
 import org.apache.shiro.config.IniSecurityManagerFactory
 import org.joda.time.DateTime
-import org.slf4j.LoggerFactory
-import spark.jobserver.JobManagerActor.JobKilledException
 import spark.jobserver.auth._
 import spark.jobserver.io.{BinaryType, ContextInfo, ErrorData, JobInfo, JobStatus}
 import spark.jobserver.routes.DataRoutes
@@ -24,15 +22,13 @@ import spray.http._
 import spray.httpx.SprayJsonSupport.sprayJsonMarshaller
 import spray.io.ServerSSLEngineProvider
 import spray.json.DefaultJsonProtocol._
-import spray.routing.directives.AuthMagnet
-import spray.routing.{HttpService, RequestContext, Route}
+import spray.routing.directives.{AuthMagnet, LoggingMagnet}
+import spray.routing.{RequestContext, Route}
 
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.Try
 import org.slf4j.LoggerFactory
-import org.apache.http.HttpStatus
 import spark.jobserver.util.MeteredHttpService
-import spark.jobserver.util.Utils
 
 object WebApi {
 
@@ -198,13 +194,30 @@ class WebApi(system: ActorSystem,
   private val jobPost = timer("job-post-duration", TimeUnit.MILLISECONDS)
   private val jobDelete = timer("job-delete-duration", TimeUnit.MILLISECONDS)
   private val configGet = timer("config-get-duration", TimeUnit.MILLISECONDS)
+  private val maxSprayLogMessageLength = 400
+
+  val accessLogger: LoggingMagnet[HttpRequest => Any => Unit] = LoggingMagnet {
+    request: HttpRequest =>
+      logger.info(s"[${request.method}] ${request.uri}")
+      _ match {
+        case res: HttpResponse =>
+          val resMessage = res.entity.toString.
+            replace('\n', ' ').replaceAll(" +", " ")
+          logger.info(s"Response: ${res.status} " +
+            s"${resMessage.substring(0, Math.min(resMessage.length(), maxSprayLogMessageLength))}(...) " +
+            s"to request: ${request.uri}")
+        case _ => logger.info("Unknown response")
+      }
+  }
 
   val logger = LoggerFactory.getLogger(getClass)
 
-  val myRoutes = cors {
-    overrideMethodWithParameter("_method") {
-      binaryRoutes ~ contextRoutes ~ jobRoutes ~
-        dataRoutes ~ healthzRoutes ~ otherRoutes
+  val myRoutes = logRequestResponse(accessLogger) {
+    cors {
+      overrideMethodWithParameter("_method") {
+        binaryRoutes ~ contextRoutes ~ jobRoutes ~
+          dataRoutes ~ healthzRoutes ~ otherRoutes
+      }
     }
   }
 
@@ -283,7 +296,6 @@ class WebApi(system: ActorSystem,
       // and the type of and last upload time of a binary.
       get { ctx =>
         val timer = binGet.time()
-        logger.info(s"GET /binaries")
         val future = (binaryManager ? ListBinaries(None)).
           mapTo[collection.Map[String, (BinaryType, DateTime)]]
         future.map { binTimeMap =>
@@ -305,7 +317,6 @@ class WebApi(system: ActorSystem,
       post {
         path(Segment) { appName =>
           val timer = binPost.time()
-          logger.info(s"POST /binaries/$appName")
           entity(as[Array[Byte]]) { binBytes =>
             contentType {
               case Some(x) =>
@@ -315,9 +326,7 @@ class WebApi(system: ActorSystem,
                       val future = binaryManager ? StoreBinary(appName, binaryType, binBytes)
                       future.map {
                         case BinaryStored =>
-                          val stcode = StatusCodes.OK
-                          logger.info("StatusCode: " + stcode)
-                          ctx.complete(stcode)
+                          ctx.complete(StatusCodes.OK)
                         case InvalidBinary => badRequest(ctx, "Binary is not of the right format")
                         case BinaryStorageFailure(ex) => logAndComplete(ctx, "Storage Failure", 500, ex)
                       }.recover {
@@ -331,11 +340,8 @@ class WebApi(system: ActorSystem,
                   }
                 }
               case None =>
-                val stcode = 415
-                val errMes = s"Content-Type header must be set to indicate binary type"
-                logger.info("StatusCode: " + stcode + ", ErrorMessage: " + errMes)
                 timer.stop()
-                complete(stcode, errMes)
+                complete(415, s"Content-Type header must be set to indicate binary type")
             }
           }
         }
@@ -344,14 +350,11 @@ class WebApi(system: ActorSystem,
       delete {
         path(Segment) { appName =>
           val timer = binDelete.time()
-          logger.info(s"DELETE /binaries/$appName")
           val future = (binaryManager ? DeleteBinary(appName))(DefaultBinaryDeletionTimeout)
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
             future.map {
               case BinaryDeleted =>
-                val stcode = StatusCodes.OK
-                logger.info("StatusCode: " + stcode)
-                ctx.complete(stcode)
+                ctx.complete(StatusCodes.OK)
               case BinaryInUse(jobs) =>
                 logAndComplete(ctx,
                               s"Binary is in use by job(s): ${jobs.mkString(", ")}",
@@ -401,15 +404,12 @@ class WebApi(system: ActorSystem,
     authenticate(authenticator) { authInfo =>
       (get & path(Segment)) { contextName =>
         val timer = contextGetSingle.time()
-        logger.info(s"GET /contexts/$contextName")
         respondWithMediaType(MediaTypes.`application/json`) { ctx =>
           val future = (supervisor ? GetSparkContexData(contextName))(15.seconds)
           future.map {
             case SparkContexData(context, appId, url) =>
-              val stcode = 200
               val contextMap = getContextReport(context, appId, url)
-              logger.info("StatusCode: " + stcode + ", " + contextMap)
-              ctx.complete(stcode, contextMap)
+              ctx.complete(200, contextMap)
             case NoSuchContext => notFound(ctx, s"can't find context with name $contextName")
             case UnexpectedError => logAndComplete(ctx, "UNEXPECTED ERROR OCCURRED", 500)
           }.recover {
@@ -422,7 +422,6 @@ class WebApi(system: ActorSystem,
       } ~
       get { ctx =>
         val timer = contextGet.time()
-        logger.info("GET /contexts")
         val future = supervisor ? ListContexts
         future.map {
           case UnexpectedError => logAndComplete(ctx, "UNEXPECTED ERROR OCCURRED", 500)
@@ -455,14 +454,10 @@ class WebApi(system: ActorSystem,
         entity(as[String]) { configString =>
           path(Segment) { contextName =>
             val timer = contextPost.time()
-            logger.info(s"POST /contexts/$contextName")
             // Enforce user context name to start with letters
             if (!contextName.head.isLetter) {
-              val stcode = StatusCodes.BadRequest
-              val errMes = "context name must start with letters"
-              logger.info("StatusCode: " + stcode + ", ErrorMessage: " + errMes)
               timer.stop()
-              complete(stcode, errMap(errMes))
+              complete(StatusCodes.BadRequest, errMap("context name must start with letters"))
             } else {
               parameterMap { (params) =>
                 // parse the config from the body, using url params as fallback values
@@ -474,10 +469,7 @@ class WebApi(system: ActorSystem,
                   logger.info("used configuration: " + contextConfig)
                   future.map {
                     case ContextInitialized =>
-                      val stcode = StatusCodes.OK
-                      val mes = "Context initialized"
-                      logger.info("StatusCode: " + stcode + ", Message: " + mes)
-                      ctx.complete(stcode, successMap(mes))
+                      ctx.complete(StatusCodes.OK, successMap("Context initialized"))
                     case ContextAlreadyExists => badRequest(ctx, "context " + contextName + " exists")
                     case ContextInitError(e) => logAndComplete(ctx, "CONTEXT INIT ERROR", 500, e)
                     case UnexpectedError => logAndComplete(ctx, "UNEXPECTED ERROR OCCURRED", 500)
@@ -502,17 +494,13 @@ class WebApi(system: ActorSystem,
             forceOpt => {
               val force = forceOpt.getOrElse(false)
               val timer = contextDelete.time()
-              logger.info(s"DELETE /contexts/$contextName (force=$forceOpt)")
               val (cName, _) = determineProxyUser(config, authInfo, contextName)
               val future = (supervisor ?
                 StopContext(cName, force))(contextDeletionTimeout.seconds + 1.seconds)
               respondWithMediaType(MediaTypes.`application/json`) { ctx =>
                 future.map {
                   case ContextStopped =>
-                    val stcode = StatusCodes.OK
-                    val mes = "Context stopped"
-                    logger.info("StatusCode: " + stcode + ", Message: " + mes)
-                    ctx.complete(stcode, successMap(mes))
+                    ctx.complete(StatusCodes.OK, successMap("Context stopped"))
                   case ContextStopInProgress =>
                     val response = HttpResponse(
                       status = StatusCodes.Accepted, headers = List(Location(ctx.request.uri)))
@@ -534,7 +522,6 @@ class WebApi(system: ActorSystem,
           parameters("reset", 'sync.as[Boolean] ?) { (reset, sync) =>
             respondWithMediaType(MediaTypes.`application/json`) { ctx =>
               val timer = contextPut.time()
-              logger.info(s"PUT /contexts")
               reset match {
                 case "reboot" =>
                   import ContextSupervisor._
@@ -547,10 +534,7 @@ class WebApi(system: ActorSystem,
 
                   if (sync.isDefined && !sync.get) {
                     contexts.map(c => supervisor ! StopContext(c))
-                    val stcode = StatusCodes.OK
-                    val mes = "Context reset requested"
-                    logger.info("StatusCode: " + stcode + ", Message: " + mes)
-                    ctx.complete(stcode, successMap(mes))
+                    ctx.complete(StatusCodes.OK, successMap("Context reset requested"))
                   } else {
                     val stopFutures = contexts.map(c => supervisor ? StopContext(c))
                     Await.ready(Future.sequence(stopFutures), contextTimeout.seconds)
@@ -558,21 +542,14 @@ class WebApi(system: ActorSystem,
                     Thread.sleep(1000) // we apparently need some sleeping in here, so spark can catch up
 
                     (supervisor ? AddContextsFromConfig).onFailure {
-                      case t =>
-                        val errMes = "ERROR"
-                        logger.info("ErrorMessage: " + errMes)
-                        ctx.complete(errMes)
+                      case _ =>
+                        ctx.complete("ERROR")
                     }
-                    val stcode = StatusCodes.OK
-                    val mes = "Context reset"
-                    logger.info("StatusCode: " + stcode + ", Message: " + mes)
-                    ctx.complete(stcode, successMap(mes))
+                    ctx.complete(StatusCodes.OK, successMap("Context reset"))
                   }
                   timer.stop()
                 case _ =>
-                  val errMes = "ERROR"
-                  logger.info("ErrorMessage: " + errMes)
-                  ctx.complete(errMes)
+                  ctx.complete("ERROR")
                   timer.stop()
               }
             }
@@ -588,7 +565,6 @@ class WebApi(system: ActorSystem,
   def healthzRoutes: Route = pathPrefix("healthz") {
     //no authentication required
     get { ctx =>
-      logger.info("Receiving healthz check request")
       ctx.complete("OK")
     }
   }
@@ -627,7 +603,6 @@ class WebApi(system: ActorSystem,
        */
       (get & path(Segment / "config")) { jobId =>
         val timer = configGet.time()
-        logger.info(s"GET /jobs/$jobId/config")
         val renderOptions = ConfigRenderOptions.defaults().setComments(false).setOriginComments(false)
 
         val future = jobInfoActor ? GetJobConfig(jobId)
@@ -653,7 +628,6 @@ class WebApi(system: ActorSystem,
         // Returned JSON contains result attribute if status is "FINISHED"
         (get & path(Segment)) { jobId =>
           val timer = jobGetSingle.time()
-          logger.info(s"GET /jobs/$jobId")
           val statusFuture = jobInfoActor ? GetJobStatus(jobId)
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
             statusFuture.map {
@@ -692,7 +666,6 @@ class WebApi(system: ActorSystem,
         //  will continue to run
         (delete & path(Segment)) { jobId =>
           val timer = jobDelete.time()
-          logger.info(s"DELETE /jobs/$jobId")
           val future = jobInfoActor ? GetJobStatus(jobId)
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
             future.map {
@@ -709,8 +682,6 @@ class WebApi(system: ActorSystem,
                   case e: Exception => logAndComplete(ctx, "ERROR", 500, e)
                 }
               case JobInfo(_, _, _, _, _, state, _, _, Some(ex)) if state.equals(JobStatus.Error) =>
-                logger.info("JobStatus: " + JobStatus.Error + ", ErrorMessage: " + ex.message
-                    + ", StackTrace: " + ex.stackTrace)
                 ctx.complete(Map(StatusKey -> JobStatus.Error, "ERROR" -> formatException(ex)))
               case JobInfo(_, _, _, _, _, state, _, _, _)
                 if (state.equals(JobStatus.Finished) || state.equals(JobStatus.Killed)) =>
@@ -748,7 +719,6 @@ class WebApi(system: ActorSystem,
             }
             val future = (jobInfoActor ? GetJobStatuses(Some(limit), statusUpperCaseOpt)).mapTo[Seq[JobInfo]]
             respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-              logger.info(s"GET /jobs (limit=$limit, status=$statusUpperCaseOpt)")
               future.map { infos =>
                 val jobReport = infos.map { info =>
                   getJobReport(info)
@@ -786,7 +756,6 @@ class WebApi(system: ActorSystem,
                 (appName, classPath, contextOpt, syncOpt, timeoutOpt, sparkProxyUser) =>
                   val timer = jobPost.time()
                   try {
-                    logger.info(s"POST /jobs")
                     val async = !syncOpt.getOrElse(false)
                     val postedJobConfig = ConfigFactory.parseString(configString)
                     val jobConfig = postedJobConfig.withFallback(config).resolve()
@@ -799,10 +768,6 @@ class WebApi(system: ActorSystem,
                       contextOpt.map(_ => cName), cConfig, classPath)
                     val events = if (async) asyncEvents else syncEvents
                     val timeout = timeoutOpt.map(t => Timeout(t.seconds)).getOrElse(DefaultSyncTimeout)
-                    logger.info(s"Post parameters:  appName=$appName, classPath=$classPath, context="
-                        + contextOpt.getOrElse("none") + ", sync=" + !async
-                        + ", timeout=" + timeout.toString()
-                        + ", sparkProxyUser=" + sparkProxyUser.getOrElse("none"))
                     val future = jobManager.get.ask(
                       JobManagerActor.StartJob(appName, classPath, jobConfig, events))(timeout)
                     respondWithMediaType(MediaTypes.`application/json`) { ctx =>
@@ -812,22 +777,17 @@ class WebApi(system: ActorSystem,
                             case s: Stream[_] => sendStreamingResponse(ctx, ResultChunkSize,
                               resultToByteIterator(Map.empty, s.toIterator))
                             case _ =>
-                              logger.info("jobId: " + jobId + ", result: " + res)
                               ctx.complete(Map[String, Any]("jobId" -> jobId) ++ resultToTable(res))
                           }
                         case JobErroredOut(jobId, _, ex) =>
-                          logger.info("jobId: " + jobId
-                              + ", ErrorMessage: ERROR, StackTrace: " + ErrorData.getStackTrace(ex))
                           ctx.complete(Map[String, String]("jobId" -> jobId) ++ errMap(ex, "ERROR")
                         )
                         case JobStarted(_, jobInfo) =>
                           val future = jobInfoActor ? StoreJobConfig(jobInfo.jobId, postedJobConfig)
                           future.map {
                             case JobConfigStored =>
-                              val stcode = 202
                               val jobReport = getJobReport(jobInfo, jobStarted = true)
-                              logger.info("StatusCode: " + stcode + ", jobReport: " + jobReport)
-                              ctx.complete(stcode, jobReport)
+                              ctx.complete(202, jobReport)
                           }.recover {
                             case e: Exception => logAndComplete(ctx, "ERROR", 500, e)
                           }
@@ -840,12 +800,9 @@ class WebApi(system: ActorSystem,
                         case ContextStopInProgress =>
                           logAndComplete(ctx, "Context stop in progress", StatusCodes.Conflict)
                         case NoJobSlotsAvailable(maxJobSlots) =>
-                          val stcode = 503
                           val errorMsg = "Too many running jobs (" + maxJobSlots.toString +
                             ") for job context '" + contextOpt.getOrElse("ad-hoc") + "'"
-                          logger.info("StatusCode: " + stcode
-                                + ", ErrorMessage: NO SLOTS AVAILABLE, " + errorMsg)
-                          ctx.complete(stcode, Map(StatusKey -> "NO SLOTS AVAILABLE", ResultKey -> errorMsg))
+                          ctx.complete(503, Map(StatusKey -> "NO SLOTS AVAILABLE", ResultKey -> errorMsg))
                         case ContextInitError(e) => logAndComplete(ctx, "CONTEXT INIT FAILED", 500, e)
                       }.recover {
                         case e: Exception => logAndComplete(ctx, "ERROR", 500, e)
@@ -855,17 +812,11 @@ class WebApi(system: ActorSystem,
                     }
                   } catch {
                     case e: NoSuchElementException =>
-                      val stcode = StatusCodes.NotFound
-                      val errMes = "context " + contextOpt.get + " not found"
-                      logger.info(s"StatusCode: $stcode, ErrorMessage: $errMes, Message: ${e.getMessage}")
                       timer.stop()
-                      complete(stcode, errMap(errMes))
+                      complete(StatusCodes.NotFound, errMap("context " + contextOpt.get + " not found"))
                     case e: ConfigException =>
-                      val stcode = StatusCodes.BadRequest
-                      val errMes = "Cannot parse config: " + e.getMessage
-                      logger.info(s"StatusCode: $stcode, ErrorMessage: $errMes, Message: ${e.getMessage}")
                       timer.stop()
-                      complete(stcode, errMap(errMes))
+                      complete(StatusCodes.BadRequest, errMap("Cannot parse config: " + e.getMessage))
                     case e: Exception =>
                       val stcode = 500
                       val errMes = "ERROR"
