@@ -2,6 +2,7 @@
 import Dependencies._
 import JobServerRelease._
 
+updateOptions := updateOptions.value.withCachedResolution(true)
 transitiveClassifiers in Global := Seq(Artifact.SourceClassifier)
 lazy val dirSettings = Seq()
 
