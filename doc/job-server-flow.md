@@ -2,9 +2,12 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
-- [Jar routes](#jar-routes)
-- [Context routes](#context-routes)
-- [Job routes](#job-routes)
+- [LocalClusterSupervisor (context-per-jvm=false)](#localclustersupervisor-context-per-jvmfalse)
+  - [Jar routes](#jar-routes)
+  - [Context routes](#context-routes)
+  - [Job routes](#job-routes)
+- [AkkaClusterSupervisor (context-per-jvm=true)](#akkaclustersupervisor-context-per-jvmtrue)
+  - [Context routes](#context-routes-1)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 

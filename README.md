@@ -40,9 +40,11 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
 - [Deployment](#deployment)
   - [Manual steps](#manual-steps)
   - [Context per JVM](#context-per-jvm)
+  - [Configuring Spark Jobserver backend](#configuring-spark-jobserver-backend)
     - [Configuring Spark Jobserver H2 Database backend](#configuring-spark-jobserver-h2-database-backend)
     - [Configuring Spark Jobserver PostgreSQL Database backend](#configuring-spark-jobserver-postgresql-database-backend)
     - [Configuring Spark Jobserver MySQL Database backend](#configuring-spark-jobserver-mysql-database-backend)
+    - [Configuring Spark Jobserver Zookeeper + HDFS Database backend](#configuring-spark-jobserver-zookeeper--hdfs-database-backend)
   - [Chef](#chef)
 - [Architecture](#architecture)
 - [API](#api)
@@ -601,6 +603,13 @@ Log files are separated out for each context (assuming `context-per-jvm` is `tru
 Note: to test out the deploy to a local staging dir, or package the job server for Mesos,
 use `bin/server_package.sh <environment>`.
 
+### Configuring Spark Jobserver backend
+
+Spark Jobserver offers a variety of options for backend storage such as:
+- H2/PostreSQL or other SQL Databases
+- Cassandra
+- Combination of SQL DB or Zookeeper with HDFS
+
 #### Configuring Spark Jobserver H2 Database backend
 By default, H2 database is used for storing Spark Jobserver related meta data.
 This can be overridden if you prefer to use PostgreSQL or MySQL.
@@ -761,6 +770,31 @@ To use MySQL as backend add the following configuration to local.conf.
     }
     # also add the following line at the root level.
     flyway.locations="db/mysql/migration"
+
+#### Configuring Spark Jobserver Zookeeper + HDFS Database backend
+
+To use Zookeeper (for metadata) and HDFS (for binaries) as backend add the following
+configuration to local.conf.
+
+```
+    combineddao {
+      rootdir = "/tmp/combineddao"
+      binarydao {
+        class = spark.jobserver.io.HdfsBinaryDAO
+        dir = "hdfs:///spark-jobserver/binaries"
+      }
+      metadatadao {
+        class = spark.jobserver.io.zookeeper.MetaDataZookeeperDAO
+      }
+    }
+
+    zookeeperdao {
+      dir = "jobserver/db"
+      connection-string = "localhost:2181"
+    }
+```
+
+More information on setting up different backends for binaries and jobserver meta data: [setting up dao](doc/dao-setup.md).
 
 ### Chef
 

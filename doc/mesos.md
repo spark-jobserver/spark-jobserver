@@ -5,6 +5,7 @@
 - [Configuring Job Server for Mesos](#configuring-job-server-for-mesos)
   - [Mesos client mode](#mesos-client-mode)
   - [Mesos cluster mode](#mesos-cluster-mode)
+- [Configuring Job Server for supervised cluster mode](#configuring-job-server-for-supervised-cluster-mode)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
