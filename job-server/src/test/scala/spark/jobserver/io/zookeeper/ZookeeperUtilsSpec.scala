@@ -16,9 +16,8 @@ class ZookeeperUtilsSpec extends FunSpec with Matchers with BeforeAndAfter {
   import JsonProtocols._
 
   before {
-    testServer.createBaseDir(testPath)
     client = zookeeperUtils.getClient
-    zookeeperUtils.delete(client, "/")
+    zookeeperUtils.delete(client, "")
   }
 
   after {
@@ -28,9 +27,9 @@ class ZookeeperUtilsSpec extends FunSpec with Matchers with BeforeAndAfter {
   describe("write, read and delete data") {
     it("should write, list and delete object") {
       zookeeperUtils.write[BinaryInfo](client, testInfo, "/testfile") should equal(true)
-      zookeeperUtils.list(client, "/") should equal(Seq("testfile"))
+      zookeeperUtils.list(client, "") should equal(Seq("testfile"))
       zookeeperUtils.delete(client, "/testfile") should equal(true)
-      zookeeperUtils.list(client, "/") should equal(Seq.empty[String])
+      zookeeperUtils.list(client, "") should equal(Seq.empty[String])
     }
 
     it("should read object") {
@@ -54,11 +53,11 @@ class ZookeeperUtilsSpec extends FunSpec with Matchers with BeforeAndAfter {
       zookeeperUtils.write[BinaryInfo](client, testInfo, "/testfile1")
       zookeeperUtils.write[BinaryInfo](client, testInfo, "/testfile2")
       zookeeperUtils.write[BinaryInfo](client, testInfo, "/testfile3")
-      zookeeperUtils.list(client, "/").sorted should equal(Seq("testfile1", "testfile2", "testfile3"))
+      zookeeperUtils.list(client, "").sorted should equal(Seq("testfile1", "testfile2", "testfile3"))
     }
 
     it("should return empty list if there are no children") {
-      zookeeperUtils.list(client, "/").sorted should equal(Seq())
+      zookeeperUtils.list(client, "").sorted should equal(Seq())
     }
   }
 
@@ -69,9 +68,9 @@ class ZookeeperUtilsSpec extends FunSpec with Matchers with BeforeAndAfter {
     }
 
     it("should not see other namespaces") {
-      zookeeperUtils.list(client, "/").sorted should equal(Seq())
+      zookeeperUtils.list(client, "").sorted should equal(Seq())
       val zkUtils2 = new ZookeeperUtils(testServer.getConnectString, "", 1)
-      zkUtils2.list(zkUtils2.getClient, "/") should equal(Seq("zookeeper"))
+      zkUtils2.list(zkUtils2.getClient, "") should equal(Seq("zookeeper"))
     }
   }
 }
