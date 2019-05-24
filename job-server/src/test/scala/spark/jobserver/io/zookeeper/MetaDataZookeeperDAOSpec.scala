@@ -31,10 +31,9 @@ class MetaDataZookeeperDAOSpec extends FunSpec with TestJarFinder with FunSpecLi
   private val zkUtils = new ZookeeperUtils(testServer.getConnectString, testDir, 1)
 
   before {
-    testServer.createBaseDir(testDir)
     Utils.usingResource(zkUtils.getClient) {
       client =>
-        zkUtils.delete(client, "/")
+        zkUtils.delete(client, "")
     }
   }
 

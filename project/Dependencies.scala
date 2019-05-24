@@ -58,8 +58,7 @@ object Dependencies {
   )
 
   lazy val zookeeperDeps = Seq(
-    "org.apache.curator" % "curator-framework" % curator excludeAll(excludeZookeeper, excludeGuava),
-    "org.apache.zookeeper" % "zookeeper" % zookeeper
+    "org.apache.curator" % "apache-curator" % curator % Provided
   )
 
   lazy val cassandraDeps = Seq(
@@ -80,9 +79,9 @@ object Dependencies {
   )
 
   lazy val miscTestDeps = Seq(
-    "org.apache.hadoop" % "hadoop-hdfs" % hadoop % Test classifier "tests",
-    "org.apache.hadoop" % "hadoop-common" % hadoop % Test classifier "tests",
-    "org.apache.hadoop" % "hadoop-minicluster" % hadoop % Test,
+    "org.apache.hadoop" % "hadoop-hdfs" % hadoop % Test classifier "tests" excludeAll(excludeCurator),
+    "org.apache.hadoop" % "hadoop-common" % hadoop % Test classifier "tests" excludeAll(excludeCurator),
+    "org.apache.hadoop" % "hadoop-minicluster" % hadoop % Test excludeAll(excludeCurator),
     "org.apache.curator" % "curator-test" % curatorTest % Test excludeAll(excludeGuava)
   )
 
