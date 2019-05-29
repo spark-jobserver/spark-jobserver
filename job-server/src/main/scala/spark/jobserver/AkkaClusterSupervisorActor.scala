@@ -25,7 +25,7 @@ import spark.jobserver.JobManagerActor.{GetContexData, ContexData, SparkContextD
 import spark.jobserver.JobManagerActor.ContextTerminatedException
 import spark.jobserver.io.{JobDAOActor, ContextInfo, ContextStatus, JobStatus, ErrorData}
 import spark.jobserver.util.{InternalServerErrorException, NoCallbackFoundException,
-  ContextJVMInitializationTimeout, ContextForcefulKillTimeout}
+  ContextJVMInitializationTimeout, ContextForcefulKillTimeout, ResolutionFailedOnStopContextException}
 import com.google.common.annotations.VisibleForTesting
 
 object AkkaClusterSupervisorActor {
@@ -307,6 +307,11 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
                     originalSender ! ContextStopError(t)
                 }
               case None =>
+                val e = new ResolutionFailedOnStopContextException(c)
+                logger.info(s"${e.getMessage} Setting context to error state and cleaning up jobs.")
+                daoActor ! JobDAOActor.SaveContextInfo(contextInfo.copy(state = ContextStatus.Error,
+                    endTime = Some(DateTime.now()), error = Some(e)))
+                daoActor ! JobDAOActor.CleanContextJobInfos(c.id, DateTime.now())
                 sender ! NoSuchContext
             }
           }
