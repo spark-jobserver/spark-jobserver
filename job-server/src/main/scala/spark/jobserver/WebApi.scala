@@ -37,6 +37,7 @@ object WebApi {
   val ResultKeyStartBytes = "{\n".getBytes
   val ResultKeyEndBytes = "}".getBytes
   val ResultKeyBytes = ("\"" + ResultKey + "\":").getBytes
+  val logger = LoggerFactory.getLogger(getClass)
 
   def badRequest(ctx: RequestContext, msg: String) {
     ctx.complete(StatusCodes.BadRequest, errMap(msg))
@@ -44,6 +45,21 @@ object WebApi {
 
   def notFound(ctx: RequestContext, msg: String) {
     ctx.complete(StatusCodes.NotFound, errMap(msg))
+  }
+
+  def logAndComplete(ctx: RequestContext, errMsg: String, stcode: Int) {
+    logger.info("StatusCode: " + stcode + ", ErrorMessage: " + errMsg)
+    ctx.complete(stcode, errMap(errMsg))
+  }
+
+  def logAndComplete(ctx: RequestContext, errMsg: String, statusCode: StatusCode) {
+    logAndComplete(ctx, errMsg, statusCode.intValue)
+  }
+
+  def logAndComplete(ctx: RequestContext, errMsg: String, stcode: Int, e: Throwable) {
+    logger.info("StatusCode: " + stcode + ", ErrorMessage: " + errMsg + ", StackTrace: "
+      + ErrorData.getStackTrace(e))
+    ctx.complete(stcode, errMap(e, errMsg))
   }
 
   def errMap(errMsg: String) : Map[String, String] = Map(StatusKey -> JobStatus.Error, ResultKey -> errMsg)
@@ -177,8 +193,6 @@ class WebApi(system: ActorSystem,
       }
   }
 
-  val logger = LoggerFactory.getLogger(getClass)
-
   val myRoutes = logRequestResponse(accessLogger) {
     cors {
       overrideMethodWithParameter("_method") {
@@ -271,7 +285,7 @@ class WebApi(system: ActorSystem,
           }.toMap
           ctx.complete(stringTimeMap)
         }.recover {
-          case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+          case e: Exception => logAndComplete(ctx, "ERROR", 500, e)
         }
       } ~
       // POST /binaries/<appName>
@@ -291,11 +305,11 @@ class WebApi(system: ActorSystem,
                         case BinaryStored =>
                           ctx.complete(StatusCodes.OK)
                         case InvalidBinary => badRequest(ctx, "Binary is not of the right format")
-                        case BinaryStorageFailure(ex) => ctx.complete(500, errMap(ex, "Storage Failure"))
+                        case BinaryStorageFailure(ex) => logAndComplete(ctx, "Storage Failure", 500, ex)
                       }.recover {
-                        case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+                        case e: Exception => logAndComplete(ctx, "ERROR", 500, e)
                       }
-                    case None => ctx.complete(415, s"Unsupported binary type $x")
+                    case None => logAndComplete(ctx, s"Unsupported binary type $x", 415)
                   }
                 }
               case None =>
@@ -313,7 +327,7 @@ class WebApi(system: ActorSystem,
               case BinaryDeleted => ctx.complete(StatusCodes.OK)
               case NoSuchBinary => notFound(ctx, s"can't find binary with name $appName")
             }.recover {
-              case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+              case e: Exception => logAndComplete(ctx, "ERROR", 500, e)
             }
           }
         }
@@ -399,23 +413,25 @@ class WebApi(system: ActorSystem,
               val contextMap = getContextReport(context, appId, url)
               ctx.complete(200, contextMap)
             case NoSuchContext => notFound(ctx, s"can't find context with name $contextName")
-            case UnexpectedError => ctx.complete(500, errMap("UNEXPECTED ERROR OCCURRED"))
+            case UnexpectedError => logAndComplete(ctx, "UNEXPECTED ERROR OCCURRED", 500)
           }.recover {
-            case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+            case e: Exception =>
+              logAndComplete(ctx, "ERROR", 500, e)
           }
         }
       } ~
       get { ctx =>
         val future = supervisor ? ListContexts
         future.map {
-          case UnexpectedError => ctx.complete(500, errMap("UNEXPECTED ERROR OCCURRED"))
+          case UnexpectedError => logAndComplete(ctx, "UNEXPECTED ERROR OCCURRED", 500)
           case contexts =>
             val getContexts = SparkJobUtils.removeProxyUserPrefix(
               authInfo.toString, contexts.asInstanceOf[Seq[String]],
               config.getBoolean("shiro.authentication") && config.getBoolean("shiro.use-as-proxy-user"))
             ctx.complete(getContexts)
         }.recover {
-          case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+          case e: Exception =>
+            logAndComplete(ctx, "ERROR", 500, e)
         }
       } ~
       post {
@@ -448,11 +464,11 @@ class WebApi(system: ActorSystem,
                     case ContextInitialized => ctx.complete(StatusCodes.OK,
                       successMap("Context initialized"))
                     case ContextAlreadyExists => badRequest(ctx, "context " + contextName + " exists")
-                    case ContextInitError(e) => ctx.complete(500, errMap(e, "CONTEXT INIT ERROR"));
-                    case UnexpectedError => ctx.complete(500, errMap("UNEXPECTED ERROR OCCURRED"))
+                    case ContextInitError(e) => logAndComplete(ctx, "CONTEXT INIT ERROR", 500, e)
+                    case UnexpectedError => logAndComplete(ctx, "UNEXPECTED ERROR OCCURRED", 500)
                   }.recover {
                     case e: Exception =>
-                      ctx.complete(500, errMap(e, "ERROR"));
+                      logAndComplete(ctx, "ERROR", 500, e)
                   }
                 }
               }
@@ -480,11 +496,11 @@ class WebApi(system: ActorSystem,
                       status = StatusCodes.Accepted, headers = List(Location(ctx.request.uri)))
                     ctx.complete(response)
                   case NoSuchContext => notFound(ctx, "context " + contextName + " not found")
-                  case ContextStopError(e) => ctx.complete(500, errMap(e, "CONTEXT DELETE ERROR"))
-                  case UnexpectedError => ctx.complete(500, errMap("UNEXPECTED ERROR OCCURRED"))
+                  case ContextStopError(e) => logAndComplete(ctx, "CONTEXT DELETE ERROR", 500, e)
+                  case UnexpectedError => logAndComplete(ctx, "UNEXPECTED ERROR OCCURRED", 500)
                 }.recover {
                   case e: Exception =>
-                     ctx.complete(500, errMap(e, "ERROR"))
+                    logAndComplete(ctx, "ERROR", 500, e)
                 }
               }
             }
@@ -580,7 +596,7 @@ class WebApi(system: ActorSystem,
               ctx.complete(cnf.root().render(renderOptions))
           }.recover {
             case e: Exception =>
-              ctx.complete(500, errMap(e, "ERROR"));
+              logAndComplete(ctx, "ERROR", 500, e)
           }
         }
       } ~
@@ -609,11 +625,11 @@ class WebApi(system: ActorSystem,
                     ctx.complete(jobReport)
                 }.recover {
                   case e: Exception =>
-                    ctx.complete(500, errMap(e, "ERROR"));
+                    logAndComplete(ctx, "ERROR", 500, e)
                 }
             }.recover {
               case e: Exception =>
-                ctx.complete(500, errMap(e, "ERROR"));
+                logAndComplete(ctx, "ERROR", 500, e)
             }
           }
         } ~
@@ -632,17 +648,17 @@ class WebApi(system: ActorSystem,
                 future.map {
                   case JobKilled(_, _) => ctx.complete(Map(StatusKey -> JobStatus.Killed))
                 }.recover {
-                  case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+                  case e: Exception => logAndComplete(ctx, "ERROR", 500, e)
                 }
               case JobInfo(_, _, _, _, _, state, _, _, Some(ex)) if state.equals(JobStatus.Error) =>
                 ctx.complete(Map(StatusKey -> JobStatus.Error, "ERROR" -> formatException(ex)))
               case JobInfo(_, _, _, _, _, state, _, _, _)
                 if (state.equals(JobStatus.Finished) || state.equals(JobStatus.Killed)) =>
                 notFound(ctx, "No running job with ID " + jobId)
-              case _ => ctx.complete(500, errMap("Received an unexpected message"))
+              case _ => logAndComplete(ctx, "Received an unexpected message", 500)
             }.recover {
               case e: Exception =>
-                ctx.complete(500, errMap(e, "ERROR"));
+                logAndComplete(ctx, "ERROR", 500, e)
             }
           }
         } ~
@@ -733,25 +749,23 @@ class WebApi(system: ActorSystem,
                               val jobReport = getJobReport(jobInfo, jobStarted = true)
                               ctx.complete(202, jobReport)
                           }.recover {
-                            case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+                            case e: Exception => logAndComplete(ctx, "ERROR", 500, e)
                           }
                         case JobValidationFailed(_, _, ex) =>
-                          ctx.complete(400, errMap(ex, "VALIDATION FAILED"))
+                          logAndComplete(ctx, "VALIDATION FAILED", 400, ex)
                         case NoSuchApplication => notFound(ctx, "appName " + appName + " not found")
                         case NoSuchClass => notFound(ctx, "classPath " + classPath + " not found")
-                        case WrongJobType =>
-                          ctx.complete(400, errMap("Invalid job type for this context"))
-                        case JobLoadingError(err) =>
-                          ctx.complete(500, errMap(err, "JOB LOADING FAILED"))
+                        case WrongJobType => logAndComplete(ctx, "Invalid job type for this context", 400)
+                        case JobLoadingError(err) => logAndComplete(ctx, "JOB LOADING FAILED", 500, err)
                         case ContextStopInProgress =>
-                          ctx.complete(StatusCodes.Conflict, errMap("Context stop in progress"))
+                          logAndComplete(ctx, "Context stop in progress", StatusCodes.Conflict)
                         case NoJobSlotsAvailable(maxJobSlots) =>
                           val errorMsg = "Too many running jobs (" + maxJobSlots.toString +
                             ") for job context '" + contextOpt.getOrElse("ad-hoc") + "'"
                           ctx.complete(503, Map(StatusKey -> "NO SLOTS AVAILABLE", ResultKey -> errorMsg))
-                        case ContextInitError(e) => ctx.complete(500, errMap(e, "CONTEXT INIT FAILED"))
+                        case ContextInitError(e) => logAndComplete(ctx, "CONTEXT INIT FAILED", 500, e)
                       }.recover {
-                        case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+                        case e: Exception => logAndComplete(ctx, "ERROR", 500, e)
                       }
                     }
                   } catch {
