@@ -765,8 +765,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
 
     it("should not change final state to STOPPING state") {
       val daoProbe = TestProbe()
-      val latch = new CountDownLatch(1)
-      val contextInfo = ContextInfo("id", "name", "", None, DateTime.now(), None, ContextStatus.Error, None)
+      val contextInfo = ContextInfo("id", "name", "", None, DateTime.now(), None, ContextStatus.Finished, None)
       var contextToTest: ContextInfo = contextInfo
 
       daoProbe.setAutoPilot(new TestActor.AutoPilot {
@@ -774,9 +773,6 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
           msg match {
             case JobDAOActor.GetContextInfoByName(_) =>
               sender ! JobDAOActor.ContextResponse(Some(contextInfo))
-            case JobDAOActor.SaveContextInfo(c) =>
-              contextToTest = c
-              latch.countDown()
           }
           TestActor.KeepRunning
         }
@@ -787,9 +783,8 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
         TestProbe().ref, managerProbe, cluster, visitedContextIsFinalStatePath), "supervisor2")
 
       supervisor ! StopContext("name")
-      latch.await()
 
-      contextToTest.state should be(ContextStatus.Error)
+      contextToTest.state should be(ContextStatus.Finished)
       expectMsg(contextInitTimeout, NoSuchContext)
     }
 
