@@ -225,6 +225,16 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       errorMsg.err.getClass should equal (classOf[IllegalArgumentException])
     }
 
+    it("should return error if job throws a fatal error") {
+      manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+
+      uploadTestJar()
+      manager ! JobManagerActor.StartJob("demo", classPrefix + "MyFatalErrorJob", emptyConfig, errorEvents)
+      val errorMsg = expectMsgClass(startJobWait, classOf[JobErroredOut])
+      errorMsg.err.getClass should equal (classOf[OutOfMemoryError])
+    }
+
     it("job should get jobConfig passed in to StartJob message") {
       val jobConfig = ConfigFactory.parseString("foo.bar.baz = 3")
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
@@ -823,8 +833,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val contextName = "context-name"
       val daoProbe = TestProbe()
       uploadTestJar("test-jar")
-      val binInfo = dao.getLastUploadTimeAndType("test-jar")
-      val binaryInfo = BinaryInfo("test-jar", binInfo.get._2, binInfo.get._1)
+      val binaryInfo = dao.getBinaryInfo("test-jar").get
       val jobInfo = JobInfo("jobId", contextId, contextName,
           binaryInfo, wordCountClass, JobStatus.Running, DateTime.now(), None, None)
       manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, spyProbe))

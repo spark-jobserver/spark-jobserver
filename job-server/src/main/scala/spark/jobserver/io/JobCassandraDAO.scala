@@ -393,9 +393,9 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
     }
   }
 
-  override def getLastUploadTimeAndType(appName: String): Option[(DateTime, BinaryType)] = {
+  override def getBinaryInfo(appName: String): Option[BinaryInfo] = {
     // Copied from the base JobDAO, feel free to optimize this (having in mind this specific storage type)
-    Await.result(getApps, 60 seconds).get(appName).map(t => (t._2, t._1))
+    Await.result(getApps, 60 seconds).get(appName).map(t => BinaryInfo(appName, t._1, t._2))
   }
 
   private def setup(config: Config): Session = {

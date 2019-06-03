@@ -135,7 +135,7 @@ object JobServer {
 
         // Check if all contexts marked as running are still available and get the ActorRefs
         val existingManagerActorRefs = getExistingManagerActorRefs(system, daoActor)
-        joinAkkaCluster(cluster, existingManagerActorRefs.headOption)
+        joinAkkaCluster(cluster, existingManagerActorRefs)
         // We don't want to read all the old events that happened in the cluster
         // So, we remove the initialStateMode parameter
         cluster.registerOnMemberUp {
@@ -161,15 +161,15 @@ object JobServer {
     webApiPF(supervisor, jobInfo, daoActor).start()
   }
 
-  private def joinAkkaCluster(cluster: Cluster, initialSeedNode: Option[ActorRef]) {
-    initialSeedNode match {
-      case None =>
-        val selfAddress = cluster.selfAddress
-        logger.info(s"Joining newly created cluster at ${selfAddress}")
-        cluster.join(selfAddress)
-      case Some(actorRef) =>
-        logger.info(s"Joining existing cluster at ${actorRef.path.address.toString}")
-        cluster.join(actorRef.path.address)
+  private def joinAkkaCluster(cluster: Cluster, seedNodes: List[ActorRef]) {
+    if (seedNodes.isEmpty) {
+      val selfAddress = cluster.selfAddress
+      logger.info(s"Joining newly created cluster at ${selfAddress}")
+      cluster.join(selfAddress)
+    } else {
+      val addressList = seedNodes.map(_.path.address)
+      logger.info(s"Joining existing cluster at one of: ${addressList.mkString("{", ", ", "}")}")
+      cluster.joinSeedNodes(addressList)
     }
   }
 

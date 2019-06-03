@@ -25,8 +25,8 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
   val throwable: Throwable = new Throwable("test-error")
   // jar test data
   val rootDirKey = "spark.jobserver.combineddao.rootdir"
-  val jarInfo: BinaryInfo = genJarInfo(false, false)
   val jarBytes: Array[Byte] = Files.toByteArray(testJar)
+  val jarInfo: BinaryInfo = genJarInfo(false, false)
   var jarFile: File = new File(
       config.getString(rootDirKey),
       jarInfo.appName + "-" + jarInfo.uploadTime.toString("yyyyMMdd_hhmmss_SSS") + ".jar"
@@ -39,7 +39,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
 
   // jobInfo test data
   val jobInfoNoEndNoErr: JobInfo = genJobInfo(jarInfo, false, JobStatus.Running)
-  val expectedJobInfo = jobInfoNoEndNoErr
+  val expectedJobInfo: JobInfo = jobInfoNoEndNoErr
   val jobInfoSomeEndNoErr: JobInfo = genJobInfo(jarInfo, false, JobStatus.Finished)
   val jobInfoSomeEndSomeErr: JobInfo = genJobInfo(jarInfo, false, ContextStatus.Error)
 
@@ -58,7 +58,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
       val app = "test-appName" + appCount
       val upload = if (newTime) time.plusMinutes(timeCount) else time
 
-      BinaryInfo(app, BinaryType.Jar, upload)
+      BinaryInfo(app, BinaryType.Jar, upload, Some(BinaryDAO.calculateBinaryHashString(jarBytes)))
     }
 
     genTestJarInfo _

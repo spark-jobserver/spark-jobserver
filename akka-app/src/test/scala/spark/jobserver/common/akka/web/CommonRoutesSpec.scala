@@ -14,7 +14,6 @@ import akka.actor.ActorSystem
 class CommonRoutesSpec extends FunSpec with Matchers with ScalatestRouteTest with CommonRoutes {
   def actorRefFactory: ActorSystem = system
 
-
   val metricCounter = Metrics.newCounter(getClass, "test-counter")
   val metricMeter = Metrics.newMeter(getClass, "test-meter", "requests", TimeUnit.SECONDS)
   val metricHistogram = Metrics.newHistogram(getClass, "test-hist")
@@ -31,7 +30,7 @@ class CommonRoutesSpec extends FunSpec with Matchers with ScalatestRouteTest wit
   val histMap = Map("type" -> "histogram", "median" -> 0.0, "p75" -> 0.0, "p95" -> 0.0,
     "p98" -> 0.0, "p99" -> 0.0, "p999" -> 0.0)
   val timerMap = Map("type" -> "timer", "rate" -> (meterMap - "type"),
-    "duration" -> (histMap ++ Map("units" -> "milliseconds") - "type"))
+    "duration" -> (histMap ++ Map("units" -> "milliseconds") ++ Map("mean" -> 0.0) - "type"))
 
   override def afterAll():Unit = {
     TestKit.shutdownActorSystem(system)

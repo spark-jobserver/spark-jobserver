@@ -3,7 +3,6 @@ package spark.jobserver.io
 import scala.concurrent.{Await, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
-
 import java.io.File
 
 import com.google.common.io.Files
@@ -30,8 +29,8 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
   val time: DateTime = new DateTime()
   val throwable: Throwable = new Throwable("test-error")
   // jar test data
-  val jarInfo: BinaryInfo = genJarInfo(false, false)
   val jarBytes: Array[Byte] = Files.toByteArray(testJar)
+  val jarInfo: BinaryInfo = genJarInfo(false, false)
   var jarFile: File = new File(
       config.getString("spark.jobserver.sqldao.rootdir"),
       jarInfo.appName + "-" + jarInfo.uploadTime.toString("yyyyMMdd_HHmmss_SSS") + ".jar"
@@ -43,8 +42,8 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
     eggInfo.appName + "-" + jarInfo.uploadTime.toString("yyyyMMdd_HHmmss_SSS") + ".egg")
 
   // jobInfo test data
-  val jobInfoNoEndNoErr:JobInfo = genJobInfo(jarInfo, false, JobStatus.Running)
-  val expectedJobInfo = jobInfoNoEndNoErr
+  val jobInfoNoEndNoErr: JobInfo = genJobInfo(jarInfo, false, JobStatus.Running)
+  val expectedJobInfo: JobInfo = jobInfoNoEndNoErr
   val jobInfoSomeEndNoErr: JobInfo = genJobInfo(jarInfo, false, JobStatus.Finished)
   val jobInfoSomeEndSomeErr: JobInfo = genJobInfo(jarInfo, false, ContextStatus.Error)
 
@@ -63,7 +62,7 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
       val app = "test-appName" + appCount
       val upload = if (newTime) time.plusMinutes(timeCount) else time
 
-      BinaryInfo(app, BinaryType.Jar, upload)
+      BinaryInfo(app, BinaryType.Jar, upload, Some(BinaryDAO.calculateBinaryHashString(jarBytes)))
     }
 
     genTestJarInfo _
@@ -126,6 +125,13 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
     }
   }
 
+  after {
+    val bins = Await.result(dao.getApps, timeout)
+    bins.foreach {
+      b => dao.deleteBinary(b._1)
+    }
+  }
+
   describe("save and get the jars") {
     it("should be able to save one jar and get it back") {
       jarFile.exists() should equal (false)
@@ -140,7 +146,8 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
     }
 
     it("should be able to save one jar and get it back without creating a cache") {
-      val configNoCache = config.withValue("spark.jobserver.cache-on-upload", ConfigValueFactory.fromAnyRef(false))
+      val configNoCache = config.withValue("spark.jobserver.cache-on-upload",
+        ConfigValueFactory.fromAnyRef(false))
       val daoNoCache = new JobSqlDAO(configNoCache)
 
       jarFile.exists() should equal (false)
@@ -154,6 +161,10 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
     }
 
     it("should be able to retrieve the jar file") {
+      val configNoCache = config.withValue("spark.jobserver.cache-on-upload",
+        ConfigValueFactory.fromAnyRef(false))
+      val daoNoCache = new JobSqlDAO(configNoCache)
+      daoNoCache.saveBinary(jarInfo.appName, BinaryType.Jar, jarInfo.uploadTime, jarBytes)
       jarFile.exists() should equal (false)
       val jarFilePath: String = dao.getBinaryFilePath(jarInfo.appName, BinaryType.Jar, jarInfo.uploadTime)
 
@@ -175,6 +186,10 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
     }
 
     it("should be able to retrieve the egg file") {
+      val configNoCache = config.withValue("spark.jobserver.cache-on-upload",
+        ConfigValueFactory.fromAnyRef(false))
+      val daoNoCache = new JobSqlDAO(configNoCache)
+      daoNoCache.saveBinary(eggInfo.appName, BinaryType.Egg, eggInfo.uploadTime, eggBytes)
       eggFile.exists() should equal (false)
       val eggFilePath: String = dao.getBinaryFilePath(eggInfo.appName, BinaryType.Egg, eggInfo.uploadTime)
 
@@ -185,20 +200,19 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
 
   describe("Basic saveJobInfo() and getJobInfos() tests") {
     it("Save another new jobInfo, bring down DB, bring up DB, should JobInfos from DB") {
+      dao.saveBinary(jarInfo.appName, BinaryType.Jar, jarInfo.uploadTime, jarBytes)
       dao.saveJobInfo(jobInfoNoEndNoErr)
       val jobInfo2 = genJobInfo(jarInfo, true, JobStatus.Running)
       val jobId2 = jobInfo2.jobId
       val expectedJobInfo2 = jobInfo2
 
       dao.saveJobInfo(jobInfo2)
-
       // Destroy and bring up the DB again
       dao = null
       dao = new JobSqlDAO(config)
 
       val jobs = Await.result(dao.getJobInfos(2), timeout)
       val jobIds = jobs map { _.jobId }
-
       jobIds should equal (Seq(jobId2, jobId))
       jobs should equal (Seq(expectedJobInfo2, expectedJobInfo))
     }
@@ -212,22 +226,24 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
       val info = genJarInfo(true, false)
       info.uploadTime should equal (jarInfo.uploadTime)
 
+      dao.saveBinary(jarInfo.appName, BinaryType.Jar, jarInfo.uploadTime, jarBytes)
+      dao.saveJobInfo(expectedJobInfo)
       val jobs: Seq[JobInfo] = Await.result(dao.getJobInfos(2), timeout)
 
-      jobs.size should equal (2)
+      jobs.size should equal (1)
       jobs.last should equal (expectedJobInfo)
 
       // Cannot compare JobInfos directly if error is a Some(Throwable) because
       // Throwable uses referential equality
       dao.saveJobInfo(expectedNoEndNoErr)
       val jobs2 = Await.result(dao.getJobInfos(2), timeout)
-      jobs2.size should equal (2)
+      jobs2.size should equal (1)
       jobs2.last.endTime should equal (None)
       jobs2.last.error shouldBe None
 
       dao.saveJobInfo(jobInfoSomeEndNoErr)
       val jobs3 = Await.result(dao.getJobInfos(2), timeout)
-      jobs3.size should equal (2)
+      jobs3.size should equal (1)
       jobs3.last.error.isDefined should equal (false)
       jobs3.last should equal (expectedSomeEndNoErr)
 
@@ -235,7 +251,7 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
       // Throwable uses referential equality
       dao.saveJobInfo(jobInfoSomeEndSomeErr)
       val jobs4 = Await.result(dao.getJobInfos(2), timeout)
-      jobs4.size should equal (2)
+      jobs4.size should equal (1)
       jobs4.last.endTime should equal (expectedSomeEndSomeErr.endTime)
       jobs4.last.error shouldBe defined
       jobs4.last.error.get.message should equal (throwable.getMessage)
@@ -247,6 +263,7 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
       val ctxToBeCleaned: JobInfo = JobInfo(
           "jobId", UUID.randomUUID().toString(), "context", jarInfo,
           "test-class", JobStatus.Running, DateTime.now(), None, None)
+      dao.saveBinary(jarInfo.appName, BinaryType.Jar, jarInfo.uploadTime, jarBytes)
       dao.saveJobInfo(ctxToBeCleaned)
 
       Await.ready(dao.cleanRunningJobInfosForContext(ctxToBeCleaned.contextId, DateTime.now()), timeout)
@@ -258,13 +275,95 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
   }
 
   describe("delete binaries") {
-    it("should be able to delete jar file") {
-      val existing = Await.result(dao.getApps, timeout)
-      existing.keys should contain (jarInfo.appName)
-      dao.deleteBinary(jarInfo.appName)
+    class JobSqlDaoExtended(sqlCommon: SqlCommon) extends JobSqlDAO(config, sqlCommon) {
+      import profile.api._
 
-      val apps = Await.result(dao.getApps, timeout)
+      def getBinaryContentHashes(): Future[Seq[Array[Byte]]] = {
+        val query = binariesContents.map(_.binHash).result
+        sqlCommon.db.run(query)
+      }
+    }
+
+    it("should be able to delete jar file") {
+      val daoExt = new JobSqlDaoExtended(new SqlCommon(config))
+
+      var hashes = Await.result(daoExt.getBinaryContentHashes(), timeout)
+      hashes.size should equal (0)
+
+      daoExt.saveBinary(jarInfo.appName, BinaryType.Jar, jarInfo.uploadTime, jarBytes)
+
+      val existing = Await.result(daoExt.getApps, timeout)
+      existing.keys should contain (jarInfo.appName)
+      Await.result(daoExt.getBinaryContentHashes(), timeout).size should be(1)
+
+      daoExt.deleteBinary(jarInfo.appName)
+
+      val apps = Await.result(daoExt.getApps, timeout)
       apps.keys should not contain (jarInfo.appName)
+      hashes = Await.result(daoExt.getBinaryContentHashes(), timeout)
+      hashes.size should equal (0)
+    }
+
+    it("should delete unused binaries for the given name") {
+      val daoExt = new JobSqlDaoExtended(new SqlCommon(config))
+
+      daoExt.saveBinary(jarInfo.appName, BinaryType.Jar, jarInfo.uploadTime, jarBytes)
+      daoExt.saveBinary(jarInfo.appName, BinaryType.Jar, jarInfo.uploadTime, Array(10, 11, 12))
+      daoExt.saveBinary("otherName", BinaryType.Jar, jarInfo.uploadTime, jarBytes)
+      jarFile.exists() should equal (true)
+
+      var hashes = Await.result(daoExt.getBinaryContentHashes(), timeout)
+      hashes.size should equal (2)
+      val existing = Await.result(daoExt.getApps, timeout)
+      existing.keys should contain (jarInfo.appName)
+      existing.keys should contain ("otherName")
+
+      daoExt.deleteBinary(jarInfo.appName)
+
+      var binaries = Await.result(daoExt.getApps, timeout)
+      binaries.size should equal (1)
+      hashes = Await.result(daoExt.getBinaryContentHashes(), timeout)
+      hashes.size should equal (1)
+      hashes.head should be(BinaryDAO.calculateBinaryHash(jarBytes))
+      jarFile.exists() should equal (false)
+
+      daoExt.deleteBinary("otherName")
+
+      binaries = Await.result(daoExt.getApps, timeout)
+      hashes = Await.result(daoExt.getBinaryContentHashes(), timeout)
+      binaries.size should equal (0)
+      hashes.size should equal (0)
+    }
+
+    it("should not delete hash if it is being used by another app") {
+      val daoExt = new JobSqlDaoExtended(new SqlCommon(config))
+
+      daoExt.saveBinary(jarInfo.appName, BinaryType.Jar, jarInfo.uploadTime, jarBytes)
+      daoExt.saveBinary("appB", BinaryType.Jar, jarInfo.uploadTime, jarBytes)
+      daoExt.saveBinary("appC", BinaryType.Jar, jarInfo.uploadTime, Array(10, 11, 12))
+
+      daoExt.deleteBinary(jarInfo.appName)
+
+      val existing = Await.result(daoExt.getApps, timeout)
+      existing.keys should contain ("appB")
+      existing.keys should contain ("appC")
+
+      val hashes = Await.result(daoExt.getBinaryContentHashes(), timeout)
+      hashes.size should equal (2)
+      hashes(0) should be(BinaryDAO.calculateBinaryHash(jarBytes))
+      hashes(1) should be(BinaryDAO.calculateBinaryHash(Array(10, 11, 12)))
+    }
+
+    it("should delete all hashes against a single app") {
+      val daoExt = new JobSqlDaoExtended(new SqlCommon(config))
+
+      daoExt.saveBinary(jarInfo.appName, BinaryType.Jar, jarInfo.uploadTime, jarBytes)
+      daoExt.saveBinary(jarInfo.appName, BinaryType.Jar, jarInfo.uploadTime, Array(10, 11, 12))
+
+      daoExt.deleteBinary(jarInfo.appName)
+
+      Await.result(daoExt.getApps, timeout).size should be(0)
+      Await.result(daoExt.getBinaryContentHashes(), timeout).size should be(0)
     }
   }
 

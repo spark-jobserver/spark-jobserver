@@ -1,4 +1,4 @@
-FROM instructure/java:8
+FROM openjdk:8-jdk
 
 USER root
 # install and cache sbt, python
