@@ -11,6 +11,7 @@ import org.apache.commons.io.FileUtils
 import org.slf4j.LoggerFactory
 import spark.jobserver.common.akka.actor.ProductionReaper
 import spark.jobserver.common.akka.actor.Reaper.WatchMe
+import spark.jobserver.util.JobServerRoles
 import spark.jobserver.io.{JobDAO, JobDAOActor}
 import spark.jobserver.util.{HadoopFSFacade, NetworkAddressFactory, Utils}
 
@@ -44,7 +45,8 @@ object JobManager {
     logger.info(s"Found master seed nodes are: ${masterAddresses}")
 
     val managerName = args(1)
-    val loadedConfig = getConfFromFS(args(2)).getOrElse(exitJVM)
+    val loadedConfig = getConfFromFS(args(2)).getOrElse(exitJVM).withValue(
+      JobServerRoles.propertyName, ConfigValueFactory.fromAnyRef(JobServerRoles.jobserverSlave))
     val defaultConfig = ConfigFactory.load()
     var systemConfig = loadedConfig.withFallback(defaultConfig)
     val master = Try(systemConfig.getString("spark.master")).toOption
