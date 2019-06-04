@@ -20,6 +20,7 @@ import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 import scala.collection.mutable.ListBuffer
 import com.google.common.annotations.VisibleForTesting
+import spark.jobserver.util.JobServerRoles
 import spark.jobserver.io.zookeeper.AutoPurgeActor
 
 import scala.util.control.NonFatal
@@ -51,7 +52,10 @@ object JobServer {
   // Allow custom function to create ActorSystem.  An example of why this is useful:
   // we can have something that stores the ActorSystem so it could be shut down easily later.
   def start(args: Array[String], makeSystem: Config => ActorSystem) {
-    val defaultConfig = ConfigFactory.load()
+    // For Akka DowningProvider to decide which node to down in case of split brain,
+    // it is important to understand weather it's SJS master or driver node. Therefore new value in config.
+    val defaultConfig = ConfigFactory.load().withValue(
+      JobServerRoles.propertyName, ConfigValueFactory.fromAnyRef(JobServerRoles.jobserverMaster))
     val config = if (args.length > 0) {
       val configFile = new File(args(0))
       if (!configFile.exists()) {
