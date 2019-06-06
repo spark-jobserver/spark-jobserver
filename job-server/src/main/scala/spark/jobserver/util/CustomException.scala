@@ -36,6 +36,9 @@ final case class ContextJVMInitializationTimeout() extends
 final case class ContextReconnectFailedException() extends
   Exception("Reconnect failed after Jobserver restart")
 
+final case class StoppedContextJoinedBackException() extends
+  Exception("Stopped context tried to join the cluster")
+
 final case class ContextForcefulKillTimeout() extends
   Exception("Forceful kill for a context failed within deletion time")
 

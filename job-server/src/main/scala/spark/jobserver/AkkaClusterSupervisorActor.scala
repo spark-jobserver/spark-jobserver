@@ -165,6 +165,15 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
                 if isContextInFinalState(contextInfo) =>
               logger.info(s"Context forked JVM (${contextInfo.name}) already errored out. Killing it.")
               actorRef ! PoisonPill
+            case (Some(JobDAOActor.ContextResponse(Some(contextInfo))), _)
+                if contextInfo.state == ContextStatus.Stopping =>
+              logger.info(s"Context (${contextInfo.name}) in ${ContextStatus.Stopping} state is joining" +
+                s"the cluster. Killing it.")
+              daoActor ! JobDAOActor.SaveContextInfo(contextInfo.copy(
+                state = ContextStatus.Error, endTime = Some(DateTime.now()),
+                error = Some(new StoppedContextJoinedBackException)))
+              daoActor ! JobDAOActor.CleanContextJobInfos(contextInfo.id, DateTime.now())
+              actorRef ! PoisonPill
             case (Some(JobDAOActor.ContextResponse(Some(contextInfo))),
                 Some((successCallback, failureCallback, timeoutMsgCancelHandler))) =>
               cancelScheduledMessage(timeoutMsgCancelHandler)

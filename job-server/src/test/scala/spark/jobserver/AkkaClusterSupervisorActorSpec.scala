@@ -489,8 +489,6 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       dao.saveContextInfo(contextWithoutActor)
       dao.saveJobInfo(finalJob)
       dao.saveJobInfo(nonfinalJob)
-      val contextUpdated = false
-      val jobsCleaned = false
 
       supervisor ! StopContext("contextWithoutActor")
 
@@ -544,6 +542,41 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       supervisor ! ActorIdentity(unusedDummyInput, Some(managerProbe.ref))
 
       deathWatch.expectTerminated(managerProbe.ref)
+    }
+
+    it("should kill context JVM and cleanup jobs if context was found in DB in STOPPING state") {
+      val managerProbe = TestProbe(AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX + "stoppingContext")
+      val contextId = managerProbe.ref.path.name.replace(AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX, "")
+      val deathWatch = TestProbe()
+      deathWatch.watch(managerProbe.ref)
+      val dummyContext = ContextInfo(contextId, contextId, "", None,
+        DateTime.now(), None, ContextStatus.Stopping, None)
+      val finalJob = JobInfo("finalJob", contextId, contextId,
+        BinaryInfo("demo", BinaryType.Jar, DateTime.now()), "", JobStatus.Finished, DateTime.now(),
+        Some(DateTime.now()), None)
+      val nonfinalJob = JobInfo("nonfinalJob", contextId, contextId,
+        BinaryInfo("demo", BinaryType.Jar, DateTime.now()), "", JobStatus.Running, DateTime.now(),
+        None, None)
+      dao.saveContextInfo(dummyContext)
+      dao.saveJobInfo(finalJob)
+      dao.saveJobInfo(nonfinalJob)
+
+      supervisor ! ActorIdentity(unusedDummyInput, Some(managerProbe.ref))
+
+      deathWatch.expectTerminated(managerProbe.ref)
+
+      Utils.retry(3, 1000){
+        // If one of these assertion fails, it's probably because the overall flow is faster than
+        // the DAO update (sent with tell). In this case, just retry
+        val c = Await.result(dao.getContextInfo(contextId), 3. seconds).get
+        c.state should equal(ContextStatus.Error)
+        c.endTime.isDefined should equal(true)
+        Await.result(dao.getJobInfo("finalJob"), 3. seconds) should equal(Some(finalJob))
+        val j = Await.result(dao.getJobInfo("nonfinalJob"), 3. seconds).get
+        j.state should equal(ContextStatus.Error)
+        j.error.isDefined should equal(true)
+        j.endTime.isDefined should equal(true)
+      }
     }
 
     it("should kill context JVM if DB call had an exception but callbacks are available") {
