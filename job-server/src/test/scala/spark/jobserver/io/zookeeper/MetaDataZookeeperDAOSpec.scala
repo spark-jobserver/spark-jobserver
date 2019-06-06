@@ -19,16 +19,18 @@ class MetaDataZookeeperDAOSpec extends FunSpec with TestJarFinder with FunSpecLi
    */
 
   private val timeout = 60 seconds
-
   private val testServer = new CuratorTestCluster()
-  private val testDir = "jobserver-test"
+
   def config: Config = ConfigFactory.parseString(
     s"""
-         |spark.jobserver.zookeeperdao.connection-string = "${testServer.getConnectString}",
-         |spark.jobserver.zookeeperdao.dir = $testDir""".stripMargin)
+         |spark.jobserver.zookeeperdao.connection-string = "${testServer.getConnectString}"
+    """.stripMargin
+  ).withFallback(
+    ConfigFactory.load("local.test.combineddao.conf")
+  )
 
   private var dao = new MetaDataZookeeperDAO(config)
-  private val zkUtils = new ZookeeperUtils(testServer.getConnectString, testDir, 1)
+  private val zkUtils = new ZookeeperUtils(config)
 
   before {
     Utils.usingResource(zkUtils.getClient) {
