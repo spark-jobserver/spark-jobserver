@@ -2,7 +2,6 @@ package spark.jobserver.io
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
-
 import com.google.common.io.Files
 import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import org.joda.time.DateTime
@@ -113,7 +112,7 @@ class SqlCommonSpec extends SqlCommonSpecBase with TestJarFinder with FunSpecLik
     }
 
     it("should save and get the same config") {
-      dao.saveJobConfig(jobId, jobConfig)
+      Await.result(dao.saveJobConfig(jobId, jobConfig), timeout) should be(true)
 
       val config = Await.result(dao.getJobConfig(jobId), timeout).get
       config should equal (expectedConfig)
