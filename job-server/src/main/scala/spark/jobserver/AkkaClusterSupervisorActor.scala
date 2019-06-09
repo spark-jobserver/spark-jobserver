@@ -6,11 +6,10 @@ import java.util.concurrent.TimeUnit
 import akka.actor._
 import akka.pattern.ask
 import akka.cluster.Cluster
-import akka.cluster.ClusterEvent.{MemberEvent, MemberUp, CurrentClusterState}
+import akka.cluster.ClusterEvent.{CurrentClusterState, MemberEvent, MemberUp}
 import akka.util.Timeout
-
 import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
-import spark.jobserver.util.{SparkJobUtils, ManagerLauncher}
+import spark.jobserver.util._
 
 import scala.collection.mutable
 import scala.reflect.ClassTag
@@ -19,13 +18,11 @@ import spark.jobserver.common.akka.InstrumentedActor
 
 import scala.concurrent.Await
 import org.joda.time.DateTime
-import spark.jobserver.JobManagerActor.{GetContexData, ContexData, SparkContextDead, RestartExistingJobs}
-import spark.jobserver.io.{JobDAOActor, ContextInfo, ContextStatus, JobStatus, ErrorData}
-import spark.jobserver.util.{InternalServerErrorException, NoCallbackFoundException,
-  ContextJVMInitializationTimeout, ContextForcefulKillTimeout, ResolutionFailedOnStopContextException}
+import spark.jobserver.JobManagerActor.{ContexData, GetContexData, RestartExistingJobs, SparkContextDead}
+import spark.jobserver.io._
 import com.google.common.annotations.VisibleForTesting
-import akka.cluster.singleton.{ClusterSingletonProxy, ClusterSingletonManager, ClusterSingletonProxySettings,
-  ClusterSingletonManagerSettings}
+import akka.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings,
+  ClusterSingletonProxy, ClusterSingletonProxySettings}
 
 object AkkaClusterSupervisorActor {
   val MANAGER_ACTOR_PREFIX = "jobManager-"
@@ -547,8 +544,18 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
     }.getOrElse(Files.createTempDirectory("jobserver"))
     logger.info("Created working directory {} for context {}", contextDir: Any, name)
 
+    val masterSeedNodes = Try {
+      Utils.getHASeedNodes(config) match {
+        case Nil => selfAddress.toString // for backward compatibility
+        case seedNodes => seedNodes.map(_.toString).mkString(",")
+      }
+    }.getOrElse {
+      logger.warn("Failed to get HA seed nodes, falling back to non-HA mode and using this node as master")
+      selfAddress.toString
+    }
+
     val launcher = new ManagerLauncher(config, contextConfig,
-        selfAddress.toString, contextActorName, contextDir.toString)
+      masterSeedNodes, contextActorName, contextDir.toString)
 
     launcher.start()
   }
