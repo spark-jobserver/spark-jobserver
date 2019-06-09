@@ -1,11 +1,17 @@
 package spark.jobserver.util
 
-import java.io.{Closeable, File, StringWriter, PrintWriter}
+import java.io.{Closeable, File, PrintWriter, StringWriter}
+
+import akka.actor.Address
+import com.typesafe.config.Config
 import com.yammer.metrics.core.Timer
+
+import collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext
 import org.slf4j.Logger
+import spark.jobserver.JobServer
 
 object Utils {
   def usingResource[A <: Closeable, B](resource: A)(f: A => B): B = {
@@ -62,4 +68,28 @@ object Utils {
     logger.error(s"${exception.getMessage} : ${sw.toString}")
   }
 
+  def getHASeedNodes(config: Config): List[Address] = {
+    config.hasPath("spark.jobserver.ha.masters") match {
+      case true =>
+        config.getStringList("spark.jobserver.ha.masters")
+          .asScala
+          .toList
+          .map(extractHostAndPort)
+          .map { node =>
+            Address("akka.tcp", JobServer.ACTOR_SYSTEM_NAME, node.host, node.port)
+          }
+      case false => List.empty
+    }
+  }
+
+  private def extractHostAndPort(address: String): MasterAddress = {
+    val hostAndPort = address.split(':')
+    hostAndPort.length match {
+      case 2 => MasterAddress(hostAndPort(0), hostAndPort(1).toInt)
+      case _ => throw new WrongFormatException(
+        s"Address should be of format HOST:PORT, wrong format specified $address")
+    }
+  }
 }
+
+final case class MasterAddress(host: String, port: Int)

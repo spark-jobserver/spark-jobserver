@@ -62,3 +62,5 @@ final case class UnsupportedNetworkAddressStrategy(name: String) extends
 
 final case class NoCorrespondingContextAliveException(jobId: String) extends
   Exception(s"No context is alive against running job ($jobId). Cleaning the job.")
+
+final case class WrongFormatException(msg: String) extends Exception(msg)

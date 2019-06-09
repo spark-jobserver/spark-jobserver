@@ -275,5 +275,17 @@ class JobManagerSpec extends FunSpecLike with Matchers with BeforeAndAfter
 
       super.shutdownHDFS()
     }
+
+    it("should exit jvm if master seed nodes cannot be parsed") {
+      def makeSystem(config: Config): ActorSystem = {
+        fail("Cannot reach this point as JVM should already be exited")
+        system
+      }
+
+      intercept[JVMExitException] {
+        JobManager.start(Seq("wrong_address", "test-manager", "").toArray,
+          makeSystem, waitForTerminationDummy)
+      }
+    }
   }
 }

@@ -3,7 +3,8 @@ package spark.jobserver
 import java.nio.charset.Charset
 
 import scala.util.Try
-import akka.actor.{Actor, ActorRef, ActorSystem, Props}
+import akka.actor.{Actor, ActorRef, ActorSystem, Address, Props}
+import akka.cluster.{Cluster, ClusterEvent, MemberStatus}
 import akka.pattern.ask
 import akka.util.Timeout
 import akka.testkit.{TestActor, TestKit, TestProbe}
@@ -371,6 +372,26 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
         s"spark.jobserver.startup_dao_cleanup_class=wrongClass")
       intercept[ClassNotFoundException] {
         JobServer.doStartupCleanup(config)
+      }
+    }
+  }
+
+  describe("Join Akka Cluster tests") {
+    it("should join itself if no slave is available and no HA setup is configured") {
+      val cluster = Cluster(actorSystem)
+      cluster.subscribe(testActor, ClusterEvent.InitialStateAsSnapshot, classOf[ClusterEvent.MemberEvent])
+      expectMsgClass(classOf[ClusterEvent.CurrentClusterState])
+
+      JobServer.joinAkkaCluster(cluster, List.empty, List.empty)
+
+      expectMsgClass(classOf[ClusterEvent.MemberUp])
+
+      within(5.seconds) {
+        awaitAssert {
+          cluster.state.members.size should ===(1)
+          cluster.state.members.head.status should ===(MemberStatus.Up)
+          cluster.state.members.head.address === cluster.selfAddress
+        }
       }
     }
   }
