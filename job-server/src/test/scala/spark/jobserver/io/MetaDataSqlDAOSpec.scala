@@ -317,5 +317,50 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
       jobs4.last.error.get.errorClass should equal (throwable.getClass.getName)
       jobs4.last.error.get.stackTrace should not be empty
     }
+
+    it("should return empty list if no job exists using binary") {
+      Await.result(dao.getJobsByBinaryName("I-don't-exist"), timeout) should equal(Seq.empty)
+    }
+
+    it("should get jobs by binary name") {
+      val isSaved = Await.result(dao.saveBinary(jarInfo.appName, BinaryType.Jar,
+        jarInfo.uploadTime, BinaryDAO.calculateBinaryHashString(jarBytes)), timeout)
+      isSaved should equal(true)
+
+      Await.result(dao.saveJob(jobInfoNoEndNoErr), timeout) should equal(true)
+
+      Await.result(dao.getJobsByBinaryName(jarInfo.appName), timeout).head should equal(jobInfoNoEndNoErr)
+    }
+
+    it("should get jobs by binary name and status") {
+      // setup
+      val isSaved = Await.result(dao.saveBinary(jarInfo.appName, BinaryType.Jar,
+        jarInfo.uploadTime, BinaryDAO.calculateBinaryHashString(jarBytes)), timeout)
+      isSaved should equal(true)
+
+      val runningJob = jobInfoNoEndNoErr
+      val restartingJob = jobInfoNoEndNoErr.copy(jobId = "restarting", state = JobStatus.Restarting)
+      val finishedJob = jobInfoNoEndNoErr.copy(jobId = "finished", state = JobStatus.Finished)
+
+      Await.result(dao.saveJob(runningJob), timeout) should equal(true)
+      Await.result(dao.saveJob(restartingJob), timeout) should equal(true)
+      Await.result(dao.saveJob(finishedJob), timeout) should equal(true)
+
+      // test
+      val getRunningJobResult = Await.result(
+        dao.getJobsByBinaryName(jarInfo.appName, Some(Seq(JobStatus.Running))), timeout)
+
+      // assert
+      getRunningJobResult.length should be(1)
+      getRunningJobResult.head should equal(runningJob)
+
+      // test-2
+      val getRunningAndFinishedJobsResult = Await.result(
+        dao.getJobsByBinaryName(jarInfo.appName, Some(Seq(JobStatus.Running, JobStatus.Finished))), timeout)
+
+      // assert-2
+      getRunningAndFinishedJobsResult.length should be(2)
+      getRunningAndFinishedJobsResult should contain allOf(runningJob, finishedJob)
+    }
   }
 }

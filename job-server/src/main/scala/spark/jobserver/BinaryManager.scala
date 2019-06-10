@@ -3,15 +3,15 @@ package spark.jobserver
 import akka.actor.ActorRef
 import akka.util.Timeout
 import spark.jobserver.io.JobDAOActor.{DeleteBinaryResult, SaveBinaryResult}
-import spark.jobserver.io.{BinaryType, JobDAOActor}
-import spark.jobserver.util.JarUtils
+import spark.jobserver.io.{BinaryType, JobDAOActor, JobInfo, JobStatus}
+import spark.jobserver.util.{JarUtils, NoSuchBinaryException}
 import org.joda.time.DateTime
 import java.nio.file.{Files, Paths}
 
 import scala.concurrent.Future
+import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 import spark.jobserver.common.akka.InstrumentedActor
-import spark.jobserver.util.NoSuchBinaryException
 
 // Messages to JarManager actor
 
@@ -34,8 +34,13 @@ case object InvalidBinary
 case object BinaryStored
 case object BinaryDeleted
 case object NoSuchBinary
+case class BinaryInUse(jobs: Seq[String])
 case class BinaryStorageFailure(ex: Throwable)
 case class BinaryDeletionFailure(ex: Throwable)
+
+object BinaryManager {
+  val DELETE_TIMEOUT = 3.seconds
+}
 
 /**
  * An Actor that manages the jars stored by the job server.   It's important that threads do not try to
@@ -56,8 +61,15 @@ class BinaryManager(jobDao: ActorRef) extends InstrumentedActor {
   }
 
   private def deleteBinary(appName: String): Future[Try[Unit]] = {
-    (jobDao ? JobDAOActor.DeleteBinary(appName)).
+    (jobDao ? JobDAOActor.DeleteBinary(appName))(BinaryManager.DELETE_TIMEOUT).
       mapTo[DeleteBinaryResult].map(_.outcome)
+  }
+
+  private def getActiveJobsUsingBinary(binName: String): Future[Seq[JobInfo]] = {
+    (jobDao ? JobDAOActor.GetJobsByBinaryName(
+          binName, Some(JobStatus.getNonFinalStates())))(BinaryManager.DELETE_TIMEOUT)
+        .mapTo[JobDAOActor.JobInfos]
+        .map(_.jobInfos)
   }
 
   override def wrappedReceive: Receive = {
@@ -108,13 +120,22 @@ class BinaryManager(jobDao: ActorRef) extends InstrumentedActor {
       }
 
     case DeleteBinary(appName) =>
+      val recipient = sender()
       logger.info(s"Deleting binary $appName")
-      deleteBinary(appName).map {
-        case Success(_) => BinaryDeleted
-        case Failure(ex) => ex match {
-          case e: NoSuchBinaryException => NoSuchBinary
-          case _ => BinaryDeletionFailure(ex)
-        }
-      }.pipeTo(sender)
+      getActiveJobsUsingBinary(appName).onComplete {
+        case Success(Seq()) =>
+          logger.info(s"No active job found for binary $appName. Deleting binary.")
+          deleteBinary(appName).map {
+            case Success(_) => {
+              BinaryDeleted
+            }
+            case Failure(ex) => ex match {
+              case _: NoSuchBinaryException => NoSuchBinary
+              case _ => BinaryDeletionFailure(ex)
+            }
+          }.pipeTo(recipient)
+        case Success(jobs) => recipient ! BinaryInUse(jobs.map(_.jobId))
+        case Failure(ex) => recipient ! BinaryDeletionFailure(ex)
+      }
   }
 }

@@ -2,9 +2,9 @@ package spark.jobserver
 
 import com.typesafe.config.ConfigFactory
 import spark.jobserver.io.BinaryType
-import spray.http.{MediaTypes, HttpHeaders, HttpHeader}
+import spray.http.{HttpHeader, HttpHeaders, MediaTypes}
 import spray.http.StatusCodes._
-import spark.jobserver.io.{JobStatus, ContextStatus}
+import spark.jobserver.io.{ContextStatus, JobStatus}
 import spark.jobserver.util.SparkJobUtils
 
 // Tests web response codes and formatting
@@ -111,6 +111,26 @@ class WebApiMainRoutesSpec extends WebApiSpec {
     it("should respond with 404 Not Found if binary was not found during deletion") {
       Delete("/binaries/badbinary") ~> sealRoute(routes) ~> check {
         status should be (NotFound)
+      }
+    }
+
+    it("should respond with 403 forbidden if user is deleting an active jar") {
+      Delete("/binaries/active") ~> sealRoute(routes) ~> check {
+        status should be (Forbidden)
+        responseAs[Map[String, String]] should be (
+          Map("status" -> "ERROR",
+            "result" -> "Binary is in use by job(s): job-active")
+        )
+      }
+    }
+
+    it("should handle failures of dao layer gracefully") {
+      Delete("/binaries/failure") ~> sealRoute(routes) ~> check {
+        status should be (InternalServerError)
+        responseAs[Map[String, String]] should be (
+          Map("status" -> "ERROR",
+            "result" -> "Failed to delete binary due to internal error. Check logs.")
+        )
       }
     }
   }

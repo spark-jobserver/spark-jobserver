@@ -189,6 +189,11 @@ class JobSqlDAO(config: Config, sqlCommon: SqlCommon) extends JobDAO with FileCa
     }
   }
 
+  override def getJobsByBinaryName(binName: String, statuses: Option[Seq[String]] = None):
+      Future[Seq[JobInfo]] = {
+    sqlCommon.getJobsByBinaryName(binName, statuses)
+  }
+
   override def saveContextInfo(contextInfo: ContextInfo): Unit = {
     if (!Await.result(sqlCommon.saveContext(contextInfo), futureTimeout)) {
       throw new SlickException(s"Could not update ${contextInfo.id} in the database")
