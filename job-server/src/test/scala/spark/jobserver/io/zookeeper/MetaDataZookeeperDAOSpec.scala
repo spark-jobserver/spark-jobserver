@@ -3,7 +3,7 @@ package spark.jobserver.io.zookeeper
 import com.typesafe.config.{Config, ConfigFactory}
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, FunSpec, FunSpecLike, Matchers}
-import spark.jobserver.io.{BinaryDAO, BinaryInfo, BinaryType, ContextInfo, ErrorData, JobInfo}
+import spark.jobserver.io._
 import spark.jobserver.util.CuratorTestCluster
 import spark.jobserver.TestJarFinder
 
@@ -185,6 +185,30 @@ class MetaDataZookeeperDAOSpec extends FunSpec with TestJarFinder with FunSpecLi
       resultList.head.appName should equal(binJar.appName)
     }
 
+    it("should get jobs by binary name") {
+      Await.result(dao.saveBinary(binJar.appName, binJar.binaryType,
+        binJar.uploadTime, binJar.binaryStorageId.get), timeout)
+
+      Await.result(dao.saveJob(normalJob), timeout)
+
+      Await.result(dao.getJobsByBinaryName(binJar.appName), timeout) should be(Seq(normalJob))
+    }
+
+    it("should get jobs by binary name and status") {
+      Await.result(dao.saveBinary(binJar.appName, binJar.binaryType,
+        binJar.uploadTime, binJar.binaryStorageId.get), timeout)
+
+      val runningJob = normalJob.copy(state = JobStatus.Running)
+      val restartingJob = normalJob.copy(jobId = "restarting", state = JobStatus.Restarting)
+      val errorJob = normalJob.copy(jobId = "error", state = JobStatus.Error)
+
+      Await.result(dao.saveJob(runningJob), timeout)
+      Await.result(dao.saveJob(restartingJob), timeout)
+      Await.result(dao.saveJob(errorJob), timeout)
+
+      Await.result(dao.getJobsByBinaryName(binJar.appName,
+        Some(Seq(JobStatus.Running, JobStatus.Error))), timeout) should contain allOf(runningJob, errorJob)
+    }
   }
 
   /*

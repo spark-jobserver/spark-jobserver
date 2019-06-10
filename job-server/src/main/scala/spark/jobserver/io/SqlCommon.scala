@@ -289,4 +289,31 @@ class SqlCommon(config: Config) {
       r.map(jobInfoFromRow).headOption
     }
   }
+
+  /**
+    * Final query is
+    * select x2.*, x3.*
+      from "BINARIES" x3, "JOBS" x2
+      where (
+        (x2."BIN_ID" = x3."BIN_ID") and
+        (x3."APP_NAME" = '$binName')) and
+        (x2."STATE" in ('$statuses'))
+    * @param binName The name of the binary to be looked up
+    * @param statuses List of job statuses to look up
+    * @return List of found jobs
+    */
+  def getJobsByBinaryName(binName: String, statuses: Option[Seq[String]] = None): Future[Seq[JobInfo]] = {
+    val joinQuery = for {
+      bin <- binaries
+      j <- jobs if ((binName, statuses) match {
+        case (binName, Some(s)) => j.binId === bin.binId && bin.appName === binName && j.state.inSet(s)
+        case (binName, None) => j.binId === bin.binId && bin.appName === binName
+      })
+    } yield {
+      (j.jobId, j.contextId, j.contextName, bin.appName, bin.binaryType, bin.uploadTime, bin.binHash,
+        j.classPath, j.state, j.startTime, j.endTime, j.error, j.errorClass, j.errorStackTrace)
+    }
+
+    db.run(joinQuery.result).map(_.map(jobInfoFromRow))
+  }
 }
