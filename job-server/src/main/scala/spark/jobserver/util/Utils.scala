@@ -1,7 +1,8 @@
 package spark.jobserver.util
 
-import java.io.{Closeable, File}
+import java.io.{Closeable, File, StringWriter, PrintWriter}
 import scala.util.{Failure, Success, Try}
+import org.slf4j.Logger
 
 object Utils {
   def usingResource[A <: Closeable, B](resource: A)(f: A => B): B = {
@@ -34,4 +35,11 @@ object Utils {
       case Failure(e) => throw e
     }
   }
+
+  def logStackTrace(logger: Logger, exception: Throwable): Unit = {
+    val sw = new StringWriter
+    exception.printStackTrace(new PrintWriter(sw))
+    logger.error(s"${exception.getMessage} : ${sw.toString}")
+  }
+
 }
