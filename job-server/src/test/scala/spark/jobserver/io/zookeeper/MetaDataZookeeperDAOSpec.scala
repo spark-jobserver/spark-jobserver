@@ -4,12 +4,11 @@ import com.typesafe.config.{Config, ConfigFactory}
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, FunSpec, FunSpecLike, Matchers}
 import spark.jobserver.io._
-import spark.jobserver.util.CuratorTestCluster
+import spark.jobserver.util.{ContextJVMInitializationTimeout, ContextReconnectFailedException, CuratorTestCluster, ResolutionFailedOnStopContextException, Utils}
 import spark.jobserver.TestJarFinder
 
 import scala.concurrent.Await
 import scala.concurrent.duration.DurationInt
-import spark.jobserver.util.Utils
 
 class MetaDataZookeeperDAOSpec extends FunSpec with TestJarFinder with FunSpecLike
       with Matchers with BeforeAndAfter {
@@ -275,6 +274,26 @@ class MetaDataZookeeperDAOSpec extends FunSpec with TestJarFinder with FunSpecLi
       val jobs = Await.result(dao.getContexts(Some(1), Some(Seq("someState", "nonexistingState"))),
           timeout)
       jobs should equal(Seq(anotherStateContext))
+    }
+
+    it("should save context with exception (custom contexts exceptions checked)") {
+      val contextResolutionFailedOnStopContextException = normalContext.copy(
+        error = Some(ResolutionFailedOnStopContextException(normalContext)))
+      Await.result(dao.saveContext(contextResolutionFailedOnStopContextException), timeout)
+      Await.result(dao.getContext(contextResolutionFailedOnStopContextException.id), timeout).get should
+        equal(contextResolutionFailedOnStopContextException)
+
+      val contextContextReconnectFailedException = normalContext.copy(
+        error = Some(ContextReconnectFailedException()))
+      Await.result(dao.saveContext(contextContextReconnectFailedException), timeout)
+      Await.result(dao.getContext(contextContextReconnectFailedException.id), timeout).get should
+        equal(contextContextReconnectFailedException)
+
+      val contextContextJVMInitializationTimeout = normalContext.copy(
+        error = Some(ContextJVMInitializationTimeout()))
+      Await.result(dao.saveContext(contextContextJVMInitializationTimeout), timeout)
+      Await.result(dao.getContext(contextContextJVMInitializationTimeout.id), timeout).get should
+        equal(contextContextJVMInitializationTimeout)
     }
 
   }
