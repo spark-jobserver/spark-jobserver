@@ -1,5 +1,6 @@
 
 import Dependencies._
+import JobServerRelease._
 
 updateOptions := updateOptions.value.withCachedResolution(true)
 transitiveClassifiers in Global := Seq(Artifact.SourceClassifier)
@@ -19,21 +20,19 @@ lazy val jobServer = Project(id = "job-server", base = file("job-server"))
   .settings(
     description := "Spark as a Service: a RESTful job server for Apache Spark",
     libraryDependencies ++= sparkDeps ++ slickDeps ++ cassandraDeps ++
-      securityDeps ++ coreTestDeps ++ zookeeperDeps ++ miscTestDeps,
-    test in Test := (test in Test).dependsOn(packageBin in Compile in jobServerTestJar)
+      securityDeps ++ coreTestDeps ++ miscTestDeps ++ zookeeperDeps,
+    test in Test <<= (test in Test).dependsOn(packageBin in Compile in jobServerTestJar)
       .dependsOn(clean in Compile in jobServerTestJar)
       .dependsOn(buildPython in jobServerPython)
-      .dependsOn(clean in Compile in jobServerPython)
-      .value,
-    testOnly in Test := (testOnly in Test).dependsOn(packageBin in Compile in jobServerTestJar)
+      .dependsOn(clean in Compile in jobServerPython),
+    testOnly in Test <<= (testOnly in Test).dependsOn(packageBin in Compile in jobServerTestJar)
       .dependsOn(clean in Compile in jobServerTestJar)
       .dependsOn(buildPython in jobServerPython)
-      .dependsOn(clean in Compile in jobServerPython)
-      .inputTaskValue,
-    console in Compile := Defaults.consoleTask(fullClasspath in Compile, console in Compile).value,
-    fullClasspath in Compile := (fullClasspath in Compile).map { classpath =>
+      .dependsOn(clean in Compile in jobServerPython),
+    console in Compile <<= Defaults.consoleTask(fullClasspath in Compile, console in Compile),
+    fullClasspath in Compile <<= (fullClasspath in Compile).map { classpath =>
       extraJarPaths ++ classpath
-    }.value,
+    },
     fork in Test := true
   )
   .settings(publishSettings)
@@ -58,20 +57,18 @@ lazy val jobServerExtras = Project(id = "job-server-extras", base = file("job-se
   .settings(commonSettings)
   .settings(jobServerExtrasSettings)
   .settings(
-    test in Test := (test in Test)
+    test in Test <<= (test in Test)
+      .dependsOn(packageBin in Compile in jobServerTestJar)
+      .dependsOn(clean in Compile in jobServerTestJar)
+      .dependsOn(buildPython in jobServerPython)
+      .dependsOn(buildPyExamples in jobServerPython)
+      .dependsOn(clean in Compile in jobServerPython),
+    testOnly in Test <<= (testOnly in Test)
       .dependsOn(packageBin in Compile in jobServerTestJar)
       .dependsOn(clean in Compile in jobServerTestJar)
       .dependsOn(buildPython in jobServerPython)
       .dependsOn(buildPyExamples in jobServerPython)
       .dependsOn(clean in Compile in jobServerPython)
-      .value,
-    testOnly in Test := (testOnly in Test)
-      .dependsOn(packageBin in Compile in jobServerTestJar)
-      .dependsOn(clean in Compile in jobServerTestJar)
-      .dependsOn(buildPython in jobServerPython)
-      .dependsOn(buildPyExamples in jobServerPython)
-      .dependsOn(clean in Compile in jobServerPython)
-      .inputTaskValue
   )
   .dependsOn(jobServerApi, jobServer % "compile->compile; test->test")
   .disablePlugins(SbtScalariform)
@@ -84,7 +81,7 @@ lazy val jobServerPython = Project(id = "job-server-python", base = file("job-se
 
 lazy val root = Project(id = "root", base = file("."))
   .settings(commonSettings)
-  .settings(Release.settings)
+  .settings(ourReleaseSettings)
   .settings(noPublishSettings)
   .settings(rootSettings)
   .settings(dockerSettings)
@@ -95,7 +92,7 @@ lazy val root = Project(id = "root", base = file("."))
 lazy val jobServerExtrasSettings = revolverSettings ++ Assembly.settings ++ publishSettings ++ Seq(
   libraryDependencies ++= sparkExtraDeps,
   // Extras packages up its own jar for testing itself
-  test in Test := (test in Test).dependsOn(packageBin in Compile).value,
+  test in Test <<= (test in Test).dependsOn(packageBin in Compile),
   fork in Test := true,
   parallelExecution in Test := false,
   // Temporarily disable test for assembly builds so folks can package and get started.  Some tests
@@ -117,7 +114,7 @@ lazy val jobServerPythonSettings = revolverSettings ++ Assembly.settings ++ publ
   testPython := PythonTasks.testPythonTask(baseDirectory.value),
   buildPython := PythonTasks.buildPythonTask(baseDirectory.value, version.value),
   buildPyExamples := PythonTasks.buildExamplesTask(baseDirectory.value, version.value),
-  assembly := assembly.dependsOn(buildPython).value
+  assembly <<= assembly.dependsOn(buildPython)
 )
 
 lazy val jobServerTestJarSettings = Seq(
@@ -129,13 +126,12 @@ lazy val jobServerTestJarSettings = Seq(
 lazy val noPublishSettings = Seq(
   publishTo := Some(Resolver.file("Unused repo", file("target/unusedrepo"))),
   publishArtifact := false,
-  publish := {},
-  skip in publish := true
+  publish := {}
 )
 
 lazy val dockerSettings = Seq(
   // Make the docker task depend on the assembly task, which generates a fat JAR file
-  docker := docker.dependsOn(assembly in jobServerExtras).value,
+  docker <<= (docker dependsOn (assembly in jobServerExtras)),
   dockerfile in docker := {
     val artifact = (assemblyOutputPath in assembly in jobServerExtras).value
     val artifactTargetPath = s"/app/${artifact.name}"
@@ -245,16 +241,16 @@ lazy val extraJarPaths = Option(System.getenv("EXTRA_JAR"))
 // Create a default Scala style task to run with compiles
 lazy val runScalaStyle = taskKey[Unit]("testScalaStyle")
 
-lazy val commonSettings = Defaults.coreDefaultSettings ++ dirSettings ++ Seq(
+lazy val commonSettings = Defaults.coreDefaultSettings ++ dirSettings ++ implicitlySettings ++ Seq(
   organization := "spark.jobserver",
   crossPaths   := true,
   scalaVersion := sys.env.getOrElse("SCALA_VERSION", "2.11.8"),
   dependencyOverrides += "org.scala-lang" % "scala-compiler" % scalaVersion.value,
   // scalastyleFailOnError := true,
   runScalaStyle := {
-    scalastyle.in(Compile).toTask("").value
+    org.scalastyle.sbt.ScalastylePlugin.scalastyle.in(Compile).toTask("").value
   },
-  (compile in Compile) := (compile in Compile).dependsOn(runScalaStyle).value,
+  (compile in Compile) <<= (compile in Compile) dependsOn runScalaStyle,
 
   // In Scala 2.10, certain language features are disabled by default, such as implicit conversions.
   // Need to pass in language options or import scala.language.* to enable them.

@@ -7,11 +7,11 @@ object Assembly {
     assemblyJarName in assembly := "spark-job-server.jar",
       // uncomment below to exclude tests
     // test in assembly := {},
-    assemblyExcludedJars in assembly := (fullClasspath in assembly).map(_.filter { cp =>
+    assemblyExcludedJars in assembly <<= (fullClasspath in assembly) map { _ filter { cp =>
       List("servlet-api", "guice-all", "junit", "uuid",
         "jetty", "jsp-api-2.0", "antlr", "avro", "slf4j-log4j", "log4j-1.2",
         "scala-actors", "commons-cli", "stax-api", "mockito").exists(cp.data.getName.startsWith(_))
-    }).value,
+    } },
     // We don't need the Scala library, Spark already includes it
     assembleArtifact in assemblyPackageScala := false,
     assemblyMergeStrategy in assembly := {
