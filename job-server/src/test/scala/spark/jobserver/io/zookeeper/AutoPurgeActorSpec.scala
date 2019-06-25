@@ -119,7 +119,7 @@ class AutoPurgeActorSpec extends TestKit(AutoPurgeActorSpec.system) with FunSpec
 
     purgeActor ! AutoPurgeActor.PurgeOldData
 
-    expectMsg(AutoPurgeActor.PurgeComplete)
+    expectMsg(timeout, AutoPurgeActor.PurgeComplete)
     Await.result(dao.getJobs(100, None), timeout).size should equal(0)
     Await.result(dao.getContexts(None, None), timeout).size should equal(0)
   }
@@ -136,7 +136,7 @@ class AutoPurgeActorSpec extends TestKit(AutoPurgeActorSpec.system) with FunSpec
 
     purgeActor ! AutoPurgeActor.PurgeOldData
 
-    expectMsg(AutoPurgeActor.PurgeComplete)
+    expectMsg(timeout, AutoPurgeActor.PurgeComplete)
     Await.result(dao.getJobs(100, None), timeout) should equal(Seq(recentJob))
     Await.result(dao.getContexts(None, None), timeout) should equal(Seq(recentContext))
   }
@@ -153,7 +153,7 @@ class AutoPurgeActorSpec extends TestKit(AutoPurgeActorSpec.system) with FunSpec
 
     purgeActor ! AutoPurgeActor.PurgeOldData
 
-    expectMsg(AutoPurgeActor.PurgeComplete)
+    expectMsg(timeout, AutoPurgeActor.PurgeComplete)
     Await.result(dao.getJobs(100, None), timeout) should equal(Seq(runningJob))
     Await.result(dao.getContexts(None, None), timeout) should equal(Seq(runningContext))
   }
