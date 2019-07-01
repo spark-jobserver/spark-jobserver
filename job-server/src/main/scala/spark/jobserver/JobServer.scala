@@ -157,10 +157,6 @@ object JobServer {
           val proxy = system.actorOf(AkkaClusterSupervisorActor.proxyProps(system),
               "context-supervisor-proxy")
 
-          if (existingManagerActorRefs.length > 0) {
-            proxy ! ContextSupervisor.RegainWatchOnExistingContexts(existingManagerActorRefs)
-          }
-
           proxy ! ContextSupervisor.AddContextsFromConfig  // Create initial contexts
           startWebApi(system, proxy, jobDAO, webApiPF)
         }
