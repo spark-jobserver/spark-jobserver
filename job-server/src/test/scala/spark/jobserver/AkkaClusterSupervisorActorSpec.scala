@@ -84,7 +84,6 @@ object StubbedAkkaClusterSupervisorActor {
   case object DisableDAOCommunication
   case object EnableDAOCommunication
   case class DummyTerminated(actorRef: ActorRef)
-  case class UnWatchContext(actorRef: ActorRef)
 }
 
 class StubbedAkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
@@ -153,8 +152,6 @@ class StubbedAkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: Ac
     case StubbedAkkaClusterSupervisorActor.DummyTerminated(actorRef) =>
       handleTerminatedEvent(actorRef)
       sender ! "Executed"
-    case StubbedAkkaClusterSupervisorActor.UnWatchContext(actorRef) =>
-      context.unwatch(actorRef)
     case Terminated(actorRef) =>
       handleTerminatedEvent(actorRef)
       managerProbe.ref ! "Executed"
@@ -806,6 +803,9 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
           msg match {
             case JobDAOActor.GetContextInfoByName(_) =>
               sender ! JobDAOActor.ContextResponse(Some(contextInfo))
+            case JobDAOActor.GetContextInfos(_, _) =>
+              sender ! Seq.empty.map(JobDAOActor.ContextInfos)
+              TestActor.KeepRunning
           }
           TestActor.KeepRunning
         }
@@ -835,6 +835,9 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
             case JobDAOActor.SaveContextInfo(c) =>
               contextToTest = c
               latch.countDown()
+            case JobDAOActor.GetContextInfos(_, _) =>
+              sender ! Seq.empty.map(JobDAOActor.ContextInfos)
+              TestActor.KeepRunning
           }
           TestActor.KeepRunning
         }
@@ -867,8 +870,8 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       timedOutContext.get.error.get.getMessage should be(timeoutExceptionMessage)
     }
 
-    it("should raise Terminated event even if the watch" +
-      "was added through RegainWatchOnExistingContexts message") {
+    it("should raise a Terminated event if an actor is killed and set the state accordingly") {
+
       val contextName = "ctxRunning"
 
       supervisor ! AddContext(contextName, contextConfig)
@@ -877,11 +880,6 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       val runningContextInfo = Await.result(dao.getContextInfoByName(contextName), daoTimeout)
       val runningContextActorRef = JobServer.getManagerActorRef(runningContextInfo.get, system).get
       runningContextActorRef should not be(None)
-
-      // Mimic SJS restart, where it loses all the watches
-      supervisor ! StubbedAkkaClusterSupervisorActor.UnWatchContext(runningContextActorRef)
-
-      supervisor ! RegainWatchOnExistingContexts(List(runningContextActorRef))
 
       val deathWatcher = TestProbe()
       deathWatcher.watch(runningContextActorRef)
@@ -1054,5 +1052,6 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       daoActor ! JobDAOActor.SaveContextInfo(msg.contextInfo.get.copy(state = ContextStatus.Finished))
       expectMsg(JobDAOActor.SavedSuccessfully)
     }
+
   }
 }

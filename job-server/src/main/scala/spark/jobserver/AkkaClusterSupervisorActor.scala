@@ -63,9 +63,6 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
   import scala.collection.JavaConverters._
   import scala.concurrent.duration._
 
-  logger.info("Subscribing to MemberUp event")
-  cluster.subscribe(self, classOf[MemberEvent])
-
   val config = context.system.settings.config
   val defaultContextConfig = config.getConfig("spark.context-settings")
   val contextInitTimeout = config.getDuration("spark.context-settings.context-init-timeout",
@@ -91,6 +88,10 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
   // This is for capturing results for ad-hoc jobs. Otherwise when ad-hoc job dies, resultActor also dies,
   // and there is no way to retrieve results.
   val globalResultActor = context.actorOf(Props[JobResultActor], "global-result-actor")
+
+  logger.info("Subscribing to MemberUp event")
+  cluster.subscribe(self, classOf[MemberEvent])
+  regainWatchOnExistingContexts()
 
   def getActorRef(contextInfo: ContextInfo) : Option[ActorRef] = {
     contextInfo.actorAddress match {
@@ -126,6 +127,22 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
     cluster.unsubscribe(self)
     cluster.leave(selfAddress)
     logger.warn(s"Unsubscribing and leaving cluster with address ${selfAddress}")
+  }
+
+  def regainWatchOnExistingContexts(){
+    getDataFromDAO[JobDAOActor.ContextInfos](JobDAOActor.GetContextInfos(None,
+        Some(Seq(ContextStatus.Running, ContextStatus.Stopping))))
+    match {
+      case Some(JobDAOActor.ContextInfos(contextInfos)) =>
+        logger.info(s"Regaining watch on ${contextInfos.length} existing contexts.")
+        contextInfos.flatMap(JobServer.getManagerActorRef(_, context.system)).foreach{
+            ref =>
+              logger.info(s"Regaining watch on existing context with address ${ref.path.address.toString}.")
+              context.watch(ref)
+        }
+      case None =>
+        logger.error("Error fetching contexts from database. Not regaining any watches.")
+    }
   }
 
   def wrappedReceive: Receive = {
@@ -348,11 +365,6 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
       }
     }
 
-    case RegainWatchOnExistingContexts(actorRefs) =>
-      actorRefs.map { ref =>
-        logger.info(s"Regaining watch on existing context with address ${ref.path.address.toString}")
-        context.watch(ref)
-      }
   }
 
   protected def handleTerminatedEvent(actorRef: ActorRef) {
