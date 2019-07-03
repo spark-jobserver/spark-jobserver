@@ -54,7 +54,7 @@ InstanceCount=10,BidPrice=2.99,Name=sparkSlave,InstanceGroupType=CORE,InstanceTy
 
 ### Build spark-jobserver distribution
 
-1. Install sbt 0.13.9 as described here http://www.scala-sbt.org/0.13/tutorial/Manual-Installation.html
+1. Install sbt as described here https://www.scala-sbt.org/download.html
 2. Install jdk 1.7.0 and git
  ```
  sudo yum install java-1.7.0-openjdk-devel git
