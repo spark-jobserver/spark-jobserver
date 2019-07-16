@@ -18,7 +18,7 @@ class build(BuildPlugin):
         # to true.
         # -no-share: forces sbt to store all the dependencies inside the
         # project/.ivy folder.
-        self._sbtCommonConfig = '-Dsbt.repository.config=proxy_repositories -Dsbt.override.build.repos=true  \'-Dhttp.nonProxyHosts=localhost|127.0.0.1|*.wdf.sap.corp|*.mo.sap.corp|*.sap.corp\' \'-Dhttps.nonProxyHosts=localhost|127.0.0.1|*.wdf.sap.corp|*.mo.sap.corp|*.sap.corp\''
+        self._sbtCommonConfig = '-Dsbt.repository.config=proxy_repositories -Dsbt.override.build.repos=true -no-share \'-Dhttp.nonProxyHosts=localhost|127.0.0.1|*.wdf.sap.corp|*.mo.sap.corp|*.sap.corp\''
 
     # Called when the actual build step is executed.
     def run(self):
@@ -32,7 +32,7 @@ class build(BuildPlugin):
     def importSbt(self):
         log.info("TRACE", "entering", "sbt")
         # Get SBT Path
-        self._sbthome = os.path.join(self.build_cfg.tools()['SBT']['1.2.8'], "sbt")
+        self._sbthome = os.path.join(self.build_cfg.tools()['SBT']['0.13.12'], "sbt")
         log.info(self._sbthome)
 
         # Set SBT_HOME
