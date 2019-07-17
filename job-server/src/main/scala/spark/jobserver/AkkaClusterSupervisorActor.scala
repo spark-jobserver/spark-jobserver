@@ -341,6 +341,10 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
                   case Success(ContextStopError(e)) =>
                     logger.error(s"Context stopped (force=${force}) failed with message ${e.getMessage}")
                     originalSender ! ContextStopError(e)
+                  case Success(unknownMessage) =>
+                    logger.error(s"Received  unknown response type: $unknownMessage")
+                    originalSender ! ContextStopError(
+                      new Throwable(s"Received unknown response trying to stop the context."))
                   case Failure(t) =>
                     logger.error(s"Context stopped failed with message ${t.getMessage}")
                     originalSender ! ContextStopError(t)
