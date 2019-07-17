@@ -15,7 +15,8 @@ import spark.jobserver.util.JobServerRoles
 import spark.jobserver.io.{JobDAO, JobDAOActor}
 import spark.jobserver.util.{HadoopFSFacade, NetworkAddressFactory, Utils}
 
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.Await
+import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -160,7 +161,7 @@ object JobManager {
         // the driver process, that why we have to wait here.
         // Calling System.exit results in a failed YARN application result:
         // org.apache.spark.deploy.yarn.ApplicationMaster#runImpl() in Spark
-        system.awaitTermination
+        Await.result(system.terminate(), Duration.Inf)
       } else {
         // Spark Standalone Cluster Mode:
         // We have to call System.exit(0) otherwise the driver process keeps running
