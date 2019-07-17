@@ -437,7 +437,7 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
     it("should update the context if id is the same for two saveContextInfo requests") {
       val uuid = UUIDs.random().toString
       val contextInfo = ContextInfo(uuid, _:String, "", None, DateTime.now(), None, ContextStatus.Started, None)
-      val contextInfo2 = contextInfo("test-context2")
+      lazy val contextInfo2 = contextInfo("test-context2")
 
       dao.saveContextInfo(contextInfo("test-context3"))
       dao.saveContextInfo(contextInfo2)
