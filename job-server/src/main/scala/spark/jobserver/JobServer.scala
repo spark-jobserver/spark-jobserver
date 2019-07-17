@@ -242,6 +242,8 @@ object JobServer {
           jobDaoActor ! JobDAOActor.SaveJobInfo(jobInfo.copy(state = JobStatus.Error,
               endTime = Some(DateTime.now()), error = Some(ErrorData(ContextReconnectFailedException()))))
           })
+        case Success(unknownResponse) =>
+          logger.error(s"Received unexpected response: $unknownResponse")
         case Failure(e: Exception) =>
           logger.error(s"Exception occurred while fetching jobs for context (${contextInfo.id})", e)
       }
