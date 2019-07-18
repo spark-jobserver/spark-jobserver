@@ -1,70 +1,75 @@
 #build scripts must define a class 'build'
 import os
-from os.path import join
-from spi import BuildPlugin
 import log
-import subprocess
 from xmake_exceptions import XmakeException
-import shutil
-import sys
+import spi
 
-class build(BuildPlugin):
+class build(spi.JavaBuildPlugin):
     def __init__(self, build_cfg):
+        spi.JavaBuildPlugin.__init__(self, build_cfg)
+
         self.build_cfg = build_cfg
 
         # -Dsbt.repository.config : used to specify the internal nexus repositories.
         # This configuration overrides the repositories defined by SJS.
         # These repositories are only used if -Dsbt.override.build.repos is set
         # to true.
-        # -no-share: forces sbt to store all the dependencies inside the
-        # project/.ivy folder.
-        self._sbtCommonConfig = '-Dsbt.repository.config=proxy_repositories -Dsbt.override.build.repos=true -no-share \'-Dhttp.nonProxyHosts=localhost|127.0.0.1|*.wdf.sap.corp|*.mo.sap.corp|*.sap.corp\''
+        self._sbt_launcher_config = ['-Dsbt.repository.config=proxy_repositories', \
+                                     '-Dsbt.override.build.repos=true', \
+                                     '-Dsbt.global.base=project/.sbtboot', \
+                                     '-Dsbt.boot.directory=project/.boot', \
+                                     '-Dsbt.ivy.home=project/.ivy', \
+                                     '-Dhttp.nonProxyHosts=localhost|127.0.0.1|*.wdf.sap.corp|*.mo.sap.corp|*.sap.corp', \
+                                     '-Dhttps.nonProxyHosts=localhost|127.0.0.1|*.wdf.sap.corp|*.mo.sap.corp|*.sap.corp']
 
-    # Called when the actual build step is executed.
-    def run(self):
-        log.info("TRACE", "entering", "run")
-        self.importSbt()
-        os.environ["SPARK_LOCAL_IP"] = "127.0.0.1"
-        commandOutput = self.buildSJS()
-        if commandOutput > 0:
-            raise XmakeException("sbt build failed. Command output is {}".format(str(commandOutput)))
+        self._sbt_group_artifact = 'com.typesafe.sbt:sbt-launcher'
+        self._sbt_version = '0.13.6'
+        self._sbt_launcher_jar_name = 'sbt-launcher-0.13.6.jar'
 
-    def importSbt(self):
-        log.info("TRACE", "entering", "sbt")
-        # Get SBT Path
-        self._sbthome = os.path.join(self.build_cfg.tools()['SBT']['0.13.12'], "sbt")
-        log.info(self._sbthome)
+    def plugin_imports(self):
+        ''' This is called by the JavaPlugin to determine further dependencies.
+            Here, we tell it to use the sbt-lanucher
+        '''
+        result = {
+            'default': [
+                '{ga}:jar:{v}'.format(ga=self._sbt_group_artifact, v=self._sbt_version)
+            ]
+        }
 
-        # Set SBT_HOME
-        os.environ["SBT_HOME"] = self._sbthome
-        log.info("SBT_HOME", os.environ["SBT_HOME"])
-
-        # Set SBT to path
-        self._sbtbin=join(self._sbthome,'bin')
-        os.environ["PATH"] = self._sbtbin + os.pathsep + os.environ["PATH"]
-        log.info("PATH", os.environ["PATH"])
-
-        # Output SBT version
-        self._sbtexecutable = join(self._sbtbin,'sbt')
-        log.info("TRACE", "exiting", "importSbt")
-
-    def buildSJS(self):
-        log.info("TRACE", "entering", "buildSJS")
-        log.info("INFO: building SJS")
-        if os.environ['V_TEMPLATE_TYPE'] == "OD-downstream":
-            return self.executeSbtCommand('clean job-server-extras/assembly')
-        else:
-            return self.executeSbtCommand('clean test job-server-extras/assembly')
-
-    def executeSbtCommand(self, sbtCommand):
-        log.info("TRACE", "entering", "executeSbtCommand")
-        sbt_args = [self._sbtexecutable, self._sbtCommonConfig]
-        sbt_args.append(sbtCommand)
-        command = ' '.join(sbt_args)
-        log.info("INFO: executing command", command)
-
-        result = os.system(command)
-        log.info("INFO: result of sbt command is", result)
-
-        log.info("TRACE", "exiting", "executeSbtCommand")
         return result
+
+    def java_run(self):
+        log.info("TRACE", "entering", "java_run")
+        os.environ["SPARK_LOCAL_IP"] = "127.0.0.1"
+
+        launcher_dir = self.get_sbt_launcher_dir()
+        command_output = self.build_sjs(launcher_dir)
+
+        if command_output > 0:
+            raise XmakeException("sbt build failed. Command output is {}".format(str(command_output)))
+
+    def get_sbt_launcher_dir(self):
+        log.info("Import directory is:", self.build_cfg.import_dir())
+        log.info("Contents of import directory are: ", os.listdir(self.build_cfg.import_dir()))
+
+        sbt_launcher_dir = os.path.join(self.build_cfg.import_dir(), self._sbt_launcher_jar_name)
+        log.info("Sbt Launcher directory full path is: " + sbt_launcher_dir)
+        return sbt_launcher_dir
+
+    def build_sjs(self, launcher_dir):
+        log.info("TRACE", "entering", "build_sjs")
+        if os.environ['V_TEMPLATE_TYPE'] == "OD-downstream":
+            return self.execute_sbt_command(launcher_dir, ['clean', 'job-server-extras/assembly'])
+        else:
+            return self.execute_sbt_command(launcher_dir, ['clean', 'test', 'job-server-extras/assembly'])
+
+    def execute_sbt_command(self, launcher_dir, sbt_command):
+        log.info("TRACE", "entering", "execute_sbt_command")
+
+        sbt_launcher_args = self._sbt_launcher_config + ['-jar', launcher_dir] + sbt_command
+        launcher_command = ' '.join(sbt_launcher_args)
+
+        log.info("Launch command is: " + launcher_command)
+
+        rc = self.java_log_execute(sbt_launcher_args, handler=None)
+        return rc
