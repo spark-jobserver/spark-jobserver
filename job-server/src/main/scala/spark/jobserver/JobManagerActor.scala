@@ -217,7 +217,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
       }
   }
 
-  def forcefulStoppingStateReceive: Receive = stopCommonHandlers.orElse {
+  def forcefulStoppingStateReceive: Receive = stopCommonHandlers.orElse(commonHandlers).orElse {
     case ContextStopForcefullyScheduledMsgTimeout(stopRequestSender) =>
       logger.warn("Failed to stop context forcefully within in timeout.")
       become(stoppingStateReceive)
