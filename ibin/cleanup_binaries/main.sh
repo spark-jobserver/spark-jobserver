@@ -15,6 +15,8 @@ then
     exit 1
 fi
 
+trap "echo 'Something went wrong. Exiting!'; exit" SIGINT SIGTERM  SIGKILL SIGQUIT SIGHUP ERR
+
 while [[ $# -gt 0 ]]
 do
 key="$1"
@@ -70,14 +72,9 @@ export ZK_BINARIES_FILE="$JUMPBOX_NAME-$ZOOKEEPER_IP-zookeeper-libs.txt"
 export CF_BINARIES_FILE="$JUMPBOX_NAME-known-libraries.txt"
 export BINARIES_TO_DELETE="$JUMPBOX_NAME-$ZOOKEEPER_IP-to-delete.txt"
 
-find_files_to_delete() {
 amm zookeeper.sc --zkBinariesFileToSave ${ZK_BINARIES_FILE}
 ./postgresql.sh -f ${CF_BINARIES_FILE}
 amm zookeeper.sc --zkBinariesFileToSave ${ZK_BINARIES_FILE} --cfBinariesFile ${CF_BINARIES_FILE} --binariesToDeleteFile ${BINARIES_TO_DELETE}
-}
-
-trap find_files_to_delete EXIT
-
 printf "\nACTION REQUIRED!\nFound `cat ${BINARIES_TO_DELETE} | wc -l` binaries to delete.\n"
 printf "Please review the following files carefully:\nCloudFoundary binaries: $CF_BINARIES_FILE\n"
 printf "Zookeeper $ZOOKEEPER_IP binaries: $ZK_BINARIES_FILE\nBinaries to delete: $BINARIES_TO_DELETE\n\n"
