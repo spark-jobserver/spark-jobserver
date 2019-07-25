@@ -76,7 +76,7 @@ class KeepOldestDowningProvider(system: ActorSystem) extends DowningProvider  {
         logger.info("DowningProvider: on split brain resolution will shutdown actor system.")
         true
       } else {
-        logger.info("DowningProvider: on split brain resolution will execute sys.exit(-1).")
+        logger.info("DowningProvider: on split brain resolution will exit JMV with exit code -1.")
         false
       }
     } else {
