@@ -135,7 +135,7 @@ class KeepOldestAutoDown(preferredOldestMemberRole: Option[String],
       Await.result(context.system.terminate(), 10 seconds)
     } else {
       logger.info("ShutdownSelf: exiting the system with -1")
-      sys.exit(-1)
+      Runtime.getRuntime.halt(-1)
     }
   }
 
