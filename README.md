@@ -834,7 +834,7 @@ When POSTing new binaries, the content-type header must be set to one of the typ
     GET /contexts               - lists all current contexts
     GET /contexts/<name>        - gets info about a context, such as the spark UI url
     POST /contexts/<name>       - creates a new context
-    DELETE /contexts/<name>     - stops a context and all jobs running in it
+    DELETE /contexts/<name>     - stops a context and all jobs running in it. Additionally, you can pass ?force=true to stop a context forcefully. This is equivalent to killing the application from SparkUI (works for spark standalone only).
     PUT /contexts?reset=reboot  - shuts down all contexts and re-loads only the contexts from config. Use ?sync=false to execute asynchronously.
 
 Spark context configuration params can follow `POST /contexts/<name>` as query params. See section below for more details.
