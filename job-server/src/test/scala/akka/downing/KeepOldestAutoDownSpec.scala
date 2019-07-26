@@ -46,6 +46,8 @@ class OldestAutoDownTestActor(address: Address,
     }
   }
 
+  override def preStart(): Unit = {}
+
   override def shutdownSelf(): Unit = {
     probe ! ShutDownCausedBySplitBrainResolver
   }
