@@ -39,11 +39,6 @@ class KeepOldestAutoDown(preferredOldestMemberRole: Option[String],
   }
 
   private val cluster = Cluster(context.system)
-
-  cluster.registerOnMemberUp {
-    cluster.subscribe(self, classOf[ClusterDomainEvent])
-  }
-
   private var membersByAge: SortedSet[Member] = SortedSet.empty(Member.ageOrdering)
   private val skipMemberStatus = Set[MemberStatus](Down, Exiting)
   private var scheduledUnreachable: Map[Member, Cancellable] = Map.empty
@@ -63,6 +58,10 @@ class KeepOldestAutoDown(preferredOldestMemberRole: Option[String],
     context.system.scheduler
   }
 
+  override def preStart(): Unit = {
+    cluster.subscribe(self, classOf[ClusterDomainEvent])
+    super.preStart()
+  }
 
   override def postStop(): Unit = {
     scheduledUnreachable.values foreach { _.cancel }
