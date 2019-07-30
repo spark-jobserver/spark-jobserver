@@ -56,6 +56,12 @@ class KeepOldestDowningProvider(system: ActorSystem) extends DowningProvider  {
     * provider is vital to a working cluster.
     */
   override def downingActorProps: Option[Props] = {
+    val (stableAfter, preferredOldestMemberRole, shutdownActorSystem) = getDowningProviderParams
+
+    Some(KeepOldestAutoDown.props(preferredOldestMemberRole, shutdownActorSystem, stableAfter))
+  }
+
+  def getDowningProviderParams: (FiniteDuration, Option[String], Boolean) = {
     val stableAfter = system.settings.config.getDuration("custom-downing.stable-after").toMillis millis
 
     if (stableAfter == Duration.Zero) {
@@ -69,10 +75,10 @@ class KeepOldestDowningProvider(system: ActorSystem) extends DowningProvider  {
         "custom-downing.oldest-auto-downing.preferred-oldest-member-role")
       if (r.isEmpty) None else Some(r)
     }
-    val calledBy = system.settings.config.getString(JobServerRoles.propertyName)
     val superviseModeOn = system.settings.config.getBoolean("spark.driver.supervise")
     val shutdownActorSystem = if (superviseModeOn) {
-       if (calledBy == JobServerRoles.jobserverMaster) {
+      val calledBy = system.settings.config.getString(JobServerRoles.propertyName)
+      if (calledBy == JobServerRoles.jobserverMaster) {
         logger.info("DowningProvider: on split brain resolution will shutdown actor system.")
         true
       } else {
@@ -84,7 +90,6 @@ class KeepOldestDowningProvider(system: ActorSystem) extends DowningProvider  {
         "shutdown actor system (as supervise mode is off).")
       true
     }
-
-    Some(KeepOldestAutoDown.props(preferredOldestMemberRole, shutdownActorSystem, stableAfter))
+    (stableAfter, preferredOldestMemberRole, shutdownActorSystem)
   }
 }
