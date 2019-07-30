@@ -17,7 +17,7 @@ trait JobContainer {
 sealed trait LoadingError
 case object JobClassNotFound extends LoadingError
 case object JobWrongType extends LoadingError
-case class JobLoadError(ex: Exception) extends LoadingError
+case class JobLoadError(t: Throwable) extends LoadingError
 
 /**
   * Factory trait for creating a SparkContext or any derived Contexts,
@@ -90,7 +90,7 @@ trait ScalaContextFactory extends SparkContextFactory {
       if (isValidJob(job)) Good(ScalaJobContainer(job)) else Bad(JobWrongType)
     } catch {
       case _: ClassNotFoundException => Bad(JobClassNotFound)
-      case err: Exception => Bad(JobLoadError(err))
+      case t: Throwable => Bad(JobLoadError(t))
     }
   }
 
@@ -122,7 +122,7 @@ trait JavaContextFactory extends SparkContextFactory {
       if (isValidJob(job)) Good(ScalaJobContainer(JavaJob(job))) else Bad(JobWrongType)
     } catch {
       case _: ClassNotFoundException => Bad(JobClassNotFound)
-      case err: Exception => Bad(JobLoadError(err))
+      case t: Throwable => Bad(JobLoadError(t))
     }
   }
 
