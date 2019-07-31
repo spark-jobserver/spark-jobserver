@@ -63,6 +63,8 @@ trait SparkContextFactory {
     val sparkConf = configToSparkConf(config, contextConfig, contextName)
     makeContext(sparkConf, contextConfig, contextName)
   }
+
+  def updateConfig(config: Config): Config = config
 }
 
 case class ScalaJobContainer(job: api.SparkJobBase) extends JobContainer {
