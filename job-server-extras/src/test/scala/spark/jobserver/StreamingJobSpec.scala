@@ -4,12 +4,16 @@ import akka.pattern._
 import akka.testkit.TestProbe
 
 import scala.concurrent.Await
-import com.typesafe.config.ConfigFactory
+import com.typesafe.config.{Config, ConfigFactory}
+import org.apache.spark.rdd.RDD
+import org.apache.spark.streaming.StreamingContext
 import spark.jobserver.ContextSupervisor._
 import spark.jobserver.JobManagerActor.{ContexData, GetContexData, StartJob, StopContextAndShutdown}
 import spark.jobserver.context.StreamingContextFactory
 import spark.jobserver.io.{JobDAOActor, JobInfo, JobStatus}
-import spark.jobserver.util.SparkJobUtils
+import spark.jobserver.util.{JobserverConfig, SparkJobUtils}
+
+import scala.collection.mutable
 
 /**
  * Test for Streaming Jobs.
@@ -27,6 +31,7 @@ class StreamingJobSpec extends JobSpecBase(StreamingJobSpec.getNewSystem) {
 
   val classPrefix = "spark.jobserver."
   private val streamingJob = classPrefix + "StreamingTestJob"
+  private val failingStreamingJob = classPrefix + "StreamingTaskFailedTestJob"
 
   val configMap = Map("streaming.batch_interval" -> Integer.valueOf(3))
 
@@ -115,6 +120,45 @@ class StreamingJobSpec extends JobSpecBase(StreamingJobSpec.getNewSystem) {
 
       expectMsg(9.seconds, SparkContextStopped)
       deathWatcher.expectTerminated(manager)
+    }
+
+    it("should stop a streaming context if job throws an exception " +
+      s"and ${JobserverConfig.STOP_CONTEXT_ON_JOB_ERROR}=true") {
+      val deathWatch = TestProbe()
+      deathWatch.watch(manager)
+
+      val ctxConfig = cfg.withFallback(
+        ConfigFactory.parseString(s"${JobserverConfig.STOP_CONTEXT_ON_JOB_ERROR}=true"))
+      triggerFailingStreamingJob(ctxConfig)
+
+      deathWatch.expectTerminated(manager, 3.seconds)
+    }
+
+    it("should not stop a streaming context if job throws an " +
+        s"exception and ${JobserverConfig.STOP_CONTEXT_ON_JOB_ERROR}=false") {
+      val deathWatch = TestProbe()
+      deathWatch.watch(manager)
+
+      val ctxConfig = cfg.withFallback(
+        ConfigFactory.parseString(s"${JobserverConfig.STOP_CONTEXT_ON_JOB_ERROR}=false"))
+      triggerFailingStreamingJob(ctxConfig)
+
+      deathWatch.expectNoMsg(1.seconds)
+    }
+  }
+
+  private def triggerFailingStreamingJob(ctxConfig: Config): Unit = {
+    manager ! JobManagerActor.Initialize(ctxConfig, None, emptyActor)
+    expectMsgClass(10 seconds, classOf[JobManagerActor.Initialized])
+    uploadTestJar()
+
+    manager ! JobManagerActor.StartJob("demo", failingStreamingJob, emptyConfig, asyncEvents ++ errorEvents)
+
+    expectMsgClass(2.seconds, classOf[JobStarted])
+    expectMsgPF(6 seconds, "Expecting JobErrored Out") {
+      case JobErroredOut(_, _, err) => {
+        err.getMessage should include ("Job aborted due to stage failure")
+      }
     }
   }
 }

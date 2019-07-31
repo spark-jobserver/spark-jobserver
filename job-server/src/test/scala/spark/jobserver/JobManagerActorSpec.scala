@@ -197,6 +197,69 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       expectNoMsg()
     }
 
+    it("should start job and return results (sync route) and the context should not terminate") {
+      val deathWatch = TestProbe()
+      deathWatch.watch(manager)
+      manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+
+      uploadTestJar()
+      manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, syncEvents ++ errorEvents)
+      expectMsgPF(startJobWait, "Did not get JobResult") {
+        case JobResult(_, result) => result should equal (counts)
+      }
+      deathWatch.expectNoMsg(1.seconds)
+    }
+
+    it("should start job and return results and the context should not terminate " +
+        s"if ${JobserverConfig.STOP_CONTEXT_ON_JOB_ERROR}=true because no error was reported") {
+      val deathWatch = TestProbe()
+      deathWatch.watch(manager)
+
+      val ctxConfig = contextConfig.withFallback(
+        ConfigFactory.parseString(s"${JobserverConfig.STOP_CONTEXT_ON_JOB_ERROR}=true"))
+
+      manager ! JobManagerActor.Initialize(ctxConfig, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+
+      uploadTestJar()
+      manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, syncEvents ++ errorEvents)
+      expectMsgPF(startJobWait, "Did not get JobResult") {
+        case JobResult(_, result) => result should equal (counts)
+      }
+      deathWatch.expectNoMsg(1.seconds)
+    }
+
+    it("should start multiple jobs and only terminate if an error " +
+        s"was reported and ${JobserverConfig.STOP_CONTEXT_ON_JOB_ERROR}=true") {
+      val deathWatch = TestProbe()
+      deathWatch.watch(manager)
+
+      val ctxConfig = contextConfig.withFallback(
+        ConfigFactory.parseString(s"${JobserverConfig.STOP_CONTEXT_ON_JOB_ERROR}=true"))
+
+      manager ! JobManagerActor.Initialize(ctxConfig, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+
+      uploadTestJar()
+      manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, syncEvents ++ errorEvents)
+      expectMsgPF(startJobWait, "Did not get JobResult") {
+        case JobResult(_, result) => result should equal (counts)
+      }
+      deathWatch.expectNoMsg(1.seconds)
+
+      manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, syncEvents ++ errorEvents)
+      expectMsgPF(startJobWait, "Did not get JobResult") {
+        case JobResult(_, result) => result should equal (counts)
+      }
+      deathWatch.expectNoMsg(1.seconds)
+
+      manager ! JobManagerActor.StartJob("demo", classPrefix + "MyErrorJob", emptyConfig, errorEvents)
+      val errorMsg = expectMsgClass(startJobWait, classOf[JobErroredOut])
+      errorMsg.err.getClass should equal (classOf[IllegalArgumentException])
+      deathWatch.expectTerminated(manager, 3.seconds)
+    }
+
     it("should start NewAPI job and return results (sync route)") {
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
@@ -240,6 +303,9 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
     }
 
     it("should return error if job throws an error") {
+      val deathWatch = TestProbe()
+      deathWatch.watch(manager)
+
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
@@ -247,6 +313,26 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobManagerActor.StartJob("demo", classPrefix + "MyErrorJob", emptyConfig, errorEvents)
       val errorMsg = expectMsgClass(startJobWait, classOf[JobErroredOut])
       errorMsg.err.getClass should equal (classOf[IllegalArgumentException])
+
+      deathWatch.expectNoMsg(1.seconds)
+    }
+
+    it("should return error if job throws an error and " +
+        s"stop context if ${JobserverConfig.STOP_CONTEXT_ON_JOB_ERROR} is enabled") {
+      contextConfig = contextConfig.withFallback(
+        ConfigFactory.parseString(s"${JobserverConfig.STOP_CONTEXT_ON_JOB_ERROR}=true"))
+
+      val deathWatch = TestProbe()
+      deathWatch.watch(manager)
+      manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+      uploadTestJar()
+
+      manager ! JobManagerActor.StartJob("demo", classPrefix + "MyErrorJob", emptyConfig, errorEvents)
+
+      val errorMsg = expectMsgClass(startJobWait, classOf[JobErroredOut])
+      errorMsg.err.getClass should equal (classOf[IllegalArgumentException])
+      deathWatch.expectTerminated(manager, 2.seconds)
     }
 
     it("should return error if job throws a fatal error") {
