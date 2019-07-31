@@ -29,7 +29,7 @@ lazy val jobServer = Project(id = "job-server", base = file("job-server"))
       .dependsOn(clean in Compile in jobServerTestJar)
       .dependsOn(buildPython in jobServerPython)
       .dependsOn(clean in Compile in jobServerPython)
-      .inputTaskValue,
+      .evaluated,
     console in Compile := Defaults.consoleTask(fullClasspath in Compile, console in Compile).value,
     fullClasspath in Compile := (fullClasspath in Compile).map { classpath =>
       extraJarPaths ++ classpath
@@ -71,7 +71,7 @@ lazy val jobServerExtras = Project(id = "job-server-extras", base = file("job-se
       .dependsOn(buildPython in jobServerPython)
       .dependsOn(buildPyExamples in jobServerPython)
       .dependsOn(clean in Compile in jobServerPython)
-      .inputTaskValue
+      .evaluated
   )
   .dependsOn(jobServerApi, jobServer % "compile->compile; test->test")
   .disablePlugins(SbtScalariform)
