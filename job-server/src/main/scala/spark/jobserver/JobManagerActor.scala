@@ -627,6 +627,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
         // If and only if job validation fails, JobErroredOut message is dropped silently in JobStatusActor.
         statusActor ! JobErroredOut(jobId, DateTime.now(), error)
         logger.error("Exception from job " + jobId + ": ", error)
+        postJobError()
     }(executionContext).andThen {
       case _ =>
         // Make sure to decrement the count of running jobs when a job finishes, in both success and failure
@@ -677,6 +678,14 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
     if (isAdHoc) {
       become(adhocStopReceive)
       self ! StopContextAndShutdown
+    }
+  }
+
+  private def postJobError() {
+    if (Try(contextConfig.getBoolean(JobserverConfig.STOP_CONTEXT_ON_JOB_ERROR)).getOrElse(false)) {
+      logger.info(
+        s"${JobserverConfig.STOP_CONTEXT_ON_JOB_ERROR} is enabled for this context, shutting down context")
+      Option(jobContext).foreach(_.stop()) // blocking call
     }
   }
 
