@@ -344,6 +344,8 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
           jarLoader.addURL(new URL(convertJarUriSparkToJava(jarUri)))
         }
         factory = getContextFactory()
+        // Add defaults or update the config according to a specific context
+        contextConfig = factory.updateConfig(contextConfig)
         jobContext = factory.makeContext(config, contextConfig, contextName)
         jobContext.sparkContext.addSparkListener(sparkListener)
         sparkEnv = SparkEnv.get

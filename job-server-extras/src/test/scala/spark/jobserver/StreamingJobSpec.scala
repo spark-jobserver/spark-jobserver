@@ -145,6 +145,16 @@ class StreamingJobSpec extends JobSpecBase(StreamingJobSpec.getNewSystem) {
 
       deathWatch.expectNoMsg(1.seconds)
     }
+
+    it("should automatically stop a streaming context if" +
+      s" job throws an exception (since ${JobserverConfig.STOP_CONTEXT_ON_JOB_ERROR} is by default true)") {
+      val deathWatch = TestProbe()
+      deathWatch.watch(manager)
+
+      triggerFailingStreamingJob(cfg)
+
+      deathWatch.expectTerminated(manager, 3.seconds)
+    }
   }
 
   private def triggerFailingStreamingJob(ctxConfig: Config): Unit = {
