@@ -1,17 +1,18 @@
 package spark.jobserver
 
-import akka.actor.{ActorSystem, ActorRef}
+import akka.actor.{ActorRef, ActorSystem}
 import akka.actor.Props
 import akka.pattern.ask
-import com.typesafe.config.{ConfigValueFactory, Config, ConfigFactory}
-
+import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import java.io.File
-import spark.jobserver.io.{BinaryType, JobDAOActor, JobDAO, DataFileDAO}
+
+import spark.jobserver.io.{BinaryType, DataFileDAO, JobDAO, JobDAOActor}
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
 import scala.concurrent.{Await, ExecutionContext}
 import scala.concurrent.duration._
+import scala.util.matching.Regex
 
 /**
  * The Spark Job Server is a web service that allows users to submit and run Spark jobs, check status,
@@ -31,7 +32,9 @@ import scala.concurrent.duration._
  */
 object JobServer {
   val logger = LoggerFactory.getLogger(getClass)
-
+  final val DEFAULT_CREDENTIAL_KEYS = "credentials,password,secret,token"
+  final val EMPTY_VALUE_PATTERN = "\"\",?".r
+  final val CREDENTIAL_MASK = " \"xxx\""
   // Allow custom function to create ActorSystem.  An example of why this is useful:
   // we can have something that stores the ActorSystem so it could be shut down easily later.
   def start(args: Array[String], makeSystem: Config => ActorSystem) {
@@ -46,8 +49,12 @@ object JobServer {
     } else {
       defaultConfig
     }
-    logger.info("Starting JobServer with config {}", config.getConfig("spark").root.render())
-    logger.info("Spray config: {}", config.getConfig("spray.can.server").root.render())
+
+    val credentialPattern = credentialRegex(config)
+    val sparkConfig = config.getConfig("spark").root
+    logger.info("Starting JobServer with config {}", maskCredentials(sparkConfig.render(), credentialPattern))
+    val sprayConfig = config.getConfig("spray.can.server").root
+    logger.info("Spray config: {}", maskCredentials(sprayConfig.render(), credentialPattern))
     val port = config.getInt("spark.jobserver.port")
 
     // TODO: Hardcode for now to get going. Make it configurable later.
@@ -88,6 +95,36 @@ object JobServer {
         logger.error("Unable to start Spark JobServer: ", e)
         sys.exit(1)
     }
+  }
+
+  private def maskCredentials(lines: String, credentialRegex: Regex): String = {
+    lines
+      .split("\n")
+      .toSeq
+      .map {
+        line => line.split(":") match {
+          // if key matches credential keys pattern and value is not empty, mask credentials
+          case Array(key, value) if (credentialRegex.findFirstIn(key).nonEmpty
+            && EMPTY_VALUE_PATTERN.findFirstIn(value.stripMargin).isEmpty) =>
+            Array(key, CREDENTIAL_MASK).mkString(":")
+          case _ => line
+      }
+    }.mkString("\n")
+  }
+
+  private def credentialRegex(config: Config): Regex = {
+    // Use default credential keys if spark.ui.confidentialKeys is not set
+    val credentialKeys = try {
+      config.getString("spark.ui.confidentialKeys")
+    } catch {
+      case _: Exception =>
+        logger.info(s"spark.ui.confidentialKeys is not set, " +
+          s"use default credential keys $DEFAULT_CREDENTIAL_KEYS")
+        DEFAULT_CREDENTIAL_KEYS
+    }
+
+    // Case insensitive
+    s"""(?i)(${credentialKeys.split(",").mkString("|")})" """.r
   }
 
   private def parseInitialBinaryConfig(key: String, config: Config): Map[String, String] = {
