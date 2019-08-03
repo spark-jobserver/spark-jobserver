@@ -1,3 +1,5 @@
+import com.typesafe.sbt.SbtMultiJvm.multiJvmSettings
+import com.typesafe.sbt.SbtMultiJvm.MultiJvmKeys.MultiJvm
 
 import Dependencies._
 
@@ -15,6 +17,7 @@ lazy val akkaApp = Project(id = "akka-app", base = file("akka-app"))
 lazy val jobServer = Project(id = "job-server", base = file("job-server"))
   .settings(commonSettings)
   .settings(revolverSettings)
+  .settings(multiJvmSettings: _*)
   .settings(assembly := null.asInstanceOf[File])
   .settings(
     description := "Spark as a Service: a RESTful job server for Apache Spark",
@@ -39,6 +42,7 @@ lazy val jobServer = Project(id = "job-server", base = file("job-server"))
   .settings(publishSettings)
   .dependsOn(akkaApp, jobServerApi)
   .disablePlugins(SbtScalariform)
+  .configs(MultiJvm)
 
 lazy val jobServerTestJar = Project(id = "job-server-tests", base = file("job-server-tests"))
   .settings(commonSettings)

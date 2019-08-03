@@ -38,8 +38,8 @@ class KeepOldestAutoDown(preferredOldestMemberRole: Option[String],
         "so autoDownUnreachableAfter timeout must be greater than zero.")
   }
 
+  protected var membersByAge: SortedSet[Member] = SortedSet.empty(Member.ageOrdering)
   private val cluster = Cluster(context.system)
-  private var membersByAge: SortedSet[Member] = SortedSet.empty(Member.ageOrdering)
   private val skipMemberStatus = Set[MemberStatus](Down, Exiting)
   private var scheduledUnreachable: Map[Member, Cancellable] = Map.empty // waiting for timeout to fire
   private var pendingUnreachable: Set[Member] = Set.empty // waiting for the oldest node to down these nodes
