@@ -61,7 +61,7 @@ class build(spi.JavaBuildPlugin):
         if os.environ['V_TEMPLATE_TYPE'] == "OD-downstream":
             return self.execute_sbt_command(launcher_dir, ['clean', 'job-server-extras/assembly'])
         else:
-            return self.execute_sbt_command(launcher_dir, ['clean', 'test', 'job-server-extras/assembly'])
+            return self.execute_sbt_command(launcher_dir, ['clean', 'multi-jvm:test', 'test', 'job-server-extras/assembly'])
 
     def execute_sbt_command(self, launcher_dir, sbt_command):
         log.info("TRACE", "entering", "execute_sbt_command")
