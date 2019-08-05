@@ -237,6 +237,11 @@ Context routes
         JobManagerActor->SparkContext: sc.stop()
         SparkContext -> JobManagerActor: onApplicationEnd
         JobManagerActor ->JobManagerActor: SparkContextStopped
+        JobManagerActor -> JobStatusActor: watch
+        JobManagerActor ->JobStatusActor: stop
+        JobStatusActor ->JobStatusActor: postStop
+        JobStatusActor -> JobDaoActor: SaveJobInfo
+        DeathWatch ->JobManagerActor: Terminated(statusActor)
         JobManagerActor->JobManagerActor: ContextStopScheduledMsgTimeout.cancel()
         JobManagerActor ->AkkaClusterSupervisorActor: SparkContextStopped
         JobManagerActor ->JobManagerActor: PoisonPill
@@ -308,6 +313,11 @@ Context routes
 
         SparkContext -> JobManagerActor: onApplicationEnd
         JobManagerActor ->JobManagerActor: SparkContextStopped
+        JobManagerActor -> JobStatusActor: watch
+        JobManagerActor ->JobStatusActor: stop
+        JobStatusActor ->JobStatusActor: postStop
+        JobStatusActor -> JobDaoActor: SaveJobInfo
+        DeathWatch ->JobManagerActor: Terminated(statusActor)
         JobManagerActor ->JobManagerActor: PoisonPill
         DeathWatch ->AkkaClusterSupervisorActor: Terminated
 
