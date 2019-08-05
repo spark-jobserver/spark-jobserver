@@ -80,7 +80,7 @@ class KeepOldestDowningProvider(system: ActorSystem) extends DowningProvider  {
         false
       }
     } else {
-      logger.info("DowningProvider: on split brain resolution will" +
+      logger.info("DowningProvider: on split brain resolution will " +
         "shutdown actor system (as supervise mode is off).")
       true
     }
