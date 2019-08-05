@@ -203,28 +203,31 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
       self ! PoisonPill
   }
 
-  def forcefulStoppingStateReceive: Receive = commonHandlers.orElse {
+  val stopCommonHandlers: Receive = {
+    case Terminated(actorRef) =>
+      val actorName = actorRef.path.name
+      actorName == JobStatusActor.NAME match {
+        case true =>
+          logger.info("Status actor terminated successfully")
+          cleanupAndRespond()
+        case false =>
+          logger.warn(s"Unexpected terminated event received for ${actorName}")
+      }
+  }
+
+  def forcefulStoppingStateReceive: Receive = stopCommonHandlers.orElse(commonHandlers).orElse {
     case ContextStopForcefullyScheduledMsgTimeout(stopRequestSender) =>
       logger.warn("Failed to stop context forcefully within in timeout.")
       become(stoppingStateReceive)
       stopRequestSender ! ContextStopError(new ContextForcefulKillTimeout())
 
     case SparkContextStopped =>
-      logger.info(s"Context $contextId stopped successfully")
-      val (stopContextSender, stopContextForcefullyTimeoutMsgHandler) = stopContextSenderAndHandler
-      stopContextForcefullyTimeoutMsgHandler.foreach{ handler =>
-        handler.isCancelled match {
-          case true =>
-            // The response to stop request already sent. No need to send any response back.
-          case false =>
-            stopContextForcefullyTimeoutMsgHandler.foreach(_.cancel())
-            stopContextSender.foreach(_ ! SparkContextStopped)
-        }
-      }
-      self ! PoisonPill
+      logger.info(
+        s"Context $contextId stopped (forcefully) successfully, stopping status actor and doing cleanup")
+      stopStatusActor()
   }
 
-  def stoppingStateReceive: Receive = commonHandlers.orElse {
+  def stoppingStateReceive: Receive = stopCommonHandlers.orElse(commonHandlers).orElse {
     // Initialize message cannot come in this state
     // - If already in stopping state then JVM is also initialized. Initialize won't come
     // - If restarts then whole JVM will restart and we will have a clean state
@@ -239,18 +242,8 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
     }
 
     case SparkContextStopped =>
-      logger.info(s"Context $contextId stopped successfully")
-      val (stopContextSender, stopContextTimeoutMsgHandler) = stopContextSenderAndHandler
-      stopContextTimeoutMsgHandler.foreach{ handler =>
-        handler.isCancelled match {
-          case true =>
-            // The response to stop request already sent. No need to send any response back.
-          case false =>
-            stopContextTimeoutMsgHandler.foreach(_.cancel())
-            stopContextSender.foreach(_ ! SparkContextStopped)
-        }
-      }
-      self ! PoisonPill
+      logger.info(s"Context $contextId stopped successfully, stopping status actor and doing cleanup")
+      stopStatusActor()
 
     case StopContextAndShutdown =>
       logger.info("Context stop already in progress")
@@ -339,7 +332,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
       logger.info("Starting context with config:\n" + contextConfig.root.render)
       contextName = contextConfig.getString("context.name")
       isAdHoc = Try(contextConfig.getBoolean("is-adhoc")).getOrElse(false)
-      statusActor = context.actorOf(JobStatusActor.props(daoActor))
+      statusActor = context.actorOf(JobStatusActor.props(daoActor), JobStatusActor.NAME)
       resultActor = resOpt.getOrElse(context.actorOf(Props[JobResultActor]))
       remoteFileCache = new RemoteFileCache(self, dataManagerActor)
 
@@ -841,5 +834,25 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
   @VisibleForTesting
   protected def forcefulKillCaller(forcefulKill: StandaloneForcefulKill) = {
     forcefulKill.kill()
+  }
+
+  private def cleanupAndRespond(): Unit = {
+    val (stopContextSender, timeoutHandler) = stopContextSenderAndHandler
+    timeoutHandler.foreach{ handler =>
+      handler.isCancelled match {
+        case true =>
+        // The response to stop request already sent. No need to send any response back.
+        case false =>
+          timeoutHandler.foreach(_.cancel())
+          stopContextSender.foreach(_ ! SparkContextStopped)
+      }
+    }
+    self ! PoisonPill
+  }
+
+  private def stopStatusActor(): Unit = {
+    logger.info("Stopping status actor")
+    context.watch(statusActor)
+    context.stop(statusActor)
   }
 }
