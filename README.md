@@ -428,7 +428,6 @@ You have a couple options to package and upload dependency jars.
         ````
         The jars /myjars/deps01.jar & /myjars/deps02.jar (present only on the SJS node) will be loaded and made available for the Spark driver & executors.
     - Use the `--package` option with Maven coordinates with `server_start.sh`.
-    - Put the extra jars in the SPARK_CLASSPATH
 
 ### Named Objects
 #### Using Named RDDs
