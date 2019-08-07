@@ -196,8 +196,18 @@ class WebApiMainRoutesSpec extends WebApiSpec {
           sealRoute(routes) ~> check {
         status should be (BadRequest)
         val result = responseAs[Map[String, String]]
-        result(StatusKey) should equal(JobStatus.Error)
         result(ResultKey) should startWith ("Cannot parse")
+      }
+    }
+
+    it("should respond with bad request if no cp or appName given") {
+      Post("/jobs?classPath=com.abc.meme", "") ~>
+        sealRoute(routes) ~> check {
+        status should be (BadRequest)
+        val result = responseAs[Map[String, String]]
+        result.keys should equal (Set(StatusKey, ResultKey))
+        result(StatusKey) should equal(JobStatus.Error)
+        result(ResultKey) should startWith ("Cannot parse config: To start the job")
       }
     }
 
@@ -213,12 +223,62 @@ class WebApiMainRoutesSpec extends WebApiSpec {
             bindConfKey -> bindConfVal,
             "foo.baz" -> "booboo",
             "shiro.authentication" -> "off",
-            "spark.jobserver.short-timeout" -> "3 s"
+            "spark.jobserver.short-timeout" -> "3 s",
+            "cp" -> List("foo")
           )
         ))
       }
     }
 
+    it("should merge appName and dependent-jar-uris into cp parameter in job config") {
+      Post(
+        "/jobs?appName=foo&classPath=com.abc.meme&context=one&sync=true", "dependent-jar-uris=[\"demo\"]"
+      ) ~>
+        sealRoute(routes) ~> check {
+        status should be (OK)
+        responseAs[Map[String, Any]] should be (Map(
+          JobId -> "foo",
+          ResultKey -> Map(
+            masterConfKey-> masterConfVal,
+            bindConfKey -> bindConfVal,
+            "shiro.authentication" -> "off",
+            "spark.jobserver.short-timeout" -> "3 s",
+            "cp" -> List("demo", "foo"),
+            "dependent-jar-uris" -> List("demo")
+          )
+        ))
+      }
+    }
+
+    it("async route should return 202 if job starts successfully (from cp value in job config)") {
+      Post("/jobs?mainClass=com.abc.meme&context=one", "cp=[\"foo\"]") ~> sealRoute(routes) ~> check {
+        status should be (Accepted)
+        responseAs[Map[String, String]] should be (Map(
+          "jobId" -> "foo",
+          "contextId" -> "cid",
+          "startTime" -> "2013-05-29T00:00:00.000Z",
+          "classPath" -> "com.abc.meme",
+          "context"  -> "context",
+          "duration" -> "Job not done yet",
+          StatusKey -> JobStatus.Started)
+        )
+      }
+    }
+
+    it("async route should return 202 if job starts successfully (from cp and mainClass values in URI)") {
+      Post("/jobs?mainClass=com.abc.meme&context=one&cp=foo", "") ~> sealRoute(routes) ~> check {
+        status should be (Accepted)
+        responseAs[Map[String, String]] should be (Map(
+          "jobId" -> "foo",
+          "contextId" -> "cid",
+          "startTime" -> "2013-05-29T00:00:00.000Z",
+          "classPath" -> "com.abc.meme",
+          "context"  -> "context",
+          "duration" -> "Job not done yet",
+          StatusKey -> JobStatus.Started)
+        )
+      }
+    }
     it("async route should return 202 if job starts successfully") {
       Post("/jobs?appName=foo&classPath=com.abc.meme&context=one", "") ~> sealRoute(routes) ~> check {
         status should be (Accepted)
@@ -256,7 +316,8 @@ class WebApiMainRoutesSpec extends WebApiSpec {
             bindConfKey -> bindConfVal,
             "foo.baz" -> "booboo",
             "shiro.authentication" -> "off",
-            "spark.jobserver.short-timeout" -> "3 s"
+            "spark.jobserver.short-timeout" -> "3 s",
+            "cp" -> List("foo")
           )
         ))
       }
@@ -285,7 +346,8 @@ class WebApiMainRoutesSpec extends WebApiSpec {
             bindConfKey -> bindConfVal,
             "foo.baz" -> "booboo",
             "shiro.authentication" -> "off",
-            "spark.jobserver.short-timeout" -> "3 s"
+            "spark.jobserver.short-timeout" -> "3 s",
+            "cp" -> List("foo")
           )
         ))
       }

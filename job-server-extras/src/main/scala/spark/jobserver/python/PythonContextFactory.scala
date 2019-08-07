@@ -58,12 +58,11 @@ trait PythonContextFactory extends SparkContextFactory {
     * the right type of job given the current context type.  For example, it may load a JAR
     * and validate the classpath exists and try to invoke its constructor.
     */
-  override def loadAndValidateJob(appName: String,
-                                  uploadTime: DateTime,
-                                  classPath: String,
+  override def loadAndValidateJob(classPath: Seq[String],
+                                  mainClass: String,
                                   jobCache: JobCache): J Or LoadingError = {
-    Try(jobCache.getPythonJob(appName, uploadTime, classPath)) match {
-      case Success(jobInfo) => Good(PythonJobContainer(buildJob(jobInfo.eggPath, classPath)))
+    Try(jobCache.getPythonJob(classPath, mainClass)) match {
+      case Success(jobInfo) => Good(PythonJobContainer(buildJob(jobInfo.eggPath, mainClass)))
       case Failure(t) => Bad(JobLoadError(t))
     }
   }

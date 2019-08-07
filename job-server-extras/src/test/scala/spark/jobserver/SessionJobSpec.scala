@@ -38,9 +38,16 @@ class SessionJobSpec extends ExtrasJobSpecBase(SessionJobSpec.getNewSystem) {
   private val hiveLoaderClass = classPrefix + "SessionLoaderTestJob"
   private val hiveQueryClass = classPrefix + "SessionTestJob"
 
-  val emptyConfig = ConfigFactory.parseString("spark.master = bar")
+  val emptyConfig = ConfigFactory.parseString("""
+      |spark.master = bar
+      |cp = ["demo"]
+    """.stripMargin
+  )
   val queryConfig = ConfigFactory.parseString(
-    """sql = "SELECT firstName, lastName FROM `default`.`test_addresses` WHERE city = 'San Jose'" """
+    """
+      |sql = "SELECT firstName, lastName FROM `default`.`test_addresses` WHERE city = 'San Jose'"
+      |cp = ["demo"]
+      |""".stripMargin
   )
   lazy val contextConfig = SessionJobSpec.getContextConfig(false, SessionJobSpec.contextConfig)
 

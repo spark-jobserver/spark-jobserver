@@ -38,9 +38,8 @@ trait SparkContextFactory {
     * the right type of job given the current context type.  For example, it may load a JAR
     * and validate the classpath exists and try to invoke its constructor.
     */
-  def loadAndValidateJob(appName: String,
-                         uploadTime: DateTime,
-                         classPath: String,
+  def loadAndValidateJob(classPath: Seq[String],
+                         mainClass: String,
                          jobCache: JobCache): J Or LoadingError
 
   /**
@@ -79,13 +78,12 @@ trait ScalaContextFactory extends SparkContextFactory {
 
   val logger = LoggerFactory.getLogger(getClass)
 
-  def loadAndValidateJob(appName: String,
-                         uploadTime: DateTime,
-                         classPath: String,
+  def loadAndValidateJob(classPath: Seq[String],
+                         mainClass: String,
                          jobCache: JobCache): J Or LoadingError = {
-    logger.info("Loading class {} for app {}", classPath, appName: Any)
+    logger.info("Loading class {} for app {}", mainClass, classPath: Any)
     try {
-      val jobJarInfo = jobCache.getSparkJob(appName, uploadTime, classPath)
+      val jobJarInfo = jobCache.getSparkJob(classPath, mainClass)
       val job = jobJarInfo.constructor()
 
       // Validate that job fits the type of context we launched
@@ -111,13 +109,12 @@ trait JavaContextFactory extends SparkContextFactory {
 
   val logger = LoggerFactory.getLogger(getClass)
 
-  def loadAndValidateJob(appName: String,
-                         uploadTime: DateTime,
-                         classPath: String,
+  def loadAndValidateJob(classPath: Seq[String],
+                         mainClass: String,
                          jobCache: JobCache): J Or LoadingError = {
-    logger.info("Loading class {} for app {}", classPath, appName: Any)
+    logger.info("Loading class {} for app {}", mainClass, classPath: Any)
     try {
-      val jobJarInfo = jobCache.getJavaJob(appName, uploadTime, classPath)
+      val jobJarInfo = jobCache.getJavaJob(classPath, mainClass)
       val job = jobJarInfo.job
 
       // Validate that job fits the type of context we launched

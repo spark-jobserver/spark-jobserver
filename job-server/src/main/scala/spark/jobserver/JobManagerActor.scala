@@ -24,7 +24,7 @@ import spark.jobserver.context._
 import spark.jobserver.common.akka.InstrumentedActor
 import spark.jobserver.util.{StandaloneForcefulKill, ContextForcefulKillTimeout}
 
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 import scala.concurrent.duration._
 import org.spark_project.guava.annotations.VisibleForTesting
@@ -140,7 +140,8 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
   private var totalJobsWhichFailedToRestart = 0
 
   // NOTE: Must be initialized after sparkContext is created
-  private var jobCache: JobCache = _
+  private var jobsLoader: JobCache = _
+  private val dependenciesCache = new DependenciesCache(jobCacheSize, daoActor)
 
   private val jobServerNamedObjects = new JobServerNamedObjects(context.system)
 
@@ -339,9 +340,10 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
       remoteFileCache = new RemoteFileCache(self, dataManagerActor)
 
       try {
-        // Load side jars first in case the ContextFactory comes from it
-        getSideJars(contextConfig).foreach { jarUri =>
-          jarLoader.addURL(new URL(convertJarUriSparkToJava(jarUri)))
+        // Load context side jars first in case the ContextFactory comes from it
+        val classPathURIs = getClassPathURIs(contextConfig)
+        classPathURIs.foreach{
+          jarURI => jarLoader.addURL(new URL(jarURI))
         }
         factory = getContextFactory()
         // Add defaults or update the config according to a specific context
@@ -349,8 +351,10 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
         jobContext = factory.makeContext(config, contextConfig, contextName)
         jobContext.sparkContext.addSparkListener(sparkListener)
         sparkEnv = SparkEnv.get
-        jobCache = new JobCacheImpl(jobCacheSize, daoActor, jobContext.sparkContext, jarLoader)
-        getSideJars(contextConfig).foreach { jarUri => jobContext.sparkContext.addJar(jarUri) }
+        jobsLoader = new JobsLoader(jobCacheSize, daoActor, jobContext.sparkContext, jarLoader)
+        classPathURIs.foreach{
+          jarURI => jobContext.sparkContext.addJar(jarURI)
+        }
         sender ! Initialized(contextName, resultActor)
       } catch {
         case t: Throwable =>
@@ -359,17 +363,33 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
           self ! PoisonPill
       }
 
-    case StartJob(appName, classPath, jobConfig, events, existingJobInfo) => {
+    case StartJob(appName, mainClass, jobConfig, events, existingJobInfo) => {
       val loadedJars = jarLoader.getURLs
-      getSideJars(jobConfig).foreach { jarUri =>
-        val jarToLoad = new URL(convertJarUriSparkToJava(jarUri))
-        if(! loadedJars.contains(jarToLoad)){
-          logger.info("Adding {} to Current Job Class path", jarUri)
-          jarLoader.addURL(new URL(convertJarUriSparkToJava(jarUri)))
-          jobContext.sparkContext.addJar(jarUri)
+      Try {
+        val classPathURIs = getClassPathURIs(jobConfig)
+        classPathURIs.foreach {
+          jarURI => {
+            val jarToLoad = new URL(jarURI)
+            if (!loadedJars.contains(jarToLoad)) {
+              logger.info("Adding {} to local JarLoader", jarURI)
+              jarLoader.addURL(jarToLoad)
+            }
+            if (!jobContext.sparkContext.jars.contains(jarURI)) {
+              logger.info("Adding {} to Spark (context.addJar)", jarURI)
+              jobContext.sparkContext.addJar(jarURI)
+            }
+          }
         }
+      } match {
+        case Failure(NoSuchBinaryException(name)) =>
+          sender ! NoSuchFile(name)
+          postEachJob()
+        case Failure(ex) =>
+          sender ! JobLoadingError(ex)
+          postEachJob()
+        case Success(_) =>
+          startJobInternal(mainClass, jobConfig, events, jobContext, sparkEnv, existingJobInfo, sender)
       }
-      startJobInternal(appName, classPath, jobConfig, events, jobContext, sparkEnv, existingJobInfo, sender)
     }
 
     case StopContextAndShutdown => {
@@ -492,61 +512,47 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
       .mapTo[JobDAOActor.SaveResponse]
   }
 
-  def startJobInternal(appName: String,
-                       classPath: String,
+  def startJobInternal(mainClass: String,
                        jobConfig: Config,
                        events: Set[Class[_]],
                        jobContext: ContextLike,
                        sparkEnv: SparkEnv,
                        existingJobInfo: Option[JobInfo],
                        subscriber: ActorRef): Future[Any] = {
-    import akka.util.Timeout
 
     def failed(msg: Any): Future[Any] = {
       subscriber ! msg
       postEachJob()
       Future.successful()
     }
-
-    (daoActor ? JobDAOActor.GetLastBinaryInfo(appName))(daoAskTimeout).
-      mapTo[JobDAOActor.LastBinaryInfo].flatMap{
-      result =>
-        val binInfo = result.lastBinaryInfo
-
-        if (binInfo.isEmpty) {
-          failed(NoSuchApplication)
-        }
-        else {
-          val binaryInfo = binInfo.get
-
-          val (jobId, startDateTime) = existingJobInfo match {
-            case Some(info) =>
-              logger.info(s"Restarting a previously terminated job with id ${info.jobId}" +
-                s" and context ${info.contextName}")
-              (info.jobId, info.startTime)
-            case None =>
-              logger.info(s"Creating new JobId for current job")
-              (java.util.UUID.randomUUID().toString, DateTime.now())
-          }
-
-          val jobContainer = factory.loadAndValidateJob(appName, binaryInfo.uploadTime,
-            classPath, jobCache) match {
-            case Good(container) => container
-            case Bad(JobClassNotFound) => return failed(NoSuchClass)
-            case Bad(JobWrongType) => return failed(WrongJobType)
-            case Bad(JobLoadError(ex)) => return failed(JobLoadingError(ex))
-          }
-
-          // Automatically subscribe the sender to events so it starts getting them right away
-          resultActor ! Subscribe(jobId, subscriber, events)
-          statusActor ! Subscribe(jobId, subscriber, events)
-
-          val jobInfo = JobInfo(jobId, contextId, contextName, binaryInfo, classPath,
-            JobStatus.Running, startDateTime, None, None)
-
-          getJobFuture(jobContainer, jobInfo, jobConfig, subscriber, jobContext, sparkEnv)
-        }
+    val (jobId, startDateTime) = existingJobInfo match {
+      case Some(info) =>
+        logger.info(s"Restarting a previously terminated job with id ${info.jobId}" +
+          s" and context ${info.contextName}")
+        (info.jobId, info.startTime)
+      case None =>
+        logger.info(s"Creating new JobId for current job")
+        (java.util.UUID.randomUUID().toString, DateTime.now())
     }
+
+    val cp = Utils.getSeqFromConfig(jobConfig, "cp")
+    val jobContainer = factory.loadAndValidateJob(cp, mainClass, jobsLoader) match {
+      case Good(container) => container
+      case Bad(JobClassNotFound) => return failed(NoSuchClass)
+      case Bad(JobWrongType) => return failed(WrongJobType)
+      case Bad(JobLoadError(ex)) => return failed(JobLoadingError(ex))
+    }
+
+    // Automatically subscribe the sender to events so it starts getting them right away
+    resultActor ! Subscribe(jobId, subscriber, events)
+    statusActor ! Subscribe(jobId, subscriber, events)
+
+    // TODO: remove binaryInfo from JobInfo object
+    val jobInfo = JobInfo(jobId, contextId, contextName,
+      BinaryInfo("##DummyName##", BinaryType.Jar, DateTime.now()), mainClass,
+      JobStatus.Running, startDateTime, None, None)
+
+    getJobFuture(jobContainer, jobInfo, jobConfig, subscriber, jobContext, sparkEnv)
   }
 
   private def getJobFuture(container: JobContainer,
@@ -691,26 +697,44 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
     }
   }
 
-  // Protocol like "local" is supported in Spark for Jar loading, but not supported in Java.
-  // This method helps convert those Spark URI to those supported by Java.
-  // "local" URIs means that the jar must be present on each job server node at the path,
-  // as well as on every Spark worker node at the path.
-  // For the job server, convert the local to a local file: URI since Java URI doesn't understand local:
-  private def convertJarUriSparkToJava(jarUri: String): String = {
-    val uri = new URI(jarUri)
-    uri.getScheme match {
-      case "local" => "file://" + uri.getPath
-      case _ => jarUri
-    }
+  /**
+    * Parses given configuration file and produces the list of class path URLs. If just a name (without
+    * protocol) is given instead of a URI, this means that a binary should be taken from the database.
+    * It will then call the DAO and produce local or remote URL for this dependency.
+    * @param config with cp (class path) property
+    * @return sequence of binary URIs
+    * @throws NoSuchBinaryException if dependency is a binary name from Jobserver DB and such
+    *                               binary is not found.
+    */
+  private def getClassPathURIs(config: Config): Seq[String] = {
+    val dependencies = Utils.getSeqFromConfig(config, "cp")
+    dependencies.flatMap(name => {
+      val uri = new URI(name)
+      uri.getScheme match {
+        // protocol like "local" is supported in Spark for Jar loading, but not supported in Java.
+        case "local" => Some("file://" + uri.getPath)
+        case null =>
+          val binInfoReq = (daoActor ? JobDAOActor.GetLastBinaryInfo(name))(daoAskTimeout).
+            mapTo[JobDAOActor.LastBinaryInfo]
+          val binInfo = Await.result(binInfoReq, daoAskTimeout.duration).lastBinaryInfo
+          if (binInfo.isEmpty) {
+            throw NoSuchBinaryException(name)
+          } else {
+            val binaryInfo = binInfo.get
+            if (binaryInfo.binaryType == BinaryType.Egg) {
+              // both downloading the egg and fetching binaryInfo will be done in PythonContextFactory
+              // Eggs are skipped here as the jarloader cannot load with egg files without exception.
+              None
+            } else {
+              val jarPath = dependenciesCache.getBinaryPath(
+                binaryInfo.appName, binaryInfo.binaryType, binaryInfo.uploadTime)
+              Some(s"file://${new File(jarPath).getAbsolutePath}")
+            }
+          }
+        case _ => Some(name)
+      }
+    })
   }
-
-  // "Side jars" are jars besides the main job jar that are needed for running the job.
-  // They are loaded from the context/job config.
-  // Each one should be an URL (http, ftp, hdfs, local, or file). local URLs are local files
-  // present on every node, whereas file:// will be assumed only present on driver node
-  private def getSideJars(config: Config): Seq[String] =
-    Try(config.getStringList("dependent-jar-uris").asScala.toSeq).
-     orElse(Try(config.getString("dependent-jar-uris").split(",").toSeq)).getOrElse(Nil)
 
   /**
    * This function is responsible for restarting terminated jobs. It selects jobs based on the

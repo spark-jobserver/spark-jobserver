@@ -31,7 +31,8 @@ class JavaJobSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) {
       "context.name" -> "ctx",
       "is-adhoc" -> "false"
     )
-    ConfigFactory.parseMap(ConfigMap.asJava).withFallback(ConfigFactory.defaultOverrides())
+    ConfigFactory.parseMap(ConfigMap.asJava).withFallback(ConfigFactory.defaultOverrides()).
+      withFallback(ConfigFactory.parseString("cp = [\"demo\"]"))
   }
 
   before {
@@ -55,18 +56,22 @@ class JavaJobSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) {
 
   describe("Running Java Jobs") {
     it("Should run a java job") {
+      uploadTestJar()
+
       manager ! JobManagerActor.Initialize(config, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
-      uploadTestJar()
+
       manager ! JobManagerActor.StartJob("demo", javaJob, config, syncEvents ++ errorEvents)
       expectMsgPF(startJobWait, "No job ever returned :'(") {
         case JobResult(_, result) => result should be("Hi!")
       }
     }
     it("Should fail running this java job"){
+      uploadTestJar()
+
       manager ! JobManagerActor.Initialize(config, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
-      uploadTestJar()
+
       manager ! JobManagerActor.StartJob("demo", failedJob, config, errorEvents)
       expectMsgPF(6 seconds, "Gets correct exception"){
         case JobErroredOut(_, _, ex) => ex.getMessage should equal("fail")
