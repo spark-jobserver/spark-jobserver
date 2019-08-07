@@ -1,5 +1,7 @@
 package spark.jobserver.util
 
+import spark.jobserver.io.ContextInfo
+
 case class DeleteBinaryInfoFailedException(private val appName: String) extends Exception {
   private val message = s"can't delete meta data information for $appName";
 }
@@ -14,6 +16,11 @@ case class SaveBinaryException(private val appName: String) extends Exception {
 
 case class NoSuchBinaryException(private val appName: String) extends Exception {
   private val message = s"can't find binary: $appName in database";
+}
+
+case class ResolutionFailedOnStopContextException(private val context : ContextInfo) extends Exception {
+  private val message = s"""Could not resolve jobManagerActor (${context.actorAddress})
+    | for context ${context.name} during StopContext."""
 }
 
 final case class InternalServerErrorException(id: String) extends

@@ -9,7 +9,8 @@ import akka.cluster.ClusterEvent.MemberEvent
 import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.io.{JobDAO, JobDAOActor, ContextInfo, ContextStatus, JobInfo, JobStatus, BinaryInfo, BinaryType}
 import ContextSupervisor._
-import spark.jobserver.util.{ManagerLauncher, ContextJVMInitializationTimeout, SparkJobUtils}
+import spark.jobserver.util.{ManagerLauncher, ContextJVMInitializationTimeout, SparkJobUtils, Utils,
+  ResolutionFailedOnStopContextException}
 import spark.jobserver.JobManagerActor._
 
 import scala.collection.JavaConverters._
@@ -476,6 +477,39 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       expectMsgType[ContextStopError](4.seconds)
     }
 
+    it("should set context and nonfinal jobs to error state if actor resolution fails during StopContext"){
+      val contextWithoutActor = ContextInfo("contextWithoutActor", "contextWithoutActor", "", None,
+          DateTime.now(), None, ContextStatus.Running, None)
+      val finalJob = JobInfo("finalJob", "contextWithoutActor", "contextWithoutActor",
+          BinaryInfo("demo", BinaryType.Jar, DateTime.now()), "", JobStatus.Finished, DateTime.now(),
+          Some(DateTime.now()), None)
+      val nonfinalJob = JobInfo("nonfinalJob", "contextWithoutActor", "contextWithoutActor",
+          BinaryInfo("demo", BinaryType.Jar, DateTime.now()), "", JobStatus.Running, DateTime.now(),
+          None, None)
+      dao.saveContextInfo(contextWithoutActor)
+      dao.saveJobInfo(finalJob)
+      dao.saveJobInfo(nonfinalJob)
+      val contextUpdated = false
+      val jobsCleaned = false
+
+      supervisor ! StopContext("contextWithoutActor")
+
+      expectMsg(4.seconds, NoSuchContext)
+      Utils.retry(3, 1000){
+        // If one of these assertion fails, it's probably because the overall flow is faster than
+        // the DAO update (sent with tell). In this case, just retry
+        val c = Await.result(dao.getContextInfo(contextWithoutActor.id), 3. seconds).get
+        c.state should equal(ContextStatus.Error)
+        c.error.get.getClass.getSimpleName should equal("ResolutionFailedOnStopContextException")
+        c.endTime.isDefined should equal(true)
+        Await.result(dao.getJobInfo("finalJob"), 3. seconds) should equal(Some(finalJob))
+        val j = Await.result(dao.getJobInfo("nonfinalJob"), 3. seconds).get
+        j.state should equal(ContextStatus.Error)
+        j.error.isDefined should equal(true)
+        j.endTime.isDefined should equal(true)
+      }
+    }
+
     it("should be able to start multiple contexts") {
       supervisor ! AddContext("test-context7", contextConfig)
       expectMsg(contextInitTimeout, ContextInitialized)
@@ -764,8 +798,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
 
     it("should not change final state to STOPPING state") {
       val daoProbe = TestProbe()
-      val latch = new CountDownLatch(1)
-      val contextInfo = ContextInfo("id", "name", "", None, DateTime.now(), None, ContextStatus.Error, None)
+      val contextInfo = ContextInfo("id", "name", "", None, DateTime.now(), None, ContextStatus.Finished, None)
       var contextToTest: ContextInfo = contextInfo
 
       daoProbe.setAutoPilot(new TestActor.AutoPilot {
@@ -773,9 +806,6 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
           msg match {
             case JobDAOActor.GetContextInfoByName(_) =>
               sender ! JobDAOActor.ContextResponse(Some(contextInfo))
-            case JobDAOActor.SaveContextInfo(c) =>
-              contextToTest = c
-              latch.countDown()
           }
           TestActor.KeepRunning
         }
@@ -786,9 +816,8 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
         TestProbe().ref, managerProbe, cluster, visitedContextIsFinalStatePath), "supervisor2")
 
       supervisor ! StopContext("name")
-      latch.await()
 
-      contextToTest.state should be(ContextStatus.Error)
+      contextToTest.state should be(ContextStatus.Finished)
       expectMsg(contextInitTimeout, NoSuchContext)
     }
 
