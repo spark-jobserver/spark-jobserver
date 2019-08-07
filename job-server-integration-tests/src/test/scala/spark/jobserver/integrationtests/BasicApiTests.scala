@@ -1,6 +1,8 @@
 package spark.jobserver.integrationtests
 
 import org.joda.time.DateTime
+import org.scalatest.BeforeAndAfterAllConfigMap
+import org.scalatest.ConfigMap
 import org.scalatest.FreeSpec
 import org.scalatest.Matchers
 
@@ -9,11 +11,14 @@ import com.softwaremill.sttp._
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
 
-class BasicApiTests extends FreeSpec with Matchers {
+class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigMap{
 
   // Configuration
-  val SJS = "localhost:8090"
+  var SJS = ""
   implicit val backend = HttpURLConnectionBackend()
+  override def beforeAll(configMap: ConfigMap) = {
+    SJS = configMap.getWithDefault("address", "localhost:8090")
+  }
 
   // Test environment
   val bin = "tests.jar"
