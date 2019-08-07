@@ -579,6 +579,42 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       expectMsgClass(startJobWait, classOf[JobErroredOut])
     }
 
+    it("should run a job that requires job jar dependencies if dependent-jar-uris are specified correctly"){
+      manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+
+      uploadTestJar()
+      val jobJarDepsConfigs = ConfigFactory.parseString(
+        s"""
+           |dependent-jar-uris = ["file://${emptyJar.getAbsolutePath}"]
+        """.stripMargin)
+
+      manager ! JobManagerActor.StartJob("demo", classPrefix + "jobJarDependenciesJob", jobJarDepsConfigs,
+        syncEvents ++ errorEvents)
+
+      expectMsgClass(startJobWait, classOf[JobResult])
+    }
+
+    it("should fail context creation if context has jar dependencies " +
+      "but dependent-jar-uris are given as plain binary names"){
+      val contextConfigWithDependentJar = contextConfig.withFallback(ConfigFactory.parseString(
+        s"""
+           |dependent-jar-uris = ["emptyjar"]
+        """.stripMargin))
+      manager ! JobManagerActor.Initialize(contextConfigWithDependentJar, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.InitError])
+    }
+
+    it("should create a context if context has jar dependencies " +
+      "and dependent-jar-uris are provided in config file"){
+      val contextConfigWithDependentJar = contextConfig.withFallback(ConfigFactory.parseString(
+        s"""
+           |dependent-jar-uris = ["file://${emptyJar.getAbsolutePath}"]
+        """.stripMargin))
+      manager ! JobManagerActor.Initialize(contextConfigWithDependentJar, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+    }
+
     it("jobs should be able to cache RDDs and retrieve them through getPersistentRDDs") {
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(classOf[JobManagerActor.Initialized])
