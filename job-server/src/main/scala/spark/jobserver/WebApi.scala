@@ -16,7 +16,8 @@ import org.joda.time.DateTime
 import spark.jobserver.auth._
 import spark.jobserver.io.{BinaryType, ContextInfo, ErrorData, JobInfo, JobStatus}
 import spark.jobserver.routes.DataRoutes
-import spark.jobserver.util.{SSLContextFactory, SparkJobUtils}
+import spark.jobserver.util.{InsufficientConfiguration, MeteredHttpService,
+  SSLContextFactory, SparkJobUtils, Utils}
 import spray.http.HttpHeaders.{Location, `Content-Type`}
 import spray.http._
 import spray.httpx.SprayJsonSupport.sprayJsonMarshaller
@@ -28,7 +29,6 @@ import spray.routing.{RequestContext, Route}
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.Try
 import org.slf4j.LoggerFactory
-import spark.jobserver.util.MeteredHttpService
 
 object WebApi {
 
@@ -740,10 +740,13 @@ class WebApi(system: ActorSystem,
          *
          * @entity         The POST entity should be a Typesafe Config format file;
          *                 It will be merged with the job server's config file at startup.
-         * @required @param appName String - the appName for the job JAR
-         * @required @param classPath String - the fully qualified class path for the job
+         * @optional @param classPath String - the fully qualified class path for the job (deprecated - use
+         *           mainClass parameter)
+         * @optional @param appName String - the appName for the job JAR (deprecated - use cp parameter)
+         * @optional @param cp String - list of binaries/URIs for the job
+         * @optional @param mainClass String - the fully qualified class path for the job
          * @optional @param context String - the name of the context to run the job under.  If not specified,
-         *                                   then a temporary context is allocated for the job
+         *           then a temporary context is allocated for the job
          * @optional @param sync Boolean if "true", then wait for and return results, otherwise return job Id
          * @optional @param timeout Int - the number of seconds to wait for sync results to come back
          * @return JSON result of { StatusKey -> "OK" | "ERROR", ResultKey -> "result"}, where "result" is
@@ -751,9 +754,10 @@ class WebApi(system: ActorSystem,
          */
         post {
           entity(as[String]) { configString =>
-            parameters('appName, 'classPath,
+            parameters('appName ?, 'classPath ?, 'cp ?, 'mainClass ?,
               'context ?, 'sync.as[Boolean] ?, 'timeout.as[Int] ?, SparkJobUtils.SPARK_PROXY_USER_PARAM ?) {
-                (appName, classPath, contextOpt, syncOpt, timeoutOpt, sparkProxyUser) =>
+                (appNameOpt, classPathOpt, cpOpt, mainClassOpt,
+                 contextOpt, syncOpt, timeoutOpt, sparkProxyUser) =>
                   val timer = jobPost.time()
                   try {
                     val async = !syncOpt.getOrElse(false)
@@ -764,12 +768,45 @@ class WebApi(system: ActorSystem,
                       .getOrElse(Map.empty))
                     val (cName, cConfig) =
                       determineProxyUser(contextConfig, authInfo, contextOpt.getOrElse(""))
+
+                    // START: classPath => mainClass, appName + dependent-jar-uris => cp
+                    import collection.JavaConverters._
+                    val providedMainClass = Try(mainClassOpt.getOrElse(jobConfig.getString("mainClass"))).
+                      getOrElse("")
+                    val providedCp = if (cpOpt.isEmpty) {
+                      Utils.getSeqFromConfig(jobConfig, "cp")
+                    } else {
+                      cpOpt.get.split(",").toSeq
+                    }
+
+                    val (mainClass, cp) = if (appNameOpt.isDefined) {
+                      if (classPathOpt.isDefined) {
+                        (classPathOpt.get,
+                          Utils.getSeqFromConfig(jobConfig, "dependent-jar-uris") ++ Seq(appNameOpt.get))
+                      } else {
+                        throw InsufficientConfiguration("classPath parameter is missing!")
+                      }
+                    } else if (providedCp.nonEmpty) {
+                      if (providedMainClass.nonEmpty) {
+                        (providedMainClass, providedCp)
+                      } else {
+                        throw InsufficientConfiguration("mainClass parameter is missing!")
+                      }
+                    } else {
+                      throw InsufficientConfiguration("To start the job " +
+                        "appName or cp parameters should be configured!")
+                    }
+                    val updatedConfig = jobConfig.withoutPath("cp").withValue(
+                      "cp", ConfigValueFactory.fromIterable(cp.toList.asJava))
+                    // END: classPath => mainClass, appName + dependent-jar-uris => cp
+
                     val jobManager = getJobManagerForContext(
-                      contextOpt.map(_ => cName), cConfig, classPath)
+                      contextOpt.map(_ => cName), cConfig, mainClass)
                     val events = if (async) asyncEvents else syncEvents
                     val timeout = timeoutOpt.map(t => Timeout(t.seconds)).getOrElse(DefaultSyncTimeout)
                     val future = jobManager.get.ask(
-                      JobManagerActor.StartJob(appName, classPath, jobConfig, events))(timeout)
+                      JobManagerActor.StartJob(
+                        appNameOpt.getOrElse("Undefined"), mainClass, updatedConfig, events))(timeout)
                     respondWithMediaType(MediaTypes.`application/json`) { ctx =>
                       future.map {
                         case JobResult(jobId, res) =>
@@ -783,7 +820,9 @@ class WebApi(system: ActorSystem,
                           ctx.complete(Map[String, String]("jobId" -> jobId) ++ errMap(ex, "ERROR")
                         )
                         case JobStarted(_, jobInfo) =>
-                          val future = jobInfoActor ? StoreJobConfig(jobInfo.jobId, postedJobConfig)
+                          val future = jobInfoActor ? StoreJobConfig(jobInfo.jobId, postedJobConfig.
+                            withoutPath("cp").withValue(
+                            "cp", ConfigValueFactory.fromIterable(cp.toList.asJava)))
                           future.map {
                             case JobConfigStored =>
                               val jobReport = getJobReport(jobInfo, jobStarted = true)
@@ -793,8 +832,10 @@ class WebApi(system: ActorSystem,
                           }
                         case JobValidationFailed(_, _, ex) =>
                           logAndComplete(ctx, "VALIDATION FAILED", 400, ex)
-                        case NoSuchApplication => notFound(ctx, "appName " + appName + " not found")
-                        case NoSuchClass => notFound(ctx, "classPath " + classPath + " not found")
+                        case NoSuchFile(name) => notFound(ctx, "appName " + name + " not found")
+                        // TODO: NoSuchApplication should be removed with next release
+                        case NoSuchApplication => notFound(ctx, "appName " + cp + " not found")
+                        case NoSuchClass => notFound(ctx, "classPath " + providedMainClass + " not found")
                         case WrongJobType => logAndComplete(ctx, "Invalid job type for this context", 400)
                         case JobLoadingError(err) => logAndComplete(ctx, "JOB LOADING FAILED", 500, err)
                         case ContextStopInProgress =>
@@ -814,7 +855,7 @@ class WebApi(system: ActorSystem,
                     case e: NoSuchElementException =>
                       timer.stop()
                       complete(StatusCodes.NotFound, errMap("context " + contextOpt.get + " not found"))
-                    case e: ConfigException =>
+                    case e @ (_: ConfigException | _: InsufficientConfiguration) =>
                       timer.stop()
                       complete(StatusCodes.BadRequest, errMap("Cannot parse config: " + e.getMessage))
                     case e: Exception =>

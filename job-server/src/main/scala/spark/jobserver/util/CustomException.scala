@@ -2,6 +2,8 @@ package spark.jobserver.util
 
 import spark.jobserver.io.ContextInfo
 
+final case class InsufficientConfiguration(private val msg: String) extends Exception(msg)
+
 final case class DeleteBinaryInfoFailedException(private val appName: String) extends
     Exception(s"can't delete meta data information for $appName")
 

@@ -102,7 +102,7 @@ class PythonSessionContextFactorySpec extends FunSpec with Matchers with BeforeA
 
     it("should create JobContainers", WindowsIgnore) {
       val factory = new TestPythonSessionContextFactory()
-      val result = factory.loadAndValidateJob("test", DateTime.now(), "path.to.Job", DummyJobCache)
+      val result = factory.loadAndValidateJob(Seq("test"), "path.to.Job", DummyJobCache)
       result.isGood should be (true)
       val jobContainer = result.get
       jobContainer shouldBe an[PythonJobContainer[_]]
@@ -113,10 +113,9 @@ class PythonSessionContextFactorySpec extends FunSpec with Matchers with BeforeA
 
     def runSessionTest(factory: TestPythonSessionContextFactory,
                    context: PythonSessionContextLikeWrapper,
-                   c:Config): Unit = {
+                   c: Config): Unit = {
       val loadResult = factory.loadAndValidateJob(
-        "sql-average",
-        DateTime.now(),
+        Seq("sql-average"),
         "example_jobs.session_window.SessionWindowJob",
         DummyJobCache)
       loadResult.isGood should be (true)

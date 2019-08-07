@@ -76,15 +76,15 @@ object PythonSparkContextFactorySpec {
 
   case object DummyJobCache extends JobCache {
 
-    override def getSparkJob(appName: String, uploadTime: DateTime, classPath: String): JobJarInfo =
+    override def getSparkJob(appName: Seq[String], classPath: String): JobJarInfo =
       sys.error("Not Implemented")
 
-    override def getJavaJob(appName: String, uploadTime: DateTime, classPath: String): JavaJarInfo =
+    override def getJavaJob(appName: Seq[String], classPath: String): JavaJarInfo =
       sys.error("No Implemented :(")
 
-    override def getPythonJob(appName: String, uploadTime: DateTime, classPath: String): PythonJobInfo = {
+    override def getPythonJob(appName: Seq[String], classPath: String): PythonJobInfo = {
       val path =
-        if (appName == "test") {
+        if (appName == Seq("test")) {
           "/tmp/test.egg"
         } else {
           jobServerAPIExamplePath.getOrElse(sys.error("job server examples path not found")).getAbsolutePath

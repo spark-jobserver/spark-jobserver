@@ -18,7 +18,9 @@ object JavaStreamingSpec extends JobSpecConfig {
 
 class JavaStreamingSpec extends ExtrasJobSpecBase(JavaStreamingSpec.getNewSystem) {
 
-  private val emptyConfig = ConfigFactory.parseMap(Map("streaming.batch_interval" -> 3).asJava)
+  private val emptyConfig = ConfigFactory.parseMap(
+    Map("streaming.batch_interval" -> 3).asJava).withFallback(
+    ConfigFactory.parseString("cp = [\"demo\"]"))
   private val classPrefix = "spark.jobserver."
   private val streamingJob = classPrefix + "JStreamingTestJob"
 

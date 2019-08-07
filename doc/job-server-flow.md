@@ -110,7 +110,7 @@ Job routes
         WebApi->JobManager: StartJob(appName, clasPatch, userConfig, asyncEvents | syncEvents)
         note over JobManager: JobDao.getLastUploadTime(appName)
         opt if no such appName:
-          JobManager->WebApi: NoSuchApplication
+          JobManager->WebApi: NoSuchBinary
           WebApi->user: 404
         end
         note over JobManager: CREATE unique jobID

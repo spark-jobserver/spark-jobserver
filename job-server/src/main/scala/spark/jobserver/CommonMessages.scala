@@ -33,9 +33,10 @@ object CommonMessages {
   // errors
   case object ContextStopping
   case object NoSuchJobId
-  case object NoSuchApplication
   case object NoSuchClass
   case object WrongJobType      // Job type C does not match context type
   case object JobInitAlready
+  case object NoSuchApplication
+  case class NoSuchFile(name: String)
   case class NoJobSlotsAvailable(maxJobSlots: Int) // TODO: maybe rename this
 }
