@@ -195,8 +195,10 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
   def adhocStopReceive: Receive = {
     case StopContextAndShutdown =>
       // Do a blocking stop, since job is already finished or errored out. Stop should be quick.
-      setCurrentContextState(ContextInfoModifiable(ContextStatus.Stopping))
-      jobContext.stop()
+      setCurrentContextState(
+        ContextInfoModifiable(ContextStatus.Stopping),
+        successCallback = jobContext.stop(),
+        failureCallback = jobContext.stop())
 
     case SparkContextStopped =>
       logger.info("Adhoc context stopped. Killing myself")
@@ -470,8 +472,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
   private def setCurrentContextState(attributes: ContextModifiableAttributes,
                              successCallback: => Unit = () => Unit,
                              failureCallback: => Unit = () => Unit) {
-    (daoActor ? JobDAOActor.UpdateContextById(contextId, attributes))(daoAskTimeout)
-        .mapTo[JobDAOActor.SaveResponse].onComplete {
+    getUpdateContextByIdFuture(contextId, attributes).onComplete {
       case Success(JobDAOActor.SavedSuccessfully) => successCallback
       case Success(JobDAOActor.SaveFailed(t)) =>
         logger.error(s"Failed to save context $contextId in DAO actor", t)
@@ -480,6 +481,13 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
         logger.error(s"Failed to get context $contextId from DAO", t)
         failureCallback
     }
+  }
+
+  @VisibleForTesting
+  protected def getUpdateContextByIdFuture(contextId: String, attributes: ContextModifiableAttributes):
+      Future[JobDAOActor.SaveResponse] = {
+    (daoActor ? JobDAOActor.UpdateContextById(contextId, attributes))(daoAskTimeout)
+      .mapTo[JobDAOActor.SaveResponse]
   }
 
   def startJobInternal(appName: String,

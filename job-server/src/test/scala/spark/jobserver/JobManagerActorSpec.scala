@@ -14,13 +14,34 @@ import spark.jobserver.CommonMessages.{JobRestartFailed, JobStarted, JobValidati
 import spark.jobserver.io._
 import spark.jobserver.ContextSupervisor.{ContextStopError, ContextStopInProgress, SparkContextStopped}
 import spark.jobserver.io.JobDAOActor.SavedSuccessfully
-import spark.jobserver.util.{ContextKillingItselfException, NoJobConfigFoundException,
-  NotStandaloneModeException, StandaloneForcefulKill}
+import spark.jobserver.util._
 
 import scala.collection.mutable
+import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.ExecutionContext.Implicits.global
 
 object JobManagerActorSpec extends JobSpecConfig
+
+object JobManagerActorSpyStateUpdate {
+  def props(daoActor: ActorRef, supervisorActorAddress: String,
+            initializationTimeout: FiniteDuration,
+            contextId: String, spyActorRef: ActorRef): Props =
+    Props(classOf[JobManagerActorSpyStateUpdate], daoActor, supervisorActorAddress,
+      initializationTimeout, contextId, spyActorRef)
+}
+
+class JobManagerActorSpyStateUpdate(daoActor: ActorRef, supervisorActorAddress: String,
+                         initializationTimeout: FiniteDuration, contextId: String, spyActorRef: ActorRef)
+    extends JobManagerActor(daoActor, supervisorActorAddress, contextId, initializationTimeout) {
+
+  override protected def getUpdateContextByIdFuture(contextId: String,
+        attributes: ContextModifiableAttributes): Future[JobDAOActor.SaveResponse] = {
+    super.getUpdateContextByIdFuture(contextId, attributes).andThen {
+      case _ => spyActorRef ! "Save Complete"
+    }
+  }
+}
 
 object JobManagerActorSpy {
   case object TriggerExternalKill
@@ -971,22 +992,26 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
     }
 
     it("should start a job in adhoc context and should stop context once finished") {
-      val deathWatcher = TestProbe()
+      manager = system.actorOf(JobManagerActorSpyStateUpdate.props(daoActor, "", 5.seconds, contextId, self))
       val adhocContextConfig = JobManagerActorSpec.getContextConfig(adhoc = true)
       daoActor ! JobDAOActor.SaveContextInfo(ContextInfo(contextId, "ctx", "",
         None, DateTime.now(), None, ContextStatus.Running, None))
       expectMsg(SavedSuccessfully)
+
       manager ! JobManagerActor.Initialize(adhocContextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
-      deathWatcher.watch(manager)
+      watch(manager)
+
       uploadTestJar()
 
+      // action
       manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, allEvents)
 
       expectMsgClass(startJobWait, classOf[JobStarted])
       expectMsgAllClassOf(classOf[JobFinished], classOf[JobResult])
-      deathWatcher.expectTerminated(manager)
-      expectNoMsg(2.seconds)
+      expectMsg("Save Complete") // State STOPPING has been updated
+      expectTerminated(manager)
+
       daoActor ! JobDAOActor.GetContextInfo(contextId)
       expectMsgPF(3.seconds, "") {
         case JobDAOActor.ContextResponse(Some(contextInfo)) =>
@@ -994,6 +1019,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
           contextInfo.endTime should be(None)
         case unexpectedMsg @ _ => fail(s"State is not stopping. Message received $unexpectedMsg")
       }
+      expectNoMsg(500.milliseconds)
     }
   }
 
