@@ -8,7 +8,7 @@ package akka.downing
 import akka.ConfigurationException
 import akka.actor.{Actor, Address, Cancellable, Props, Scheduler}
 import akka.cluster.ClusterEvent._
-import akka.cluster.MemberStatus.{Down, Exiting}
+import akka.cluster.MemberStatus._
 import akka.cluster.{Member, MemberStatus, _}
 import org.slf4j.LoggerFactory
 
@@ -41,8 +41,9 @@ class KeepOldestAutoDown(preferredOldestMemberRole: Option[String],
   private val cluster = Cluster(context.system)
   private var membersByAge: SortedSet[Member] = SortedSet.empty(Member.ageOrdering)
   private val skipMemberStatus = Set[MemberStatus](Down, Exiting)
-  private var scheduledUnreachable: Map[Member, Cancellable] = Map.empty
-  private var pendingUnreachable: Set[Member] = Set.empty
+  private var scheduledUnreachable: Map[Member, Cancellable] = Map.empty // waiting for timeout to fire
+  private var pendingUnreachable: Set[Member] = Set.empty // waiting for the oldest node to down these nodes
+  // already timed out, should be downed as soon as all scheduled time out
   private var unstableUnreachable: Set[Member] = Set.empty
   private val logger = LoggerFactory.getLogger(getClass)
 
@@ -83,7 +84,9 @@ class KeepOldestAutoDown(preferredOldestMemberRole: Option[String],
       }
       if (scheduledUnreachable.isEmpty) {
         unstableUnreachable += member
-        logger.info(s"Downing unstableUnreachable: $unstableUnreachable")
+        logger.info(s"UnreachableTimeout was triggered for members: $unstableUnreachable. \n" +
+          s"This is the current cluster state (sorted by age): $membersByAge. \n" +
+          s"Current list of pending members (other node should have downed them): $pendingUnreachable")
         downUnreachableNodes(unstableUnreachable)
       } else {
         logger.info(s"Adding $member to unstableUnreachable: $unstableUnreachable")
@@ -245,7 +248,7 @@ class KeepOldestAutoDown(preferredOldestMemberRole: Option[String],
   }
 
   private def isOK(member: Member): Boolean = {
-    (member.status == MemberStatus.Up || member.status == MemberStatus.Leaving) &&
+    (member.status == Up || member.status == Leaving || member.status == Joining) &&
       (!pendingUnreachable.contains(member) && !unstableUnreachable.contains(member))
   }
 
