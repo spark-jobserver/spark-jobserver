@@ -314,11 +314,32 @@ class OldestAutoDowningSpec extends TestKit(ActorSystem("OldestAutoDowningSpec")
     it("should not down the node if not the oldest and oldest is alone unreachable") {
       val othersNodeDowningProvider = system.actorOf(Props(
         new OldestAutoDownTestActor(
-          initialMembersByAge.drop(3).head.address, 1.seconds, None, testActor
+          someMember.address, 1.seconds, None, testActor
         )))
       othersNodeDowningProvider ! CurrentClusterState(members = initialMembersByAge)
       othersNodeDowningProvider ! UnreachableMember(initialMembersByAge.head)
       expectNoMsg(3.seconds)
+    }
+
+    it("should not down the node if not the oldest and oldest is alone unreachable even though there are" +
+      " some nodes in Joining state") {
+      val othersNodeDowningProvider = system.actorOf(Props(
+        new OldestAutoDownTestActor(
+          someMember.address, 1.seconds, None, testActor
+        )))
+      val joiningMember = TestMember(Address("akka.tcp", "sys", "joining", 2552), Joining, Set("slave"))
+      othersNodeDowningProvider ! CurrentClusterState(members = initialMembersByAge)
+      othersNodeDowningProvider ! ReachableMember(joiningMember)
+      othersNodeDowningProvider ! UnreachableMember(initialMembersByAge.head)
+      expectNoMsg(3.seconds)
+    }
+
+    it("should down joining node if it becomes unreachable after a while") {
+      val joiningMember = TestMember(Address("akka.tcp", "sys", "joining", 2552), Joining, Set("slave"))
+      oldestDowningProvider ! CurrentClusterState(members = initialMembersByAge)
+      oldestDowningProvider ! ReachableMember(joiningMember)
+      oldestDowningProvider ! UnreachableMember(joiningMember)
+      expectMsg(DownCalled(joiningMember.address))
     }
   }
 
