@@ -1009,7 +1009,15 @@ for instance: `sbt ++2.11.6 job-server/compile`
 - From the "master" project, please run "test" to ensure nothing is broken.
    - You may need to set `SPARK_LOCAL_IP` to `localhost` to ensure Akka port can bind successfully
    - Note for Windows users: very few tests fail on Windows. Thus, run `testOnly -- -l WindowsIgnore` from SBT shell to ignore them.
-- Logging for tests goes to "job-server-test.log"
+- Logging for tests goes to "job-server-test.log". To see test logging in console also, add the following to your log4j.properties (`job-server/src/test/resources/log4j.properties`)
+```$xslt
+log4j.rootLogger=INFO, LOGFILE, console
+
+log4j.appender.console=org.apache.log4j.ConsoleAppender
+log4j.appender.console.target=System.err
+log4j.appender.console.layout=org.apache.log4j.PatternLayout
+log4j.appender.console.layout.ConversionPattern=[%d] %-5p %.26c [%X{testName}] [%X{akkaSource}] - %m%n
+```
 - Run `scoverage:test` to check the code coverage and improve it.
   - Windows users: run `; coverage ; testOnly -- -l WindowsIgnore ; coverageReport` from SBT shell.
 - Please run scalastyle to ensure your code changes don't break the style guide.
