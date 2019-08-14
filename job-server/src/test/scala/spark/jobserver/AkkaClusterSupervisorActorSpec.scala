@@ -866,14 +866,15 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
           msg match {
             case JobDAOActor.GetContextInfoByName(_) =>
               sender ! JobDAOActor.ContextResponse(Some(contextInfo))
+              TestActor.KeepRunning
             case JobDAOActor.SaveContextInfo(c) =>
               contextToTest = c
               latch.countDown()
+              TestActor.NoAutoPilot
             case JobDAOActor.GetContextInfos(_, _) =>
               sender ! Seq.empty.map(JobDAOActor.ContextInfos)
               TestActor.KeepRunning
           }
-          TestActor.KeepRunning
         }
       })
 
