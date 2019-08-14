@@ -1092,7 +1092,6 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val spyProbe = TestProbe()
       val contextId = "dummy-context"
       val deathWatcher = TestProbe()
-      val daoProbe = TestProbe()
       val binaryInfo = BinaryInfo("demo", BinaryType.Jar, DateTime.now())
       val jobInfo = JobInfo("jobId", contextId, "context-name",
           binaryInfo, wordCountClass, JobStatus.Running, DateTime.now(), None, None)
@@ -1105,12 +1104,14 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       uploadTestJar()
       dao.saveJobInfo(jobInfo)
       dao.saveJobConfig(jobInfo.jobId, stringConfig)
-      dao.saveJobInfo(jobInfo.copy(jobId = "jobId1"))
+      dao.saveJobInfo(jobInfo.copy(jobId = "jobId1")) // Not saving config for jobId1 causes restart failure
 
       manager ! JobManagerActor.RestartExistingJobs
 
-      spyProbe.expectMsg("StartJob Received")
-      spyProbe.expectMsgAllClassOf(classOf[JobStarted], classOf[JobRestartFailed])
+      val messages = spyProbe.expectMsgAllClassOf(
+        classOf[String], classOf[JobStarted], classOf[JobRestartFailed])
+      messages.filter(_.isInstanceOf[String]).head should be("StartJob Received")
+
       spyProbe.expectNoMsg()
       deathWatcher.expectNoMsg()
     }
