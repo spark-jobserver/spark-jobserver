@@ -27,6 +27,7 @@ trait JobSpecConfig {
 
   lazy val config = {
     val ConfigMap = Map(
+      "akka.loglevel" -> "OFF",
       "spark.jobserver.job-result-cache-size" -> JobResultCacheSize,
       "spark.jobserver.dao-timeout" -> "3s",
       "spark.jobserver.context-deletion-timeout" -> "5s",
