@@ -13,7 +13,9 @@ object IntegrationTests extends App {
 
   // Run all integration tests
   (new BasicApiTests).execute(configMap = ConfigMap(("address", sjs1)))
+  (new CornerCasesTests).execute(configMap = ConfigMap(("address", sjs1)))
 
+  // Usage
   def printUsage(){
     println("Usage: IntegrationTests <jobserver-ip>:<jobserver-port>")
   }
