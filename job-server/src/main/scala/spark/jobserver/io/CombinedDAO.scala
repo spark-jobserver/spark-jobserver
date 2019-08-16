@@ -1,6 +1,7 @@
 package spark.jobserver.io
 
 import java.io.File
+import java.util.concurrent.TimeUnit
 
 import com.typesafe.config.Config
 import org.joda.time.DateTime
@@ -28,18 +29,16 @@ object CombinedDAO {
 class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetrics {
   private val logger = LoggerFactory.getLogger(getClass)
 
-  // Counter metrics
+  // Metrics
+  private val saveTimerMs = timer("total-save-time", TimeUnit.MILLISECONDS)
   private val totalSuccessfulSaveRequests = counter("total-save-binary-success")
   private val totalFailedSaveBinaryDAORequests = counter("total-binary-save-binary-dao-failed")
   private val totalFailedSaveMetadataDAORequests = counter("total-binary-save-metadata-dao-failed")
 
+  private val deleteTimerMs = timer("total-delete-time", TimeUnit.MILLISECONDS)
   private val totalSuccessfulDeleteRequests = counter("total-delete-binary-success")
   private val totalFailedDeleteBinaryDAORequests = counter("total-binary-delete-binary-dao-failed")
   private val totalFailedDeleteMetadataDAORequests = counter("total-binary-delete-metadata-dao-failed")
-
-  /*
-   * Config
-   */
 
   var binaryDAO: BinaryDAO = _
   var metaDataDAO: MetaDataDAO = _
@@ -72,9 +71,10 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
 
   initFileDirectory()
 
-  /*
-   * Contexts
-   */
+  override def getApps: Future[Map[String, (BinaryType, DateTime)]] =
+    metaDataDAO.getBinaries.map(
+      binaryInfos => binaryInfos.map(info => info.appName -> (info.binaryType, info.uploadTime)).toMap
+    )
 
   override def saveContextInfo(contextInfo: ContextInfo): Unit = {
     val isSaved = Await.result(metaDataDAO.saveContext(contextInfo), defaultAwaitTime)
@@ -83,9 +83,7 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
     }
   }
 
-  override def getContextInfo(id: String): Future[Option[ContextInfo]] = {
-    metaDataDAO.getContext(id)
-  }
+  override def getContextInfo(id: String): Future[Option[ContextInfo]] = metaDataDAO.getContext(id)
 
   override def getContextInfoByName(name: String): Future[Option[ContextInfo]] = {
     metaDataDAO.getContextByName(name)
@@ -96,10 +94,6 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
     metaDataDAO.getContexts(limit, statuses)
   }
 
-  /*
-   * Jobs
-   */
-
   override def saveJobInfo(jobInfo: JobInfo): Unit = {
     val isSaved = Await.result(metaDataDAO.saveJob(jobInfo), defaultAwaitTime)
     if(!isSaved) {
@@ -107,9 +101,7 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
     }
   }
 
-  override def getJobInfo(jobId: String): Future[Option[JobInfo]] = {
-    metaDataDAO.getJob(jobId)
-  }
+  override def getJobInfo(jobId: String): Future[Option[JobInfo]] = metaDataDAO.getJob(jobId)
 
   override def getJobInfos(limit: Int, status: Option[String]): Future[Seq[JobInfo]] = {
     metaDataDAO.getJobs(limit, status)
@@ -119,10 +111,6 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
                                       jobStatuses: Option[Seq[String]]): Future[Seq[JobInfo]] = {
     metaDataDAO.getJobsByContextId(contextId, jobStatuses)
   }
-
-  /*
-   * JobConfigs
-   */
 
   override def saveJobConfig(jobId: String, jobConfig: Config): Unit = {
     val isSaved = Await.result(metaDataDAO.saveJobConfig(jobId, jobConfig), defaultAwaitTime)
@@ -135,18 +123,8 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
     metaDataDAO.getJobConfig(jobId)
   }
 
-  /*
-   * Binaries
-   */
-
-  override def getApps: Future[Map[String, (BinaryType, DateTime)]] = {
-    metaDataDAO.getBinaries.map(
-      binaryInfos => binaryInfos.map(info => info.appName -> (info.binaryType, info.uploadTime)).toMap
-    )
-  }
-
   override def getBinaryInfo(name: String): Option[BinaryInfo] = {
-  val binaryInfo = Await.result(metaDataDAO.getBinary(name), defaultAwaitTime).getOrElse(return None)
+    val binaryInfo = Await.result(metaDataDAO.getBinary(name), defaultAwaitTime).getOrElse(return None)
     Some(binaryInfo)
   }
 
@@ -166,8 +144,10 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
       cacheBinary(name, binaryType, uploadTime, binaryBytes)
     }
 
+    val saveTimer = saveTimerMs.time()
     if (Await.result(binaryDAO.save(binHash, binaryBytes), defaultAwaitTime)) {
       if (Await.result(metaDataDAO.saveBinary(name, binaryType, uploadTime, binHash), defaultAwaitTime)) {
+        saveTimer.stop()
         totalSuccessfulSaveRequests.inc()
         logger.info(s"Successfully uploaded binary for $name")
       } else {
@@ -182,9 +162,11 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
           }
           case _ => logger.info(s"Performing no cleanup, $name binary is used in meta data.")
         }
+        saveTimer.stop()
         throw SaveBinaryException(name)
       }
     } else {
+      saveTimer.stop()
       totalFailedSaveBinaryDAORequests.inc()
       logger.error(s"Failed to save binary data for $name, not proceeding with meta")
       throw SaveBinaryException(name)
@@ -192,6 +174,7 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
   }
 
   override def deleteBinary(name: String): Unit = {
+    val deleteTimer = deleteTimerMs.time()
     Await.result(metaDataDAO.getBinary(name), defaultAwaitTime) match {
       case Some(binaryInfo) =>
         binaryInfo.binaryStorageId match {
@@ -211,19 +194,23 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
                     logger.error(s"Failed to delete binary file for $name, leaving an artifact")
                 }
               }
+              deleteTimer.stop()
               cleanCacheBinaries(name)
             }
             else {
+              deleteTimer.stop()
               totalFailedDeleteMetadataDAORequests.inc()
               logger.error(s"Failed to delete binary meta for $name, not proceeding with file")
               throw DeleteBinaryInfoFailedException(name)
             }
           case _ =>
+            deleteTimer.stop()
             totalFailedDeleteMetadataDAORequests.inc()
             logger.error(s"Failed to delete binary meta for $name, hash is not found")
             throw NoStorageIdException(name)
         }
       case None =>
+        deleteTimer.stop()
         totalFailedDeleteMetadataDAORequests.inc()
         logger.warn(s"Couldn't find meta data information for $name")
         throw NoSuchBinaryException(name)

@@ -20,8 +20,8 @@ object ManagerLauncher {
   }
 }
 
-class ManagerLauncher(systemConfig: Config, contextConfig: Config,
-                      masterAddress: String, contextActorName: String, contextDir: String,
+class ManagerLauncher(systemConfig: Config, contextConfig: Config, masterAddress: String,
+                      contextName: String, contextActorName: String, contextDir: String,
                       sparkLauncher: SparkLauncher = new SparkLauncher,
                       environment: Environment = new SystemEnvironment)
                       extends Launcher(systemConfig, sparkLauncher, environment) {
@@ -55,6 +55,10 @@ class ManagerLauncher(systemConfig: Config, contextConfig: Config,
       launcher.addSparkArg("--conf", s"spark.executor.extraJavaOptions=$loggingOpts")
       launcher.addSparkArg("--driver-java-options",
           s"$gcOPTS $baseJavaOPTS $loggingOpts $configOverloads $extraJavaOPTS")
+
+      if (!contextName.isEmpty) {
+        launcher.setAppName(contextName)
+      }
 
       if (useSuperviseMode) {
         launcher.addSparkArg("--supervise")

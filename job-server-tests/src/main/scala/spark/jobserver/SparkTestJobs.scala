@@ -15,6 +15,13 @@ class MyErrorJob extends SparkTestJob {
   }
 }
 
+/** @see [[scala.util.control.NonFatal]] */
+class MyFatalErrorJob extends SparkTestJob {
+  def runJob(sc: SparkContext, config: Config): Any = {
+    throw new OutOfMemoryError("this is a fatal error")
+  }
+}
+
 class ConfigCheckerJob extends SparkTestJob {
   import scala.collection.JavaConverters._
 

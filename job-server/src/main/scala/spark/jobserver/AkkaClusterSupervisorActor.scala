@@ -580,7 +580,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
     }
 
     val launcher = new ManagerLauncher(config, contextConfig,
-      masterSeedNodes, contextActorName, contextDir.toString)
+      masterSeedNodes, encodedContextName, contextActorName, contextDir.toString)
 
     launcher.start()
   }

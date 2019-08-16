@@ -6,6 +6,7 @@ import akka.pattern.ask
 import akka.cluster.Cluster
 import akka.cluster.ClusterEvent.{InitialStateAsEvents, MemberEvent}
 import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
+
 import java.io.File
 import java.util.concurrent.{TimeUnit, TimeoutException}
 
