@@ -45,6 +45,7 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
     - [Configuring Spark Jobserver PostgreSQL Database backend](#configuring-spark-jobserver-postgresql-database-backend)
     - [Configuring Spark Jobserver MySQL Database backend](#configuring-spark-jobserver-mysql-database-backend)
     - [Configuring Spark Jobserver Zookeeper + HDFS Database backend](#configuring-spark-jobserver-zookeeper--hdfs-database-backend)
+  - [HA Deployment (beta)](#ha-deployment-beta)
   - [Chef](#chef)
 - [Architecture](#architecture)
 - [API](#api)
@@ -110,6 +111,7 @@ Spark Job Server is included in Datastax Enterprise!
 - Named Objects (such as RDDs or DataFrames) to cache and retrieve RDDs or DataFrames by name, improving object sharing and reuse among jobs.
 - Supports Scala 2.10 and 2.11
 - Support for supervise mode of Spark (EXPERIMENTAL)
+- Possible to be deployed in an [HA setup](#ha-deployment-beta) of multiple jobservers (beta)
 
 ## Version Information
 
@@ -793,6 +795,10 @@ configuration to local.conf.
 ```
 
 More information on setting up different backends for binaries and jobserver meta data: [setting up dao](doc/dao-setup.md).
+
+### HA Deployment (beta)
+
+It is possible to run multiple Spark Jobservers in a highly available setup. For a documentation of a Jobserver HA setup, refer to the [Jobserver HA documentation](doc/HA.md).
 
 ### Chef
 
