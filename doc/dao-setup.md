@@ -32,16 +32,14 @@ MetaDataDAO and BinaryDAO is the hash of binary.
 ### Configuration
 
 #### HDFS + Zookeeper
-
-Set `HADOOP_CONF_DIR` environment variable for Hadoop and add the following lines to the
-configuration file `local.conf`:
-
+To set up the CombinedDAO with HDFS and Zookeeper, include the following lines in the configuration file (e.g. `local.conf`):
 ```
+    jobdao = spark.jobserver.io.CombinedDAO
     combineddao {
       rootdir = "/tmp/combineddao"
       binarydao {
         class = spark.jobserver.io.HdfsBinaryDAO
-        dir = "hdfs:///spark-jobserver/binaries"
+        dir = "hdfs://<hadoop-ip>:<hadoop-port>/spark-jobserver/binaries"
       }
       metadatadao {
         class = spark.jobserver.io.zookeeper.MetaDataZookeeperDAO
@@ -83,13 +81,12 @@ The autopurge feature introduces an option to automatically remove old contexts 
 It works by starting an `AutoPurgeActor` on Jobserver startup, which every hour checks the zookeeper tree for jobs and contexts which have been finished for more than `autopurge_age` hours and deletes them.
 
 #### HDFS + SQL
-
 Please configure SQL backend as described [here](../README.md#configuring-spark-jobserver-backend)
 
-Set `HADOOP_CONF_DIR` environment variable for Hadoop and add the following lines to the
-configuration file `local.conf`:
+To set up the CombinedDAO with HDFS and SQL, include the following lines in the configuration file (e.g. `local.conf`):
 
 ```
+    jobdao = spark.jobserver.io.CombinedDAO
     combineddao {
       binarydao {
         class = spark.jobserver.io.HdfsBinaryDAO
