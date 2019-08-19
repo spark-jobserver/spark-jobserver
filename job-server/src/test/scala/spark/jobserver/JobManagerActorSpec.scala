@@ -461,6 +461,16 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       deathWatch.expectTerminated(manager, 2.seconds)
     }
 
+    it("should return error if job throws a fatal error") {
+      manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+
+      uploadTestJar()
+      manager ! JobManagerActor.StartJob("demo", classPrefix + "MyFatalErrorJob", emptyConfig, errorEvents)
+      val errorMsg = expectMsgClass(startJobWait, classOf[JobErroredOut])
+      errorMsg.err.getClass should equal (classOf[OutOfMemoryError])
+    }
+
     it("job should get jobConfig passed in to StartJob message") {
       val jobConfig = ConfigFactory.parseString("foo.bar.baz = 3")
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)

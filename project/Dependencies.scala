@@ -83,7 +83,7 @@ object Dependencies {
     "org.apache.hadoop" % "hadoop-hdfs" % hadoop % Test classifier "tests" excludeAll(excludeCurator),
     "org.apache.hadoop" % "hadoop-common" % hadoop % Test classifier "tests" excludeAll(excludeCurator),
     "org.apache.hadoop" % "hadoop-minicluster" % hadoop % Test excludeAll(excludeCurator),
-    "org.apache.curator" % "curator-test" % curatorTest % Test
+    "org.apache.curator" % "curator-test" % curatorTest % Test excludeAll(excludeGuava)
   )
 
   lazy val securityDeps = Seq(
