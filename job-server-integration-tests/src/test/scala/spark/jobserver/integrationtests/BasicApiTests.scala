@@ -30,7 +30,7 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
     var binaryUploadDate : DateTime = null
 
     "POST /binaries/<app> should upload a binary" in {
-      val byteArray = fileToByteArray(bin)
+      val byteArray = TestHelper.fileToByteArray(bin)
 
       val request = sttp.post(uri"$SJS/binaries/$appName")
           .body(byteArray)
@@ -50,7 +50,7 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
     }
 
     "POST /binaries/<app> should overwrite a binary with a new version" in {
-      val byteArray = fileToByteArray(streamingbin)
+      val byteArray = TestHelper.fileToByteArray(streamingbin)
       val request = sttp.post(uri"$SJS/binaries/$appName")
           .body(byteArray)
           .contentType("application/java-archive")
@@ -191,8 +191,8 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
     var jobContext : String = ""
 
     "(preparation) uploading job binaries for job testing should not fail" in {
-      val byteArray1 = fileToByteArray(bin)
-      val byteArray2 = fileToByteArray(streamingbin)
+      val byteArray1 = TestHelper.fileToByteArray(bin)
+      val byteArray2 = TestHelper.fileToByteArray(streamingbin)
       sttp.post(uri"$SJS/binaries/$app")
           .body(byteArray1)
           .contentType("application/java-archive")
@@ -415,22 +415,6 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
       }
     }
 
-  }
-
-  /*
-   * Helper methods
-   */
-
-  def fileToByteArray(fileName : String) : Array[Byte] = {
-    try{
-      val stream = getClass().getResourceAsStream(s"/$fileName")
-      Iterator continually stream.read takeWhile (-1 !=) map (_.toByte) toArray
-    } catch {
-      case e: Exception =>
-        println(s"Could not open $fileName.")
-        e.printStackTrace()
-        sys.exit(-1)
-    }
   }
 
 }
