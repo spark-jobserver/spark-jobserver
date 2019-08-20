@@ -19,16 +19,12 @@ import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 import spark.jobserver.common.akka.InstrumentedActor
 
-// Messages to JarManager actor
-
 /** Message for storing a JAR for an application given the byte array of the JAR file */
 case class StoreBinary(appName: String, binaryType: BinaryType, binBytes: Array[Byte])
-
 case class DeleteBinary(appName: String)
-
 /** Message requesting a listing of the available JARs */
 case class ListBinaries(typeFilter: Option[BinaryType])
-
+case class GetBinary(appName: String)
 /** Message for storing one or more local Binaries based on the given map.
   *
   * @param  localBinaries    Map where the key is the appName and the value is the local path to the Binary.
@@ -83,6 +79,10 @@ class BinaryManager(jobDao: ActorRef) extends InstrumentedActor {
   }
 
   override def wrappedReceive: Receive = {
+    case GetBinary(appName) =>
+      val resp = (jobDao ? JobDAOActor.GetLastBinaryInfo(appName)).mapTo[JobDAOActor.LastBinaryInfo]
+      resp pipeTo sender
+
     case ListBinaries(filterOpt) =>
       val requestor = sender
       val resp = (jobDao ? JobDAOActor.GetApps(filterOpt)).mapTo[JobDAOActor.Apps]

@@ -26,6 +26,7 @@ import org.apache.xerces.util.URI.MalformedURIException
 
 import scala.concurrent.duration.Duration
 import spark.jobserver.util.{NoSuchBinaryException, Utils}
+import spark.jobserver.io.JobDAOActor.LastBinaryInfo
 
 // Tests web response codes and formatting
 // Does NOT test underlying Supervisor / JarManager functionality
@@ -64,9 +65,9 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
   val routes = api.myRoutes
 
   val dt = DateTime.parse("2013-05-29T00Z")
-  val baseJobInfo =
-    JobInfo("foo-1", "cid", "context", BinaryInfo("demo", BinaryType.Jar, dt), "com.abc.meme",
-        JobStatus.Running, dt, None, None)
+  val binaryInfo = BinaryInfo("demo", BinaryType.Jar, dt)
+  val baseJobInfo = JobInfo("foo-1", "cid", "context", binaryInfo, "com.abc.meme", JobStatus.Running, dt,
+      None, None)
   val finishedJobInfo = baseJobInfo.copy(endTime = Some(dt.plusMinutes(5)),state = JobStatus.Finished)
   val errorJobInfo = finishedJobInfo.copy(
       error =  Some(ErrorData(new Throwable("test-error"))), state = JobStatus.Error)
@@ -80,7 +81,6 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
       ContextStatus.Running, None)
   val finishedContextInfo = contextInfo.copy(name = "finishedContextWithInfo",
       endTime = Some(dt.plusMinutes(5)), state = ContextStatus.Finished)
-  val binaryInfo = BinaryInfo("appName", BinaryType.Jar, DateTime.now(), None)
 
   class DummyActor extends Actor {
 
@@ -152,6 +152,9 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
           "demo2" -> (BinaryType.Jar, dt.plusHours(1)),
           "demo3" -> (BinaryType.Egg, dt.plusHours(2))
         )
+
+      case GetBinary("demo") => sender ! LastBinaryInfo(Some(binaryInfo))
+      case GetBinary(_) => sender ! LastBinaryInfo(None)
       // Ok these really belong to a JarManager but what the heck, type unsafety!!
       case StoreBinary("badjar", _, _)  => sender ! InvalidBinary
       case StoreBinary("daofail", _, _) => sender ! BinaryStorageFailure(new Exception("DAO failed to store"))

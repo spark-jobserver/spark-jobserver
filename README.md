@@ -823,6 +823,7 @@ Flow diagrams are checked in in the doc/ subdirectory.  .diagram files are for w
 ### Binaries
 
     GET /binaries               - lists all current binaries
+    GET /binaries /<appName>    - gets info about the last binary uploaded under this name (app-name, binary-type, upload-time)
     POST /binaries/<appName>    - upload a new binary file
     DELETE /binaries/<appName>  - delete defined binary
 
