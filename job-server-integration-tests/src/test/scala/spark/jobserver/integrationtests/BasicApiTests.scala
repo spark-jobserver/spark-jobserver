@@ -23,10 +23,14 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
   // Test environment
   val bin = "tests.jar"
   val streamingbin = "BasicTest.jar"
+  val appName = "IntegrationTestApp"
+  val contextName = "IntegrationTestContext"
+  val app = "IntegrationTestTestsJar"
+  val streamingApp = "IntegrationTestStreamingApp"
+  val batchContextName = "IntegrationTestBatchContext"
+  val streamingContextName = "IntegrationTestStreamingContext"
 
   "/binaries" - {
-
-    val appName = "IntegrationTestApp"
     var binaryUploadDate : DateTime = null
 
     "POST /binaries/<app> should upload a binary" in {
@@ -91,7 +95,6 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
   }
 
   "/contexts" - {
-    val contextName = "IntegrationTestContext"
 
     "POST /contexts/<contextName> should create a new context" in {
       val request = sttp.post(uri"$SJS/contexts/$contextName")
@@ -183,8 +186,6 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
 
   "/jobs" - {
 
-    val app = "job-server-tests"
-    val streamingApp = "job-server-streaming-test"
     var adHocJobId : String = ""
     var batchJobId: String = ""
     var streamingJobId : String = ""
@@ -253,7 +254,7 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
     "batch jobs" - {
       "POST /jobs?context=<context> should start a job in an existing (batch) context" in {
         // Start context
-        jobContext = "TestBatchContext"
+        jobContext = batchContextName
         val contextRequest = sttp.post(uri"$SJS/contexts/$jobContext")
         val contextResponse = contextRequest.send()
         contextResponse.code should equal(200)
@@ -293,7 +294,7 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
     "streaming jobs" - {
       "POST /jobs?context=<streamingContext> should start a job in an existing (streaming) context" in {
         // Start context
-        jobContext = "TestStreamingContext"
+        jobContext = batchContextName
         val contextRequest = sttp.post(uri"$SJS/contexts/$jobContext?context-factory=spark.jobserver.context.StreamingContextFactory")
         val contextResponse = contextRequest.send()
         contextResponse.code should equal(200)
@@ -415,6 +416,17 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
       }
     }
 
+  }
+
+  override def afterAll(configMap: ConfigMap) = {
+    // Clean up test entities in general
+    sttp.delete(uri"$SJS/binaries/$app")
+    sttp.delete(uri"$SJS/binaries/$streamingApp")
+    // Clean up test entities just in case something went wrong
+    sttp.delete(uri"$SJS/binaries/$appName")
+    sttp.delete(uri"$SJS/contexts/$contextName")
+    sttp.delete(uri"$SJS/contexts/$batchContextName")
+    sttp.delete(uri"$SJS/contexts/$streamingContextName")
   }
 
 }
