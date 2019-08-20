@@ -26,6 +26,7 @@ import org.apache.xerces.util.URI.MalformedURIException
 
 import scala.concurrent.duration.Duration
 import spark.jobserver.util.{NoSuchBinaryException, Utils}
+import spark.jobserver.io.JobDAOActor.LastBinaryInfo
 
 // Tests web response codes and formatting
 // Does NOT test underlying Supervisor / JarManager functionality
@@ -151,6 +152,8 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
           "demo2" -> (BinaryType.Jar, dt.plusHours(1)),
           "demo3" -> (BinaryType.Egg, dt.plusHours(2))
         )
+      case GetBinary("demo") => sender ! LastBinaryInfo(Some(binaryInfo))
+      case GetBinary(_) => sender ! LastBinaryInfo(None)
       // Ok these really belong to a JarManager but what the heck, type unsafety!!
       case StoreBinary("badjar", _, _)  => sender ! InvalidBinary
       case StoreBinary("daofail", _, _) => sender ! BinaryStorageFailure(new Exception("DAO failed to store"))

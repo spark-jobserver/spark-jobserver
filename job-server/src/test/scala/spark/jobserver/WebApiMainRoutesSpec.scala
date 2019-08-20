@@ -37,6 +37,26 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       }
     }
 
+    it("should retrieve a specific binary") {
+      Get("/binaries/demo") ~> sealRoute(routes) ~> check {
+        status should be (OK)
+        responseAs[Map[String, String]] should be(Map(
+          "app-name" -> "demo",
+          "binary-type" -> "Jar",
+          "upload-time" -> "2013-05-29T00:00:00.000Z"
+        ))
+      }
+    }
+
+    it("should return with 404 if binary cannot be found") {
+      Get("/binaries/nonexisting") ~> sealRoute(routes) ~> check {
+        status should be (NotFound)
+        responseAs[Map[String, String]] should be(Map(
+            "status" -> "ERROR",
+            "result" -> "Can't find binary with name nonexisting"))
+      }
+    }
+
     it("should respond with OK if jar uploaded successfully") {
       Post("/binaries/foobar", Array[Byte](0, 1, 2)).
         withHeaders(BinaryType.Jar.contentType) ~> sealRoute(routes) ~> check {
@@ -737,4 +757,3 @@ class WebApiMainRoutesSpec extends WebApiSpec {
     }
   }
 }
-

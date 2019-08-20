@@ -32,6 +32,7 @@ import spray.routing.{RequestContext, Route}
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.Try
 import org.slf4j.LoggerFactory
+import spark.jobserver.io.JobDAOActor.LastBinaryInfo
 
 object WebApi {
 
@@ -186,6 +187,7 @@ class WebApi(system: ActorSystem,
 
   // Timer metrics
   private val binGet = timer("binary-get-duration", TimeUnit.MILLISECONDS)
+  private val binGetSingle = timer("binary-get-single-duration", TimeUnit.MILLISECONDS)
   private val binPost = timer("binary-post-duration", TimeUnit.MILLISECONDS)
   private val binDelete = timer("binary-delete-duration", TimeUnit.MILLISECONDS)
   private val contextGet = timer("context-get-duration", TimeUnit.MILLISECONDS)
@@ -282,6 +284,7 @@ class WebApi(system: ActorSystem,
   /**
     * Routes for listing and uploading binaries
     *    GET /binaries              - lists all current binaries
+    *    GET /binaries/<appName>    - returns binary information for binary with this appName
     *    POST /binaries/<appName>   - upload a new binary file
     *    DELETE /binaries/<appName> - delete defined binary
     *
@@ -295,6 +298,26 @@ class WebApi(system: ActorSystem,
   def binaryRoutes: Route = pathPrefix("binaries") {
     // user authentication
     authenticate(authenticator) { authInfo =>
+      // GET /binaries/<appName>
+      (get & path(Segment)) { appName =>
+        val timer = binGetSingle.time()
+        respondWithMediaType(MediaTypes.`application/json`) { ctx =>
+          val future = (binaryManager ? GetBinary(appName)).mapTo[LastBinaryInfo]
+          future.map{
+            case LastBinaryInfo(Some(bin)) =>
+              val res = Map("app-name" -> bin.appName,
+                  "binary-type" -> bin.binaryType.name,
+                  "upload-time" -> bin.uploadTime.toString())
+              ctx.complete(200, res)
+            case LastBinaryInfo(None) => notFound(ctx, s"Can't find binary with name $appName")
+            case _ => logAndComplete(ctx, "UNEXPECTED ERROR OCCURRED", 500)
+          }.recover {
+            case e: Exception => logAndComplete(ctx, "ERROR", 500, e)
+          }.andThen {
+            case _ => timer.stop()
+          }
+        }
+      } ~
       // GET /binaries route returns a JSON map of the app name
       // and the type of and last upload time of a binary.
       get { ctx =>
