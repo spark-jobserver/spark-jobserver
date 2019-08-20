@@ -58,6 +58,16 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
       binaryUploadDate = new DateTime((testbin \ "upload-time").as[String])
     }
 
+    "GET /binaries/<app> should retrieve a specific binary" in {
+      val request = sttp.get(uri"$SJS/binaries/$appName")
+      val response = request.send()
+      response.code should equal(200)
+      val json = Json.parse(response.body.merge)
+      (json \ "app-name").as[String] should equal(appName)
+      (json \ "binary-type").as[String] should equal("Jar")
+      (json \ "upload-time").as[String] should equal(binaryUploadDate.toString)
+    }
+
     "POST /binaries/<app> should overwrite a binary with a new version" in {
       val byteArray = TestHelper.fileToByteArray(streamingbin)
       val request = sttp.post(uri"$SJS/binaries/$appName")
@@ -90,6 +100,15 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
     }
 
     "Error scenarios" - {
+      "GET /binaries/<app> should fail if the binary does not exist" in {
+        val request = sttp.get(uri"$SJS/binaries/$appName")
+        val response = request.send()
+        response.code should equal(404)
+        val json = Json.parse(getresponse.body.merge)
+        (json \ "status").as[String] should equal("ERROR")
+        (json \ "result").as[String] should include("Can't find binary with name")
+      }
+
       "DELETE /binaries<app> should fail if the binary does not exist" in {
         val request = sttp.delete(uri"$SJS/binaries/$appName")
         val response = request.send()
