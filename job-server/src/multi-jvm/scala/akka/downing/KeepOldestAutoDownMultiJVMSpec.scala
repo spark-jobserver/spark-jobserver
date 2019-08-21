@@ -140,7 +140,10 @@ abstract class SBRMultiJvmSpec extends MultiNodeSpec(SBRMultiJvmSpecConfig)
       runOn(bigCluster: _*) {
         val sbr = system.actorSelection(myAddress + downingProviderAddress)
         sbr ! InitializeTestActorRef
-        expectMsg(timeout, PingTestActor)
+        fishForMessage(timeout, "testProbe is waiting for confirmation from SBR"){
+          case PingTestActor => true
+          case _ => false // as the cluster is reused, some old messages after recovery may be received
+        }
       }
       enterBarrier("SBR knows testProbe address")
 
@@ -192,7 +195,10 @@ abstract class SBRMultiJvmSpec extends MultiNodeSpec(SBRMultiJvmSpecConfig)
       runOn(bigCluster: _*) {
         val sbr = system.actorSelection(myAddress + downingProviderAddress)
         sbr ! InitializeTestActorRef
-        expectMsg(timeout, PingTestActor)
+        fishForMessage(timeout, "testProbe is waiting for confirmation from SBR"){
+          case PingTestActor => true
+          case _ => false // as the cluster is reused, some old messages after recovery may be received
+        }
       }
       enterBarrier("SBR knows testProbe address")
 
@@ -249,7 +255,10 @@ abstract class SBRMultiJvmSpec extends MultiNodeSpec(SBRMultiJvmSpecConfig)
     runOn(bigCluster: _*) {
       val sbr = system.actorSelection(myAddress + downingProviderAddress)
       sbr ! InitializeTestActorRef
-      expectMsg(timeout, PingTestActor)
+      fishForMessage(timeout, "testProbe is waiting for confirmation from SBR"){
+        case PingTestActor => true
+        case _ => false // as the cluster is reused, some old messages after recovery may be received
+      }
     }
     enterBarrier("SBR knows testProbe address")
 

@@ -104,6 +104,13 @@ class KeepOldestAutoDown(preferredOldestMemberRole: Option[String],
       logger.info("{} is reachable", m)
       refreshMember(m)
       removeFromUnreachable(m)
+      if (scheduledUnreachable.isEmpty && unstableUnreachable.nonEmpty) {
+        logger.info(s"Member $m is reachable again." +
+          s"Checking members for which UnreachableTimeout was already triggered: $unstableUnreachable. \n" +
+          s"This is the current cluster state (sorted by age): $membersByAge. \n" +
+          s"Current list of pending members (other node should have downed them): $pendingUnreachable")
+        downUnreachableNodes(unstableUnreachable)
+      }
     case MemberLeft(m) =>
       logger.info("{} is left the cluster", m)
       refreshMember(m)
