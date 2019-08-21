@@ -5,6 +5,7 @@ object Dependencies {
 
   lazy val helpers = Seq(
     "com.softwaremill.sttp" %% "core" % "1.6.3",
-    "com.typesafe.play" %% "play-json" % "2.7.4"
+    "com.typesafe.play" %% "play-json" % "2.7.4",
+    "com.typesafe" % "config" % "1.3.4"
   )
 }
