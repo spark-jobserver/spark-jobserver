@@ -90,16 +90,8 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
   initFileDirectory()
 
   /*
-   * DAO operations
+   * Contexts
    */
-
-  override def getApps: Future[Map[String, (BinaryType, DateTime)]] = {
-    Utils.timedFuture(binList){
-      metaDataDAO.getBinaries.map(
-        binaryInfos => binaryInfos.map(info => info.appName -> (info.binaryType, info.uploadTime)).toMap
-      )
-    }
-  }
 
   override def saveContextInfo(contextInfo: ContextInfo): Unit = {
     Utils.usingTimer(contextWrite){ () =>
@@ -129,6 +121,10 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
     }
   }
 
+  /*
+   * Jobs
+   */
+
   override def saveJobInfo(jobInfo: JobInfo): Unit = {
     Utils.usingTimer(jobWrite){ () =>
       val isSaved = Await.result(metaDataDAO.saveJob(jobInfo), defaultAwaitTime)
@@ -157,6 +153,17 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
     }
   }
 
+  override def getJobsByBinaryName(binName: String, statuses: Option[Seq[String]] = None):
+      Future[Seq[JobInfo]] = {
+    Utils.timedFuture(jobQuery){
+      metaDataDAO.getJobsByBinaryName(binName, statuses)
+    }
+  }
+
+  /*
+   * Job Configs
+   */
+
   override def saveJobConfig(jobId: String, jobConfig: Config): Unit = {
     Utils.usingTimer(configWrite){ () =>
       val isSaved = Await.result(metaDataDAO.saveJobConfig(jobId, jobConfig), defaultAwaitTime)
@@ -171,6 +178,10 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
       metaDataDAO.getJobConfig(jobId)
     }
   }
+
+  /*
+   * Binaries
+   */
 
   override def getBinaryInfo(name: String): Option[BinaryInfo] = {
     Utils.usingTimer(binRead){ () =>
@@ -217,6 +228,14 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
         logger.error(s"Failed to save binary data for $name, not proceeding with meta")
         throw SaveBinaryException(name)
       }
+    }
+  }
+
+  override def getApps: Future[Map[String, (BinaryType, DateTime)]] = {
+    Utils.timedFuture(binList){
+      metaDataDAO.getBinaries.map(
+        binaryInfos => binaryInfos.map(info => info.appName -> (info.binaryType, info.uploadTime)).toMap
+      )
     }
   }
 
@@ -288,10 +307,4 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
     }
   }
 
-  override def getJobsByBinaryName(binName: String, statuses: Option[Seq[String]] = None):
-      Future[Seq[JobInfo]] = {
-    Utils.timedFuture(jobQuery){
-      metaDataDAO.getJobsByBinaryName(binName, statuses)
-    }
-  }
 }
