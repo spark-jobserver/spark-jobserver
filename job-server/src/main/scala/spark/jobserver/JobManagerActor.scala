@@ -9,7 +9,7 @@ import java.util.concurrent.TimeUnit
 import akka.actor._
 import akka.pattern.ask
 import akka.util.Timeout
-import com.typesafe.config.{Config, ConfigFactory}
+import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import org.apache.hadoop.conf.Configuration
 import org.apache.spark.{SparkConf, SparkEnv}
 import org.apache.spark.scheduler.SparkListener
@@ -17,12 +17,12 @@ import org.apache.spark.scheduler.SparkListenerApplicationEnd
 import org.joda.time.DateTime
 import org.scalactic._
 import spark.jobserver.api.{DataFileCache, JobEnvironment}
-import spark.jobserver.ContextSupervisor.{ContextStopInProgress, SparkContextStopped, ContextStopError}
+import spark.jobserver.ContextSupervisor.{ContextStopError, ContextStopInProgress, SparkContextStopped}
 import spark.jobserver.io._
 import spark.jobserver.util._
 import spark.jobserver.context._
 import spark.jobserver.common.akka.InstrumentedActor
-import spark.jobserver.util.{StandaloneForcefulKill, ContextForcefulKillTimeout}
+import spark.jobserver.util.{ContextForcefulKillTimeout, StandaloneForcefulKill}
 
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
@@ -60,6 +60,8 @@ object JobManagerActor {
   case class ContexData(appId: String, url: Option[String])
   case object SparkContextAlive
   case object SparkContextDead
+
+  val dummyBinaryInfoName = "##DummyName##"
 
   // Akka 2.2.x style actor props for actor creation
   def props(daoActor: ActorRef, supervisorActorAddress: String = "", contextId: String = "",
@@ -549,7 +551,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
 
     // TODO: remove binaryInfo from JobInfo object
     val jobInfo = JobInfo(jobId, contextId, contextName,
-      BinaryInfo("##DummyName##", BinaryType.Jar, DateTime.now()), mainClass,
+      BinaryInfo(dummyBinaryInfoName, BinaryType.Jar, DateTime.now()), mainClass,
       JobStatus.Running, startDateTime, None, None)
 
     getJobFuture(jobContainer, jobInfo, jobConfig, subscriber, jobContext, sparkEnv)
@@ -801,7 +803,15 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
     var respMsg = s"Restarting the last job (JobId=${existingJobInfo.jobId} & "
     respMsg = respMsg + s"contextName=${existingJobInfo.contextName})"
     logger.info(respMsg)
-    val fullJobConfig = existingJobConfig.withFallback(config).resolve()
+
+    val fullJobConfig = if (existingJobInfo.binaryInfo.appName != dummyBinaryInfoName) {
+      // Job was started before migration to cp/mainClass and config needs to be updated
+      existingJobConfig.withValue("cp", ConfigValueFactory.fromIterable(
+        List(existingJobInfo.binaryInfo.appName).asJava
+      )).withFallback(config).resolve()
+    } else {
+      existingJobConfig.withFallback(config).resolve()
+    }
     val events: Set[Class[_]] = Set(classOf[JobStarted]) ++ Set(classOf[JobValidationFailed])
 
     sendStartJobMessage(self, StartJob(existingJobInfo.binaryInfo.appName,
