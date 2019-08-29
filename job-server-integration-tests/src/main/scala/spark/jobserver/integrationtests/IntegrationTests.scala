@@ -18,6 +18,7 @@ object IntegrationTests extends App {
   (new BasicApiTests).execute(configMap = ConfigMap(("address", sjs1)))
   (new CornerCasesTests).execute(configMap = ConfigMap(("address", sjs1)))
   (new TwoJobserverTests).execute(configMap = ConfigMap(("sjs1", sjs1), ("sjs2", sjs2)))
+  (new HAFailoverTest).execute(configMap = ConfigMap(("sjs1", sjs1), ("sjs2", sjs2)))
 
   // Usage
   def printUsage(){
