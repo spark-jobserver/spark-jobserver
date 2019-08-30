@@ -32,10 +32,16 @@ else
   exit 1
 fi
 
+set +u
+if [ -z "${SBT_BIN}" ]; then
+  export SBT_BIN="sbt"
+fi
+set -u
+
 echo Packaging job-server for environment $ENV...
 
 cd $(dirname $0)/..
-sbt ++$SCALA_VERSION job-server-extras/assembly
+"$SBT_BIN" ++$SCALA_VERSION job-server-extras/assembly
 if [ "$?" != "0" ]; then
   echo "Assembly failed"
   exit 1
