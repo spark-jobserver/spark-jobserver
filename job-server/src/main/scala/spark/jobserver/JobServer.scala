@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory
 import scala.collection.JavaConverters._
 import scala.concurrent.{Await, ExecutionContext}
 import scala.concurrent.duration._
+import scala.util.matching.Regex
 import scala.util.Try
 
 /**
@@ -32,6 +33,9 @@ import scala.util.Try
  */
 object JobServer {
   val logger = LoggerFactory.getLogger(getClass)
+  final val DEFAULT_CREDENTIAL_PATTERN = "(?i)credentials|secret|password|token"
+  final val EMPTY_VALUE_PATTERN = "\"\",?".r
+  final val REDACTION_REPLACEMENT_TEXT = " \"*********(redacted)\""
 
   class InvalidConfiguration(error: String) extends RuntimeException(error)
 
@@ -49,8 +53,12 @@ object JobServer {
     } else {
       defaultConfig
     }
-    logger.info("Starting JobServer with config {}", config.getConfig("spark").root.render())
-    logger.info("Spray config: {}", config.getConfig("spray.can.server").root.render())
+
+    val credentialPattern = credentialRegex(config)
+    val sparkConfig = config.getConfig("spark").root.render()
+    logger.info("Starting JobServer with config {}", maskCredentials(sparkConfig, credentialPattern))
+    val sprayConfig = config.getConfig("spray.can.server").root.render()
+    logger.info("Spray config: {}", maskCredentials(sprayConfig, credentialPattern))
 
     // TODO: Hardcode for now to get going. Make it configurable later.
     val system = makeSystem(config)
@@ -120,6 +128,35 @@ object JobServer {
     // Create initial contexts
     supervisor ! ContextSupervisor.AddContextsFromConfig
     new WebApi(system, config, port, binManager, dataManager, supervisor, jobInfo).start()
+  }
+
+  private def maskCredentials(lines: String, credentialRegex: Regex): String = {
+    lines
+      .split("\n")
+      .toSeq
+      .map {
+        line => line.split(":") match {
+          // if key matches credential keys pattern and value is not empty, mask credentials
+          case Array(key, value) if (credentialRegex.findFirstIn(key).nonEmpty
+            && EMPTY_VALUE_PATTERN.findFirstIn(value.stripMargin).isEmpty) =>
+            Array(key, REDACTION_REPLACEMENT_TEXT).mkString(":")
+          case _ => line
+        }
+      }.mkString("\n")
+  }
+
+  private def credentialRegex(config: Config): Regex = {
+    // Use default credential keys if spark.ui.confidentialKeys is not set
+    val credentialPattern = try {
+      config.getString("spark.redaction.regex")
+    } catch {
+      case _: Exception =>
+        logger.info(s"spark.redaction.regex is not set, " +
+          s"use default credential pattern $DEFAULT_CREDENTIAL_PATTERN")
+        DEFAULT_CREDENTIAL_PATTERN
+    }
+
+    credentialPattern.r
   }
 
   private def parseInitialBinaryConfig(key: String, config: Config): Map[String, String] = {
