@@ -1,4 +1,4 @@
-package spark.jobserver.integrationtests
+package spark.jobserver.integrationtests.util
 
 object TestHelper {
   def fileToByteArray(fileName : String) : Array[Byte] = {

@@ -1,4 +1,4 @@
-package spark.jobserver.integrationtests
+package spark.jobserver.integrationtests.tests
 
 import org.joda.time.DateTime
 import org.scalatest.BeforeAndAfterAllConfigMap
@@ -10,6 +10,7 @@ import com.softwaremill.sttp._
 
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
+import spark.jobserver.integrationtests.util.TestHelper
 
 class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigMap{
 

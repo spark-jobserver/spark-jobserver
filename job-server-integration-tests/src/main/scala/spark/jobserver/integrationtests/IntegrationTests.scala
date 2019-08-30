@@ -2,6 +2,8 @@ package spark.jobserver.integrationtests
 
 import org.scalatest.ConfigMap
 
+import spark.jobserver.integrationtests.tests._
+
 object IntegrationTests extends App {
 
   // Parse args
@@ -15,7 +17,7 @@ object IntegrationTests extends App {
   // Run all integration tests
   (new BasicApiTests).execute(configMap = ConfigMap(("address", sjs1)))
   (new CornerCasesTests).execute(configMap = ConfigMap(("address", sjs1)))
-  (new HATests).execute(configMap = ConfigMap(("sjs1", sjs1), ("sjs2", sjs2)))
+  (new TwoJobserverTests).execute(configMap = ConfigMap(("sjs1", sjs1), ("sjs2", sjs2)))
 
   // Usage
   def printUsage(){

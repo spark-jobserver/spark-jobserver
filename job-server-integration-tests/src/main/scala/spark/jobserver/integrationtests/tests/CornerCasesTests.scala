@@ -1,4 +1,4 @@
-package spark.jobserver.integrationtests
+package spark.jobserver.integrationtests.tests
 
 import org.scalatest.BeforeAndAfterAllConfigMap
 import org.scalatest.ConfigMap
@@ -6,7 +6,9 @@ import org.scalatest.FreeSpec
 import org.scalatest.Matchers
 
 import com.softwaremill.sttp._
+
 import play.api.libs.json.Json
+import spark.jobserver.integrationtests.util.TestHelper
 
 class CornerCasesTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigMap {
 

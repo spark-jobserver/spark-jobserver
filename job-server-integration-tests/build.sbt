@@ -11,10 +11,6 @@ lazy val root = (project in file("."))
     libraryDependencies += scalaTest,
     libraryDependencies ++= helpers,
 
-    unmanagedSourceDirectories in Compile += baseDirectory.value / "src/test/scala",
-    unmanagedResourceDirectories in Compile += baseDirectory.value / "src/test/resources",
     mainClass in Compile := Some("spark.jobserver.integrationtests.IntegrationTests"),
 
-    // Skip tests during assembly
-    test in assembly := {}
   )
