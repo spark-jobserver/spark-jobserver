@@ -1,5 +1,7 @@
 package spark.jobserver.integrationtests.tests
 
+import java.io.File
+
 import org.joda.time.DateTime
 import org.scalatest.BeforeAndAfterAllConfigMap
 import org.scalatest.ConfigMap
@@ -226,9 +228,9 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
     }
 
     "adHoc jobs" - {
-      "POST /jobs should start a job in adHoc context" in {
-        val request = sttp.post(uri"$SJS/jobs?appName=$app&classPath=spark.jobserver.WordCountExample")
-            .body("input.string = a b c a b see")
+      "POST /jobs?cp=..&mainClass=.. should start a job" in {
+        val request = sttp.post(uri"$SJS/jobs?cp=$app&mainClass=spark.jobserver.WordCountExample")
+          .body("input.string = a b c a b see")
         val response = request.send()
         response.code should equal(202)
         val json = Json.parse(response.body.merge)
@@ -256,7 +258,8 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
     }
 
     "batch jobs" - {
-      "POST /jobs?context=<context> should start a job in an existing (batch) context" in {
+      "POST /jobs?context=<context>&cp=..&mainClass=., should start a job in an " +
+        "existing (batch) context" in {
         // Start context
         jobContext = batchContextName
         val contextRequest = sttp.post(uri"$SJS/contexts/$jobContext")
@@ -265,8 +268,8 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
         val contextJson = Json.parse(contextResponse.body.merge)
         (contextJson \ "status").as[String] should equal("SUCCESS")
         // Start job
-        val request = sttp.post(uri"$SJS/jobs?appName=$app&classPath=spark.jobserver.WordCountExample&context=$jobContext")
-            .body("input.string = a b c a b see")
+        val request = sttp.post(uri"$SJS/jobs?cp=$app&mainClass=spark.jobserver.WordCountExample&context=$jobContext")
+          .body("input.string = a b c a b see")
         val response = request.send()
         response.code should equal(202)
         val json = Json.parse(response.body.merge)
@@ -276,14 +279,7 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
       }
 
       "the termination of the job should not terminate the context" in {
-        Thread.sleep(10000)
-        // Job finished?
-        val jobRequest = sttp.get(uri"$SJS/jobs/$batchJobId")
-        val jobResponse = jobRequest.send()
-        jobResponse.code should equal(200)
-        val jobJson = Json.parse(jobResponse.body.merge)
-        (jobJson \ "status").as[String] should equal("FINISHED")
-        // Context running?
+        TestHelper.waitForJobTermination(SJS, batchJobId, 15)
         val contextRequest = sttp.get(uri"$SJS/contexts/$jobContext")
         val contextResponse = contextRequest.send()
         contextResponse.code should equal(200)
@@ -305,7 +301,7 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
         val contextJson = Json.parse(contextResponse.body.merge)
         (contextJson \ "status").as[String] should equal("SUCCESS")
         // Start job
-        val request = sttp.post(uri"$SJS/jobs?appName=$streamingApp&classPath=com.sap.hcpbd.Streaming&context=$jobContext")
+        val request = sttp.post(uri"$SJS/jobs?cp=$streamingApp&mainClass=com.sap.hcpbd.Streaming&context=$jobContext")
         val response = request.send()
         response.code should equal(202)
         val json = Json.parse(response.body.merge)
@@ -342,6 +338,37 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
       }
     }
 
+    "POST /jobs?cp=..&mainClass=.. should start a job from 2 binaries" in {
+      val request = sttp.post(
+        uri"$SJS/jobs?cp=$app,$streamingApp&mainClass=spark.jobserver.WordCountExample")
+        .body("input.string = a b c a b see")
+      val response = request.send()
+      response.code should equal(202)
+      val json = Json.parse(response.body.merge)
+      (json \ "status").as[String] should equal("STARTED")
+      jobContext = (json \ "context").as[String]
+      jobContext should include("WordCountExample")
+      adHocJobId = (json \ "jobId").as[String]
+    }
+
+    "POST /jobs should start a job by taking cp and mainClass values from config" in {
+      val request = sttp.post(
+        uri"$SJS/jobs")
+        .body(
+          s"""
+             |input.string = a b c a b see
+             |cp = $app
+             |mainClass=spark.jobserver.WordCountExample
+             |""".stripMargin)
+      val response = request.send()
+      response.code should equal(202)
+      val json = Json.parse(response.body.merge)
+      (json \ "status").as[String] should equal("STARTED")
+      jobContext = (json \ "context").as[String]
+      jobContext should include("WordCountExample")
+      adHocJobId = (json \ "jobId").as[String]
+    }
+
     "GET /jobs should list all jobs" in {
       val request = sttp.get(uri"$SJS/jobs")
       val response = request.send()
@@ -368,6 +395,120 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
       response.code should equal(200)
       val json = Json.parse(response.body.merge)
       ((json \ "input") \ "string").as[String] should equal("a b c a b see")
+    }
+
+    "legacy API (appName + classPath)" - {
+      "adHoc jobs" - {
+        "POST /jobs?appName=..&classPath=.. should start a job in adHoc context" in {
+          val request = sttp.post(uri"$SJS/jobs?appName=$app&classPath=spark.jobserver.WordCountExample")
+            .body("input.string = a b c a b see")
+          val response = request.send()
+          response.code should equal(202)
+          val json = Json.parse(response.body.merge)
+          (json \ "status").as[String] should equal("STARTED")
+          jobContext = (json \ "context").as[String]
+          jobContext should include("WordCountExample")
+          adHocJobId = (json \ "jobId").as[String]
+        }
+
+        "the termination of the job should also terminate the adHoc context" in {
+          // Context finished?
+          TestHelper.waitForContextTermination(SJS, jobContext, 5)
+          val request = sttp.get(uri"$SJS/contexts/$jobContext")
+          val response = request.send()
+          response.code should equal(200)
+          val json = Json.parse(response.body.merge)
+          (json \ "state").as[String] should equal("FINISHED")
+          // Job finished?
+          val jobRequest = sttp.get(uri"$SJS/jobs/$adHocJobId")
+          val jobResponse = jobRequest.send()
+          jobResponse.code should equal(200)
+          val jobJson = Json.parse(jobResponse.body.merge)
+          (jobJson \ "status").as[String] should equal("FINISHED")
+        }
+      }
+
+      "batch jobs" - {
+        "POST /jobs?context=<context> should start a job in an existing (batch) context" in {
+          // Start context
+          jobContext = batchContextName
+          val contextRequest = sttp.post(uri"$SJS/contexts/$jobContext")
+          val contextResponse = contextRequest.send()
+          contextResponse.code should equal(200)
+          val contextJson = Json.parse(contextResponse.body.merge)
+          (contextJson \ "status").as[String] should equal("SUCCESS")
+          // Start job
+          val request = sttp.post(uri"$SJS/jobs?appName=$app&classPath=spark.jobserver.WordCountExample&context=$jobContext")
+            .body("input.string = a b c a b see")
+          val response = request.send()
+          response.code should equal(202)
+          val json = Json.parse(response.body.merge)
+          (json \ "status").as[String] should equal("STARTED")
+          (json \ "context").as[String] should equal(jobContext)
+          batchJobId = (json \ "jobId").as[String]
+        }
+
+        "the termination of the job should not terminate the context" in {
+          // Job finished?
+          TestHelper.waitForJobTermination(SJS, batchJobId, 10)
+          // Context running?
+          val contextRequest = sttp.get(uri"$SJS/contexts/$jobContext")
+          val contextResponse = contextRequest.send()
+          contextResponse.code should equal(200)
+          val contextJson = Json.parse(contextResponse.body.merge)
+          (contextJson \ "state").as[String] should equal("RUNNING")
+          // Cleanup
+          val deleteResponse = sttp.delete(uri"$SJS/contexts/$jobContext").send()
+          deleteResponse.code should equal(200)
+        }
+      }
+
+      "streaming jobs" - {
+        "POST /jobs?context=<streamingContext> should start a job in an existing (streaming) context" in {
+          // Start context
+          jobContext = batchContextName
+          val contextRequest = sttp.post(uri"$SJS/contexts/$jobContext?context-factory=spark.jobserver.context.StreamingContextFactory")
+          val contextResponse = contextRequest.send()
+          contextResponse.code should equal(200)
+          val contextJson = Json.parse(contextResponse.body.merge)
+          (contextJson \ "status").as[String] should equal("SUCCESS")
+          // Start job
+          val request = sttp.post(uri"$SJS/jobs?appName=$streamingApp&classPath=com.sap.hcpbd.Streaming&context=$jobContext")
+          val response = request.send()
+          response.code should equal(202)
+          val json = Json.parse(response.body.merge)
+          (json \ "status").as[String] should equal("STARTED")
+          (json \ "context").as[String] should equal(jobContext)
+          streamingJobId = (json \ "jobId").as[String]
+        }
+
+        "DELETE /jobs/<jobId> should stop a streaming job" in {
+          val request = sttp.delete(uri"$SJS/jobs/$streamingJobId")
+          val response = request.send()
+          response.code should equal(200)
+          val json = Json.parse(response.body.merge)
+          (json \ "status").as[String] should equal("KILLED")
+        }
+
+        "the termination of the streaming job should not terminate the streaming context" in {
+          Thread.sleep(10000)
+          // Job in state killed?
+          val requestJob = sttp.get(uri"$SJS/jobs/$streamingJobId")
+          var response = requestJob.send()
+          response.code should equal(200)
+          var json = Json.parse(response.body.merge)
+          (json \ "status").as[String] should equal("KILLED")
+          // Context running?
+          val contextRequest = sttp.get(uri"$SJS/contexts/$jobContext")
+          response = contextRequest.send()
+          response.code should equal(200)
+          json = Json.parse(response.body.merge)
+          (json \ "state").as[String] should equal("RUNNING")
+          // Cleanup
+          response = sttp.delete(uri"$SJS/contexts/$jobContext").send()
+          response.code should equal(200)
+        }
+      }
     }
 
     "Error scenarios" - {
@@ -418,8 +559,59 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
         (json \ "status").as[String] should equal("ERROR")
         (json \ "result").as[String] should include("No such job ID")
       }
-    }
 
+      "POST /jobs should fail if configured improperly (cp is missing)" in {
+        val request = sttp.post(uri"$SJS/jobs?mainClass=spark.jobserver.WordCountExample")
+        val response = request.send()
+        response.code should equal(400)
+        val json = Json.parse(response.body.merge)
+        (json \ "status").as[String] should equal("ERROR")
+        (json \ "result").as[String] should include("appName or cp parameters should be configured")
+      }
+
+      "POST /jobs should fail if configured improperly (mainClass is missing)" in {
+        val request = sttp.post(uri"$SJS/jobs?cp=NonExistingAppName")
+        val response = request.send()
+        response.code should equal(400)
+        val json = Json.parse(response.body.merge)
+        (json \ "status").as[String] should equal("ERROR")
+        (json \ "result").as[String] should include("mainClass parameter is missing")
+      }
+
+      "POST /jobs should fail if configured improperly (cp and classPath)" in {
+        val request = sttp.post(
+          uri"$SJS/jobs?cp=NonExistingAppName&classPath=spark.jobserver.WordCountExample")
+        val response = request.send()
+        response.code should equal(400)
+        val json = Json.parse(response.body.merge)
+        (json \ "status").as[String] should equal("ERROR")
+        (json \ "result").as[String] should include("mainClass parameter is missing")
+      }
+
+      "POST /jobs should fail if configured improperly (appName and mainClass)" in {
+        val request = sttp.post(
+          uri"$SJS/jobs?appName=NonExistingAppName&mainClass=spark.jobserver.WordCountExample")
+        val response = request.send()
+        response.code should equal(400)
+        val json = Json.parse(response.body.merge)
+        (json \ "status").as[String] should equal("ERROR")
+        (json \ "result").as[String] should include("classPath parameter is missing")
+      }
+
+      "POST /jobs should return BadRequest if URI has invalid protocol" in {
+        val request = sttp.post(uri"$SJS/jobs?mainClass=spark.jobserver.WordCountExample")
+          .body(
+            s"""
+               |input.string = a b c a b see
+               |cp = "hdfs:///test/does/not/exist"
+               |mainClass=spark.jobserver.WordCountExample
+               |""".stripMargin)
+        val response = request.send()
+        response.code should equal(400)
+        val json = Json.parse(response.body.merge)
+        (json \ "status").as[String] should equal("JOB LOADING FAILED: Malformed URL")
+      }
+    }
   }
 
   override def afterAll(configMap: ConfigMap) = {
