@@ -108,10 +108,10 @@ object WebApi {
   def getJobReport(jobInfo: JobInfo, jobStarted: Boolean = false): Map[String, Any] = {
 
     val statusMap = jobInfo match {
-      case JobInfo(_, _, _, _, _, state, _, _, Some(err)) =>
+      case JobInfo(_, _, _, _, _, state, _, _, Some(err), _) =>
         Map(StatusKey -> state, ResultKey -> formatException(err))
-      case JobInfo(_, _, _, _, _, _, _, _, None) if jobStarted => Map(StatusKey -> JobStatus.Started)
-      case JobInfo(_, _, _, _, _, state, _, _, None) => Map(StatusKey -> state)
+      case JobInfo(_, _, _, _, _, _, _, _, None, _) if jobStarted => Map(StatusKey -> JobStatus.Started)
+      case JobInfo(_, _, _, _, _, state, _, _, None, _) => Map(StatusKey -> state)
     }
     Map("jobId" -> jobInfo.jobId,
       "startTime" -> jobInfo.startTime.toString(),
@@ -361,7 +361,7 @@ class WebApi(system: ActorSystem,
                 logAndComplete(ctx,
                               s"Binary is in use by job(s): ${jobs.mkString(", ")}",
                               StatusCodes.Forbidden)
-              case NoSuchBinary => notFound(ctx, s"can't find binary with name $appName")
+              case NoSuchBinary(name) => notFound(ctx, s"can't find binary with name $name")
               case BinaryDeletionFailure(ex) =>
                 logAndComplete(ctx,
                               s"Failed to delete binary due to internal error. Check logs.",
@@ -676,7 +676,7 @@ class WebApi(system: ActorSystem,
             future.map {
               case NoSuchJobId =>
                 notFound(ctx, "No such job ID " + jobId)
-              case JobInfo(_, _, contextName, _, _, classPath, _, None, _) =>
+              case JobInfo(_, _, contextName, _, _, classPath, _, None, _, _) =>
                 val jobManager = getJobManagerForContext(Some(contextName), config, classPath)
                 val future = jobManager.get ? KillJob(jobId)
                 future.map {
@@ -684,9 +684,9 @@ class WebApi(system: ActorSystem,
                 }.recover {
                   case e: Exception => logAndComplete(ctx, "ERROR", 500, e)
                 }
-              case JobInfo(_, _, _, _, _, state, _, _, Some(ex)) if state.equals(JobStatus.Error) =>
+              case JobInfo(_, _, _, _, _, state, _, _, Some(ex), _) if state.equals(JobStatus.Error) =>
                 ctx.complete(Map(StatusKey -> JobStatus.Error, "ERROR" -> formatException(ex)))
-              case JobInfo(_, _, _, _, _, state, _, _, _)
+              case JobInfo(_, _, _, _, _, state, _, _, _, _)
                 if (state.equals(JobStatus.Finished) || state.equals(JobStatus.Killed)) =>
                 notFound(ctx, "No running job with ID " + jobId)
               case _ => logAndComplete(ctx, "Received an unexpected message", 500)
@@ -756,111 +756,118 @@ class WebApi(system: ActorSystem,
           entity(as[String]) { configString =>
             parameters('appName ?, 'classPath ?, 'cp ?, 'mainClass ?,
               'context ?, 'sync.as[Boolean] ?, 'timeout.as[Int] ?, SparkJobUtils.SPARK_PROXY_USER_PARAM ?) {
-                (appNameOpt, classPathOpt, cpOpt, mainClassOpt,
-                 contextOpt, syncOpt, timeoutOpt, sparkProxyUser) =>
-                  val timer = jobPost.time()
-                  try {
-                    val async = !syncOpt.getOrElse(false)
-                    val postedJobConfig = ConfigFactory.parseString(configString)
-                    val jobConfig = postedJobConfig.withFallback(config).resolve()
-                    val contextConfig = getContextConfig(jobConfig,
-                      sparkProxyUser.map(user => Map((SparkJobUtils.SPARK_PROXY_USER_PARAM, user)))
+              (appNameOpt, classPathOpt, cpOpt, mainClassOpt,
+               contextOpt, syncOpt, timeoutOpt, sparkProxyUser) =>
+                val timer = jobPost.time()
+                try {
+                  val async = !syncOpt.getOrElse(false)
+                  val postedJobConfig = ConfigFactory.parseString(configString)
+                  val jobConfig = postedJobConfig.withFallback(config).resolve()
+                  val contextConfig = getContextConfig(jobConfig,
+                    sparkProxyUser.map(user => Map((SparkJobUtils.SPARK_PROXY_USER_PARAM, user)))
                       .getOrElse(Map.empty))
-                    val (cName, cConfig) =
-                      determineProxyUser(contextConfig, authInfo, contextOpt.getOrElse(""))
+                  val (cName, cConfig) =
+                    determineProxyUser(contextConfig, authInfo, contextOpt.getOrElse(""))
 
-                    // START: classPath => mainClass, appName + dependent-jar-uris => cp
-                    import collection.JavaConverters._
-                    val providedMainClass = Try(mainClassOpt.getOrElse(jobConfig.getString("mainClass"))).
-                      getOrElse("")
-                    val providedCp = if (cpOpt.isEmpty) {
-                      Utils.getSeqFromConfig(jobConfig, "cp")
+                  import collection.JavaConverters._
+                  val providedMainClass = Try(mainClassOpt.getOrElse(jobConfig.getString("mainClass"))).
+                    getOrElse("")
+                  val providedCp = if (cpOpt.isEmpty) {
+                    Utils.getSeqFromConfig(jobConfig, "cp")
+                  } else {
+                    cpOpt.get.split(",").toSeq
+                  }
+
+                  val (mainClass, cp) = if (appNameOpt.isDefined) {
+                    if (classPathOpt.isDefined) {
+                      (classPathOpt.get,
+                        Utils.getSeqFromConfig(jobConfig, "dependent-jar-uris") ++ Seq(appNameOpt.get))
                     } else {
-                      cpOpt.get.split(",").toSeq
+                      throw InsufficientConfiguration("classPath parameter is missing!")
                     }
-
-                    val (mainClass, cp) = if (appNameOpt.isDefined) {
-                      if (classPathOpt.isDefined) {
-                        (classPathOpt.get,
-                          Utils.getSeqFromConfig(jobConfig, "dependent-jar-uris") ++ Seq(appNameOpt.get))
-                      } else {
-                        throw InsufficientConfiguration("classPath parameter is missing!")
-                      }
-                    } else if (providedCp.nonEmpty) {
-                      if (providedMainClass.nonEmpty) {
-                        (providedMainClass, providedCp)
-                      } else {
-                        throw InsufficientConfiguration("mainClass parameter is missing!")
-                      }
+                  } else if (providedCp.nonEmpty) {
+                    if (providedMainClass.nonEmpty) {
+                      (providedMainClass, providedCp)
                     } else {
-                      throw InsufficientConfiguration("To start the job " +
-                        "appName or cp parameters should be configured!")
+                      throw InsufficientConfiguration("mainClass parameter is missing!")
                     }
-                    val updatedConfig = jobConfig.withoutPath("cp").withValue(
-                      "cp", ConfigValueFactory.fromIterable(cp.toList.asJava))
-                    // END: classPath => mainClass, appName + dependent-jar-uris => cp
-
-                    val jobManager = getJobManagerForContext(
-                      contextOpt.map(_ => cName), cConfig, mainClass)
-                    val events = if (async) asyncEvents else syncEvents
-                    val timeout = timeoutOpt.map(t => Timeout(t.seconds)).getOrElse(DefaultSyncTimeout)
-                    val future = jobManager.get.ask(
-                      JobManagerActor.StartJob(
-                        appNameOpt.getOrElse("Undefined"), mainClass, updatedConfig, events))(timeout)
-                    respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-                      future.map {
-                        case JobResult(jobId, res) =>
-                          res match {
-                            case s: Stream[_] => sendStreamingResponse(ctx, ResultChunkSize,
-                              resultToByteIterator(Map.empty, s.toIterator))
-                            case _ =>
-                              ctx.complete(Map[String, Any]("jobId" -> jobId) ++ resultToTable(res))
-                          }
-                        case JobErroredOut(jobId, _, ex) =>
-                          ctx.complete(Map[String, String]("jobId" -> jobId) ++ errMap(ex, "ERROR")
-                        )
-                        case JobStarted(_, jobInfo) =>
-                          val future = jobInfoActor ? StoreJobConfig(jobInfo.jobId, postedJobConfig.
-                            withoutPath("cp").withValue(
-                            "cp", ConfigValueFactory.fromIterable(cp.toList.asJava)))
-                          future.map {
-                            case JobConfigStored =>
-                              val jobReport = getJobReport(jobInfo, jobStarted = true)
-                              ctx.complete(202, jobReport)
-                          }.recover {
-                            case e: Exception => logAndComplete(ctx, "ERROR", 500, e)
-                          }
-                        case JobValidationFailed(_, _, ex) =>
-                          logAndComplete(ctx, "VALIDATION FAILED", 400, ex)
-                        case NoSuchFile(name) => notFound(ctx, "appName " + name + " not found")
-                        // TODO: NoSuchApplication should be removed with next release
-                        case NoSuchApplication => notFound(ctx, "appName " + cp + " not found")
-                        case NoSuchClass => notFound(ctx, "classPath " + providedMainClass + " not found")
-                        case WrongJobType => logAndComplete(ctx, "Invalid job type for this context", 400)
-                        case JobLoadingError(err) => logAndComplete(ctx, "JOB LOADING FAILED", 500, err)
-                        case ContextStopInProgress =>
-                          logAndComplete(ctx, "Context stop in progress", StatusCodes.Conflict)
-                        case NoJobSlotsAvailable(maxJobSlots) =>
-                          val errorMsg = "Too many running jobs (" + maxJobSlots.toString +
-                            ") for job context '" + contextOpt.getOrElse("ad-hoc") + "'"
-                          ctx.complete(503, Map(StatusKey -> "NO SLOTS AVAILABLE", ResultKey -> errorMsg))
-                        case ContextInitError(e) => logAndComplete(ctx, "CONTEXT INIT FAILED", 500, e)
-                      }.recover {
-                        case e: Exception => logAndComplete(ctx, "ERROR", 500, e)
-                      }.andThen {
-                        case _ => timer.stop()
-                      }
+                  } else {
+                    throw InsufficientConfiguration("To start the job " +
+                      "appName or cp parameters should be configured!")
+                  }
+                  val timeout = timeoutOpt.map(t => Timeout(t.seconds)).getOrElse(DefaultSyncTimeout)
+                  val binManagerFuture = binaryManager.ask(GetBinaryInfoListForCp(cp))(timeout)
+                  respondWithMediaType(MediaTypes.`application/json`) { ctx =>
+                    binManagerFuture.map {
+                      case BinaryInfoListForCp(binInfos) =>
+                        logger.info(s"BinaryInfos from BinaryManager: $binInfos")
+                        val jobManager = getJobManagerForContext(
+                          contextOpt.map(_ => cName), cConfig, mainClass)
+                        val events = if (async) asyncEvents else syncEvents
+                        val future = jobManager.get.ask(
+                          JobManagerActor.StartJob(
+                            mainClass, binInfos, jobConfig, events))(timeout)
+                        future.map {
+                          case JobResult(jobId, res) =>
+                            res match {
+                              case s: Stream[_] => sendStreamingResponse(ctx, ResultChunkSize,
+                                resultToByteIterator(Map.empty, s.toIterator))
+                              case _ =>
+                                ctx.complete(Map[String, Any]("jobId" -> jobId) ++ resultToTable(res))
+                            }
+                          case JobErroredOut(jobId, _, ex) =>
+                            ctx.complete(Map[String, String]("jobId" -> jobId) ++ errMap(ex, "ERROR")
+                            )
+                          case JobStarted(_, jobInfo) =>
+                            val future = jobInfoActor ? StoreJobConfig(jobInfo.jobId, postedJobConfig)
+                            future.map {
+                              case JobConfigStored =>
+                                val jobReport = getJobReport(jobInfo, jobStarted = true)
+                                ctx.complete(202, jobReport)
+                            }.recover {
+                              case e: Exception => logAndComplete(ctx, "ERROR", 500, e)
+                            }
+                          case JobValidationFailed(_, _, ex) =>
+                            logAndComplete(ctx, "VALIDATION FAILED", 400, ex)
+                          case NoSuchFile(name) => notFound(ctx, "appName " + name + " not found")
+                          case NoSuchClass => notFound(ctx, "classPath " + providedMainClass + " not found")
+                          case WrongJobType => logAndComplete(ctx, "Invalid job type for this context", 400)
+                          case JobLoadingError(err) => logAndComplete(ctx, "JOB LOADING FAILED", 500, err)
+                          case ContextStopInProgress =>
+                            logAndComplete(ctx, "Context stop in progress", StatusCodes.Conflict)
+                          case NoJobSlotsAvailable(maxJobSlots) =>
+                            val errorMsg = "Too many running jobs (" + maxJobSlots.toString +
+                              ") for job context '" + contextOpt.getOrElse("ad-hoc") + "'"
+                            ctx.complete(503, Map(StatusKey -> "NO SLOTS AVAILABLE", ResultKey -> errorMsg))
+                          case ContextInitError(e) => logAndComplete(ctx, "CONTEXT INIT FAILED", 500, e)
+                        }.recover {
+                          case e: Exception => logAndComplete(ctx, "ERROR", 500, e)
+                        }.andThen {
+                          case _ => timer.stop()
+                        }
+                      case NoSuchBinary(name) =>
+                        notFound(ctx, "appName " + name + " not found")
+                      case GetBinaryInfoListForCpFailure(ex) =>
+                        logAndComplete(ctx, "ERROR", 500, ex)
+                    }.recover {
+                      case _: NoSuchElementException =>
+                        ctx.complete(StatusCodes.NotFound, errMap("context " + contextOpt.get + " not found"))
+                      case e: Exception => logAndComplete(ctx, "ERROR", 500, e)
+                    }.andThen {
+                      case _ => timer.stop()
                     }
-                  } catch {
-                    case e: NoSuchElementException =>
-                      timer.stop()
-                      complete(StatusCodes.NotFound, errMap("context " + contextOpt.get + " not found"))
-                    case e @ (_: ConfigException | _: InsufficientConfiguration) =>
-                      timer.stop()
-                      complete(StatusCodes.BadRequest, errMap("Cannot parse config: " + e.getMessage))
-                    case e: Exception =>
-                      timer.stop()
-                      complete(500, errMap(e, "ERROR"))
+                  }
+                } catch {
+                  case e @ (_: ConfigException | _: InsufficientConfiguration) =>
+                    timer.stop()
+                    complete(StatusCodes.BadRequest, errMap("Cannot parse config: " + e.getMessage))
+                  case e: Exception =>
+                    val stcode = 500
+                    val errMes = "ERROR"
+                    logger.info("StatusCode: " + stcode + ", ErrorMessage: " + errMes
+                      + ", StackTrace: " + ErrorData.getStackTrace(e))
+                    timer.stop()
+                    complete(stcode, errMap(e, errMes))
                   }
               }
           }

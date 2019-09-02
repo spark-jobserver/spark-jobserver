@@ -28,13 +28,14 @@ import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 import scala.concurrent.duration._
 import org.spark_project.guava.annotations.VisibleForTesting
+import spark.jobserver.io.JobDAOActor.{BinaryInfosForCp, BinaryNotFound, GetBinaryInfosForCpFailed}
 
 object JobManagerActor {
   // Messages
   sealed trait ContextStopSchedule
   case class Initialize(contextConfig: Config, resultActorOpt: Option[ActorRef],
                         dataFileActor: ActorRef)
-  case class StartJob(appName: String, classPath: String, config: Config,
+  case class StartJob(mainClass: String, cp: Seq[BinaryInfo], config: Config,
                       subscribedEvents: Set[Class[_]], existingJobInfo: Option[JobInfo] = None)
   case class KillJob(jobId: String)
   case class JobKilledException(jobId: String) extends Exception(s"Job $jobId killed")
@@ -343,7 +344,23 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
 
       try {
         // Load context side jars first in case the ContextFactory comes from it
-        val classPathURIs = getClassPathURIs(contextConfig)
+        val cpFromConfig = Utils.getSeqFromConfig(contextConfig, "cp")
+        val cp = if (cpFromConfig.nonEmpty) {
+          // TODO: can be done without blocking await?
+          val daoResponse = Await.result(
+            (daoActor ? JobDAOActor.GetBinaryInfosForCp(cpFromConfig))(daoAskTimeout), daoAskTimeout.duration
+          )
+          daoResponse match {
+            case BinaryInfosForCp(binInfos) => binInfos
+            case GetBinaryInfosForCpFailed(ex) =>
+              throw new Exception(s"Failed to get list of binaries for cp: ${ex.getMessage}")
+            case BinaryNotFound(name) =>
+              throw NoSuchBinaryException(name)
+          }
+        } else {
+          List.empty
+        }
+        val classPathURIs = getClassPathURIs(cp)
         classPathURIs.foreach{
           jarURI => jarLoader.addURL(new URL(jarURI))
         }
@@ -365,10 +382,11 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
           self ! PoisonPill
       }
 
-    case StartJob(appName, mainClass, jobConfig, events, existingJobInfo) => {
+    case StartJob(mainClass, cp, jobConfig, events, existingJobInfo) => {
       val loadedJars = jarLoader.getURLs
+      var classPathURIs: Seq[String] = null
       Try {
-        val classPathURIs = getClassPathURIs(jobConfig)
+        classPathURIs = getClassPathURIs(cp)
         classPathURIs.foreach {
           jarURI => {
             val jarToLoad = new URL(jarURI)
@@ -390,7 +408,8 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
           sender ! JobLoadingError(ex)
           postEachJob()
         case Success(_) =>
-          startJobInternal(mainClass, jobConfig, events, jobContext, sparkEnv, existingJobInfo, sender)
+          startJobInternal(mainClass, classPathURIs, cp, jobConfig, events,
+            jobContext, sparkEnv, existingJobInfo, sender)
       }
     }
 
@@ -515,6 +534,8 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
   }
 
   def startJobInternal(mainClass: String,
+                       cp: Seq[String],
+                       cpBin: Seq[BinaryInfo],
                        jobConfig: Config,
                        events: Set[Class[_]],
                        jobContext: ContextLike,
@@ -537,7 +558,6 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
         (java.util.UUID.randomUUID().toString, DateTime.now())
     }
 
-    val cp = Utils.getSeqFromConfig(jobConfig, "cp")
     val jobContainer = factory.loadAndValidateJob(cp, mainClass, jobsLoader) match {
       case Good(container) => container
       case Bad(JobClassNotFound) => return failed(NoSuchClass)
@@ -552,8 +572,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
     // TODO: remove binaryInfo from JobInfo object
     val jobInfo = JobInfo(jobId, contextId, contextName,
       BinaryInfo(dummyBinaryInfoName, BinaryType.Jar, DateTime.now()), mainClass,
-      JobStatus.Running, startDateTime, None, None)
-
+      JobStatus.Running, startDateTime, None, None, cpBin)
     getJobFuture(jobContainer, jobInfo, jobConfig, subscriber, jobContext, sparkEnv)
   }
 
@@ -703,37 +722,20 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
     * Parses given configuration file and produces the list of class path URLs. If just a name (without
     * protocol) is given instead of a URI, this means that a binary should be taken from the database.
     * It will then call the DAO and produce local or remote URL for this dependency.
-    * @param config with cp (class path) property
+    * @param classPath list of BinaryInfo objects
     * @return sequence of binary URIs
-    * @throws NoSuchBinaryException if dependency is a binary name from Jobserver DB and such
-    *                               binary is not found.
     */
-  private def getClassPathURIs(config: Config): Seq[String] = {
-    val dependencies = Utils.getSeqFromConfig(config, "cp")
-    dependencies.flatMap(name => {
-      val uri = new URI(name)
-      uri.getScheme match {
-        // protocol like "local" is supported in Spark for Jar loading, but not supported in Java.
-        case "local" => Some("file://" + uri.getPath)
-        case null =>
-          val binInfoReq = (daoActor ? JobDAOActor.GetLastBinaryInfo(name))(daoAskTimeout).
-            mapTo[JobDAOActor.LastBinaryInfo]
-          val binInfo = Await.result(binInfoReq, daoAskTimeout.duration).lastBinaryInfo
-          if (binInfo.isEmpty) {
-            throw NoSuchBinaryException(name)
-          } else {
-            val binaryInfo = binInfo.get
-            if (binaryInfo.binaryType == BinaryType.Egg) {
-              // both downloading the egg and fetching binaryInfo will be done in PythonContextFactory
-              // Eggs are skipped here as the jarloader cannot load with egg files without exception.
-              None
-            } else {
+  private def getClassPathURIs(classPath: Seq[BinaryInfo]): Seq[String] = {
+    classPath.flatMap(binInfo => {
+      binInfo.binaryType.name match {
+        case "Uri" => Some(binInfo.appName)
+        case "Jar" =>
               val jarPath = dependenciesCache.getBinaryPath(
-                binaryInfo.appName, binaryInfo.binaryType, binaryInfo.uploadTime)
+                binInfo.appName, binInfo.binaryType, binInfo.uploadTime)
               Some(s"file://${new File(jarPath).getAbsolutePath}")
-            }
-          }
-        case _ => Some(name)
+        case "Egg" =>
+          // Skipping adding egg file to class path as they are handled by PythonContext in job validation
+          None
       }
     })
   }
@@ -799,25 +801,34 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
   }
 
   private def restartJob(existingJobInfo: JobInfo, existingJobConfig: Config) {
+    def sendStartJobAndLog(jobInfo: JobInfo, cp: Seq[BinaryInfo], events: Set[Class[_]]): Unit = {
+      sendStartJobMessage(self, StartJob(jobInfo.classPath, cp,
+        existingJobConfig, events, Some(jobInfo)))
+      logger.info(s"Job restart message has been sent for old job (${jobInfo.jobId})" +
+        s" and context ${jobInfo.contextName}.")
+    }
     // Add response to master for testing
     var respMsg = s"Restarting the last job (JobId=${existingJobInfo.jobId} & "
     respMsg = respMsg + s"contextName=${existingJobInfo.contextName})"
     logger.info(respMsg)
 
-    val fullJobConfig = if (existingJobInfo.binaryInfo.appName != dummyBinaryInfoName) {
-      // Job was started before migration to cp/mainClass and config needs to be updated
-      existingJobConfig.withValue("cp", ConfigValueFactory.fromIterable(
-        List(existingJobInfo.binaryInfo.appName).asJava
-      )).withFallback(config).resolve()
-    } else {
-      existingJobConfig.withFallback(config).resolve()
-    }
     val events: Set[Class[_]] = Set(classOf[JobStarted]) ++ Set(classOf[JobValidationFailed])
-
-    sendStartJobMessage(self, StartJob(existingJobInfo.binaryInfo.appName,
-        existingJobInfo.classPath, fullJobConfig, events, Some(existingJobInfo)))
-    logger.info(s"Job restart message has been sent for old job (${existingJobInfo.jobId})" +
-        s" and context ${existingJobInfo.contextName}.")
+    if (existingJobInfo.cp.nonEmpty) {
+      sendStartJobAndLog(existingJobInfo, existingJobInfo.cp, events)
+    } else {
+      val name = existingJobInfo.binaryInfo.appName
+      val binInfoReq = (daoActor ? JobDAOActor.GetLastBinaryInfo(name))(daoAskTimeout).
+        mapTo[JobDAOActor.LastBinaryInfo]
+      val binInfo = Await.result(binInfoReq, daoAskTimeout.duration).lastBinaryInfo
+      if (binInfo.isEmpty) {
+        val errorMsg = s"Didn't find any binary for jobInfo ${existingJobInfo.jobId}. " +
+          s"Can't restart the job."
+        logger.error(errorMsg)
+        updateJobInfoAndReportFailure(existingJobInfo, new Exception(errorMsg))
+      } else {
+        sendStartJobAndLog(existingJobInfo, List(binInfo.get), events)
+      }
+    }
   }
 
   private def getRestartCandidates(jobInfos: Seq[JobInfo]): Seq[JobInfo] = {

@@ -56,23 +56,23 @@ class JavaJobSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) {
 
   describe("Running Java Jobs") {
     it("Should run a java job") {
-      uploadTestJar()
+      val testJar = uploadTestJar()
 
       manager ! JobManagerActor.Initialize(config, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
-      manager ! JobManagerActor.StartJob("demo", javaJob, config, syncEvents ++ errorEvents)
+      manager ! JobManagerActor.StartJob(javaJob, List(testJar), config, syncEvents ++ errorEvents)
       expectMsgPF(startJobWait, "No job ever returned :'(") {
         case JobResult(_, result) => result should be("Hi!")
       }
     }
     it("Should fail running this java job"){
-      uploadTestJar()
+      val testJar = uploadTestJar()
 
       manager ! JobManagerActor.Initialize(config, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
-      manager ! JobManagerActor.StartJob("demo", failedJob, config, errorEvents)
+      manager ! JobManagerActor.StartJob(failedJob, List(testJar), config, errorEvents)
       expectMsgPF(6 seconds, "Gets correct exception"){
         case JobErroredOut(_, _, ex) => ex.getMessage should equal("fail")
       }

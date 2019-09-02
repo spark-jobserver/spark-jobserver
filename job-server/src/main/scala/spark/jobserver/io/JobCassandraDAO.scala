@@ -356,7 +356,7 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
 
   override def saveJobInfo(jobInfo: JobInfo): Unit = {
     val JobInfo(jobId, contextId, contextName, binaryInfo, classPath, state,
-        startTime, endTime, error) = jobInfo
+        startTime, endTime, error, cp) = jobInfo
 
     val localDate: LocalDate = LocalDate.fromMillisSinceEpoch(jobInfo.startTime.getMillis)
 

@@ -12,7 +12,7 @@ import scala.concurrent.duration._
 
 class TestSessionContextFactory extends SessionContextFactory {
 
-  override def makeContext(sparkConf: SparkConf, config: Config,  contextName: String): C = {
+  override def makeContext(sparkConf: SparkConf, config: Config, contextName: String): C = {
     val builder = SparkSession.builder()
     builder.config(sparkConf).appName(contextName).master("local")
     builder.config("javax.jdo.option.ConnectionURL", "jdbc:derby:memory:myDB;create=true")
@@ -62,14 +62,16 @@ class SessionJobSpec extends ExtrasJobSpecBase(SessionJobSpec.getNewSystem) {
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(30 seconds, classOf[JobManagerActor.Initialized])
 
-      uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", hiveLoaderClass, emptyConfig, syncEvents ++ errorEvents)
+      var testBinInfo = uploadTestJar()
+      manager ! JobManagerActor.StartJob(
+        hiveLoaderClass, Seq(testBinInfo), emptyConfig, syncEvents ++ errorEvents)
       expectMsgPF(120 seconds, "Did not get JobResult") {
         case JobResult(_, result: Long) => result should equal (3L)
       }
       expectNoMsg(1.seconds)
 
-      manager ! JobManagerActor.StartJob("demo", hiveQueryClass, queryConfig, syncEvents ++ errorEvents)
+      manager ! JobManagerActor.StartJob(
+        hiveQueryClass, Seq(testBinInfo), queryConfig, syncEvents ++ errorEvents)
       expectMsgPF(6 seconds, "Did not get JobResult") {
         case JobResult(_, result: Array[Row]) =>
           result should have length 2

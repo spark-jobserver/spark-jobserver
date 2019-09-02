@@ -69,8 +69,9 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
     it("should return job info when requested for jobId that exists") {
       val dt = DateTime.parse("2013-05-29T00Z")
-      val jobInfo =
-        JobInfo("foo", "cid", "context", BinaryInfo("demo", BinaryType.Jar, dt), "com.abc.meme", JobStatus.Running, dt, None, None)
+      val jobInfo = JobInfo(
+        "foo", "cid", "context", BinaryInfo("demo", BinaryType.Jar, dt),
+        "com.abc.meme", JobStatus.Running, dt, None, None)
       dao.saveJobInfo(jobInfo)
       actor ! GetJobStatus("foo")
       expectMsg(jobInfo)
@@ -78,8 +79,9 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
     it("should return job info when requested for jobId that exists, where the job is a Python job") {
       val dt = DateTime.parse("2013-05-29T00Z")
-      val jobInfo =
-        JobInfo("bar", "cid", "context", BinaryInfo("demo", BinaryType.Egg, dt), "com.abc.meme", JobStatus.Running, dt, None, None)
+      val jobInfo = JobInfo(
+        "bar", "cid", "context", BinaryInfo("demo", BinaryType.Egg, dt),
+        "com.abc.meme", JobStatus.Running, dt, None, None)
       dao.saveJobInfo(jobInfo)
       actor ! GetJobStatus("bar")
       expectMsg(jobInfo)
@@ -94,9 +96,15 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
       val dt1 = DateTime.parse("2013-05-28T00Z")
       val dt2 = DateTime.parse("2013-05-29T00Z")
       val jobInfo1 =
-        JobInfo("foo-1", "cid", "context", BinaryInfo("demo", BinaryType.Jar, dt1), "com.abc.meme", JobStatus.Running, dt2, None, None)
+        JobInfo(
+          "foo-1", "cid", "context", BinaryInfo("demo", BinaryType.Jar, dt1),
+          "com.abc.meme", JobStatus.Running, dt2, None, None
+        )
       val jobInfo2 =
-        JobInfo("foo-2", "cid", "context", BinaryInfo("demo", BinaryType.Jar, dt2), "com.abc.meme", JobStatus.Running, dt2, None, None)
+        JobInfo(
+          "foo-2", "cid", "context", BinaryInfo("demo", BinaryType.Jar, dt2),
+          "com.abc.meme", JobStatus.Running, dt2, None, None
+        )
       dao.saveJobInfo(jobInfo1)
       dao.saveJobInfo(jobInfo2)
       actor ! GetJobStatuses(Some(10))

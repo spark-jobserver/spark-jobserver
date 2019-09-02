@@ -1,15 +1,17 @@
 package spark.jobserver.io
 
+import java.net.URI
+
 import akka.actor.{ActorRef, Props}
+import akka.pattern.ask
 import com.typesafe.config.Config
 import org.joda.time.DateTime
 
 import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 import spark.jobserver.common.akka.InstrumentedActor
-import spark.jobserver.util.NoMatchingDAOObjectException
-
-import scala.concurrent.Future
+import spark.jobserver.util.{NoMatchingDAOObjectException, NoSuchBinaryException}
+import scala.concurrent.{Await, Future}
 
 object JobDAOActor {
 
@@ -45,6 +47,7 @@ object JobDAOActor {
   case class GetContextInfos(limit: Option[Int] = None,
       statuses: Option[Seq[String]] = None) extends JobDAORequest
   case class GetJobsByBinaryName(appName: String, statuses: Option[Seq[String]] = None) extends JobDAORequest
+  case class GetBinaryInfosForCp(cp: Seq[String]) extends JobDAORequest
 
   //Responses
   sealed trait JobDAOResponse
@@ -55,6 +58,9 @@ object JobDAOActor {
   case class LastBinaryInfo(lastBinaryInfo: Option[BinaryInfo]) extends JobDAOResponse
   case class ContextResponse(contextInfo: Option[ContextInfo]) extends JobDAOResponse
   case class ContextInfos(contextInfos: Seq[ContextInfo]) extends JobDAOResponse
+  case class BinaryInfosForCp(binInfos: Seq[BinaryInfo]) extends JobDAOResponse
+  case class BinaryNotFound(name: String) extends JobDAOResponse
+  case class GetBinaryInfosForCpFailed(error: Throwable)
 
   case object InvalidJar extends JobDAOResponse
   case object JarStored extends JobDAOResponse
@@ -138,6 +144,33 @@ class JobDAOActor(dao: JobDAO) extends InstrumentedActor {
           logger.error(s"Failed to get context $contextId by Id", t)
           recipient ! SaveFailed(t)
       }
+
+    case GetBinaryInfosForCp(cp) =>
+      val recipient = sender()
+      val currentTime = DateTime.now()
+      Try {
+        cp.flatMap(name => {
+          val uri = new URI(name)
+          uri.getScheme match {
+            // protocol like "local" is supported in Spark for Jar loading, but not supported in Java.
+            case "local" =>
+              Some(BinaryInfo("file://" + uri.getPath, BinaryType.URI, currentTime, None))
+            case null =>
+              val binInfo = dao.getBinaryInfo(name)
+              if (binInfo.isEmpty) {
+                throw NoSuchBinaryException(name)
+              }
+              binInfo
+            case _ => Some(BinaryInfo(name, BinaryType.URI, currentTime, None))
+          }
+        })
+      } match {
+        case Success(binInfos) => recipient ! BinaryInfosForCp(binInfos)
+        case Failure(NoSuchBinaryException(name)) => recipient ! BinaryNotFound(name)
+        case Failure(exception) =>
+          logger.error(exception.getMessage)
+          recipient ! GetBinaryInfosForCpFailed(exception)
+    }
   }
 
   private def saveContextAndRespond(recipient: ActorRef, contextInfo: ContextInfo) = {

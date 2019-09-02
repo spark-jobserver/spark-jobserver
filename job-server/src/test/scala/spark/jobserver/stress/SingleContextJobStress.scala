@@ -5,9 +5,11 @@ import akka.pattern.ask
 import akka.util.Timeout
 import com.typesafe.config.ConfigFactory
 import org.joda.time.DateTime
+
 import scala.concurrent.Await
 import spark.jobserver._
-import spark.jobserver.io.{BinaryType, JobFileDAO}
+import spark.jobserver.io.{BinaryInfo, BinaryType, JobFileDAO}
+
 
 /**
  * A stress test for launching many jobs within a job context
@@ -39,9 +41,10 @@ object SingleContextJobStress extends App with TestJarFinder {
 
   val jobManager = system.actorOf(Props(classOf[JobManagerActor], dao, "c1", "local[4]", config, false))
 
-  private def uploadJar(jarFilePath: String, appName: String) {
+  private def uploadJar(jarFilePath: String, appName: String): BinaryInfo = {
     val bytes = scala.io.Source.fromFile(jarFilePath, "ISO-8859-1").map(_.toByte).toArray
     dao.saveBinary(appName, BinaryType.Jar, DateTime.now, bytes)
+    dao.getBinaryInfo(appName).get
   }
 
   private val demoJarPath = testJar.getAbsolutePath
@@ -52,14 +55,14 @@ object SingleContextJobStress extends App with TestJarFinder {
   val res1 = Await.result(jobManager ? Initialize, 3 seconds)
   assert(res1.getClass == classOf[Initialized])
 
-  uploadJar(demoJarPath, "demo1")
+  val testBinInfo = uploadJar(demoJarPath, "demo1")
 
   // Now keep running this darn test ....
   var numJobs = 0
   val startTime = System.currentTimeMillis()
 
   while (true) {
-    val f = jobManager ? StartJob("demo1", demoJarClass, emptyConfig, Set(classOf[JobResult]))
+    val f = jobManager ? StartJob(demoJarClass, Seq(testBinInfo), emptyConfig, Set(classOf[JobResult]))
     Await.result(f, 3 seconds) match {
       case JobResult(info, Some(m)) =>
         numJobs += 1
