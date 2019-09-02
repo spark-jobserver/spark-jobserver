@@ -3,8 +3,7 @@ package spark.jobserver.util
 import org.joda.time.DateTime
 import java.text.SimpleDateFormat
 import spark.jobserver.io.{BinaryInfo, BinaryType, ContextInfo, ErrorData, JobInfo}
-import spray.json.{DefaultJsonProtocol, JsNull, JsObject, JsString, JsValue, RootJsonFormat,
-                   deserializationError, pimpAny}
+import spray.json._
 
 object JsonProtocols extends DefaultJsonProtocol {
 
@@ -52,14 +51,25 @@ object JsonProtocols extends DefaultJsonProtocol {
         "state" -> JsString(i.state),
         "startTime" -> JsString(df.format(i.startTime.getMillis)),
         "endTime" -> i.endTime.map(et => fromJoda(et)).toJson,
-        "error" -> i.error.toJson)
+        "error" -> i.error.toJson,
+        "cp" -> JsArray(i.cp.toVector.map(_.toJson))
+      )
 
     def read(value: JsValue): JobInfo = {
       value.asJsObject.getFields("jobId", "contextId", "contextName", "binaryInfo", "classPath",
-        "state", "startTime", "endTime", "error") match {
+        "state", "startTime", "endTime", "error", "cp") match {
           // Correct json format
-          case Seq(JsString(jobId), JsString(contextId), JsString(contextName),
-            binaryInfo, JsString(classPath), JsString(state), JsString(startTime), endTime, error) =>
+          case Seq(JsString(jobId), JsString(contextId), JsString(contextName), binaryInfo,
+          JsString(classPath), JsString(state), JsString(startTime), endTime, error, JsArray(cpJson)) =>
+            val endTimeOpt = readOpt(endTime, et => toJoda(et.convertTo[String]))
+            val errorOpt = error.convertTo[Option[ErrorData]]
+            val startTimeObj = toJoda(startTime)
+            val cp = cpJson.map(_.convertTo[BinaryInfo])
+            JobInfo(jobId, contextId, contextName, binaryInfo.convertTo[BinaryInfo], classPath,
+              state, startTimeObj, endTimeOpt, errorOpt, cp)
+        // Legacy json format (for backwards compatibility)
+        case Seq(JsString(jobId), JsString(contextId), JsString(contextName),
+          binaryInfo, JsString(classPath), JsString(state), JsString(startTime), endTime, error) =>
             val endTimeOpt = readOpt(endTime, et => toJoda(et.convertTo[String]))
             val errorOpt = error.convertTo[Option[ErrorData]]
             val startTimeObj = toJoda(startTime)

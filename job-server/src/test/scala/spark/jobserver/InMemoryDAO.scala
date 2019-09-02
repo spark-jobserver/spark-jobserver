@@ -1,6 +1,7 @@
 package spark.jobserver
 
 import java.io.{BufferedOutputStream, FileOutputStream}
+import java.util.NoSuchElementException
 
 import com.typesafe.config.Config
 import org.joda.time.DateTime
@@ -40,10 +41,12 @@ class InMemoryDAO extends JobDAO {
     val bos = new BufferedOutputStream(new FileOutputStream(outFile))
     try {
       bos.write(binaries((appName, binaryType, uploadTime)))
+      outFile.getAbsolutePath
+    } catch {
+      case e: NoSuchElementException => "" // DAOs return empty string if binary not found
     } finally {
       bos.close()
     }
-    outFile.getAbsolutePath
   }
 
   val contextInfos = mutable.HashMap.empty[String, ContextInfo]

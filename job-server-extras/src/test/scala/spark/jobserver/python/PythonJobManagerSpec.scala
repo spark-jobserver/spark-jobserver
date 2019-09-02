@@ -34,11 +34,11 @@ class PythonJobManagerSpec extends ExtrasJobSpecBase(PythonJobManagerSpec.getNew
       manager ! JobManagerActor.Initialize(pyContextConfig, None, emptyActor)
       expectMsgClass(30 seconds, classOf[JobManagerActor.Initialized])
 
-      uploadTestEgg("python-demo")
+      val testBinInfo = uploadTestEgg("python-demo")
 
       manager ! JobManagerActor.StartJob(
-        "python-demo",
         "example_jobs.word_count.WordCountSparkSessionJob",
+        Seq(testBinInfo),
         ConfigFactory.parseString("""input.strings = ["a", "b", "a"]"""),
         errorEvents ++ syncEvents)
       expectMsgPF(3 seconds, "Expected a JobResult or JobErroredOut message!") {

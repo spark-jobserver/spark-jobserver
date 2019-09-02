@@ -211,6 +211,16 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       }
     }
 
+    it("should respond with internal server error if failed to resolve cp path") {
+      Post("/jobs?cp=Failure&mainClass=com.abc.meme", "") ~>
+        sealRoute(routes) ~> check {
+        status should be (InternalServerError)
+        val result = responseAs[Map[String, Any]]
+        result.keys should equal (Set(StatusKey, ResultKey))
+        result(StatusKey) should equal(JobStatus.Error)
+      }
+    }
+
     it("should merge user passed jobConfig with default jobConfig") {
       val config2 = "foo.baz = booboo, spark.master=overriden"
       Post("/jobs?appName=foo&classPath=com.abc.meme&context=one&sync=true", config2) ~>
@@ -223,16 +233,15 @@ class WebApiMainRoutesSpec extends WebApiSpec {
             bindConfKey -> bindConfVal,
             "foo.baz" -> "booboo",
             "shiro.authentication" -> "off",
-            "spark.jobserver.short-timeout" -> "3 s",
-            "cp" -> List("foo")
+            "spark.jobserver.short-timeout" -> "3 s"
           )
         ))
       }
     }
 
-    it("should merge appName and dependent-jar-uris into cp parameter in job config") {
+    it("should merge appName and dependent-jar-uris for starting the job") {
       Post(
-        "/jobs?appName=foo&classPath=com.abc.meme&context=one&sync=true", "dependent-jar-uris=[\"demo\"]"
+        "/jobs?appName=demo&classPath=com.abc.meme&context=one&sync=true", "dependent-jar-uris=[\"foo\"]"
       ) ~>
         sealRoute(routes) ~> check {
         status should be (OK)
@@ -243,9 +252,39 @@ class WebApiMainRoutesSpec extends WebApiSpec {
             bindConfKey -> bindConfVal,
             "shiro.authentication" -> "off",
             "spark.jobserver.short-timeout" -> "3 s",
-            "cp" -> List("demo", "foo"),
-            "dependent-jar-uris" -> List("demo")
+            "dependent-jar-uris" -> List("foo")
           )
+        ))
+      }
+    }
+
+    it("should accept several binary names for cp parameter") {
+      Post(
+        "/jobs?cp=multi,some,bin&mainClass=com.abc.meme&context=one&sync=true", ""
+      ) ~>
+        sealRoute(routes) ~> check {
+        status should be (OK)
+        responseAs[Map[String, Any]] should be (Map(
+          JobId -> "multi",
+          ResultKey -> Map(
+            masterConfKey-> masterConfVal,
+            bindConfKey -> bindConfVal,
+            "shiro.authentication" -> "off",
+            "spark.jobserver.short-timeout" -> "3 s"
+          )
+        ))
+      }
+    }
+
+    it("should return not found if one of the binaries in given cp list is not found") {
+      Post(
+        "/jobs?cp=multi,some,BinaryNotFound&mainClass=com.abc.meme&context=one&sync=true", ""
+      ) ~>
+        sealRoute(routes) ~> check {
+        status should be (NotFound)
+        responseAs[Map[String, String]] should be (Map(
+          StatusKey -> "ERROR",
+          ResultKey -> "appName BinaryNotFound not found"
         ))
       }
     }
@@ -316,8 +355,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
             bindConfKey -> bindConfVal,
             "foo.baz" -> "booboo",
             "shiro.authentication" -> "off",
-            "spark.jobserver.short-timeout" -> "3 s",
-            "cp" -> List("foo")
+            "spark.jobserver.short-timeout" -> "3 s"
           )
         ))
       }
@@ -346,8 +384,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
             bindConfKey -> bindConfVal,
             "foo.baz" -> "booboo",
             "shiro.authentication" -> "off",
-            "spark.jobserver.short-timeout" -> "3 s",
-            "cp" -> List("foo")
+            "spark.jobserver.short-timeout" -> "3 s"
           )
         ))
       }

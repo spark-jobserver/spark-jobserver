@@ -62,8 +62,9 @@ class StreamingJobSpec extends JobSpecBase(StreamingJobSpec.getNewSystem) {
 
       manager ! JobManagerActor.Initialize(cfg, None, emptyActor)
       expectMsgClass(10 seconds, classOf[JobManagerActor.Initialized])
-      uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", streamingJob, emptyConfig, asyncEvents ++ errorEvents)
+      val testBinInfo = uploadTestJar()
+      manager ! JobManagerActor.StartJob(
+        streamingJob, Seq(testBinInfo), emptyConfig, asyncEvents ++ errorEvents)
 
       jobId = expectMsgPF(6 seconds, "Did not start StreamingTestJob, expecting JobStarted") {
         case JobStarted(jobid, _) => {
@@ -76,7 +77,7 @@ class StreamingJobSpec extends JobSpecBase(StreamingJobSpec.getNewSystem) {
       Thread sleep 1000
       val jobInfo = Await.result(dao.getJobInfo(jobId), 60 seconds)
       jobInfo.get match {
-        case JobInfo(_, _, _, _, _, state, _, _, _) if state == JobStatus.Running => {  }
+        case JobInfo(_, _, _, _, _, state, _, _, _, _) if state == JobStatus.Running => {  }
         case e => fail("Unexpected JobInfo" + e)
       }
 
@@ -97,9 +98,10 @@ class StreamingJobSpec extends JobSpecBase(StreamingJobSpec.getNewSystem) {
 
       manager ! JobManagerActor.Initialize(cfgWithGracefulShutdown, None, emptyActor)
       expectMsgClass(10 seconds, classOf[JobManagerActor.Initialized])
-      uploadTestJar()
+      val testBinInfo = uploadTestJar()
 
-      manager ! JobManagerActor.StartJob("demo", streamingJob, streamingJobConfig, asyncEvents ++ errorEvents)
+      manager ! JobManagerActor.StartJob(
+        streamingJob, Seq(testBinInfo), streamingJobConfig, asyncEvents ++ errorEvents)
       expectMsgType[JobStarted]
 
       Thread.sleep(2000) // Allow the job to start processing data
@@ -112,7 +114,8 @@ class StreamingJobSpec extends JobSpecBase(StreamingJobSpec.getNewSystem) {
       manager ! GetContexData
       expectMsgType[ContexData]
 
-      manager ! JobManagerActor.StartJob("demo", streamingJob, streamingJobConfig, asyncEvents ++ errorEvents)
+      manager ! JobManagerActor.StartJob(
+        streamingJob, Seq(testBinInfo), streamingJobConfig, asyncEvents ++ errorEvents)
       expectMsg(ContextStopInProgress)
 
       manager ! StopContextAndShutdown
@@ -160,9 +163,10 @@ class StreamingJobSpec extends JobSpecBase(StreamingJobSpec.getNewSystem) {
   private def triggerFailingStreamingJob(ctxConfig: Config): Unit = {
     manager ! JobManagerActor.Initialize(ctxConfig, None, emptyActor)
     expectMsgClass(10 seconds, classOf[JobManagerActor.Initialized])
-    uploadTestJar()
+    val testBinInfo = uploadTestJar()
 
-    manager ! JobManagerActor.StartJob("demo", failingStreamingJob, emptyConfig, asyncEvents ++ errorEvents)
+    manager ! JobManagerActor.StartJob(
+      failingStreamingJob, Seq(testBinInfo), emptyConfig, asyncEvents ++ errorEvents)
 
     expectMsgClass(2.seconds, classOf[JobStarted])
     expectMsgPF(6 seconds, "Expecting JobErrored Out") {

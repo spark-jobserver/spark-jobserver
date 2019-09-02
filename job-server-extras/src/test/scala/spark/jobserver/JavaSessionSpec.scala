@@ -67,14 +67,15 @@ class JavaSessionSpec extends ExtrasJobSpecBase(JavaSessionSpec.getNewSystem) {
       manager ! JobManagerActor.Initialize(cfg, None, emptyActor)
       expectMsgClass(30 seconds, classOf[JobManagerActor.Initialized])
 
-      uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", hiveLoaderClass, emptyConfig, syncEvents ++ errorEvents)
+      val testJar = uploadTestJar()
+      manager ! JobManagerActor.StartJob(
+        hiveLoaderClass, Seq(testJar), emptyConfig, syncEvents ++ errorEvents)
       expectMsgPF(120 seconds, "Did not get JobResult") {
         case JobResult(_, result: Long) => result should equal (3L)
       }
       expectNoMsg()
 
-      manager ! JobManagerActor.StartJob("demo", hiveQueryClass, queryConfig, syncEvents ++ errorEvents)
+      manager ! JobManagerActor.StartJob(hiveQueryClass, Seq(testJar), queryConfig, syncEvents ++ errorEvents)
       expectMsgPF(6 seconds, "Did not get JobResult") {
         case JobResult(_, result: Array[Row]) =>
           result should have length 2

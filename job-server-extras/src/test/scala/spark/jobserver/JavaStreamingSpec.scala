@@ -42,8 +42,8 @@ class JavaStreamingSpec extends ExtrasJobSpecBase(JavaStreamingSpec.getNewSystem
       manager ! JobManagerActor.Initialize(cfg, None, emptyActor)
       expectMsgClass(10 seconds, classOf[JobManagerActor.Initialized])
 
-      uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", streamingJob, emptyConfig, asyncEvents ++ errorEvents)
+      val binInfo = uploadTestJar()
+      manager ! JobManagerActor.StartJob(streamingJob, Seq(binInfo), emptyConfig, asyncEvents ++ errorEvents)
       val id = expectMsgPF(6 seconds, "No?") {
         case JobStarted(jid, _) =>
           jid should not be null
@@ -52,7 +52,7 @@ class JavaStreamingSpec extends ExtrasJobSpecBase(JavaStreamingSpec.getNewSystem
       Thread.sleep(1000)
       val info = Await.result(dao.getJobInfo(id), 60 seconds)
       info.get match {
-        case JobInfo(_, _, _, _, _, state, _, _, _) if state == JobStatus.Running => {}
+        case JobInfo(_, _, _, _, _, state, _, _, _, _) if state == JobStatus.Running => {}
         case e => fail(s":-( No worky work $e")
       }
     }

@@ -50,7 +50,8 @@ object BinaryType {
 case class JobInfo(jobId: String, contextId: String, contextName: String,
                    binaryInfo: BinaryInfo, classPath: String, state: String,
                    startTime: DateTime, endTime: Option[DateTime],
-                   error: Option[ErrorData]) {
+                   error: Option[ErrorData], cp: Seq[BinaryInfo] = Seq.empty) {
+
   def jobLengthMillis: Option[Long] = endTime.map { end => new Duration(startTime, end).getMillis }
 }
 

@@ -8,7 +8,9 @@ import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.context.DefaultSparkContextFactory
-import spark.jobserver.io.{BinaryType, JobDAO}
+import spark.jobserver.io.{BinaryInfo, BinaryType, JobDAO}
+
+import scala.concurrent.duration._
 
 /**
  * Provides a base Config for tests.  Override the vals to configure.  Mix into an object.
@@ -83,6 +85,7 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
   def testJar: java.io.File
   def testEgg: java.io.File
   var supervisor: ActorRef = _
+  val timeout: Duration = 5.seconds
   def extrasJar: java.io.File
 
   override def afterAll() {
@@ -90,17 +93,20 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
     TestKit.shutdownActorSystem(system)
   }
 
-  protected def uploadBinary(dao: JobDAO, jarFilePath: String, appName: String, binaryType: BinaryType) {
+  protected def uploadBinary(dao: JobDAO, jarFilePath: String,
+                             appName: String, binaryType: BinaryType): BinaryInfo = {
     val bytes = scala.io.Source.fromFile(jarFilePath, "ISO-8859-1").map(_.toByte).toArray
     dao.saveBinary(appName, binaryType, DateTime.now, bytes)
+    dao.getBinaryInfo(appName).get
   }
 
-  protected def uploadTestJar(appName: String = "demo") {
+  protected def uploadTestJar(appName: String = "demo"): BinaryInfo = {
     uploadBinary(dao, testJar.getAbsolutePath, appName, BinaryType.Jar)
   }
 
-  protected def uploadTestEgg(appName: String = "demo") {
+  protected def uploadTestEgg(appName: String = "demo"): BinaryInfo = {
     uploadBinary(dao, testEgg.getAbsolutePath, appName, BinaryType.Egg)
+    dao.getBinaryInfo(appName).get
   }
 
   protected def getExtrasJarPath: String = extrasJar.getAbsolutePath

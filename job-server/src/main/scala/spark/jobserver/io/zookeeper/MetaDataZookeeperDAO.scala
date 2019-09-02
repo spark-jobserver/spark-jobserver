@@ -310,21 +310,14 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
       Future {
         Utils.usingResource(zookeeperUtils.getClient) {
           client =>
+            logger.debug(s"Retrieving jobs by binary name $binName (states: $statuses)")
             zookeeperUtils.sync(client, binariesDir)
-            lazy val jobsUsingBinName = zookeeperUtils.list(client, jobsDir).
-              map(id => (readJobInfo(client, id), readJobConfig(id))).filter(jobData => {
-                val jobInfoMatch = if (jobData._1.isDefined) {
-                  jobData._1.get.binaryInfo.appName == binName
-                } else {
-                  false
-                }
-                val jobConfigMatch = if (jobData._2.isDefined) {
-                    Utils.getSeqFromConfig(jobData._2.get, "cp").contains(binName)
-                  } else {
-                  false
-                }
-              jobConfigMatch || jobInfoMatch
-              }).flatMap{case (inf, _) => inf}
+            val jobs = zookeeperUtils.list(client, jobsDir)
+              .flatMap(id => readJobInfo(client, id))
+            lazy val jobsUsingBinName = zookeeperUtils.list(client, jobsDir)
+              .flatMap(id => readJobInfo(client, id))
+              .filter(j => (j.binaryInfo.appName == binName) ||
+                j.cp.map(_.appName).contains(binName))
             statuses match {
               case None =>
                 jobsUsingBinName
@@ -332,6 +325,6 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
                 jobsUsingBinName.filter(j => states.contains(j.state))
             }
         }
-    }
+      }
   }
 }

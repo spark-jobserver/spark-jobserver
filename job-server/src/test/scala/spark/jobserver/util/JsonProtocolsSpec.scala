@@ -40,8 +40,12 @@ class JsonProtocolsSpec extends FunSpec with Matchers with BeforeAndAfter {
       "SomeClass", "SomeTrace")))
   val testJobInfo2 = JobInfo("SomeJobId", "SomeContextId", "SomeContextName", testBinaryInfo,
       "SomeClassPath", "SomeState", earlyDate, None, None)
-  val testJobInfoJson = "{\"binaryInfo\":{\"appName\":\"SomeName\",\"binaryType\":\"Jar\",\"uploadTime\":\"" + earlyDateStr + "\",\"binaryStorageId\":\"SomeStorId\"},\"classPath\":\"SomeClassPath\",\"startTime\":\"" + earlyDateStr + "\",\"state\":\"SomeState\",\"contextName\":\"SomeContextName\",\"endTime\":\"" + dateStr + "\",\"error\":{\"message\":\"SomeMessage\",\"errorClass\":\"SomeClass\",\"stackTrace\":\"SomeTrace\"},\"jobId\":\"SomeJobId\",\"contextId\":\"SomeContextId\"}"
-  val testJobInfo2Json = "{\"binaryInfo\":{\"appName\":\"SomeName\",\"binaryType\":\"Jar\",\"uploadTime\":\"" + earlyDateStr + "\",\"binaryStorageId\":\"SomeStorId\"},\"classPath\":\"SomeClassPath\",\"startTime\":\"" + earlyDateStr + "\",\"state\":\"SomeState\",\"contextName\":\"SomeContextName\",\"endTime\":null,\"error\":null,\"jobId\":\"SomeJobId\",\"contextId\":\"SomeContextId\"}"
+  val testJobInfoWithCp = JobInfo("SomeJobId", "SomeContextId", "SomeContextName", testBinaryInfo,
+    "SomeClassPath", "SomeState", earlyDate, Some(date), Some(ErrorData("SomeMessage",
+      "SomeClass", "SomeTrace")), Seq(testBinaryInfo, testBinaryInfo2))
+  val testJobInfoJson = "{\"binaryInfo\":{\"appName\":\"SomeName\",\"binaryType\":\"Jar\",\"uploadTime\":\"" + earlyDateStr + "\",\"binaryStorageId\":\"SomeStorId\"},\"classPath\":\"SomeClassPath\",\"startTime\":\"" + earlyDateStr + "\",\"state\":\"SomeState\",\"contextName\":\"SomeContextName\",\"endTime\":\"" + dateStr + "\",\"error\":{\"message\":\"SomeMessage\",\"errorClass\":\"SomeClass\",\"stackTrace\":\"SomeTrace\"},\"jobId\":\"SomeJobId\",\"cp\":[],\"contextId\":\"SomeContextId\"}"
+  val testJobInfo2Json = "{\"binaryInfo\":{\"appName\":\"SomeName\",\"binaryType\":\"Jar\",\"uploadTime\":\"" + earlyDateStr + "\",\"binaryStorageId\":\"SomeStorId\"},\"classPath\":\"SomeClassPath\",\"startTime\":\"" + earlyDateStr + "\",\"state\":\"SomeState\",\"contextName\":\"SomeContextName\",\"endTime\":null,\"error\":null,\"jobId\":\"SomeJobId\",\"cp\":[],\"contextId\":\"SomeContextId\"}"
+  val testJobInfoWithCp2Json = "{\"binaryInfo\":{\"appName\":\"SomeName\",\"binaryType\":\"Jar\",\"uploadTime\":\"" + earlyDateStr + "\",\"binaryStorageId\":\"SomeStorId\"},\"classPath\":\"SomeClassPath\",\"startTime\":\"" + earlyDateStr + "\",\"state\":\"SomeState\",\"contextName\":\"SomeContextName\",\"endTime\":\"" + dateStr + "\",\"error\":{\"message\":\"SomeMessage\",\"errorClass\":\"SomeClass\",\"stackTrace\":\"SomeTrace\"},\"jobId\":\"SomeJobId\",\"cp\":[{\"appName\":\"SomeName\",\"binaryType\":\"Jar\",\"uploadTime\":\"" + earlyDateStr + "\",\"binaryStorageId\":\"SomeStorId\"},{\"appName\":\"SomeName\",\"binaryType\":\"Egg\",\"uploadTime\":\"" + earlyDateStr + "\",\"binaryStorageId\":null}],\"contextId\":\"SomeContextId\"}"
 
   // ContextInfo
   val testContextInfo = ContextInfo("someId", "someName", "someConfig", Some("ActorAddress"),
@@ -90,6 +94,11 @@ class JsonProtocolsSpec extends FunSpec with Matchers with BeforeAndAfter {
     it("should deserialize JobInfo") {
       val deserial = testJobInfoJson.parseJson.convertTo[JobInfo]
       deserial should equal(testJobInfo)
+    }
+
+    it("should serialize JobInfo with cp value set") {
+      val serial = testJobInfoWithCp.toJson
+      serial.compactPrint should equal(testJobInfoWithCp2Json)
     }
 
     it("should handle the absence of optional JobInfo values correctly") {
