@@ -24,9 +24,18 @@ object BinaryType {
     val contentType = HttpHeaders.`Content-Type`(mediaType)
   }
 
+  case object URI extends BinaryType {
+    // WARNING: only for internal use (not accepted for upload from user)
+    val extension = "uri"
+    val name = "Uri"
+    val mediaType: MediaType = MediaTypes.register(MediaType.custom("text/uri-list"))
+    val contentType = HttpHeaders.`Content-Type`(mediaType)
+  }
+
   def fromString(typeString: String): BinaryType = typeString match {
     case "Jar" => Jar
     case "Egg" => Egg
+    case "Uri" => URI
   }
 
   def fromMediaType(mediaType: MediaType): Option[BinaryType] = mediaType match {
