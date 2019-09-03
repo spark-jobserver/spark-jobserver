@@ -1,26 +1,33 @@
 package spark.jobserver.integrationtests.util
 
-import sys.process._
-import com.softwaremill.sttp._
-import play.api.libs.json.Json
-import play.api.libs.json.JsValue
-import com.typesafe.config.ConfigFactory
-import java.io.File
+import scala.sys.process._
 
-class BoshController extends DeploymentController{
+import com.softwaremill.sttp._
+import com.typesafe.config.Config
+import com.typesafe.config.ConfigException
+
+import play.api.libs.json.JsValue
+import play.api.libs.json.Json
+
+class BoshController(config: Config) extends DeploymentController(config: Config) {
 
   /*
    * Initialization
    */
 
   // Constructor
-  val deployment = getDeploymentFromConfig("bosh.conf")
+  val deployment = getDeploymentFromConfig(config)
   val instances = getInstances(deployment)
 
-  private def getDeploymentFromConfig(configFile: String) : String = {
-    val file = new File(configFile)
-    val config = ConfigFactory.parseFile(file)
-    config.getString("deployment")
+  private def getDeploymentFromConfig(config: Config) : String = {
+    try {
+      config.getString("deployment")
+    } catch {
+      case e : ConfigException =>
+        println("Configuration is invalid. Cannot run tests.")
+        e.printStackTrace()
+        sys.exit(-1)
+    }
   }
 
   private def getInstances(deployment: String): Seq[JsValue] = {

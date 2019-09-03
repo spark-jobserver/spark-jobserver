@@ -4,10 +4,11 @@ import org.scalatest.BeforeAndAfterAllConfigMap
 import org.scalatest.ConfigMap
 import org.scalatest.FreeSpec
 import org.scalatest.Matchers
+
 import com.softwaremill.sttp._
+import com.typesafe.config.Config
+
 import play.api.libs.json.Json
-import play.api.libs.json.JsValue.jsValueToJsLookup
-import scala.util.Either.MergeableEither
 import spark.jobserver.integrationtests.util.TestHelper
 
 class TwoJobserverTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigMap {
@@ -18,8 +19,14 @@ class TwoJobserverTests extends FreeSpec with Matchers with BeforeAndAfterAllCon
   implicit val backend = HttpURLConnectionBackend()
 
   override def beforeAll(configMap: ConfigMap) = {
-    SJS1 = configMap.getWithDefault("sjs1", "localhost:8090")
-    SJS2 = configMap.getWithDefault("sjs2", "localhost:8091")
+    val config = configMap.getRequired[Config]("config")
+    val jobservers = config.getStringList("jobserverAddresses")
+    if(jobservers.size() < 2){
+      println("You need to specify two jobserver addresses in the config to run HA tests.")
+      sys.exit(-1)
+    }
+    SJS1 = jobservers.get(0)
+    SJS2 = jobservers.get(1)
   }
 
   // Test artifacts

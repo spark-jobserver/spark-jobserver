@@ -11,6 +11,7 @@ import com.softwaremill.sttp._
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
 import spark.jobserver.integrationtests.util.TestHelper
+import com.typesafe.config.Config
 
 class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigMap{
 
@@ -19,7 +20,9 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
   implicit val backend = HttpURLConnectionBackend()
 
   override def beforeAll(configMap: ConfigMap) = {
-    SJS = configMap.getWithDefault("address", "localhost:8090")
+    val config = configMap.getRequired[Config]("config")
+    val jobservers = config.getStringList("jobserverAddresses")
+    SJS = jobservers.get(0)
   }
 
   // Test environment

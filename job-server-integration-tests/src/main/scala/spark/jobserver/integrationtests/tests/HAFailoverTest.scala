@@ -6,9 +6,10 @@ import org.scalatest.FreeSpec
 import org.scalatest.Matchers
 
 import com.softwaremill.sttp._
+import com.typesafe.config.Config
 
 import play.api.libs.json.Json
-import spark.jobserver.integrationtests.util.BoshController
+import spark.jobserver.integrationtests.util.DeploymentController
 import spark.jobserver.integrationtests.util.TestHelper
 
 class HAFailoverTest extends FreeSpec with Matchers with BeforeAndAfterAllConfigMap {
@@ -17,12 +18,19 @@ class HAFailoverTest extends FreeSpec with Matchers with BeforeAndAfterAllConfig
   var SJS1 = ""
   var SJS2 = ""
   implicit val backend = HttpURLConnectionBackend()
+  var controller : DeploymentController = _
 
   override def beforeAll(configMap: ConfigMap) = {
-    SJS1 = configMap.getWithDefault("sjs1", "localhost:8090")
-    SJS2 = configMap.getWithDefault("sjs2", "localhost:8091")
+    val config = configMap.getRequired[Config]("config")
+    val jobservers = config.getStringList("jobserverAddresses")
+    if(jobservers.size() < 2){
+      println("You need to specify two jobserver addresses in the config to run HA tests.")
+      sys.exit(-1)
+    }
+    SJS1 = jobservers.get(0)
+    SJS2 = jobservers.get(1)
+    controller = DeploymentController.fromConfig(config)
     // Restart second jobserver to make sure the first one is the singleton
-    val controller = new BoshController()
     val ip2 = SJS2.split(":").head
     controller.isJobserverUp(ip2) should equal(true)
     controller.stopJobserver(ip2)
@@ -37,7 +45,6 @@ class HAFailoverTest extends FreeSpec with Matchers with BeforeAndAfterAllConfig
   "Sustain one jobserver failure" - {
 
     "Stopping Jobserver 1 should succeed" in {
-      val controller = new BoshController()
       val ip1 = SJS1.split(":").head
       controller.isJobserverUp(ip1) should equal(true)
       controller.stopJobserver(ip1)
@@ -88,7 +95,6 @@ class HAFailoverTest extends FreeSpec with Matchers with BeforeAndAfterAllConfig
     }
 
     "Restart of Jobserver 1 should succeed" in {
-      val controller = new BoshController()
       val ip1 = SJS1.split(":").head
       controller.isJobserverUp(ip1) should equal(false)
       controller.startJobserver(ip1)
