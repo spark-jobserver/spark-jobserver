@@ -17,6 +17,7 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
   // Configuration
   var SJS = ""
   implicit val backend = HttpURLConnectionBackend()
+
   override def beforeAll(configMap: ConfigMap) = {
     SJS = configMap.getWithDefault("address", "localhost:8090")
   }
@@ -129,23 +130,13 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
       response.code should equal(200)
       val json = Json.parse(response.body.merge)
       (json \ "status").as[String] should equal("SUCCESS")
-      // status finished?
+      // state finished?
+      TestHelper.waitForContextTermination(SJS, contextName, 5)
       val request2 = sttp.get(uri"$SJS/contexts/$contextName")
-      var response2 = request2.send()
+      val response2 = request2.send()
       response2.code should equal(200)
-      var json2 = Json.parse(response2.body.merge)
-      var state = (json2 \ "state").as[String]
-      // Stopping may take some time, so retry in such case
-      var retries = 3
-      while(state == "STOPPING" && retries > 0){
-        Thread.sleep(1000)
-        response2 = request2.send()
-        response2.code should equal(200)
-        json2 = Json.parse(response2.body.merge)
-        state = (json2 \ "state").as[String]
-        retries -= 1
-      }
-      state should equal("FINISHED")
+      val json2 = Json.parse(response2.body.merge)
+      (json2 \ "state").as[String] should equal("FINISHED")
     }
 
     "GET /contexts should not list deleted contexts" in {
@@ -227,22 +218,12 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
 
       "the termination of the job should also terminate the adHoc context" in {
         // Context finished?
+        TestHelper.waitForContextTermination(SJS, jobContext, 5)
         val request = sttp.get(uri"$SJS/contexts/$jobContext")
-        var response = request.send()
+        val response = request.send()
         response.code should equal(200)
-        var json = Json.parse(response.body.merge)
-        var state = (json \ "state").as[String]
-        // Stopping may take some time, so retry
-        var retries = 5
-        while(state != "FINISHED" && retries > 0){
-          Thread.sleep(1000)
-          response = request.send()
-          response.code should equal(200)
-          json = Json.parse(response.body.merge)
-          state = (json \ "state").as[String]
-          retries -= 1
-        }
-        state should equal("FINISHED")
+        val json = Json.parse(response.body.merge)
+        (json \ "state").as[String] should equal("FINISHED")
         // Job finished?
         val jobRequest = sttp.get(uri"$SJS/jobs/$adHocJobId")
         val jobResponse = jobRequest.send()

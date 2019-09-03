@@ -9,6 +9,7 @@ import com.softwaremill.sttp._
 
 import play.api.libs.json.Json
 import spark.jobserver.integrationtests.util.BoshController
+import spark.jobserver.integrationtests.util.TestHelper
 
 class HAFailoverTest extends FreeSpec with Matchers with BeforeAndAfterAllConfigMap {
 
@@ -16,6 +17,7 @@ class HAFailoverTest extends FreeSpec with Matchers with BeforeAndAfterAllConfig
   var SJS1 = ""
   var SJS2 = ""
   implicit val backend = HttpURLConnectionBackend()
+
   override def beforeAll(configMap: ConfigMap) = {
     SJS1 = configMap.getWithDefault("sjs1", "localhost:8090")
     SJS2 = configMap.getWithDefault("sjs2", "localhost:8091")
@@ -77,22 +79,12 @@ class HAFailoverTest extends FreeSpec with Matchers with BeforeAndAfterAllConfig
       val json = Json.parse(response.body.merge)
       (json \ "status").as[String] should equal("SUCCESS")
       // status finished?
+      TestHelper.waitForContextTermination(SJS2, contextName, 3)
       val request2 = sttp.get(uri"$SJS2/contexts/$contextName")
-      var response2 = request2.send()
+      val response2 = request2.send()
       response2.code should equal(200)
-      var json2 = Json.parse(response2.body.merge)
-      var state = (json2 \ "state").as[String]
-      // Stopping may take some time, so retry in such case
-      var retries = 3
-      while(state == "STOPPING" && retries > 0){
-        Thread.sleep(1000)
-        response2 = request2.send()
-        response2.code should equal(200)
-        json2 = Json.parse(response2.body.merge)
-        state = (json2 \ "state").as[String]
-        retries -= 1
-      }
-      state should equal("FINISHED")
+      val json2 = Json.parse(response2.body.merge)
+      (json2 \ "state").as[String] should equal("FINISHED")
     }
 
     "Restart of Jobserver 1 should succeed" in {
@@ -133,22 +125,12 @@ class HAFailoverTest extends FreeSpec with Matchers with BeforeAndAfterAllConfig
       val json = Json.parse(response.body.merge)
       (json \ "status").as[String] should equal("SUCCESS")
       // status finished?
+      TestHelper.waitForContextTermination(SJS1, contextName, 3)
       val request2 = sttp.get(uri"$SJS1/contexts/$contextName")
-      var response2 = request2.send()
+      val response2 = request2.send()
       response2.code should equal(200)
-      var json2 = Json.parse(response2.body.merge)
-      var state = (json2 \ "state").as[String]
-      // Stopping may take some time, so retry in such case
-      var retries = 3
-      while(state == "STOPPING" && retries > 0){
-        Thread.sleep(1000)
-        response2 = request2.send()
-        response2.code should equal(200)
-        json2 = Json.parse(response2.body.merge)
-        state = (json2 \ "state").as[String]
-        retries -= 1
-      }
-      state should equal("FINISHED")
+      val json2 = Json.parse(response2.body.merge)
+      (json2 \ "state").as[String] should equal("FINISHED")
     }
 
   }

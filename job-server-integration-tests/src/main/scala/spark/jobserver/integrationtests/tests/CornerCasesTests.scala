@@ -15,6 +15,7 @@ class CornerCasesTests extends FreeSpec with Matchers with BeforeAndAfterAllConf
   // Configuration
   var SJS = ""
   implicit val backend = HttpURLConnectionBackend()
+
   override def beforeAll(configMap: ConfigMap) = {
     SJS = configMap.getWithDefault("address", "localhost:8090")
   }
@@ -54,20 +55,11 @@ class CornerCasesTests extends FreeSpec with Matchers with BeforeAndAfterAllConf
     message should include(jobId)
 
     // wait for job termination
+    TestHelper.waitForJobTermination(SJS, jobId, 15)
     val request = sttp.get(uri"$SJS/jobs/$jobId")
-    var response = request.send()
-    var json = Json.parse(response.body.merge)
-    var state = (json \ "status").as[String]
-    var retries = 15
-    while(state != "FINISHED" && retries > 0){
-      Thread.sleep(1000)
-      response = request.send()
-      response.code should equal(200)
-      json = Json.parse(response.body.merge)
-      state = (json \ "status").as[String]
-      retries -= 1
-    }
-    state should equal("FINISHED")
+    val response = request.send()
+    val json = Json.parse(response.body.merge)
+    (json \ "status").as[String] should equal("FINISHED")
 
     // deletion should succeed finally
     val response4 = sttp.delete(uri"$SJS/binaries/$deletionTestApp")

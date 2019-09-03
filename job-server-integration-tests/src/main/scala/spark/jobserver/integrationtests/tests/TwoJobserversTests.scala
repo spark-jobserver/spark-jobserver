@@ -8,6 +8,7 @@ import com.softwaremill.sttp._
 import play.api.libs.json.Json
 import play.api.libs.json.JsValue.jsValueToJsLookup
 import scala.util.Either.MergeableEither
+import spark.jobserver.integrationtests.util.TestHelper
 
 class TwoJobserverTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigMap {
 
@@ -15,15 +16,17 @@ class TwoJobserverTests extends FreeSpec with Matchers with BeforeAndAfterAllCon
   var SJS1 = ""
   var SJS2 = ""
   implicit val backend = HttpURLConnectionBackend()
+
   override def beforeAll(configMap: ConfigMap) = {
     SJS1 = configMap.getWithDefault("sjs1", "localhost:8090")
     SJS2 = configMap.getWithDefault("sjs2", "localhost:8091")
   }
 
-  "Synchronize contexts across jobservers" - {
+  // Test artifacts
+  val context1 = "HAIntegrationTestContext1"
+  val context2 = "HAIntegrationTestContext2"
 
-    val context1 = "HAIntegrationTestContext1"
-    val context2 = "HAIntegrationTestContext2"
+  "Synchronize contexts across jobservers" - {
 
     "POST /context on sjs1 should be visible on sjs2" in {
       // Create on SJS1
@@ -60,6 +63,7 @@ class TwoJobserverTests extends FreeSpec with Matchers with BeforeAndAfterAllCon
       val json1 = Json.parse(response1.body.merge)
       (json1 \ "status").as[String] should equal("SUCCESS")
       // Read from SJS2
+      TestHelper.waitForContextTermination(SJS2, context2, 3)
       val response2 = sttp.get(uri"$SJS2/contexts/$context2").send()
       response2.code should equal(200)
       val json2 = Json.parse(response2.body.merge)
@@ -74,6 +78,7 @@ class TwoJobserverTests extends FreeSpec with Matchers with BeforeAndAfterAllCon
       val json1 = Json.parse(response1.body.merge)
       (json1 \ "status").as[String] should equal("SUCCESS")
       // Read from SJS1
+      TestHelper.waitForContextTermination(SJS1, context1, 3)
       val response2 = sttp.get(uri"$SJS1/contexts/$context1").send()
       response2.code should equal(200)
       val json2 = Json.parse(response2.body.merge)
@@ -81,6 +86,11 @@ class TwoJobserverTests extends FreeSpec with Matchers with BeforeAndAfterAllCon
       (json2 \ "state").as[String] should equal("FINISHED")
     }
 
+  }
+
+  override def afterAll(configMap: ConfigMap) = {
+    sttp.delete(uri"$SJS1/contexts/$context1")
+    sttp.delete(uri"$SJS1/contexts/$context2")
   }
 
 }
