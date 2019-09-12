@@ -382,8 +382,8 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
 
       within(5.seconds) {
         awaitAssert {
-          cluster.state.members.size should ===(1)
-          cluster.state.members.head.status should ===(MemberStatus.Up)
+          cluster.state.members.size should === (1)
+          cluster.state.members.head.status should === (MemberStatus.Up)
           cluster.state.members.head.address === cluster.selfAddress
         }
       }
