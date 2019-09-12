@@ -36,5 +36,12 @@ class UtilsSpec extends FunSpecLike with Matchers
       Utils.getHASeedNodes(config) should be(
         List(Address("akka.tcp", JobServer.ACTOR_SYSTEM_NAME, "IP", 20)))
     }
+
+    it("should return multiple seed nodes") {
+      val config = ConfigFactory.parseString("spark.jobserver.ha.masters=[\"IP:20\", \"IP2:20\"]")
+      Utils.getHASeedNodes(config) should be(
+        List(Address("akka.tcp", JobServer.ACTOR_SYSTEM_NAME, "IP", 20),
+             Address("akka.tcp", JobServer.ACTOR_SYSTEM_NAME, "IP2", 20)))
+    }
   }
 }
