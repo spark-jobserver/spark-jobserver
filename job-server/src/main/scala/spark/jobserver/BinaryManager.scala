@@ -5,7 +5,8 @@ import java.net.URI
 
 import akka.actor.ActorRef
 import akka.util.Timeout
-import spark.jobserver.io.JobDAOActor.{BinaryInfosForCp, BinaryNotFound, DeleteBinaryResult, SaveBinaryResult}
+import spark.jobserver.io.JobDAOActor.{
+  BinaryInfosForCp, BinaryNotFound, DeleteBinaryResult, GetBinaryInfosForCpFailed, SaveBinaryResult}
 import spark.jobserver.io.{BinaryInfo, BinaryType, JobDAOActor, JobInfo, JobStatus}
 import spark.jobserver.util.{JarUtils, NoSuchBinaryException}
 import org.joda.time.DateTime
@@ -153,7 +154,7 @@ class BinaryManager(jobDao: ActorRef) extends InstrumentedActor {
         case Success(BinaryNotFound(name)) =>
           logger.warn(s"Could not find binary: $name")
           recipient ! NoSuchBinary(name)
-        case Success(GetBinaryInfoListForCpFailure(ex)) =>
+        case Success(GetBinaryInfosForCpFailed(ex)) =>
           logger.error(s"Could not get list of cp path binaries from DAOActor: ${ex.getMessage}")
           recipient ! GetBinaryInfoListForCpFailure(ex)
         case Success(message) =>
