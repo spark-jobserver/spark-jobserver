@@ -1,7 +1,7 @@
 package spark.jobserver
 
 import java.io.File
-import java.net.{URI, URL}
+import java.net.{MalformedURLException, URI, URL}
 import java.util.concurrent.Executors._
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.TimeUnit
@@ -376,6 +376,10 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
         }
         sender ! Initialized(contextName, resultActor)
       } catch {
+        case ex: MalformedURLException =>
+          logger.error(s"Couldn't add URI to class loader for context $contextName; shutting down actor", ex)
+          sender ! InitError(ex)
+          self ! PoisonPill
         case t: Throwable =>
           logger.error("Failed to create context " + contextName + ", shutting down actor", t)
           sender ! InitError(t)
