@@ -1,5 +1,7 @@
 package spark.jobserver
 
+import java.net.MalformedURLException
+
 import akka.actor.{Actor, ActorSystem, Props}
 import akka.testkit.TestKit
 import com.typesafe.config.ConfigFactory
@@ -19,6 +21,8 @@ import spray.testkit.ScalatestRouteTest
 import scala.concurrent.{Await, Future}
 import scala.util.{Failure, Success}
 import java.util.concurrent.TimeUnit
+
+import org.apache.xerces.util.URI.MalformedURIException
 
 import scala.concurrent.duration.Duration
 import spark.jobserver.util.{NoSuchBinaryException, Utils}
@@ -187,6 +191,8 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
         c.getInt("override_me") should be(3)
         sender ! ContextInitialized
       case AddContext("initError-ctx", _) => sender ! ContextInitError(new Throwable("Some Throwable"))
+      case AddContext("initError-URI-ctx", _) =>
+        sender ! ContextInitError(new MalformedURLException("Some Throwable"))
       case AddContext("unexp-err", _) => sender ! UnexpectedError
       case AddContext(_, _)     => sender ! ContextInitialized
 
@@ -203,6 +209,7 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
           case "wrong-type" => sender ! WrongJobType
           case "err" => sender ! JobErroredOut (
             "foo", dt, new RuntimeException ("oops", new IllegalArgumentException ("foo") ) )
+          case "loadErr" => sender ! JobLoadingError(new MalformedURLException("foo"))
           case "multi" =>
             assert(Seq("multi", "some", "bin") == cp.map(_.appName), "cp path should include all binaries")
             statusActor ! Subscribe("multi", sender, events)

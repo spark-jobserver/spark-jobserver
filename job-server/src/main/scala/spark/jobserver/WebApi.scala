@@ -1,5 +1,6 @@
 package spark.jobserver
 
+import java.net.MalformedURLException
 import java.util.NoSuchElementException
 import java.util.concurrent.TimeUnit
 
@@ -471,7 +472,11 @@ class WebApi(system: ActorSystem,
                     case ContextInitialized => ctx.complete(StatusCodes.OK,
                       successMap("Context initialized"))
                     case ContextAlreadyExists => badRequest(ctx, "context " + contextName + " exists")
-                    case ContextInitError(e) => logAndComplete(ctx, "CONTEXT INIT ERROR", 500, e)
+                    case ContextInitError(e) => e match {
+                      case _: MalformedURLException => logAndComplete(
+                        ctx, "CONTEXT INIT ERROR: Malformed URL", StatusCodes.BadRequest.intValue, e)
+                      case _ => logAndComplete(ctx, "CONTEXT INIT ERROR", 500, e)
+                    }
                     case UnexpectedError => logAndComplete(ctx, "UNEXPECTED ERROR OCCURRED", 500)
                   }.recover {
                     case e: Exception =>
@@ -832,14 +837,22 @@ class WebApi(system: ActorSystem,
                           case NoSuchFile(name) => notFound(ctx, "appName " + name + " not found")
                           case NoSuchClass => notFound(ctx, "classPath " + providedMainClass + " not found")
                           case WrongJobType => logAndComplete(ctx, "Invalid job type for this context", 400)
-                          case JobLoadingError(err) => logAndComplete(ctx, "JOB LOADING FAILED", 500, err)
+                          case JobLoadingError(err) => err match {
+                            case _: MalformedURLException => logAndComplete(
+                              ctx, "JOB LOADING FAILED: Malformed URL", StatusCodes.BadRequest.intValue, err)
+                            case _ => logAndComplete (ctx, "JOB LOADING FAILED", 500, err)
+                          }
                           case ContextStopInProgress =>
                             logAndComplete(ctx, "Context stop in progress", StatusCodes.Conflict)
                           case NoJobSlotsAvailable(maxJobSlots) =>
                             val errorMsg = "Too many running jobs (" + maxJobSlots.toString +
                               ") for job context '" + contextOpt.getOrElse("ad-hoc") + "'"
                             ctx.complete(503, Map(StatusKey -> "NO SLOTS AVAILABLE", ResultKey -> errorMsg))
-                          case ContextInitError(e) => logAndComplete(ctx, "CONTEXT INIT FAILED", 500, e)
+                          case ContextInitError(e) => e match {
+                            case _: MalformedURLException => logAndComplete(
+                              ctx, "CONTEXT INIT ERROR: Malformed URL", StatusCodes.BadRequest.intValue, e)
+                            case _ => logAndComplete(ctx, "CONTEXT INIT FAILED", 500, e)
+                          }
                         }.recover {
                           case e: Exception => logAndComplete(ctx, "ERROR", 500, e)
                         }.andThen {

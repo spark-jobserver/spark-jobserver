@@ -494,6 +494,14 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       }
     }
 
+    it("should respond with 400 if job was not able to load due to malformed URI") {
+      Post("/jobs?appName=loadErr&classPath=com.abc.meme", " ") ~> sealRoute(routes) ~> check {
+        status should be (BadRequest)
+        val resultMap = responseAs[Map[String, Any]]
+        resultMap(StatusKey) should equal("JOB LOADING FAILED: Malformed URL")
+      }
+    }
+
     it("sync route should return Ok with ERROR in JSON response if job failed") {
       Post("/jobs?appName=err&classPath=com.abc.meme&context=one&sync=true", " ") ~>
           sealRoute(routes) ~> check {
@@ -709,6 +717,14 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         status should be (InternalServerError)
         val result = responseAs[Map[String, Any]]
         result(StatusKey) should equal("CONTEXT INIT ERROR")
+      }
+    }
+
+    it("should respond with BadRequest if malformed URI error during initialization occurs") {
+      Post("/contexts/initError-URI-ctx", "") ~> sealRoute(routes) ~> check {
+        status should be (BadRequest)
+        val result = responseAs[Map[String, Any]]
+        result(StatusKey) should equal("CONTEXT INIT ERROR: Malformed URL")
       }
     }
 
