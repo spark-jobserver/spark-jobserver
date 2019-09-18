@@ -31,7 +31,18 @@ object JobManager {
   def start(args: Array[String], makeSystem: Config => ActorSystem,
             waitForTermination: (ActorSystem, String, String) => Unit) {
 
-    val clusterAddress = AddressFromURIString.parse(args(0))
+    val masterAddresses = args(0)
+    val masterSeedNodes = Try {
+      masterAddresses
+        .split(',')
+        .map(AddressFromURIString.parse)
+        .toList
+      }.getOrElse {
+        logger.info(s"Failed to parse master seed node address(es) ${masterAddresses} in JVM arguments.")
+        exitJVM
+      }
+    logger.info(s"Found master seed nodes are: ${masterAddresses}")
+
     val managerName = args(1)
     val loadedConfig = getConfFromFS(args(2)).getOrElse(exitJVM)
     val defaultConfig = ConfigFactory.load()
@@ -80,7 +91,7 @@ object JobManager {
        * resolver, since the fix of resolving the AkkaClusterSupervisor no longer works
        * when there is more than one Jobserver in the cluster (as it might be there or not).
        */
-      case true => clusterAddress.toString + "/user/singleton/context-supervisor"
+      case true => masterSeedNodes.head.toString + "/user/singleton/context-supervisor"
       case false => ""
     }
 
@@ -88,9 +99,9 @@ object JobManager {
     val jobManager = system.actorOf(JobManagerActor.props(daoActor, masterAddress, contextId,
         getManagerInitializationTimeout(systemConfig)), managerName)
 
-    //Join akka cluster
-    logger.info("Joining cluster at address {}", clusterAddress)
-    Cluster(system).join(clusterAddress)
+    // Join akka cluster
+    logger.info("Joining cluster at address(es) {}", masterSeedNodes.mkString(", "))
+    Cluster(system).joinSeedNodes(masterSeedNodes)
 
     val reaper = system.actorOf(Props[ProductionReaper])
     reaper ! WatchMe(jobManager)

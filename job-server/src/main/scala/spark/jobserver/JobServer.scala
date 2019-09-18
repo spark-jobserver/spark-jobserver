@@ -1,17 +1,16 @@
 package spark.jobserver
 
-import akka.actor.{ActorContext, ActorNotFound, ActorRef, ActorSystem, AddressFromURIString, Props}
+import akka.actor.{ActorContext, ActorNotFound, ActorRef, ActorSystem, Address, AddressFromURIString, Props}
 import akka.util.Timeout
 import akka.pattern.ask
 import akka.cluster.Cluster
 import akka.cluster.ClusterEvent.{InitialStateAsEvents, MemberEvent}
 import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
-
 import java.io.File
 import java.util.concurrent.{TimeUnit, TimeoutException}
 
 import spark.jobserver.io._
-import spark.jobserver.util.{ContextReconnectFailedException, DAOCleanup}
+import spark.jobserver.util.{ContextReconnectFailedException, DAOCleanup, Utils, WrongFormatException}
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 
@@ -46,6 +45,8 @@ object JobServer {
   implicit val ec = scala.concurrent.ExecutionContext.Implicits.global
 
   class InvalidConfiguration(error: String) extends RuntimeException(error)
+
+  val ACTOR_SYSTEM_NAME = "JobServer"
 
   // Allow custom function to create ActorSystem.  An example of why this is useful:
   // we can have something that stores the ActorSystem so it could be shut down easily later.
@@ -115,6 +116,8 @@ object JobServer {
       logger.info("Embeded H2 server started with base dir {} and URL {}", rootDir, h2.getURL: Any)
     }
 
+    val haSeedNodes = getAndValidateHASeedNodes(config)
+
     // Start actors and managers
     val ctor = jobDaoClass.getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
     val jobDAO = ctor.newInstance(config).asInstanceOf[JobDAO]
@@ -141,7 +144,7 @@ object JobServer {
 
         // Check if all contexts marked as running are still available and get the ActorRefs
         val existingManagerActorRefs = getExistingManagerActorRefs(system, daoActor)
-        joinAkkaCluster(cluster, existingManagerActorRefs)
+        joinAkkaCluster(cluster, existingManagerActorRefs, haSeedNodes)
         // We don't want to read all the old events that happened in the cluster
         // So, we remove the initialStateMode parameter
         cluster.registerOnMemberUp {
@@ -166,15 +169,37 @@ object JobServer {
     webApiPF(supervisor, jobInfo).start()
   }
 
-  private def joinAkkaCluster(cluster: Cluster, seedNodes: List[ActorRef]) {
-    if (seedNodes.isEmpty) {
+  /**
+    * This function is responsible for joining the Akka cluster dynamically
+    * based on current situation of Akka cluster.
+    *
+    * - If there are no old slave nodes and HA section of config is not
+    *   defined, then this JVM joins itself.
+    * - If some slave nodes are already running then this JVM joins them.
+    *   If multiple jobserver master VMs will be started then all of them
+    *   will join the slave nodes.
+    * - If no slave nodes are available but ha nodes are provided, then
+    *   this JVM joins the master nodes. joinSeedNodes function is
+    *   intelligent enough to form 1 cluster if multiple masters are
+    *   specified and they all join at the same time (given that the
+    *   list of masters is the same on all nodes)
+    *
+    * @param cluster Current Akka cluster
+    * @param slaveSeedNodes Akka addresses of currently running seed nodes
+    * @param haSeedNodes Akka addresses of all jobserver masters
+    */
+  @VisibleForTesting
+  def joinAkkaCluster(cluster: Cluster, slaveSeedNodes: List[ActorRef], haSeedNodes: List[Address]) {
+    if (slaveSeedNodes.isEmpty && haSeedNodes.isEmpty) {
       val selfAddress = cluster.selfAddress
       logger.info(s"Joining newly created cluster at ${selfAddress}")
       cluster.join(selfAddress)
     } else {
-      val addressList = seedNodes.map(_.path.address)
-      logger.info(s"Joining existing cluster at one of: ${addressList.mkString("{", ", ", "}")}")
-      cluster.joinSeedNodes(addressList)
+      val slaveAddressList = slaveSeedNodes.map(_.path.address)
+      logger.info(s"Found slave seed nodes: ${slaveAddressList.mkString(", ")} / " +
+        s"HA seed Nodes: ${haSeedNodes.mkString(", ")}")
+      val allSeedNodes = haSeedNodes ::: slaveAddressList
+      cluster.joinSeedNodes(allSeedNodes)
     }
   }
 
@@ -336,6 +361,16 @@ object JobServer {
     }
   }
 
+  private def getAndValidateHASeedNodes(config: Config): List[Address] = {
+    try {
+      Utils.getHASeedNodes(config)
+    } catch {
+      case NonFatal(t) =>
+        logger.error("Failed to fetch HA seed nodes", t)
+        throw new InvalidConfiguration("Wrong format for config section spark.jobserver.ha.masters")
+    }
+  }
+
   @VisibleForTesting
   def isCleanupEnabled(config: Config): Boolean = {
     val daoClassProperty = "spark.jobserver.startup_dao_cleanup_class"
@@ -359,7 +394,7 @@ object JobServer {
     }
 
     try {
-      start(args, makeSupervisorSystem("JobServer")(_))
+      start(args, makeSupervisorSystem(ACTOR_SYSTEM_NAME)(_))
     } catch {
       case e: Exception =>
         logger.error("Unable to start Spark JobServer: ", e)
