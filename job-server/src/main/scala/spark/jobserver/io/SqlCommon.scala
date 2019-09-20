@@ -25,18 +25,21 @@ class SqlCommon(config: Config) {
   val profileModule = runtimeMirror.staticModule(slickDriverClass)
   val profile = runtimeMirror.reflectModule(profileModule).instance.asInstanceOf[JdbcProfile]
 
+  val timeout = 10.seconds
+
   import profile.api._
 
   // Definition of the tables
   //scalastyle:off
   // Explicitly avoiding to label 'jarId' as a foreign key to avoid dealing with
   // referential integrity constraint violations.
-  class Jobs(tag: Tag) extends Table[(String, String, String, Int, String, String, Timestamp,
+  class Jobs(tag: Tag) extends Table[(String, String, String, String, String, String, String, Timestamp,
     Option[Timestamp], Option[String], Option[String], Option[String])](tag, "JOBS") {
     def jobId = column[String]("JOB_ID", O.PrimaryKey)
     def contextId = column[String]("CONTEXT_ID")
     def contextName = column[String]("CONTEXT_NAME")
-    def binId = column[Int]("BIN_ID")
+    def binIds = column[String]("BIN_IDS")
+    def URIs = column[String]("URIS")
     def classPath = column[String]("CLASSPATH")
     def state = column[String]("STATE")
     def startTime = column[Timestamp]("START_TIME")
@@ -44,7 +47,7 @@ class SqlCommon(config: Config) {
     def error = column[Option[String]]("ERROR")
     def errorClass = column[Option[String]]("ERROR_CLASS")
     def errorStackTrace = column[Option[String]]("ERROR_STACK_TRACE")
-    def * = (jobId, contextId, contextName, binId, classPath, state, startTime, endTime,
+    def * = (jobId, contextId, contextName, binIds, URIs, classPath, state, startTime, endTime,
         error, errorClass, errorStackTrace)
   }
 
@@ -155,23 +158,42 @@ class SqlCommon(config: Config) {
     db.run(query.head)
   }
 
-  def jobInfoFromRow(row: (String, String, String, String, String,
-    Timestamp, Array[Byte], String, String, Timestamp, Option[Timestamp],
-    Option[String], Option[String], Option[String])): JobInfo = row match {
-    case (id, contextId, contextName, app, binType, upload, binHash, classpath,
+  private def binaryInfoFromRow(row: (Int, String, String, Timestamp, Array[Byte])): BinaryInfo = row match {
+    case (binId, appName, binaryType, uploadTime, hash) =>
+      BinaryInfo(
+        appName,
+        BinaryType.fromString(binaryType),
+        convertDateSqlToJoda(uploadTime),
+        Some(BinaryDAO.hashBytesToString(hash))
+      )
+  }
+
+  def jobInfoFromRow(row: (String, String, String, String, String, String, String,
+  Timestamp, Option[Timestamp], Option[String], Option[String], Option[String])): JobInfo = row match {
+    case (id, contextId, contextName, bins, uris, classpath,
         state, start, end, err, errCls, errStTr) =>
-      val errorInfo = err.map(ErrorData(_, errCls.getOrElse(""), errStTr.getOrElse("")))
+      val errorInfo = err.map(ErrorData(_
+        , errCls.getOrElse(""), errStTr.getOrElse("")))
+
+      val binIds = bins.split(",").toSeq.map(_.toInt)
+      val query = binaries.filter(_.binId inSet binIds).result
+      val binInfos = Await.result(
+        db.run(query).map(r => r.map(binaryInfoFromRow(_))), timeout)
+      val uriInfos = if (uris.nonEmpty) {
+        uris.split(",").toSeq.map(u => BinaryInfo(u, BinaryType.URI, DateTime.now()))
+      } else {
+        Seq.empty
+      }
       JobInfo(
         id,
         contextId,
         contextName,
-        BinaryInfo(app, BinaryType.fromString(binType), convertDateSqlToJoda(upload),
-          Some(BinaryDAO.hashBytesToString(binHash))),
         classpath,
         state,
         convertDateSqlToJoda(start),
         end.map(convertDateSqlToJoda),
-        errorInfo
+        errorInfo,
+        binInfos ++ uriInfos
       )
   }
 
@@ -243,18 +265,12 @@ class SqlCommon(config: Config) {
   }
 
   def getJobs(limit: Int, status: Option[String] = None): Future[Seq[JobInfo]] = {
-    val joinQuery = for {
-      bin <- binaries
-      j <- jobs if (status match {
-                          case Some(state) => j.binId === bin.binId && j.state === state
-                          case None => j.binId === bin.binId
-                })
-    } yield {
-      (j.jobId, j.contextId, j.contextName, bin.appName, bin.binaryType, bin.uploadTime, bin.binHash,
-        j.classPath, j.state, j.startTime, j.endTime, j.error, j.errorClass, j.errorStackTrace)
+    val baseQuery = if (status.isDefined) {
+      jobs.filter(_.state === status)
+    } else {
+      jobs
     }
-    val sortQuery = joinQuery.sortBy(_._9.desc)
-    val limitQuery = sortQuery.take(limit)
+    val limitQuery = baseQuery.sortBy(_.startTime).take(limit)
     // Transform the each row of the table into a map of JobInfo values
     for (r <- db.run(limitQuery.result)) yield {
       r.map(jobInfoFromRow)
@@ -263,57 +279,40 @@ class SqlCommon(config: Config) {
 
   def getJobsByContextId(contextId: String, statuses: Option[Seq[String]] = None): Future[Seq[JobInfo]] = {
     val joinQuery = for {
-      bin <- binaries
       j <- jobs if ((contextId, statuses) match {
-                          case (contextId, Some(s)) => j.binId === bin.binId &&
+                          case (contextId, Some(s)) =>
                               j.contextId === contextId && j.state.inSet(s)
-                          case _ => j.binId === bin.binId && j.contextId === contextId
+                          case _ => j.contextId === contextId
                 })
     } yield {
-      (j.jobId, j.contextId, j.contextName, bin.appName, bin.binaryType, bin.uploadTime, bin.binHash,
-        j.classPath, j.state, j.startTime, j.endTime, j.error, j.errorClass, j.errorStackTrace)
+      j
     }
     db.run(joinQuery.result).map(_.map(jobInfoFromRow))
   }
 
   def getJob(id: String): Future[Option[JobInfo]] = {
-    // Join the BINARIES and JOBS tables without unnecessary columns
-    val joinQuery = for {
-      bin <- binaries
-      j <- jobs if j.binId === bin.binId && j.jobId === id
-    } yield {
-      (j.jobId, j.contextId, j.contextName, bin.appName, bin.binaryType, bin.uploadTime, bin.binHash,
-        j.classPath, j.state, j.startTime, j.endTime, j.error, j.errorClass, j.errorStackTrace)
-    }
-    for (r <- db.run(joinQuery.result)) yield {
+    for (r <- db.run(jobs.filter(j => j.jobId === id).result)) yield {
       r.map(jobInfoFromRow).headOption
     }
   }
 
   /**
-    * Final query is
-    * select x2.*, x3.*
-      from "BINARIES" x3, "JOBS" x2
-      where (
-        (x2."BIN_ID" = x3."BIN_ID") and
-        (x3."APP_NAME" = '$binName')) and
-        (x2."STATE" in ('$statuses'))
     * @param binName The name of the binary to be looked up
     * @param statuses List of job statuses to look up
     * @return List of found jobs
     */
   def getJobsByBinaryName(binName: String, statuses: Option[Seq[String]] = None): Future[Seq[JobInfo]] = {
-    val joinQuery = for {
-      bin <- binaries
-      j <- jobs if ((binName, statuses) match {
-        case (binName, Some(s)) => j.binId === bin.binId && bin.appName === binName && j.state.inSet(s)
-        case (binName, None) => j.binId === bin.binId && bin.appName === binName
-      })
-    } yield {
-      (j.jobId, j.contextId, j.contextName, bin.appName, bin.binaryType, bin.uploadTime, bin.binHash,
-        j.classPath, j.state, j.startTime, j.endTime, j.error, j.errorClass, j.errorStackTrace)
-    }
+    val binQuery = binaries.filter(_.appName === binName).map(_.binId).result.headOption
+    val binId = Await.result(db.run(binQuery), 10.seconds).getOrElse(return Future.successful(Seq.empty))
 
-    db.run(joinQuery.result).map(_.map(jobInfoFromRow))
+    // .result should be called on jobs before uris/binaries string can be parsed
+    // before it's only Rep[String], not real String
+    val jobsQuery = jobs.result.map(_.filter {
+      case (_, _, _, cp, _, _, status, _, _, _, _, _) =>
+        cp.split(",").map(_.toInt).contains(binId) &&
+          statuses.getOrElse(Seq(status)).contains(status)
+    })
+
+    db.run(jobsQuery).map(_.map(jobInfoFromRow))
   }
 }

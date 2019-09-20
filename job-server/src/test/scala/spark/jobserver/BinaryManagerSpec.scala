@@ -21,8 +21,8 @@ object BinaryManagerSpec {
 
     import spark.jobserver.io.JobDAOActor._
 
-    val jobInfo = JobInfo("bar", "cid", "context", binInfo,
-        "com.abc.meme", JobStatus.Running, DateTime.now, None, None)
+    val jobInfo = JobInfo("bar", "cid", "context",
+        "com.abc.meme", JobStatus.Running, DateTime.now, None, None, Seq(binInfo))
 
     override def wrappedReceive: Receive = {
       case GetApps(_) =>

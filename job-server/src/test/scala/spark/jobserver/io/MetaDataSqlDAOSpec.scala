@@ -92,8 +92,8 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
         case JobStatus.Error | JobStatus.Killed => (someEndTime, someError)
       }
 
-      JobInfo(id, ctxId, contextName, jarInfo, classPath, state, startTime,
-          endTimeAndError._1, endTimeAndError._2)
+      JobInfo(id, ctxId, contextName, classPath, state, startTime,
+          endTimeAndError._1, endTimeAndError._2, Seq(jarInfo))
     }
   }
 

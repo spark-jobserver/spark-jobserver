@@ -254,8 +254,8 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
   def saveContextAndJobInRestartingState(contextId: String) : String = {
     val dt = DateTime.now()
     saveContextInSomeState(contextId, ContextStatus.Restarting)
-    val job = JobInfo("specialJobId", contextId, "someContext", BinaryInfo("demo", BinaryType.Jar, dt),
-        "com.abc.meme", JobStatus.Restarting, dt, None, None)
+    val job = JobInfo("specialJobId", contextId, "someContext",
+        "com.abc.meme", JobStatus.Restarting, dt, None, None, Seq(BinaryInfo("demo", BinaryType.Jar, dt)))
     dao.saveJobInfo(job)
     job.jobId
   }
@@ -478,11 +478,11 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       val contextWithoutActor = ContextInfo("contextWithoutActor", "contextWithoutActor", "", None,
           DateTime.now(), None, ContextStatus.Running, None)
       val finalJob = JobInfo("finalJob", "contextWithoutActor", "contextWithoutActor",
-          BinaryInfo("demo", BinaryType.Jar, DateTime.now()), "", JobStatus.Finished, DateTime.now(),
-          Some(DateTime.now()), None)
+          "", JobStatus.Finished, DateTime.now(),
+          Some(DateTime.now()), None, Seq(BinaryInfo("demo", BinaryType.Jar, DateTime.now())))
       val nonfinalJob = JobInfo("nonfinalJob", "contextWithoutActor", "contextWithoutActor",
-          BinaryInfo("demo", BinaryType.Jar, DateTime.now()), "", JobStatus.Running, DateTime.now(),
-          None, None)
+          "", JobStatus.Running, DateTime.now(),
+          None, None, Seq(BinaryInfo("demo", BinaryType.Jar, DateTime.now())))
       dao.saveContextInfo(contextWithoutActor)
       dao.saveJobInfo(finalJob)
       dao.saveJobInfo(nonfinalJob)
@@ -549,11 +549,11 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       val dummyContext = ContextInfo(contextId, contextId, "", None,
         DateTime.now(), None, ContextStatus.Stopping, None)
       val finalJob = JobInfo("finalJob", contextId, contextId,
-        BinaryInfo("demo", BinaryType.Jar, DateTime.now()), "", JobStatus.Finished, DateTime.now(),
-        Some(DateTime.now()), None)
+        "", JobStatus.Finished, DateTime.now(),
+        Some(DateTime.now()), None, Seq(BinaryInfo("demo", BinaryType.Jar, DateTime.now())))
       val nonfinalJob = JobInfo("nonfinalJob", contextId, contextId,
-        BinaryInfo("demo", BinaryType.Jar, DateTime.now()), "", JobStatus.Running, DateTime.now(),
-        None, None)
+        "", JobStatus.Running, DateTime.now(),
+        None, None, Seq(BinaryInfo("demo", BinaryType.Jar, DateTime.now())))
       dao.saveContextInfo(dummyContext)
       dao.saveJobInfo(finalJob)
       dao.saveJobInfo(nonfinalJob)

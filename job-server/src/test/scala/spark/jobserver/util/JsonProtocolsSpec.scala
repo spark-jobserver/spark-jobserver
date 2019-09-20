@@ -33,20 +33,23 @@ class JsonProtocolsSpec extends FunSpec with Matchers with BeforeAndAfter {
   val testBinaryInfoJson = "{\"appName\":\"SomeName\",\"binaryType\":\"Jar\",\"uploadTime\":\"" + earlyDateStr + "\",\"binaryStorageId\":\"SomeStorId\"}"
   val testBinaryInfo2 = BinaryInfo("SomeName", BinaryType.Egg, earlyDate, None)
   val testBinaryInfo2Json = "{\"appName\":\"SomeName\",\"binaryType\":\"Egg\",\"uploadTime\":\"" + earlyDateStr + "\",\"binaryStorageId\":null}"
+  val testBinaryInfo3 = BinaryInfo("file://some/path/to/file", BinaryType.URI, earlyDate, None)
+  val testBinaryInfo3Json = "{\"appName\":\"file://some/path/to/file\",\"binaryType\":\"Uri\",\"uploadTime\":\"" + earlyDateStr + "\",\"binaryStorageId\":null}"
 
   // JobInfo
-  val testJobInfo = JobInfo("SomeJobId", "SomeContextId", "SomeContextName", testBinaryInfo,
+  val testJobInfo = JobInfo("SomeJobId", "SomeContextId", "SomeContextName",
       "SomeClassPath", "SomeState", earlyDate, Some(date), Some(ErrorData("SomeMessage",
-      "SomeClass", "SomeTrace")))
-  val testJobInfo2 = JobInfo("SomeJobId", "SomeContextId", "SomeContextName", testBinaryInfo,
-      "SomeClassPath", "SomeState", earlyDate, None, None)
-  val testJobInfoWithCp = JobInfo("SomeJobId", "SomeContextId", "SomeContextName", testBinaryInfo,
+      "SomeClass", "SomeTrace")), Seq.empty)
+  val testJobInfo2 = JobInfo("SomeJobId", "SomeContextId", "SomeContextName",
+      "SomeClassPath", "SomeState", earlyDate, None, None, Seq.empty)
+  val testJobInfoWithCp = JobInfo("SomeJobId", "SomeContextId", "SomeContextName",
     "SomeClassPath", "SomeState", earlyDate, Some(date), Some(ErrorData("SomeMessage",
       "SomeClass", "SomeTrace")), Seq(testBinaryInfo, testBinaryInfo2))
-  val testJobInfoJson = "{\"binaryInfo\":{\"appName\":\"SomeName\",\"binaryType\":\"Jar\",\"uploadTime\":\"" + earlyDateStr + "\",\"binaryStorageId\":\"SomeStorId\"},\"classPath\":\"SomeClassPath\",\"startTime\":\"" + earlyDateStr + "\",\"state\":\"SomeState\",\"contextName\":\"SomeContextName\",\"endTime\":\"" + dateStr + "\",\"error\":{\"message\":\"SomeMessage\",\"errorClass\":\"SomeClass\",\"stackTrace\":\"SomeTrace\"},\"jobId\":\"SomeJobId\",\"cp\":[],\"contextId\":\"SomeContextId\"}"
-  val testJobInfo2Json = "{\"binaryInfo\":{\"appName\":\"SomeName\",\"binaryType\":\"Jar\",\"uploadTime\":\"" + earlyDateStr + "\",\"binaryStorageId\":\"SomeStorId\"},\"classPath\":\"SomeClassPath\",\"startTime\":\"" + earlyDateStr + "\",\"state\":\"SomeState\",\"contextName\":\"SomeContextName\",\"endTime\":null,\"error\":null,\"jobId\":\"SomeJobId\",\"cp\":[],\"contextId\":\"SomeContextId\"}"
-  val testJobInfoWithCp2Json = "{\"binaryInfo\":{\"appName\":\"SomeName\",\"binaryType\":\"Jar\",\"uploadTime\":\"" + earlyDateStr + "\",\"binaryStorageId\":\"SomeStorId\"},\"classPath\":\"SomeClassPath\",\"startTime\":\"" + earlyDateStr + "\",\"state\":\"SomeState\",\"contextName\":\"SomeContextName\",\"endTime\":\"" + dateStr + "\",\"error\":{\"message\":\"SomeMessage\",\"errorClass\":\"SomeClass\",\"stackTrace\":\"SomeTrace\"},\"jobId\":\"SomeJobId\",\"cp\":[{\"appName\":\"SomeName\",\"binaryType\":\"Jar\",\"uploadTime\":\"" + earlyDateStr + "\",\"binaryStorageId\":\"SomeStorId\"},{\"appName\":\"SomeName\",\"binaryType\":\"Egg\",\"uploadTime\":\"" + earlyDateStr + "\",\"binaryStorageId\":null}],\"contextId\":\"SomeContextId\"}"
-
+  val testJobInfoJson = "{\"classPath\":\"SomeClassPath\",\"startTime\":\"" + earlyDateStr + "\",\"state\":\"SomeState\",\"contextName\":\"SomeContextName\",\"endTime\":\"" + dateStr + "\",\"error\":{\"message\":\"SomeMessage\",\"errorClass\":\"SomeClass\",\"stackTrace\":\"SomeTrace\"},\"jobId\":\"SomeJobId\",\"cp\":[],\"contextId\":\"SomeContextId\"}"
+  val testJobInfoNoCpJson = "{\"classPath\":\"SomeClassPath\",\"startTime\":\"" + earlyDateStr + "\",\"state\":\"SomeState\",\"contextName\":\"SomeContextName\",\"endTime\":\"" + dateStr + "\",\"error\":{\"message\":\"SomeMessage\",\"errorClass\":\"SomeClass\",\"stackTrace\":\"SomeTrace\"},\"jobId\":\"SomeJobId\",\"contextId\":\"SomeContextId\"}"
+  val testJobInfo2Json = "{\"classPath\":\"SomeClassPath\",\"startTime\":\"" + earlyDateStr + "\",\"state\":\"SomeState\",\"contextName\":\"SomeContextName\",\"endTime\":null,\"error\":null,\"jobId\":\"SomeJobId\",\"cp\":[],\"contextId\":\"SomeContextId\"}"
+  val testJobInfoWithNonEmptyCpJson = "{\"classPath\":\"SomeClassPath\",\"startTime\":\"" + earlyDateStr + "\",\"state\":\"SomeState\",\"contextName\":\"SomeContextName\",\"endTime\":\"" + dateStr + "\",\"error\":{\"message\":\"SomeMessage\",\"errorClass\":\"SomeClass\",\"stackTrace\":\"SomeTrace\"},\"jobId\":\"SomeJobId\",\"cp\":[{\"appName\":\"SomeName\",\"binaryType\":\"Jar\",\"uploadTime\":\"" + earlyDateStr + "\",\"binaryStorageId\":\"SomeStorId\"},{\"appName\":\"SomeName\",\"binaryType\":\"Egg\",\"uploadTime\":\"" + earlyDateStr + "\",\"binaryStorageId\":null}],\"contextId\":\"SomeContextId\"}"
+  val testJobInfoWithBinInfoJson = "{\"binaryInfo\":{\"appName\":\"SomeName\",\"binaryType\":\"Jar\",\"uploadTime\":\"" + earlyDateStr + "\",\"binaryStorageId\":\"SomeStorId\"},\"classPath\":\"SomeClassPath\",\"startTime\":\"" + earlyDateStr + "\",\"state\":\"SomeState\",\"contextName\":\"SomeContextName\",\"endTime\":\"" + dateStr + "\",\"error\":{\"message\":\"SomeMessage\",\"errorClass\":\"SomeClass\",\"stackTrace\":\"SomeTrace\"},\"jobId\":\"SomeJobId\",\"cp\":[],\"contextId\":\"SomeContextId\"}"
   // ContextInfo
   val testContextInfo = ContextInfo("someId", "someName", "someConfig", Some("ActorAddress"),
       earlyDate, Some(date), "someState", Some(new Throwable("message")))
@@ -78,6 +81,12 @@ class JsonProtocolsSpec extends FunSpec with Matchers with BeforeAndAfter {
       deserial should equal(testBinaryInfo2)
     }
 
+    it("should handle binary info for URIs") {
+      val serial = testBinaryInfo3.toJson
+      serial.compactPrint should equal(testBinaryInfo3Json)
+      val deserial = testBinaryInfo3Json.parseJson.convertTo[BinaryInfo]
+      deserial should equal(testBinaryInfo3)
+    }
   }
 
   /*
@@ -98,7 +107,7 @@ class JsonProtocolsSpec extends FunSpec with Matchers with BeforeAndAfter {
 
     it("should serialize JobInfo with cp value set") {
       val serial = testJobInfoWithCp.toJson
-      serial.compactPrint should equal(testJobInfoWithCp2Json)
+      serial.compactPrint should equal(testJobInfoWithNonEmptyCpJson)
     }
 
     it("should handle the absence of optional JobInfo values correctly") {
@@ -108,6 +117,17 @@ class JsonProtocolsSpec extends FunSpec with Matchers with BeforeAndAfter {
       deserial should equal(testJobInfo2)
     }
 
+    describe("should support legacy job info formats") {
+      it("should deserialize old data format, where there was no cp parameter at all") {
+        val deserial = testJobInfoNoCpJson.parseJson.convertTo[JobInfo]
+        deserial should equal(testJobInfo)
+      }
+
+      it("should deserialize old data format, where binary info set not in cp") {
+        val deserial = testJobInfoWithBinInfoJson.parseJson.convertTo[JobInfo]
+        deserial should equal(testJobInfo)
+      }
+    }
   }
 
   /*

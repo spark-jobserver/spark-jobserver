@@ -109,14 +109,14 @@ object WebApi {
   def getJobReport(jobInfo: JobInfo, jobStarted: Boolean = false): Map[String, Any] = {
 
     val statusMap = jobInfo match {
-      case JobInfo(_, _, _, _, _, state, _, _, Some(err), _) =>
+      case JobInfo(_, _, _, _, state, _, _, Some(err), _) =>
         Map(StatusKey -> state, ResultKey -> formatException(err))
-      case JobInfo(_, _, _, _, _, _, _, _, None, _) if jobStarted => Map(StatusKey -> JobStatus.Started)
-      case JobInfo(_, _, _, _, _, state, _, _, None, _) => Map(StatusKey -> state)
+      case JobInfo(_, _, _, _, _, _, _, None, _) if jobStarted => Map(StatusKey -> JobStatus.Started)
+      case JobInfo(_, _, _, _, state, _, _, None, _) => Map(StatusKey -> state)
     }
     Map("jobId" -> jobInfo.jobId,
       "startTime" -> jobInfo.startTime.toString(),
-      "classPath" -> jobInfo.classPath,
+      "classPath" -> jobInfo.mainClass,
       "context" -> (if (jobInfo.contextName.isEmpty) "<<ad-hoc>>" else jobInfo.contextName),
       "contextId" -> jobInfo.contextId,
       "duration" -> getJobDurationString(jobInfo)) ++ statusMap
@@ -681,7 +681,7 @@ class WebApi(system: ActorSystem,
             future.map {
               case NoSuchJobId =>
                 notFound(ctx, "No such job ID " + jobId)
-              case JobInfo(_, _, contextName, _, _, classPath, _, None, _, _) =>
+              case JobInfo(_, _, contextName, _, classPath, _, None, _, _) =>
                 val jobManager = getJobManagerForContext(Some(contextName), config, classPath)
                 val future = jobManager.get ? KillJob(jobId)
                 future.map {
@@ -689,9 +689,9 @@ class WebApi(system: ActorSystem,
                 }.recover {
                   case e: Exception => logAndComplete(ctx, "ERROR", 500, e)
                 }
-              case JobInfo(_, _, _, _, _, state, _, _, Some(ex), _) if state.equals(JobStatus.Error) =>
+              case JobInfo(_, _, _, _, state, _, _, Some(ex), _) if state.equals(JobStatus.Error) =>
                 ctx.complete(Map(StatusKey -> JobStatus.Error, "ERROR" -> formatException(ex)))
-              case JobInfo(_, _, _, _, _, state, _, _, _, _)
+              case JobInfo(_, _, _, _, state, _, _, _, _)
                 if (state.equals(JobStatus.Finished) || state.equals(JobStatus.Killed)) =>
                 notFound(ctx, "No running job with ID " + jobId)
               case _ => logAndComplete(ctx, "Received an unexpected message", 500)
@@ -911,13 +911,13 @@ class WebApi(system: ActorSystem,
 
   private def getJobManagerForContext(context: Option[String],
                                       contextConfig: Config,
-                                      classPath: String): Option[ActorRef] = {
+                                      mainClass: String): Option[ActorRef] = {
     import ContextSupervisor._
     val msg =
       if (context.isDefined) {
         GetContext(context.get)
       } else {
-        StartAdHocContext(classPath, contextConfig)
+        StartAdHocContext(mainClass, contextConfig)
       }
     val future = (supervisor ? msg)(contextTimeout.seconds)
     Await.result(future, contextTimeout.seconds) match {

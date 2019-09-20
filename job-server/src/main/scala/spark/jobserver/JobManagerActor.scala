@@ -573,9 +573,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
     resultActor ! Subscribe(jobId, subscriber, events)
     statusActor ! Subscribe(jobId, subscriber, events)
 
-    // TODO: remove binaryInfo from JobInfo object
-    val jobInfo = JobInfo(jobId, contextId, contextName,
-      BinaryInfo(dummyBinaryInfoName, BinaryType.Jar, DateTime.now()), mainClass,
+    val jobInfo = JobInfo(jobId, contextId, contextName, mainClass,
       JobStatus.Running, startDateTime, None, None, cpBin)
     getJobFuture(jobContainer, jobInfo, jobConfig, subscriber, jobContext, sparkEnv)
   }
@@ -588,7 +586,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
                            sparkEnv: SparkEnv): Future[Any] = {
 
     val jobId = jobInfo.jobId
-    logger.info("Starting Spark job {} [{}]...", jobId: Any, jobInfo.classPath)
+    logger.info("Starting Spark job {} [{}]...", jobId: Any, jobInfo.mainClass)
 
     // Atomically increment the number of currently running jobs. If the old value already exceeded the
     // limit, decrement it back, send an error message to the sender, and return a dummy future with
@@ -806,7 +804,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
 
   private def restartJob(existingJobInfo: JobInfo, existingJobConfig: Config) {
     def sendStartJobAndLog(jobInfo: JobInfo, cp: Seq[BinaryInfo], events: Set[Class[_]]): Unit = {
-      sendStartJobMessage(self, StartJob(jobInfo.classPath, cp,
+      sendStartJobMessage(self, StartJob(jobInfo.mainClass, cp,
         existingJobConfig, events, Some(jobInfo)))
       logger.info(s"Job restart message has been sent for old job (${jobInfo.jobId})" +
         s" and context ${jobInfo.contextName}.")
@@ -820,18 +818,10 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
     if (existingJobInfo.cp.nonEmpty) {
       sendStartJobAndLog(existingJobInfo, existingJobInfo.cp, events)
     } else {
-      val name = existingJobInfo.binaryInfo.appName
-      val binInfoReq = (daoActor ? JobDAOActor.GetLastBinaryInfo(name))(daoAskTimeout).
-        mapTo[JobDAOActor.LastBinaryInfo]
-      val binInfo = Await.result(binInfoReq, daoAskTimeout.duration).lastBinaryInfo
-      if (binInfo.isEmpty) {
-        val errorMsg = s"Didn't find any binary for jobInfo ${existingJobInfo.jobId}. " +
-          s"Can't restart the job."
-        logger.error(errorMsg)
-        updateJobInfoAndReportFailure(existingJobInfo, new Exception(errorMsg))
-      } else {
-        sendStartJobAndLog(existingJobInfo, List(binInfo.get), events)
-      }
+      val errorMsg = s"No binary of cp info in JobInfo for the job ${existingJobInfo.jobId}. " +
+        s"Can't restart the job."
+      logger.error(errorMsg)
+      updateJobInfoAndReportFailure(existingJobInfo, new Exception(errorMsg))
     }
   }
 

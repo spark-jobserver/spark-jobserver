@@ -125,8 +125,8 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
   private val authorizationInvalidPassword = new Authorization(new BasicHttpCredentials(USER_NAME, "xxx"))
   private val authorizationUnknownUser = new Authorization(new BasicHttpCredentials("whoami", "xxx"))
   private val dt = DateTime.parse("2013-05-29T00Z")
-  private val jobInfo = JobInfo("foo-1", "cid", "context", BinaryInfo("demo", BinaryType.Jar, dt), "com.abc.meme",
-      JobStatus.Running, dt, None, None)
+  private val jobInfo = JobInfo("foo-1", "cid", "context", "com.abc.meme",
+      JobStatus.Running, dt, None, None, Seq(BinaryInfo("demo", BinaryType.Jar, dt)))
   private val ResultKey = "result"
 
   private val addedContexts = new scala.collection.mutable.HashSet[String] with SynchronizedSet[String]
