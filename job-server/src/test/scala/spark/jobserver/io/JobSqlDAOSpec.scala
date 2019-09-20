@@ -96,8 +96,8 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
         case JobStatus.Error | JobStatus.Killed => (someEndTime, someError)
       }
 
-      JobInfo(id, ctxId, contextName, jarInfo, classPath, state, startTime,
-          endTimeAndError._1, endTimeAndError._2)
+      JobInfo(id, ctxId, contextName, classPath, state, startTime,
+          endTimeAndError._1, endTimeAndError._2, Seq(jarInfo))
     }
   }
 
@@ -261,8 +261,8 @@ class JobSqlDAOSpec extends JobSqlDAOSpecBase with TestJarFinder with FunSpecLik
 
     it("clean running jobs for context") {
       val ctxToBeCleaned: JobInfo = JobInfo(
-          "jobId", UUID.randomUUID().toString(), "context", jarInfo,
-          "test-class", JobStatus.Running, DateTime.now(), None, None)
+          "jobId", UUID.randomUUID().toString(), "context",
+          "test-class", JobStatus.Running, DateTime.now(), None, None, Seq(jarInfo))
       dao.saveBinary(jarInfo.appName, BinaryType.Jar, jarInfo.uploadTime, jarBytes)
       dao.saveJobInfo(ctxToBeCleaned)
 

@@ -25,8 +25,8 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
   private val appName = "appName"
   private val jarInfo = BinaryInfo(appName, BinaryType.Jar, DateTime.now)
   private val classPath = "classPath"
-  private val jobInfo = JobInfo(jobId, contextId, contextName, jarInfo, classPath, JobStatus.Running,
-      DateTime.now, None, None)
+  private val jobInfo = JobInfo(jobId, contextId, contextName, classPath, JobStatus.Running,
+      DateTime.now, None, None, Seq(jarInfo))
   private val endTime = DateTime.now()
   private val error = new Throwable
 

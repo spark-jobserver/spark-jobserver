@@ -96,8 +96,8 @@ class AutoPurgeActorSpec extends TestKit(AutoPurgeActorSpec.system) with FunSpec
       Some(backThen), "FINISHED", None)
   val recentContext = oldContext.copy(id = "2", endTime = Some(rightNow))
   val runningContext = oldContext.copy(id = "3", state = "RUNNING")
-  val oldJob = JobInfo("1", "someContextId", "someContextName", bin, "someClassPath", "FINISHED",
-      backThen, Some(backThen), Some(ErrorData("someMessage", "someError", "someTrace")))
+  val oldJob = JobInfo("1", "someContextId", "someContextName", "someClassPath", "FINISHED",
+      backThen, Some(backThen), Some(ErrorData("someMessage", "someError", "someTrace")), Seq(bin))
   val recentJob = oldJob.copy(jobId = "2", endTime = Some(rightNow))
   val runningJob = oldJob.copy(jobId = "3", state = "RUNNING")
 

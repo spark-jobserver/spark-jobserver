@@ -66,13 +66,13 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
 
   val dt = DateTime.parse("2013-05-29T00Z")
   val binaryInfo = BinaryInfo("demo", BinaryType.Jar, dt)
-  val baseJobInfo = JobInfo("foo-1", "cid", "context", binaryInfo, "com.abc.meme", JobStatus.Running, dt,
-      None, None)
-  val finishedJobInfo = baseJobInfo.copy(endTime = Some(dt.plusMinutes(5)),state = JobStatus.Finished)
+  val baseJobInfo = JobInfo("foo-1", "cid", "context", "com.abc.meme", JobStatus.Running, dt,
+      None, None, Seq(binaryInfo))
+  val finishedJobInfo = baseJobInfo.copy(endTime = Some(dt.plusMinutes(5)), state = JobStatus.Finished)
   val errorJobInfo = finishedJobInfo.copy(
-      error =  Some(ErrorData(new Throwable("test-error"))), state = JobStatus.Error)
+      error = Some(ErrorData(new Throwable("test-error"))), state = JobStatus.Error)
   val killedJobInfo = finishedJobInfo.copy(
-      error =  Some(ErrorData(JobKilledException(finishedJobInfo.jobId))), state = JobStatus.Killed)
+      error = Some(ErrorData(JobKilledException(finishedJobInfo.jobId))), state = JobStatus.Killed)
   val JobId = "jobId"
   val StatusKey = "status"
   val ResultKey = "result"
@@ -217,8 +217,8 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
             assert(Seq("multi", "some", "bin") == cp.map(_.appName), "cp path should include all binaries")
             statusActor ! Subscribe("multi", sender, events)
             val jobInfo = JobInfo(
-              "multi", "cid", "context", null, "com.abc.meme",
-              getStateBasedOnEvents(events), dt, None, None)
+              "multi", "cid", "context", "com.abc.meme",
+              getStateBasedOnEvents(events), dt, None, None, Seq.empty)
             statusActor ! JobStatusActor.JobInit(jobInfo)
             statusActor ! JobStarted(jobInfo.jobId, jobInfo)
             val map = config.entrySet().asScala.map {
@@ -229,8 +229,8 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
           case "foo" | "demo" =>
             statusActor ! Subscribe("foo", sender, events)
             val jobInfo = JobInfo(
-              "foo", "cid", "context", null, "com.abc.meme",
-              getStateBasedOnEvents(events), dt, None, None)
+              "foo", "cid", "context", "com.abc.meme",
+              getStateBasedOnEvents(events), dt, None, None, Seq.empty)
             statusActor ! JobStatusActor.JobInit(jobInfo)
             statusActor ! JobStarted(jobInfo.jobId, jobInfo)
             val map = config.entrySet().asScala.map {
@@ -241,7 +241,7 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
           case "foo.stream" =>
             statusActor ! Subscribe ("foo.stream", sender, events)
             val jobInfo = JobInfo (
-            "foo.stream", "cid", "context", null, "", getStateBasedOnEvents (events), dt, None, None)
+            "foo.stream", "cid", "context", "", getStateBasedOnEvents (events), dt, None, None, Seq.empty)
             statusActor ! JobStatusActor.JobInit (jobInfo)
             statusActor ! JobStarted (jobInfo.jobId, jobInfo)
             val result = "\"1, 2, 3, 4, 5, 6\"".getBytes ().toStream

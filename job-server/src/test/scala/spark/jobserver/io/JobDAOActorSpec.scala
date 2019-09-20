@@ -109,8 +109,8 @@ object JobDAOActorSpec {
         case "multiple" =>
           val dt = DateTime.parse("2013-05-29T00Z")
           val jobInfo =
-            JobInfo("bar", "cid", "context", BinaryInfo("demo", BinaryType.Egg, dt),
-              "com.abc.meme", JobStatus.Running, dt, None, None)
+            JobInfo("bar", "cid", "context",
+              "com.abc.meme", JobStatus.Running, dt, None, None, Seq(BinaryInfo("demo", BinaryType.Egg, dt)))
 
           Future.successful(Seq(jobInfo, jobInfo.copy(jobId = "kaboom")))
         case _ => Future.failed(new Exception("Unknown message"))

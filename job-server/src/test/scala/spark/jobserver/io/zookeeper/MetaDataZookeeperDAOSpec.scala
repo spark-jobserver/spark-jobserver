@@ -47,6 +47,8 @@ class MetaDataZookeeperDAOSpec extends FunSpec with TestJarFinder with FunSpecLi
       Some(BinaryDAO.calculateBinaryHashString("1".getBytes)))
   val binEgg = BinaryInfo("binaryWithEgg", BinaryType.Egg, new DateTime(),
       Some(BinaryDAO.calculateBinaryHashString("2".getBytes)))
+  val binURI = BinaryInfo("http://foo/bar", BinaryType.URI, new DateTime(),
+      Some(BinaryDAO.calculateBinaryHashString("42".getBytes)))
   val binJarV2 = BinaryInfo("binaryWithJar", BinaryType.Jar, new DateTime().plusHours(1),
       Some(BinaryDAO.calculateBinaryHashString("3".getBytes)))
   val binElse = BinaryInfo("anotherBinaryWithJar", BinaryType.Jar, new DateTime(),
@@ -65,15 +67,18 @@ class MetaDataZookeeperDAOSpec extends FunSpec with TestJarFinder with FunSpecLi
       new DateTime(1548683342368L).plusHours(1), None, "someState", None)
 
   // Jobs
-  val normalJob = JobInfo("someJobId", "someContextId", "someContextName", binJar,
+  val normalJob = JobInfo("someJobId", "someContextId", "someContextName",
       "someClassPath", "someState", new DateTime(), Some(new DateTime()),
-      Some(ErrorData("someMessage", "someError", "someTrace")))
-  val minimalJob = JobInfo("someOtherJobId", "someContextId", "someOtherContextName", binJar,
-      "someClassPath", "someState", new DateTime().plusHours(1), None, None)
-  val sameIdJob = JobInfo("someJobId", "someOtherContextId", "thirdContextName", binJar,
-      "someClassPath", "someState", new DateTime().minusHours(1), None, None)
-  val anotherJob = JobInfo("thirdJobId", "someOtherContextId", "thirdContextName", binJar,
-      "someClassPath", "anotherState", new DateTime().minusHours(1), None, None)
+      Some(ErrorData("someMessage", "someError", "someTrace")), Seq(binJar))
+  val minimalJob = JobInfo("someOtherJobId", "someContextId", "someOtherContextName",
+      "someClassPath", "someState", new DateTime().plusHours(1), None, None, Seq(binJar))
+  val sameIdJob = JobInfo("someJobId", "someOtherContextId", "thirdContextName",
+      "someClassPath", "someState", new DateTime().minusHours(1), None, None, Seq(binJar))
+  val anotherJob = JobInfo("thirdJobId", "someOtherContextId", "thirdContextName",
+      "someClassPath", "anotherState", new DateTime().minusHours(1), None, None, Seq(binJar))
+  val multiJarJob = JobInfo("multiJarJobId", "someOtherContextId", "thirdContextName",
+    "someClassPath", "anotherState", new DateTime().minusHours(1), None, None,
+    Seq(binJar, binEgg, binURI))
 
   // JobConfigs
   val config1 = ConfigFactory.parseString("{key : value}")
@@ -311,7 +316,7 @@ class MetaDataZookeeperDAOSpec extends FunSpec with TestJarFinder with FunSpecLi
       insertInitialBinary()
       val success = Await.result(dao.saveJob(normalJob), timeout)
       success should equal(true)
-      Await.result(dao.getJob("someJobId"), timeout) should equal(Some(normalJob))
+      Await.result(dao.getJob(normalJob.jobId), timeout) should equal(Some(normalJob))
     }
 
     it("should return None if there is no job with a given id") {
@@ -326,7 +331,7 @@ class MetaDataZookeeperDAOSpec extends FunSpec with TestJarFinder with FunSpecLi
       success should equal(true)
       success = Await.result(dao.saveJob(normalJob), timeout)
       success should equal(true)
-      Await.result(dao.getJob("someJobId"), timeout) should equal(Some(normalJob))
+      Await.result(dao.getJob(normalJob.jobId), timeout) should equal(Some(normalJob))
     }
 
     it("should retrieve jobs by their context id") {
@@ -334,6 +339,7 @@ class MetaDataZookeeperDAOSpec extends FunSpec with TestJarFinder with FunSpecLi
       Await.result(dao.saveJob(normalJob), timeout)
       Await.result(dao.saveJob(minimalJob), timeout)
       Await.result(dao.saveJob(anotherJob), timeout)
+      Await.result(dao.saveJob(multiJarJob), timeout)
       val jobs = Await.result(dao.getJobsByContextId("someContextId", None), timeout)
       jobs.size should equal(2)
       jobs should equal(Seq(minimalJob, normalJob)) //right order?
@@ -345,7 +351,8 @@ class MetaDataZookeeperDAOSpec extends FunSpec with TestJarFinder with FunSpecLi
       Await.result(dao.saveJob(sameIdJob), timeout)
       Await.result(dao.saveJob(minimalJob), timeout)
       Await.result(dao.saveJob(anotherJob), timeout)
-      val jobs = Await.result(dao.getJobsByContextId("someOtherContextId", Some(Seq("someState"))),
+      Await.result(dao.saveJob(multiJarJob), timeout)
+      val jobs = Await.result(dao.getJobsByContextId(sameIdJob.contextId, Some(Seq(sameIdJob.state))),
           timeout)
       jobs should equal(Seq(sameIdJob))
     }
@@ -355,8 +362,9 @@ class MetaDataZookeeperDAOSpec extends FunSpec with TestJarFinder with FunSpecLi
       Await.result(dao.saveJob(normalJob), timeout)
       Await.result(dao.saveJob(minimalJob), timeout)
       Await.result(dao.saveJob(anotherJob), timeout)
+      Await.result(dao.saveJob(multiJarJob), timeout)
       val jobs = Await.result(dao.getJobs(100, None), timeout)
-      jobs.size should equal(3)
+      jobs.size should equal(4)
     }
 
     it("should retrieve all jobs with a limit") {
@@ -373,15 +381,22 @@ class MetaDataZookeeperDAOSpec extends FunSpec with TestJarFinder with FunSpecLi
       Await.result(dao.saveJob(normalJob), timeout)
       Await.result(dao.saveJob(minimalJob), timeout)
       Await.result(dao.saveJob(anotherJob), timeout)
-      val jobs = Await.result(dao.getJobs(1, Some("someState")), timeout)
+      Await.result(dao.saveJob(multiJarJob), timeout)
+      val jobs = Await.result(dao.getJobs(1, Some(minimalJob.state)), timeout)
       jobs should equal(Seq(minimalJob))
     }
 
     it("should retrieve jobs with missing binaries") {
       val success = Await.result(dao.saveJob(normalJob), timeout)
       success should equal(true)
-      Await.result(dao.getJob("someJobId"), timeout) should equal(Some(normalJob))
+      Await.result(dao.getJob(normalJob.jobId), timeout) should equal(Some(normalJob))
       Await.result(dao.getJobs(100, None), timeout).size should equal(1)
+    }
+
+    it("should retrieve jobs with multiple binaries") {
+      val success = Await.result(dao.saveJob(multiJarJob), timeout)
+      success should equal(true)
+      Await.result(dao.getJob(multiJarJob.jobId), timeout) should equal(Some(multiJarJob))
     }
 
     it("should be able to access data after DAO recreation") {
@@ -389,12 +404,12 @@ class MetaDataZookeeperDAOSpec extends FunSpec with TestJarFinder with FunSpecLi
       // Save a job
       val success = Await.result(dao.saveJob(normalJob), timeout)
       success should equal(true)
-      Await.result(dao.getJob("someJobId"), timeout) should equal(Some(normalJob))
+      Await.result(dao.getJob(normalJob.jobId), timeout) should equal(Some(normalJob))
       // Restart
       dao = null
       dao = new MetaDataZookeeperDAO(config)
       // Still available?
-      Await.result(dao.getJob("someJobId"), timeout) should equal(Some(normalJob))
+      Await.result(dao.getJob(normalJob.jobId), timeout) should equal(Some(normalJob))
     }
 
   }

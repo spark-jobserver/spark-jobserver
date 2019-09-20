@@ -16,7 +16,6 @@ import scala.concurrent.Await
 import org.scalatest._
 import spark.jobserver.util.Utils
 
-@Ignore
 class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers with BeforeAndAfter
   with BeforeAndAfterAll {
 
@@ -41,6 +40,9 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
   private val expectedJobInfo: JobInfo = jobInfoNoEndNoErr
   private val jobInfoSomeEndNoErr: JobInfo = genJobInfo(jarInfo, JobStatus.Finished)
   private val jobInfoSomeEndSomeErr: JobInfo = genJobInfo(jarInfo, JobStatus.Error)
+  private val jobInfoWithMultipleJars: JobInfo = genJobInfo(jarInfo, JobStatus.Running).copy(
+    cp = Seq(jarInfo, jarInfo.copy(appName = "http://foo/bar", binaryType = BinaryType.URI))
+  )
 
   // job config test data
   private val jobId: String = jobInfoNoEndNoErr.jobId
@@ -85,8 +87,8 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
       }
 
       Thread.sleep(2) // hack to guarantee order
-      JobInfo(id, contextId, contextName, jarInfo, classPath, state, startTime,
-          endTimeAndError._1, endTimeAndError._2)
+      JobInfo(id, contextId, contextName, classPath, state, startTime,
+          endTimeAndError._1, endTimeAndError._2, Seq(jarInfo))
     }
 
   }
@@ -293,11 +295,11 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
       val dt2 = Some(DateTime.now())
       val someError = Some(ErrorData("test-error", "", ""))
       val finishedJob: JobInfo = JobInfo(UUID.randomUUID.toString, UUID.randomUUID.toString,
-          "test", jarInfo, "test-class", JobStatus.Finished, dt1, dt2, None)
+          "test", "test-class", JobStatus.Finished, dt1, dt2, None, Seq(jarInfo))
       val errorJob: JobInfo = JobInfo(UUID.randomUUID.toString, UUID.randomUUID.toString,
-          "test", jarInfo, "test-class", JobStatus.Error, dt1, dt2, someError)
+          "test", "test-class", JobStatus.Error, dt1, dt2, someError, Seq(jarInfo))
       val runningJob: JobInfo = JobInfo(UUID.randomUUID.toString, UUID.randomUUID.toString,
-          "test", jarInfo, "test-class", JobStatus.Running, dt1, None, None)
+          "test", "test-class", JobStatus.Running, dt1, None, None, Seq(jarInfo))
       dao.saveJobInfo(finishedJob)
       dao.saveJobInfo(runningJob)
       dao.saveJobInfo(errorJob)
@@ -405,6 +407,15 @@ class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers w
       updatedJobInfo.get.state shouldBe JobStatus.Error
       updatedJobInfo.get.endTime shouldBe defined
       updatedJobInfo.get.error shouldBe defined
+    }
+
+    it("should save a new JobInfo and get the same JobInfo with multiple binaries in cp") {
+      dao.saveJobInfo(jobInfoWithMultipleJars)
+
+      val job = Await.result(dao.getJobInfo(jobInfoWithMultipleJars.jobId), timeout).get
+
+      job.jobId should equal (jobInfoWithMultipleJars.jobId)
+      job.cp.sortBy(_.appName) should equal (jobInfoWithMultipleJars.cp.sortBy(_.appName))
     }
   }
 

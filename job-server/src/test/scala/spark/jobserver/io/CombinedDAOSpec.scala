@@ -320,7 +320,7 @@ class CombinedDAOSpec extends CombinedDAOSpecBase with FunSpecLike with BeforeAn
   describe("saveJobInfo tests") {
     val date = DateTime.now()
     val jobInfoWithoutId = JobInfo(_: String, "", "",
-      BinaryInfo("", BinaryType.Jar, date), "", "", date, None, None)
+      "", "", date, None, None, Seq(BinaryInfo("", BinaryType.Jar, date)))
 
     it("save should be synchronous") {
       val jobId = "jid"
@@ -347,7 +347,7 @@ class CombinedDAOSpec extends CombinedDAOSpecBase with FunSpecLike with BeforeAn
       val endTime = DateTime.now()
       val terminatedException = Some(ErrorData(ContextTerminatedException(contextId)))
       val runningJob = JobInfo(jobId, contextId, "",
-        BinaryInfo("", BinaryType.Jar, date), "", JobStatus.Running, date, None, None)
+         "", JobStatus.Running, date, None, None, Seq(BinaryInfo("", BinaryType.Jar, date)))
 
       dao.saveJobInfo(runningJob) // synchronous call
 

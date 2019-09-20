@@ -88,8 +88,8 @@ class SqlCommonSpec extends SqlCommonSpecBase with TestJarFinder with FunSpecLik
         case JobStatus.Error | JobStatus.Killed => (someEndTime, someError)
       }
 
-      JobInfo(id, ctxId, contextName, jarInfo, classPath, state, startTime,
-          endTimeAndError._1, endTimeAndError._2)
+      JobInfo(id, ctxId, contextName, classPath, state, startTime,
+          endTimeAndError._1, endTimeAndError._2, Seq(jarInfo))
     }
   }
 
@@ -156,11 +156,14 @@ class SqlCommonSpec extends SqlCommonSpecBase with TestJarFinder with FunSpecLik
       val dt2 = Some(DateTime.now())
       val someError = Some(ErrorData("test-error", "", ""))
       val finishedJob: JobInfo =
-        JobInfo("test-finished", "cid","test", jarInfo, "test-class", JobStatus.Finished, dt1, dt2, None)
+        JobInfo("test-finished", "cid", "test", "test-class",
+          JobStatus.Finished, dt1, dt2, None, Seq(jarInfo))
       val errorJob: JobInfo =
-        JobInfo("test-error", "cid", "test", jarInfo, "test-class", JobStatus.Error, dt1, dt2, someError)
+        JobInfo("test-error", "cid", "test", "test-class",
+          JobStatus.Error, dt1, dt2, someError, Seq(jarInfo))
       val runningJob: JobInfo =
-        JobInfo("test-running", "cid", "test", jarInfo, "test-class", JobStatus.Running, dt1, None, None)
+        JobInfo("test-running", "cid", "test", "test-class",
+          JobStatus.Running, dt1, None, None, Seq(jarInfo))
       helperJobSqlDao.saveJobInfo(finishedJob)
       helperJobSqlDao.saveJobInfo(runningJob)
       helperJobSqlDao.saveJobInfo(errorJob)

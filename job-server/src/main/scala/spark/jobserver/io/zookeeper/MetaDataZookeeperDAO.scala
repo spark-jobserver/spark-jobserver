@@ -316,8 +316,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
               .flatMap(id => readJobInfo(client, id))
             lazy val jobsUsingBinName = zookeeperUtils.list(client, jobsDir)
               .flatMap(id => readJobInfo(client, id))
-              .filter(j => (j.binaryInfo.appName == binName) ||
-                j.cp.map(_.appName).contains(binName))
+              .filter(j => j.cp.map(_.appName).contains(binName))
             statuses match {
               case None =>
                 jobsUsingBinName
