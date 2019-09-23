@@ -8,7 +8,7 @@ import org.joda.time.DateTime
 
 import scala.concurrent.Await
 import spark.jobserver._
-import spark.jobserver.io.{BinaryInfo, BinaryType, JobFileDAO}
+import spark.jobserver.io.{BinaryInfo, BinaryType}
 
 
 /**
@@ -36,8 +36,7 @@ object SingleContextJobStress extends App with TestJarFinder {
   implicit val ShortTimeout = Timeout(3 seconds)
 
   val jobDaoDir = jobDaoPrefix + DateTime.now.toString()
-  val jobDaoConfig = ConfigFactory.parseMap(Map("spark.jobserver.filedao.rootdir" -> jobDaoDir).asJava)
-  val dao = new JobFileDAO(jobDaoConfig)
+  val dao = new InMemoryDAO
 
   val jobManager = system.actorOf(Props(classOf[JobManagerActor], dao, "c1", "local[4]", config, false))
 

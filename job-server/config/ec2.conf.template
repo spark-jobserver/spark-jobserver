@@ -18,13 +18,7 @@ spark {
 
     context-per-jvm = false
 
-    # Note: JobFileDAO is deprecated from v0.7.0 because of issues in
-    # production and will be removed in future, now defaults to H2 file.
     jobdao = spark.jobserver.io.JobSqlDAO
-
-    filedao {
-      rootdir = /tmp/spark-job-server/filedao/data
-    }
 
     sqldao {
       # Slick database driver, full classpath

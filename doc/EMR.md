@@ -101,13 +101,8 @@ InstanceCount=10,BidPrice=2.99,Name=sparkSlave,InstanceGroupType=CORE,InstanceTy
    master = "yarn-client"
    jobserver {
      port = 8090
-     # Note: JobFileDAO is deprecated from v0.7.0 because of issues in
-     # production and will be removed in future, now defaults to H2 file.
      jobdao = spark.jobserver.io.JobSqlDAO
 
-     filedao {
-       rootdir = /mnt/tmp/spark-jobserver/filedao/data
-     }
      sqldao {
        # Slick database driver, full classpath
        slick-driver = slick.driver.H2Driver

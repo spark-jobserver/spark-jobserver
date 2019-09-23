@@ -127,16 +127,6 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
       }
     }
 
-    it("does not support context-per-jvm and JobFileDAO") {
-      val configFileName = writeConfigFile(Map(
-        "spark.jobserver.context-per-jvm " -> true,
-        "spark.jobserver.jobdao" -> "spark.jobserver.io.JobFileDAO"))
-
-      intercept[InvalidConfiguration] {
-        JobServer.start(Seq(configFileName).toArray, makeSupervisorSystem(_))
-      }
-    }
-
     it("does not support context-per-jvm and H2 in-memory DB") {
       val configFileName = writeConfigFile(Map(
         "spark.jobserver.context-per-jvm " -> true,
