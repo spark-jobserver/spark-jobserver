@@ -45,6 +45,7 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
     - [Configuring Spark Jobserver PostgreSQL Database backend](#configuring-spark-jobserver-postgresql-database-backend)
     - [Configuring Spark Jobserver MySQL Database backend](#configuring-spark-jobserver-mysql-database-backend)
     - [Configuring Spark Jobserver Zookeeper + HDFS Database backend](#configuring-spark-jobserver-zookeeper--hdfs-database-backend)
+    - [Configuring Spark Jobserver Cassandra backend](#configuring-spark-jobserver-cassandra-backend)
   - [HA Deployment (beta)](#ha-deployment-beta)
   - [Chef](#chef)
 - [Architecture](#architecture)
@@ -627,7 +628,7 @@ To use the embedded H2 db as a backend, add the following configuration to local
           # JDBC driver, full classpath
           jdbc-driver = org.h2.Driver
 
-          # Directory where default H2 driver stores its data. Only needed for H2.
+          # Directory where binaries are cached and default H2 driver stores its data
           rootdir = "/var/spark-jobserver/sqldao/data"
 
           jdbc {
@@ -795,6 +796,26 @@ configuration to local.conf.
 ```
 
 More information on setting up different backends for binaries and jobserver meta data: [setting up dao](doc/dao-setup.md).
+
+#### Configuring Spark Jobserver Cassandra backend
+
+To use Cassandra db as a backend, setup Cassandra and add the following configuration to local.conf:
+
+```
+    cassandra {
+      consistency = "ONE"
+      hosts = ["localhost:9042"]
+      user = ""
+      password = ""
+      chunk-size-in-kb = 1024
+    }
+
+    cassandradao {
+      # Directory where Jobserver will cache files before starting the job
+      rootdir = /tmp/spark-jobserver/cassandradao/data
+    }
+```
+
 
 ### HA Deployment (beta)
 

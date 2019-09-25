@@ -26,6 +26,11 @@ spark {
       rootdir = /tmp/spark-jobserver/upload
     }
 
+    cassandradao {
+      # Directory where binaries are cached
+      rootdir = /tmp/spark-jobserver/cassandradao/data
+    }
+
     sqldao {
       # Slick database driver, full classpath
       slick-driver = slick.driver.H2Driver
@@ -33,7 +38,7 @@ spark {
       # JDBC driver, full classpath
       jdbc-driver = org.h2.Driver
 
-      # Directory where default H2 driver stores its data. Only needed for H2.
+      # Directory where binaries are cached and default H2 driver stores its data
       rootdir = /tmp/spark-jobserver/sqldao/data
 
       # Full JDBC URL / init string, along with username and password.  Sorry, needs to match above.
