@@ -64,10 +64,9 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
   setupSchema()
 
 
-  // NOTE: below is only needed for H2 drivers
-  override val rootDir = config.getString("spark.jobserver.sqldao.rootdir")
+  override val rootDir = config.getString("spark.jobserver.cassandra.rootdir")
   override val rootDirFile = new File(rootDir)
-  logger.info("rootDir is " + rootDirFile.getAbsolutePath)
+  logger.info("File caching rootDir is " + rootDirFile.getAbsolutePath)
   initFileDirectory()
 
   override def saveBinary(appName: String,

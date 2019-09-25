@@ -34,10 +34,10 @@ class JobSqlDAO(config: Config, sqlCommon: SqlCommon) extends JobDAO with FileCa
 
   import profile.api._
 
-  // NOTE: below is only needed for H2 drivers
   override val rootDir = config.getString("spark.jobserver.sqldao.rootdir")
   override val rootDirFile = new File(rootDir)
-  logger.info("rootDir is " + rootDirFile.getAbsolutePath)
+  logger.info("File caching rootDir is " + rootDirFile.getAbsolutePath)
+  initFileDirectory()
 
   // Definition of the tables
   //scalastyle:off
@@ -50,7 +50,6 @@ class JobSqlDAO(config: Config, sqlCommon: SqlCommon) extends JobDAO with FileCa
   val binariesContents = TableQuery[BinariesContents]
   //scalastyle:on
 
-  initFileDirectory()
   sqlCommon.initFlyway()
 
   override def saveBinary(appName: String,
