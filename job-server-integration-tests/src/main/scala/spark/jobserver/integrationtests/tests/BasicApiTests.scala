@@ -104,7 +104,7 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
         val request = sttp.get(uri"$SJS/binaries/$appName")
         val response = request.send()
         response.code should equal(404)
-        val json = Json.parse(getresponse.body.merge)
+        val json = Json.parse(response.body.merge)
         (json \ "status").as[String] should equal("ERROR")
         (json \ "result").as[String] should include("Can't find binary with name")
       }
