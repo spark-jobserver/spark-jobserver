@@ -19,11 +19,13 @@ with ScalatestRouteTest with HttpService {
   val bindConfVal = "127.0.0.1"
   val masterConfKey = "spark.master"
   val masterConfVal = "spark://localhost:7077"
+  val healthConfVal = "spark.jobserver.APIHealthCheck"
   val config = ConfigFactory.parseString(s"""
     spark {
       master = "$masterConfVal"
       jobserver.bind-address = "$bindConfVal"
       jobserver.short-timeout = 3 s
+      jobserver.healthcheck = "$healthConfVal"
     }
     shiro {
       authentication = off

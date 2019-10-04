@@ -566,7 +566,7 @@ class WebApi(system: ActorSystem,
       try {
           val healthCheckClass = Class.forName(config.getString("spark.jobserver.healthcheck"))
           val instance = healthCheckClass.newInstance.asInstanceOf[HealthCheckService]
-          instance.healthCheckImpl(ctx, supervisor, jobInfo, daoActor)
+          instance.healthCheckImpl(ctx, supervisor, jobInfoActor, daoActor)
         }
         catch {
           case ex: Exception => {
