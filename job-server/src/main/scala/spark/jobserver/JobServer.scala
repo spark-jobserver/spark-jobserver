@@ -159,7 +159,7 @@ object JobServer {
               "context-supervisor-proxy")
 
           proxy ! ContextSupervisor.AddContextsFromConfig  // Create initial contexts
-          startWebApi(system, supervisor, jobDAO, webApiPF, daoActor)
+          startWebApi(system, proxy, jobDAO, webApiPF, daoActor)
         }
     }
   }
