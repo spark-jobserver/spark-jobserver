@@ -70,7 +70,7 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
     val testConfig = config.withValue("shiro.authentication-timeout",
       ConfigValueFactory.fromAnyRef(authTimeout))
       .withValue("shiro.use-as-proxy-user", ConfigValueFactory.fromAnyRef(useAsProxyUser))
-    val api = new WebApi(system, testConfig, dummyPort, dummyActor, dummyActor, dummyActor, dummyActor, dummyActor) {
+    val api = new WebApi(system, testConfig, dummyPort, dummyActor, dummyActor, dummyActor, dummyActor, null) {
       private def asShiroAuthenticatorWithWait(authTimeout: Int)
           (implicit ec: ExecutionContext): AuthMagnet[AuthInfo] = {
         val logger = LoggerFactory.getLogger(getClass)

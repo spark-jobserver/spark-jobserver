@@ -4,6 +4,7 @@ import akka.actor.{Actor, ActorSystem, Props, PoisonPill}
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
 import spark.jobserver.io.JobDAOActor
+import spark.jobserver.util.HealthCheck._
 import spray.http.StatusCodes._
 import spray.routing.HttpService
 import spray.testkit.ScalatestRouteTest
@@ -19,7 +20,7 @@ with ScalatestRouteTest with HttpService {
   val bindConfVal = "127.0.0.1"
   val masterConfKey = "spark.master"
   val masterConfVal = "spark://localhost:7077"
-  val healthConfVal = "spark.jobserver.ActorsHealthCheck"
+  val healthConfVal = "spark.jobserver.util.ActorsHealthCheck"
   val config = ConfigFactory.parseString(s"""
     spark {
       master = "$masterConfVal"
@@ -78,7 +79,8 @@ with ScalatestRouteTest with HttpService {
   }
   
   describe("healthz - all actors alive") {
-    val api = new WebApi(system, config, dummyPort, aliveActor, aliveActor, aliveActor, aliveActor, aliveActor)
+    val healthCheckInst = new ActorsHealthCheck(aliveActor, aliveActor, aliveActor)
+    val api = new WebApi(system, config, dummyPort, aliveActor, aliveActor, aliveActor, aliveActor, healthCheckInst)
     val routes = api.myRoutes
     it("should return OK") {
       Get("/healthz") ~> sealRoute(routes) ~> check {
@@ -88,7 +90,8 @@ with ScalatestRouteTest with HttpService {
   }
   
   describe("healthz - all actors dead") {
-    val api = new WebApi(system, config, dummyPort, deadActor, deadActor, deadActor, deadActor, deadActor)
+    val healthCheckInst = new ActorsHealthCheck(deadActor, deadActor, deadActor)
+    val api = new WebApi(system, config, dummyPort, deadActor, deadActor, deadActor, deadActor, healthCheckInst)
     val routes = api.myRoutes
     it("should return 500") {
       Get("/healthz") ~> sealRoute(routes) ~> check {
@@ -101,7 +104,8 @@ with ScalatestRouteTest with HttpService {
   }
   
   describe("healthz - supervisor dead") {
-    val api = new WebApi(system, config, dummyPort, aliveActor, aliveActor, deadActor, aliveActor, aliveActor)
+    val healthCheckInst = new ActorsHealthCheck(deadActor, aliveActor, aliveActor)
+    val api = new WebApi(system, config, dummyPort, aliveActor, aliveActor, deadActor, aliveActor, healthCheckInst)
     val routes = api.myRoutes
     it("should return 500") {
       Get("/healthz") ~> sealRoute(routes) ~> check {
@@ -113,21 +117,9 @@ with ScalatestRouteTest with HttpService {
     }
   }
   
-  describe("healthz - DAOactor dead") {
-    val api = new WebApi(system, config, dummyPort, aliveActor, aliveActor, aliveActor, aliveActor, deadActor)
-    val routes = api.myRoutes
-    it("should return 500") {
-      Get("/healthz") ~> sealRoute(routes) ~> check {
-        status should be (InternalServerError)
-        val resultMap = responseAs[Map[String, String]]
-        resultMap(StatusKey) should be ("ERROR")
-        resultMap(ResultKey) should be ("Required actors not alive")
-      }
-    }
-  }
-  
-  describe("healthz - DAO and JobInfo dead") {
-    val api = new WebApi(system, config, dummyPort, aliveActor, aliveActor, aliveActor, deadActor, deadActor)
+  describe("healthz - JobInfo dead") {
+    val healthCheckInst = new ActorsHealthCheck(aliveActor, aliveActor, deadActor)
+    val api = new WebApi(system, config, dummyPort, aliveActor, aliveActor, aliveActor, deadActor, healthCheckInst)
     val routes = api.myRoutes
     it("should return 500") {
       Get("/healthz") ~> sealRoute(routes) ~> check {

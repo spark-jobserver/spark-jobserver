@@ -10,7 +10,8 @@ import java.io.File
 import java.util.concurrent.{TimeUnit, TimeoutException}
 
 import spark.jobserver.io._
-import spark.jobserver.util.{ContextReconnectFailedException, DAOCleanup, Utils, WrongFormatException}
+import spark.jobserver.util.{ContextReconnectFailedException, DAOCleanup, HealthCheck, Utils,
+                             WrongFormatException}
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 
@@ -137,13 +138,13 @@ object JobServer {
     storeInitialBinaries(config, binManager)
 
     val webApiPF = new WebApi(system, config, port, binManager, dataManager, _: ActorRef, _: ActorRef,
-        _: ActorRef)
+        _: HealthCheck)
     contextPerJvm match {
       case false =>
         val supervisor = system.actorOf(Props(classOf[LocalContextSupervisorActor],
             daoActor, dataManager), AkkaClusterSupervisorActor.ACTOR_NAME)
         supervisor ! ContextSupervisor.AddContextsFromConfig  // Create initial contexts
-        startWebApi(system, supervisor, jobDAO, webApiPF, daoActor)
+        startWebApi(system, supervisor, jobDAO, webApiPF, daoActor, config)
       case true =>
         val cluster = Cluster(system)
 
@@ -159,15 +160,23 @@ object JobServer {
               "context-supervisor-proxy")
 
           proxy ! ContextSupervisor.AddContextsFromConfig  // Create initial contexts
-          startWebApi(system, supervisor, jobDAO, webApiPF, daoActor)
+          startWebApi(system, proxy, jobDAO, webApiPF, daoActor, config)
         }
     }
   }
 
   def startWebApi(system: ActorSystem, supervisor: ActorRef, jobDAO: JobDAO,
-      webApiPF: (ActorRef, ActorRef, ActorRef) => WebApi, daoActor: ActorRef) {
+      webApiPF: (ActorRef, ActorRef, HealthCheck) => WebApi, daoActor: ActorRef, config: Config) {
     val jobInfo = system.actorOf(Props(classOf[JobInfoActor], jobDAO, supervisor), "job-info")
-    webApiPF(supervisor, jobInfo, daoActor).start()
+    val healthClass = Class.forName(config.getString("spark.jobserver.healthcheck"))
+    var healthCheckInst: HealthCheck = null
+    if (healthClass.getName() == "spark.jobserver.util.ActorsHealthCheck") {
+      val healthCtr = healthClass.getConstructors()(0)
+      healthCheckInst = healthCtr.newInstance(supervisor, jobInfo, daoActor).asInstanceOf[HealthCheck]
+    } else {
+      healthCheckInst = healthClass.newInstance.asInstanceOf[HealthCheck]
+    }
+    webApiPF(supervisor, jobInfo, healthCheckInst).start()
   }
 
   /**
