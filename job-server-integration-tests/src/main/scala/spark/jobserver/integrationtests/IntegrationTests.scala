@@ -1,10 +1,12 @@
 package spark.jobserver.integrationtests
 
+import java.io.File
+
 import org.scalatest.ConfigMap
 
-import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigException
-import java.io.File
+import com.typesafe.config.ConfigFactory
+import com.typesafe.config.ConfigRenderOptions
 
 object IntegrationTests extends App {
 
@@ -46,6 +48,8 @@ object IntegrationTests extends App {
   }
 
   // Run selected integration tests
+  println("Running integration tests with the following configuration:")
+  println(config.root().render(ConfigRenderOptions.concise().setFormatted(true).setJson(true)))
   val testsToRun = config.getStringList("runTests").toArray()
   testsToRun.foreach{ t =>
     val testName = s"spark.jobserver.integrationtests.tests.$t"
