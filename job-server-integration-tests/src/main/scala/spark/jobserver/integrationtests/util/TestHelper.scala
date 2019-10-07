@@ -1,6 +1,19 @@
 package spark.jobserver.integrationtests.util
 
+import java.security.KeyManagementException
+import java.security.NoSuchAlgorithmException
+import java.security.SecureRandom
+import java.security.cert.X509Certificate
+
 import com.softwaremill.sttp._
+
+import javax.net.ssl.HostnameVerifier
+import javax.net.ssl.HttpsURLConnection
+import javax.net.ssl.KeyManager
+import javax.net.ssl.SSLContext
+import javax.net.ssl.SSLSession
+import javax.net.ssl.TrustManager
+import javax.net.ssl.X509TrustManager
 import play.api.libs.json.Json
 
 object TestHelper {
@@ -48,6 +61,30 @@ object TestHelper {
       state = (json \ "status").as[String]
       retriesLeft -= 1
     }
+  }
+
+  def disableSSLVerification(): Unit = {
+    val trustAllCerts = Array[TrustManager](new X509TrustManager() {
+      def getAcceptedIssuers: Array[X509Certificate] = Array[X509Certificate]()
+      override def checkServerTrusted(x509Certificates: Array[X509Certificate], s: String): Unit = ()
+      override def checkClientTrusted(x509Certificates: Array[X509Certificate], s: String): Unit = ()
+    })
+
+    var sc: SSLContext = null
+    try {
+      sc = SSLContext.getInstance("TLS")
+      sc.init(Array[KeyManager](), trustAllCerts, new SecureRandom())
+    } catch {
+      case e: KeyManagementException =>
+        e.printStackTrace()
+      case e: NoSuchAlgorithmException =>
+        e.printStackTrace()
+    }
+    HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory)
+    val allHostsValid = new HostnameVerifier {
+      override def verify(s: String, sslSession: SSLSession): Boolean = true
+    }
+    HttpsURLConnection.setDefaultHostnameVerifier(allHostsValid)
   }
 
 }

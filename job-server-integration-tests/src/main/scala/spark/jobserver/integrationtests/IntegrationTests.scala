@@ -8,6 +8,8 @@ import com.typesafe.config.ConfigException
 import com.typesafe.config.ConfigFactory
 import com.typesafe.config.ConfigRenderOptions
 
+import spark.jobserver.integrationtests.util.TestHelper
+
 object IntegrationTests extends App {
 
   // Parse config
@@ -45,6 +47,11 @@ object IntegrationTests extends App {
     case e: ConfigException =>
       println("Invalid configuration file: " + e.getMessage)
       sys.exit(-1)
+  }
+
+  // In case HTTPS is used, just disable verification
+  if(config.hasPath("useSSL") && config.getBoolean("useSSL")) {
+    TestHelper.disableSSLVerification()
   }
 
   // Run selected integration tests

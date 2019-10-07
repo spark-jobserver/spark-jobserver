@@ -30,6 +30,8 @@ Here's a running example for a config file:
 {
   // Define the addresses of to be tested jobservers in this format
   jobserverAddresses: ["localhost:8090", "localhost:8091"]
+  // In case jobserver communicates via https
+  useSSL: true
   // Specify which tests to run (list of concrete tests)
   runTests: ["BasicApiTests", "CornerCasesTests", "HAFailoverTests"]
   // Define the concrete deployment controller in case you are running HA tests
