@@ -31,12 +31,11 @@ class HAFailoverTest extends FreeSpec with Matchers with BeforeAndAfterAllConfig
     SJS2 = jobservers.get(1)
     controller = DeploymentController.fromConfig(config)
     // Restart second jobserver to make sure the first one is the singleton
-    val ip2 = SJS2.split(":").head
-    controller.isJobserverUp(ip2) should equal(true)
-    controller.stopJobserver(ip2)
-    controller.isJobserverUp(ip2) should equal(false)
-    controller.startJobserver(ip2)
-    controller.isJobserverUp(ip2) should equal(true)
+    controller.isJobserverUp(SJS2) should equal(true)
+    controller.stopJobserver(SJS2)
+    controller.isJobserverUp(SJS2) should equal(false)
+    controller.startJobserver(SJS2)
+    controller.isJobserverUp(SJS2) should equal(true)
   }
 
   // Test artifacts
@@ -45,10 +44,9 @@ class HAFailoverTest extends FreeSpec with Matchers with BeforeAndAfterAllConfig
   "Sustain one jobserver failure" - {
 
     "Stopping Jobserver 1 should succeed" in {
-      val ip1 = SJS1.split(":").head
-      controller.isJobserverUp(ip1) should equal(true)
-      controller.stopJobserver(ip1)
-      controller.isJobserverUp(ip1) should equal(false)
+      controller.isJobserverUp(SJS1) should equal(true)
+      controller.stopJobserver(SJS1)
+      controller.isJobserverUp(SJS1) should equal(false)
     }
 
     // sample test representing every API call that is not routed through ClusterSupervisor
@@ -95,10 +93,9 @@ class HAFailoverTest extends FreeSpec with Matchers with BeforeAndAfterAllConfig
     }
 
     "Restart of Jobserver 1 should succeed" in {
-      val ip1 = SJS1.split(":").head
-      controller.isJobserverUp(ip1) should equal(false)
-      controller.startJobserver(ip1)
-      controller.isJobserverUp(ip1) should equal(true)
+      controller.isJobserverUp(SJS1) should equal(false)
+      controller.startJobserver(SJS1)
+      controller.isJobserverUp(SJS1) should equal(true)
     }
 
     "GET /binaries should work again on Jobserver 1" in {

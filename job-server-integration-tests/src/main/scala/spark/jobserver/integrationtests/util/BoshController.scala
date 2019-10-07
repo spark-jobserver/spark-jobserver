@@ -41,7 +41,9 @@ class BoshController(config: Config) extends DeploymentController(config: Config
    * Helper
    */
 
-  def getInstanceIDByIp(ip: String): Option[String] = {
+  def getInstanceIDByIp(address: String): Option[String] = {
+    val uri = uri"$address"
+    val ip = uri.host
     instances.foreach { instance =>
       if((instance \ "ips").as[String] == ip){
         return Some((instance \ "instance").as[String])
@@ -56,7 +58,9 @@ class BoshController(config: Config) extends DeploymentController(config: Config
    * Interface
    */
 
-  override def stopJobserver(ip: String) : Boolean = {
+  override def stopJobserver(address: String) : Boolean = {
+    val uri = uri"$address"
+    val ip = uri.host
     val instanceId = getInstanceIDByIp(ip)
     if(instanceId.isDefined){
       val command = s"bosh -d $deployment stop -n ${instanceId.get}"
@@ -68,7 +72,9 @@ class BoshController(config: Config) extends DeploymentController(config: Config
 
   }
 
-  override def startJobserver(ip: String): Boolean = {
+  override def startJobserver(address: String): Boolean = {
+    val uri = uri"$address"
+    val ip = uri.host
     val instanceId = getInstanceIDByIp(ip)
     if(instanceId.isDefined){
       val command = s"bosh -d $deployment -n start ${instanceId.get}"
@@ -79,11 +85,11 @@ class BoshController(config: Config) extends DeploymentController(config: Config
     }
   }
 
-  override def isJobserverUp(ip: String): Boolean = {
+  override def isJobserverUp(address: String): Boolean = {
     try{
-    implicit val backend = HttpURLConnectionBackend()
-    val healthCheck = sttp.get(uri"$ip:8090/healthz").send()
-    return healthCheck.code == 200
+      implicit val backend = HttpURLConnectionBackend()
+      val healthCheck = sttp.get(uri"$address/healthz").send()
+      return healthCheck.code == 200
     } catch {
       case _ : Throwable => return false
     }
