@@ -69,7 +69,7 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
   private val chunkSizeInKb = Try(config.getInt("spark.jobserver.cassandra.chunk-size-in-kb")).getOrElse(1024)
   setupSchema()
 
-  override val rootDir = config.getString("spark.jobserver.cassandra.rootdir")
+  override val rootDir = config.getString("spark.jobserver.cassandradao.rootdir")
   override val rootDirFile = new File(rootDir)
   logger.info("File caching rootDir is " + rootDirFile.getAbsolutePath)
   initFileDirectory()
