@@ -269,9 +269,6 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
     case AddContext(name, contextConfig) =>
       val originator = sender()
       val mergedConfig = contextConfig.withFallback(defaultContextConfig)
-      // TODO(velvia): This check is not atomic because contexts is only populated
-      // after SparkContext successfully created!  See
-      // https://github.com/spark-jobserver/spark-jobserver/issues/349
       val resp = getActiveContextByName(name)
       (resp._1, resp._2) match {
         case (true, Some(c)) => originator ! ContextAlreadyExists
