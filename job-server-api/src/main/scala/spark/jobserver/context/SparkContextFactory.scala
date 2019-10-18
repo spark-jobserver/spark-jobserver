@@ -64,6 +64,8 @@ trait SparkContextFactory {
   }
 
   def updateConfig(config: Config): Config = config
+
+  def runsPython: Boolean = false
 }
 
 case class ScalaJobContainer(job: api.SparkJobBase) extends JobContainer {

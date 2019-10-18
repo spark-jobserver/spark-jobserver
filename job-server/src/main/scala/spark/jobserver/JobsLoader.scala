@@ -49,20 +49,11 @@ class JobsLoader(maxEntries: Int,
     * @return The case class containing the location of the binary file for the specified job.
     */
   override def getPythonJob(classPath: Seq[String], mainClass: String): PythonJobInfo = {
-    val appName = classPath.head // TODO: make proper validation here
-    val lastBinInfoObj = Await.result(
-      (dao ? JobDAOActor.GetLastBinaryInfo(appName))(daoAskTimeout), daoAskTimeout.duration).
-      asInstanceOf[JobDAOActor.LastBinaryInfo].lastBinaryInfo
-    if (lastBinInfoObj.isEmpty) {
-      // TODO: should lead to NoSuchBinary in the end
-      throw NoSuchBinaryException(s"$appName - binary not found")
+    if (classPath.length == 1) {
+      PythonJobInfo(classPath.head)
+    } else {
+      throw new IllegalArgumentException(
+        s"Python should have exactly one egg file! Found: ${classPath.length}")
     }
-    val binInfo = lastBinInfoObj.get
-    val pyPathReq =
-      (dao ? JobDAOActor.GetBinaryPath(
-        appName, BinaryType.Egg, binInfo.uploadTime)).mapTo[JobDAOActor.BinaryPath]
-    val pyPath = Await.result(pyPathReq, daoAskTimeout.duration).binPath
-    val pyFilePath = new File(pyPath).getAbsolutePath
-    PythonJobInfo(pyFilePath)
   }
 }
