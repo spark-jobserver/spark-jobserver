@@ -97,6 +97,8 @@ trait PythonContextFactory extends SparkContextFactory {
   protected def doMakeContext(sc: SparkContext,
                     contextConfig: Config,
                     contextName: String): C
+
+  override def runsPython: Boolean = true
 }
 
 object PythonContextFactory {

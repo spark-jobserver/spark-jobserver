@@ -360,7 +360,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
         } else {
           List.empty
         }
-        val classPathURIs = getClassPathURIs(cp)
+        val classPathURIs = getURIsForBinaryInfos(cp)
         classPathURIs.foreach{
           jarURI => jarLoader.addURL(new URL(jarURI))
         }
@@ -390,17 +390,21 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
       val loadedJars = jarLoader.getURLs
       var classPathURIs: Seq[String] = null
       Try {
-        classPathURIs = getClassPathURIs(cp)
-        classPathURIs.foreach {
-          jarURI => {
-            val jarToLoad = new URL(jarURI)
-            if (!loadedJars.contains(jarToLoad)) {
-              logger.info("Adding {} to local JarLoader", jarURI)
-              jarLoader.addURL(jarToLoad)
-            }
-            if (!jobContext.sparkContext.jars.contains(jarURI)) {
-              logger.info("Adding {} to Spark (context.addJar)", jarURI)
-              jobContext.sparkContext.addJar(jarURI)
+        classPathURIs = getURIsForBinaryInfos(cp)
+        if (factory.runsPython) {
+          logger.info("Skipping adding URIs to jar loader for Python job.")
+        } else {
+          classPathURIs.foreach {
+            jarURI => {
+              val jarToLoad = new URL(jarURI)
+              if (!loadedJars.contains(jarToLoad)) {
+                logger.info("Adding {} to local JarLoader", jarURI)
+                jarLoader.addURL(jarToLoad)
+              }
+              if (!jobContext.sparkContext.jars.contains(jarURI)) {
+                logger.info("Adding {} to Spark (context.addJar)", jarURI)
+                jobContext.sparkContext.addJar(jarURI)
+              }
             }
           }
         }
@@ -721,23 +725,20 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
   }
 
   /**
-    * Parses given configuration file and produces the list of class path URLs. If just a name (without
+    * Parses given configuration file and produces the list of URIs for binaries. If just a name (without
     * protocol) is given instead of a URI, this means that a binary should be taken from the database.
     * It will then call the DAO and produce local or remote URL for this dependency.
-    * @param classPath list of BinaryInfo objects
+    * @param binInfos list of BinaryInfo objects
     * @return sequence of binary URIs
     */
-  private def getClassPathURIs(classPath: Seq[BinaryInfo]): Seq[String] = {
-    classPath.flatMap(binInfo => {
+  private def getURIsForBinaryInfos(binInfos: Seq[BinaryInfo]): Seq[String] = {
+    binInfos.flatMap(binInfo => {
       binInfo.binaryType.name match {
         case "Uri" => Some(binInfo.appName)
-        case "Jar" =>
+        case _ =>
               val jarPath = dependenciesCache.getBinaryPath(
                 binInfo.appName, binInfo.binaryType, binInfo.uploadTime)
               Some(s"file://${new File(jarPath).getAbsolutePath}")
-        case "Egg" =>
-          // Skipping adding egg file to class path as they are handled by PythonContext in job validation
-          None
       }
     })
   }
