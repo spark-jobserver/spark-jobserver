@@ -413,7 +413,7 @@ object WordCountExampleSparkSession extends SparkSessionJob {
 
 ### Dependency jars
 
-You have a couple options to package and upload dependency jars.
+For Java/Scala applications you have a couple options to package and upload dependency jars.
 
 * The easiest is to use something like [sbt-assembly](https://github.com/sbt/sbt-assembly) to produce a fat jar.  Be sure to mark the Spark and job-server dependencies as "provided" so it won't blow up the jar size.  This works well if the number of dependencies is not large.
 * When the dependencies are sizeable and/or you don't want to load them with every different job, you can package the dependencies separately and use one of several options:
@@ -430,7 +430,17 @@ You have a couple options to package and upload dependency jars.
         }'
         ````
         The jars /myjars/deps01.jar & /myjars/deps02.jar (present only on the SJS node) will be loaded and made available for the Spark driver & executors.
+        Please note that only only `file`, `local`, `ftp`, `http` protocols will work (URIs will be added to standard java class loader).
+        Recent changes also allow to use names of the binaries, which were uploaded to Jobserver.
     - Use the `--package` option with Maven coordinates with `server_start.sh`.
+    - Recent changes also allow you to use new parameters for the `POST /jobs` request:
+      ````
+      POST /jobs?cp=someURI,binName1,binName2&mainClass=some.main.Class
+      ````
+      `cp` accepts list of binary names (under which you uploaded binary to Jobserver) and URIs,
+      `mainClass` is the main class of your application.
+      Main advantage of this approach in comparison to using `dependent-jar-uris` is that you don't need to
+      specify which jar is the main one and can just send all of needed jars in one list.
 
 ### Named Objects
 #### Using Named RDDs
@@ -871,6 +881,8 @@ the REST API.
     GET /jobs/<jobId>        - Gets the result or status of a specific job
     DELETE /jobs/<jobId>     - Kills the specified job
     GET /jobs/<jobId>/config - Gets the job configuration
+
+For additional information on `POST /jobs` check out [submitting jobs documentation](doc/submitting-jobs.md).
 
 For details on the Typesafe config format used for input (JSON also works), see the [Typesafe Config docs](https://github.com/typesafehub/config).
 
