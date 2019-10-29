@@ -66,6 +66,10 @@ object WebApi {
     ctx.complete(stcode.intValue, errMap(e, errMsg))
   }
 
+  def completeWithStatusCode(ctx: RequestContext, statusCode: StatusCode): Unit = {
+    ctx.complete(statusCode, Map.empty[String, String])
+  }
+
   def errMap(errMsg: String) : Map[String, String] = Map(StatusKey -> JobStatus.Error, ResultKey -> errMsg)
 
   def errMap(t: Throwable, status: String) : Map[String, Any] =
@@ -350,7 +354,7 @@ class WebApi(system: ActorSystem,
                       val future = binaryManager ? StoreBinary(appName, binaryType, binBytes)
                       future.map {
                         case BinaryStored =>
-                          ctx.complete(StatusCodes.OK)
+                          completeWithStatusCode(ctx, StatusCodes.Created)
                         case InvalidBinary => badRequest(ctx, "Binary is not of the right format")
                         case BinaryStorageFailure(ex) => logAndComplete(
                           ctx, "Storage Failure", StatusCodes.InternalServerError, ex)
@@ -384,7 +388,7 @@ class WebApi(system: ActorSystem,
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
             future.map {
               case BinaryDeleted =>
-                ctx.complete(StatusCodes.OK)
+                completeWithStatusCode(ctx, StatusCodes.OK)
               case BinaryInUse(jobs) =>
                 logAndComplete(ctx,
                               s"Binary is in use by job(s): ${jobs.mkString(", ")}",
@@ -583,13 +587,13 @@ class WebApi(system: ActorSystem,
 
                     (supervisor ? AddContextsFromConfig).onFailure {
                       case _ =>
-                        ctx.complete("ERROR")
+                        completeWithStatusCode(ctx, StatusCodes.InternalServerError)
                     }
                     ctx.complete(StatusCodes.OK, successMap("Context reset"))
                   }
                   timer.stop()
                 case _ =>
-                  ctx.complete("ERROR")
+                  completeWithStatusCode(ctx, StatusCodes.InternalServerError)
                   timer.stop()
               }
             }
@@ -605,7 +609,7 @@ class WebApi(system: ActorSystem,
   def healthzRoutes: Route = pathPrefix("healthz") {
     //no authentication required
     get { ctx =>
-      ctx.complete("OK")
+      completeWithStatusCode(ctx, StatusCodes.OK)
     }
   }
 
