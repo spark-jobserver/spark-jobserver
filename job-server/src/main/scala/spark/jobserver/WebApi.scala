@@ -66,6 +66,10 @@ object WebApi {
     ctx.complete(stcode.intValue, errMap(e, errMsg))
   }
 
+  def completeWithStatusCode(ctx: RequestContext, statusCode: StatusCode): Unit = {
+    ctx.complete(statusCode, Map.empty[String, String])
+  }
+
   def errMap(errMsg: String) : Map[String, String] = Map(StatusKey -> JobStatus.Error, ResultKey -> errMsg)
 
   def errMap(t: Throwable, status: String) : Map[String, Any] =
@@ -352,7 +356,7 @@ class WebApi(system: ActorSystem,
 
                       future.map {
                         case BinaryStored =>
-                          ctx.complete(StatusCodes.OK)
+                          completeWithStatusCode(ctx, StatusCodes.Created)
                         case InvalidBinary => badRequest(ctx, "Binary is not of the right format")
                         case BinaryStorageFailure(ex) => logAndComplete(
                           ctx, "Storage Failure", StatusCodes.InternalServerError, ex)
@@ -386,7 +390,7 @@ class WebApi(system: ActorSystem,
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
             future.map {
               case BinaryDeleted =>
-                ctx.complete(StatusCodes.OK)
+                completeWithStatusCode(ctx, StatusCodes.OK)
               case BinaryInUse(jobs) =>
                 logAndComplete(ctx,
                               s"Binary is in use by job(s): ${jobs.mkString(", ")}",
@@ -582,13 +586,14 @@ class WebApi(system: ActorSystem,
                     Thread.sleep(1000) // we apparently need some sleeping in here, so spark can catch up
 
                     (supervisor ? AddContextsFromConfig).onFailure {
-                      case t => ctx.complete("ERROR")
+                      case _ =>
+                        completeWithStatusCode(ctx, StatusCodes.InternalServerError)
                     }
                     ctx.complete(StatusCodes.OK, successMap("Context reset"))
                   }
                 timer.stop()
                 case _ =>
-                  ctx.complete("ERROR")
+                  completeWithStatusCode(ctx, StatusCodes.InternalServerError)
                   timer.stop()
               }
             }
@@ -605,7 +610,7 @@ class WebApi(system: ActorSystem,
     get { ctx =>
       try {
         if (healthCheckInst != null && healthCheckInst.isHealthy()) {
-          ctx.complete(StatusCodes.OK)
+          completeWithStatusCode(ctx, StatusCodes.OK)
         } else {
           ctx.complete(StatusCodes.InternalServerError, errMap("Required actors not alive"))
         }
