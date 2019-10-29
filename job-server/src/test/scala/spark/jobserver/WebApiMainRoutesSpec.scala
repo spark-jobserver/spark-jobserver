@@ -57,17 +57,17 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       }
     }
 
-    it("should respond with OK if jar uploaded successfully") {
+    it("should respond with 201 if jar uploaded successfully") {
       Post("/binaries/foobar", Array[Byte](0, 1, 2)).
         withHeaders(BinaryType.Jar.contentType) ~> sealRoute(routes) ~> check {
-        status should be (OK)
+        status should be (Created)
       }
     }
 
-    it("should respond with OK if egg uploaded successfully") {
+    it("should respond with 201 if egg uploaded successfully") {
       Post("/binaries/pyfoo", Array[Byte](0, 1, 2)).
         withHeaders(BinaryType.Egg.contentType) ~> sealRoute(routes) ~> check {
-        status should be (OK)
+        status should be (Created)
       }
     }
 
