@@ -52,7 +52,7 @@ trait DataRoutes extends HttpService {
             future.map {
               case Deleted => ctx.complete(StatusCodes.OK)
               case Error =>
-                badRequest(ctx, "Unable to delete data file '" + filename + "'.")
+                logAndComplete(ctx, "Unable to delete data file '" + filename + "'.", StatusCodes.BadRequest)
             }.recover {
               case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
             }
@@ -72,7 +72,8 @@ trait DataRoutes extends HttpService {
                   val future = dataManager ? DeleteAllData
                   future.map {
                     case Deleted => ctx.complete(StatusCodes.OK, successMap("Data reset"))
-                    case Error => badRequest(ctx, "Unable to delete data folder")
+                    case Error =>
+                      logAndComplete(ctx, "Unable to delete data folder", StatusCodes.BadRequest)
                   }.recover {
                     case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
                   }
@@ -95,7 +96,7 @@ trait DataRoutes extends HttpService {
                     ResultKey -> Map("filename" -> filename)))
                 }
                 case Error =>
-                  badRequest(ctx, "Failed to store data file '" + filename + "'.")
+                  logAndComplete(ctx, "Failed to store data file '" + filename + "'.", StatusCodes.BadRequest)
               }.recover {
                 case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
               }
