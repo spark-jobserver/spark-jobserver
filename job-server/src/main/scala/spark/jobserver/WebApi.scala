@@ -51,13 +51,9 @@ object WebApi {
     ctx.complete(StatusCodes.NotFound, errMap(msg))
   }
 
-  def logAndComplete(ctx: RequestContext, errMsg: String, stcode: Int) {
+  def logAndComplete(ctx: RequestContext, errMsg: String, stcode: StatusCode) {
     logger.info("StatusCode: " + stcode + ", ErrorMessage: " + errMsg)
-    ctx.complete(stcode, errMap(errMsg))
-  }
-
-  def logAndComplete(ctx: RequestContext, errMsg: String, statusCode: StatusCode) {
-    logAndComplete(ctx, errMsg, statusCode.intValue)
+    ctx.complete(stcode.intValue, errMap(errMsg))
   }
 
   def logAndComplete(ctx: RequestContext, errMsg: String, stcode: StatusCode, e: Throwable) {
