@@ -25,7 +25,7 @@ object Versions {
   lazy val shiro = "1.3.2"
   lazy val slick = "3.1.1"
   lazy val spray = "1.3.3"
-  lazy val sprayJson = "1.3.2"
+  lazy val sprayJson = "1.3.5"
   lazy val typeSafeConfig = if (isJavaAtLeast("1.8")) "1.3.0" else "1.2.1"
   lazy val cassandraConnector = "6.0.9"
 }
