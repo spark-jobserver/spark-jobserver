@@ -4,7 +4,7 @@ import java.io.{BufferedOutputStream, FileOutputStream}
 
 import com.typesafe.config.Config
 import org.joda.time.DateTime
-import spark.jobserver.io.{BinaryType, ContextInfo, JobDAO, JobInfo, JobStatus}
+import spark.jobserver.io._
 
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -121,12 +121,17 @@ class InMemoryDAO extends JobDAO {
     jobConfigs.get(jobId)
   }
 
-  override def getLastUploadTimeAndType(appName: String): Option[(DateTime, BinaryType)] = {
+  override def getBinaryInfo(appName: String): Option[BinaryInfo] = {
     // Copied from the base JobDAO, feel free to optimize this (having in mind this specific storage type)
-    Await.result(getApps, 60 seconds).get(appName).map(t => (t._2, t._1))
+    Await.result(getApps, 60 seconds).get(appName).map(t => BinaryInfo(appName, t._1, t._2))
   }
 
-override def deleteBinary(appName: String): Unit = {
+  override def deleteBinary(appName: String): Unit = {
     binaries = binaries.filter { case ((name, _, _), _) => appName != name }
+  }
+
+  override def getJobsByBinaryName(binName: String, statuses: Option[Seq[String]] = None):
+      Future[Seq[JobInfo]] = {
+    throw new NotImplementedError()
   }
 }

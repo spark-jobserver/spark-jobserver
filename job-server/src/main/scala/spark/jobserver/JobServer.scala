@@ -1,17 +1,17 @@
 package spark.jobserver
 
-import akka.actor.{ActorContext, ActorNotFound, ActorRef, ActorSystem, AddressFromURIString, Props}
+import akka.actor.{ActorContext, ActorNotFound, ActorRef, ActorSystem, Address, AddressFromURIString, Props}
 import akka.util.Timeout
 import akka.pattern.ask
 import akka.cluster.Cluster
 import akka.cluster.ClusterEvent.{InitialStateAsEvents, MemberEvent}
 import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
-
 import java.io.File
 import java.util.concurrent.{TimeUnit, TimeoutException}
 
 import spark.jobserver.io._
-import spark.jobserver.util.ContextReconnectFailedException
+import spark.jobserver.util.{ContextReconnectFailedException, DAOCleanup, HealthCheck, Utils,
+                             WrongFormatException}
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 
@@ -21,6 +21,10 @@ import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 import scala.collection.mutable.ListBuffer
 import com.google.common.annotations.VisibleForTesting
+import spark.jobserver.util.JobServerRoles
+import spark.jobserver.io.zookeeper.AutoPurgeActor
+
+import scala.util.control.NonFatal
 
 /**
  * The Spark Job Server is a web service that allows users to submit and run Spark jobs, check status,
@@ -44,10 +48,15 @@ object JobServer {
 
   class InvalidConfiguration(error: String) extends RuntimeException(error)
 
+  val ACTOR_SYSTEM_NAME = "JobServer"
+
   // Allow custom function to create ActorSystem.  An example of why this is useful:
   // we can have something that stores the ActorSystem so it could be shut down easily later.
   def start(args: Array[String], makeSystem: Config => ActorSystem) {
-    val defaultConfig = ConfigFactory.load()
+    // For Akka DowningProvider to decide which node to down in case of split brain,
+    // it is important to understand weather it's SJS master or driver node. Therefore new value in config.
+    val defaultConfig = ConfigFactory.load().withValue(
+      JobServerRoles.propertyName, ConfigValueFactory.fromAnyRef(JobServerRoles.jobserverMaster))
     val config = if (args.length > 0) {
       val configFile = new File(args(0))
       if (!configFile.exists()) {
@@ -112,6 +121,9 @@ object JobServer {
       logger.info("Embeded H2 server started with base dir {} and URL {}", rootDir, h2.getURL: Any)
     }
 
+    val haSeedNodes = getAndValidateHASeedNodes(config)
+
+    // Start actors and managers
     val ctor = jobDaoClass.getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
     val jobDAO = ctor.newInstance(config).asInstanceOf[JobDAO]
     val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO), "dao-manager")
@@ -119,56 +131,85 @@ object JobServer {
     val dataManager = system.actorOf(Props(classOf[DataManagerActor], dataFileDAO), "data-manager")
     val binManager = system.actorOf(Props(classOf[BinaryManager], daoActor), "binary-manager")
 
+    startCleanupIfEnabled(config)
+    startAutoPurge(system, daoActor, config)
+
     // Add initial job JARs, if specified in configuration.
     storeInitialBinaries(config, binManager)
 
-    val webApiPF = new WebApi(system, config, port, binManager, dataManager, _: ActorRef, _: ActorRef)
+    val webApiPF = new WebApi(system, config, port, binManager, dataManager, _: ActorRef, _: ActorRef,
+        _: HealthCheck)
     contextPerJvm match {
       case false =>
         val supervisor = system.actorOf(Props(classOf[LocalContextSupervisorActor],
             daoActor, dataManager), AkkaClusterSupervisorActor.ACTOR_NAME)
         supervisor ! ContextSupervisor.AddContextsFromConfig  // Create initial contexts
-        startWebApi(system, supervisor, jobDAO, webApiPF)
+        startWebApi(system, supervisor, jobDAO, webApiPF, daoActor, config)
       case true =>
         val cluster = Cluster(system)
 
         // Check if all contexts marked as running are still available and get the ActorRefs
         val existingManagerActorRefs = getExistingManagerActorRefs(system, daoActor)
-        joinAkkaCluster(cluster, existingManagerActorRefs.headOption)
+        joinAkkaCluster(cluster, existingManagerActorRefs, haSeedNodes)
         // We don't want to read all the old events that happened in the cluster
         // So, we remove the initialStateMode parameter
         cluster.registerOnMemberUp {
-          val supervisor = system.actorOf(Props(classOf[AkkaClusterSupervisorActor],
-            daoActor, dataManager, cluster), "context-supervisor")
+          system.actorOf(AkkaClusterSupervisorActor.managerProps(daoActor, dataManager, cluster),
+              "singleton")
+          val proxy = system.actorOf(AkkaClusterSupervisorActor.proxyProps(system),
+              "context-supervisor-proxy")
 
-          logger.info("Subscribing to MemberUp event")
-          cluster.subscribe(supervisor, classOf[MemberEvent])
-
-          if (existingManagerActorRefs.length > 0) {
-            supervisor ! ContextSupervisor.RegainWatchOnExistingContexts(existingManagerActorRefs)
-          }
-
-          supervisor ! ContextSupervisor.AddContextsFromConfig  // Create initial contexts
-          startWebApi(system, supervisor, jobDAO, webApiPF)
+          proxy ! ContextSupervisor.AddContextsFromConfig  // Create initial contexts
+          startWebApi(system, proxy, jobDAO, webApiPF, daoActor, config)
         }
     }
   }
 
   def startWebApi(system: ActorSystem, supervisor: ActorRef, jobDAO: JobDAO,
-      webApiPF: (ActorRef, ActorRef) => WebApi) {
+      webApiPF: (ActorRef, ActorRef, HealthCheck) => WebApi, daoActor: ActorRef, config: Config) {
     val jobInfo = system.actorOf(Props(classOf[JobInfoActor], jobDAO, supervisor), "job-info")
-    webApiPF(supervisor, jobInfo).start()
+    val healthClass = Class.forName(config.getString("spark.jobserver.healthcheck"))
+    var healthCheckInst: HealthCheck = null
+    if (healthClass.getName() == "spark.jobserver.util.ActorsHealthCheck") {
+      val healthCtr = healthClass.getConstructors()(0)
+      healthCheckInst = healthCtr.newInstance(supervisor, jobInfo, daoActor).asInstanceOf[HealthCheck]
+    } else {
+      healthCheckInst = healthClass.newInstance.asInstanceOf[HealthCheck]
+    }
+    webApiPF(supervisor, jobInfo, healthCheckInst).start()
   }
 
-  private def joinAkkaCluster(cluster: Cluster, initialSeedNode: Option[ActorRef]) {
-    initialSeedNode match {
-      case None =>
-        val selfAddress = cluster.selfAddress
-        logger.info(s"Joining newly created cluster at ${selfAddress}")
-        cluster.join(selfAddress)
-      case Some(actorRef) =>
-        logger.info(s"Joining existing cluster at ${actorRef.path.address.toString}")
-        cluster.join(actorRef.path.address)
+  /**
+    * This function is responsible for joining the Akka cluster dynamically
+    * based on current situation of Akka cluster.
+    *
+    * - If there are no old slave nodes and HA section of config is not
+    *   defined, then this JVM joins itself.
+    * - If some slave nodes are already running then this JVM joins them.
+    *   If multiple jobserver master VMs will be started then all of them
+    *   will join the slave nodes.
+    * - If no slave nodes are available but ha nodes are provided, then
+    *   this JVM joins the master nodes. joinSeedNodes function is
+    *   intelligent enough to form 1 cluster if multiple masters are
+    *   specified and they all join at the same time (given that the
+    *   list of masters is the same on all nodes)
+    *
+    * @param cluster Current Akka cluster
+    * @param slaveSeedNodes Akka addresses of currently running seed nodes
+    * @param haSeedNodes Akka addresses of all jobserver masters
+    */
+  @VisibleForTesting
+  def joinAkkaCluster(cluster: Cluster, slaveSeedNodes: List[ActorRef], haSeedNodes: List[Address]) {
+    if (slaveSeedNodes.isEmpty && haSeedNodes.isEmpty) {
+      val selfAddress = cluster.selfAddress
+      logger.info(s"Joining newly created cluster at ${selfAddress}")
+      cluster.join(selfAddress)
+    } else {
+      val slaveAddressList = slaveSeedNodes.map(_.path.address)
+      logger.info(s"Found slave seed nodes: ${slaveAddressList.mkString(", ")} / " +
+        s"HA seed Nodes: ${haSeedNodes.mkString(", ")}")
+      val allSeedNodes = haSeedNodes ::: slaveAddressList
+      cluster.joinSeedNodes(allSeedNodes)
     }
   }
 
@@ -195,8 +236,7 @@ object JobServer {
 
   @VisibleForTesting
   def setReconnectionFailedForContextAndJobs(contextInfo: ContextInfo,
-      jobDaoActor: ActorRef) {
-    val finiteDuration = FiniteDuration(3, SECONDS)
+      jobDaoActor: ActorRef, timeout: Timeout) {
     val ctxName = contextInfo.name
     val logMsg = s"Reconnecting to context $ctxName failed ->" +
       s"updating status of context $ctxName and related jobs to error"
@@ -204,18 +244,23 @@ object JobServer {
     val updatedContextInfo = contextInfo.copy(endTime = Option(DateTime.now()),
         state = ContextStatus.Error, error = Some(ContextReconnectFailedException()))
     jobDaoActor ! JobDAOActor.SaveContextInfo(updatedContextInfo)
-    (jobDaoActor ? JobDAOActor.GetJobInfosByContextId(
-        contextInfo.id, Some(JobStatus.getNonFinalStates())))(finiteDuration).onComplete {
-      case Success(JobDAOActor.JobInfos(jobInfos)) =>
-        jobInfos.foreach(jobInfo => {
-        jobDaoActor ! JobDAOActor.SaveJobInfo(jobInfo.copy(state = JobStatus.Error,
-            endTime = Some(DateTime.now()), error = Some(ErrorData(ContextReconnectFailedException()))))
-        })
-      case Failure(e: Exception) =>
-        logger.error(s"Exception occurred while fetching jobs for context (${contextInfo.id})", e)
-      case unexpectedMsg @ _ =>
-        logger.error(
-            s"$unexpectedMsg message received while fetching jobs for context (${contextInfo.id})")
+    try{
+      Await.ready((jobDaoActor ? JobDAOActor.GetJobInfosByContextId(
+          contextInfo.id, Some(JobStatus.getNonFinalStates())))(timeout), timeout.duration).value.get match {
+        case Success(JobDAOActor.JobInfos(jobInfos)) =>
+          jobInfos.foreach(jobInfo => {
+          jobDaoActor ! JobDAOActor.SaveJobInfo(jobInfo.copy(state = JobStatus.Error,
+              endTime = Some(DateTime.now()), error = Some(ErrorData(ContextReconnectFailedException()))))
+          })
+        case Success(unknownResponse) =>
+          logger.error(s"Received unexpected response: $unknownResponse")
+        case Failure(e: Exception) =>
+          logger.error(s"Exception occurred while fetching jobs for context (${contextInfo.id})", e)
+      }
+    } catch {
+      case _ : TimeoutException =>
+        logger.error(s"Fetching job infos for context ${contextInfo.id} timed out. "
+            + "Not updating jobs to error state.")
     }
   }
 
@@ -231,7 +276,7 @@ object JobServer {
 
     resp.contextInfos.map{ contextInfo =>
       getManagerActorRef(contextInfo, system) match {
-        case None => setReconnectionFailedForContextAndJobs(contextInfo, jobDaoActor)
+        case None => setReconnectionFailedForContextAndJobs(contextInfo, jobDaoActor, daoAskTimeout)
         case Some(actorRef) => validManagerRefs += actorRef
       }
     }
@@ -301,6 +346,57 @@ object JobServer {
     }
   }
 
+  private def startAutoPurge(system: ActorSystem, daoActor: ActorRef, config : Config) : Unit = {
+    val enabled = AutoPurgeActor.isEnabled(config)
+
+    if (enabled){
+      val age = config.getInt("spark.jobserver.zookeeperdao.autopurge_after_hours")
+      val actor = system.actorOf(AutoPurgeActor.props(config, daoActor, age))
+      val initialPurge = (actor ? AutoPurgeActor.PurgeOldData)(AutoPurgeActor.maxPurgeDuration)
+      Await.result(initialPurge, AutoPurgeActor.maxPurgeDuration) match {
+        case AutoPurgeActor.PurgeComplete => logger.info("Initial auto purge completed successfully.")
+        case _ => logger.error("Initial auto purge unsuccessful.")
+      }
+    }
+  }
+
+  private def startCleanupIfEnabled(config: Config): Unit = {
+    isCleanupEnabled(config) match {
+      case true =>
+        logger.info("Cleanup of dao is enabled. Instantiating the class.")
+        Try(doStartupCleanup(config)) match {
+          case Success(true) => logger.info("Cleaned the dao successfully.")
+          case Success(false) => logger.error("Dao cleanup failed.")
+          case Failure(e) => logger.error("Failed to cleanup", e)
+        }
+      case false => logger.info("Startup dao cleanup is disabled.")
+    }
+  }
+
+  private def getAndValidateHASeedNodes(config: Config): List[Address] = {
+    try {
+      Utils.getHASeedNodes(config)
+    } catch {
+      case NonFatal(t) =>
+        logger.error("Failed to fetch HA seed nodes", t)
+        throw new InvalidConfiguration("Wrong format for config section spark.jobserver.ha.masters")
+    }
+  }
+
+  @VisibleForTesting
+  def isCleanupEnabled(config: Config): Boolean = {
+    val daoClassProperty = "spark.jobserver.startup_dao_cleanup_class"
+    (config.hasPath(daoClassProperty) && config.getString(daoClassProperty) != "")
+  }
+
+  @VisibleForTesting
+  def doStartupCleanup(config: Config): Boolean = {
+    val daoCleanupClass = Class.forName(config.getString("spark.jobserver.startup_dao_cleanup_class"))
+    val ctor = daoCleanupClass.getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
+    val daoCleanup = ctor.newInstance(config).asInstanceOf[DAOCleanup]
+    daoCleanup.cleanup()
+  }
+
   def main(args: Array[String]) {
     import scala.collection.JavaConverters._
     def makeSupervisorSystem(name: String)(config: Config): ActorSystem = {
@@ -310,7 +406,7 @@ object JobServer {
     }
 
     try {
-      start(args, makeSupervisorSystem("JobServer")(_))
+      start(args, makeSupervisorSystem(ACTOR_SYSTEM_NAME)(_))
     } catch {
       case e: Exception =>
         logger.error("Unable to start Spark JobServer: ", e)

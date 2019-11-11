@@ -3,25 +3,29 @@ package spark.jobserver
 import java.nio.charset.Charset
 
 import scala.util.Try
-import akka.actor.{ActorRef, ActorSystem, Props, Actor}
+import akka.actor.{Actor, ActorRef, ActorSystem, Address, Props}
+import akka.cluster.{Cluster, ClusterEvent, MemberStatus}
 import akka.pattern.ask
 import akka.util.Timeout
-import akka.testkit.{TestKit, TestProbe, TestActor}
+import akka.testkit.{TestActor, TestKit, TestProbe}
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 import java.nio.file.{Files, Path}
 
 import scala.concurrent.duration._
 import spark.jobserver.JobServer.InvalidConfiguration
 import spark.jobserver.common.akka
-import spark.jobserver.io.{
-  JobDAOActor, JobDAO, ContextInfo, ContextStatus, JobInfo, BinaryInfo, BinaryType, JobStatus}
-import spark.jobserver.util.ContextReconnectFailedException
+import spark.jobserver.io.{BinaryInfo, BinaryType, ContextInfo, ContextStatus, JobDAO, JobDAOActor, JobInfo, JobStatus}
+import spark.jobserver.util.{ContextReconnectFailedException, DAOCleanup}
 
 import scala.concurrent.Await
-import scala.concurrent.duration.TimeUnit;
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.Future
 import java.util.UUID
+
 import org.joda.time.DateTime
-import java.util.concurrent.{TimeUnit, CountDownLatch}
+import java.util.concurrent.{CountDownLatch, TimeUnit}
+
+import com.typesafe.config.Config
 
 object JobServerSpec {
   val system = ActorSystem("test")
@@ -69,7 +73,13 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
     return None
   }
 
-  def makeSupervisorSystem(config: Config): ActorSystem = actorSystem
+  def makeSupervisorSystem(config: Config): ActorSystem = {
+    val configWithRole = config.withValue("akka.cluster.roles",
+      ConfigValueFactory.fromIterable(List("supervisor").asJava))
+    actorSystem = ActorSystem("JobServerSpec", configWithRole)
+    actorSystem
+  }
+
   implicit val timeout: Timeout = 3 seconds
 
   describe("Fails on invalid configuration") {
@@ -190,7 +200,9 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
       resolveActorRef("/user/dao-manager") shouldNot be(None)
       resolveActorRef("/user/data-manager") shouldNot be(None)
       resolveActorRef("/user/binary-manager") shouldNot be(None)
-      resolveActorRef("/user/context-supervisor") shouldNot be (None)
+      resolveActorRef("/user/singleton") shouldNot be (None)
+      resolveActorRef("/user/singleton/context-supervisor") shouldNot be (None)
+      resolveActorRef("/user/context-supervisor-proxy") shouldNot be (None)
       resolveActorRef("/user/job-info") shouldNot be(None)
     }
 
@@ -300,8 +312,12 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
     it("should update the status of context and jobs if reconnection failed") {
       val daoActorProbe = TestProbe()
 
+      // Run setReconnectionFailedForContextAndJobs in separate thread
+      // to be able to probe the ongoing communication properly (especially due to blocking awaits)
       val (ctxRunning, _) = createContext("ctxRunning", ContextStatus.Running, true)
-      JobServer.setReconnectionFailedForContextAndJobs(ctxRunning, daoActorProbe.ref)
+      Future{
+        JobServer.setReconnectionFailedForContextAndJobs(ctxRunning, daoActorProbe.ref, timeout)
+      }
 
       // Check if context is updated correctly
       val saveContextMsg = daoActorProbe.expectMsgType[JobDAOActor.SaveContextInfo]
@@ -334,5 +350,55 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
 
       JobServer.getManagerActorRef(ctxInvalidAddress, actorSystem) should be(None)
     }
+  }
+
+  describe("Dao cleanup tests") {
+    it("should correctly find if the cleanup is enabled or not") {
+      JobServer.isCleanupEnabled(ConfigFactory.parseString("")) should be(false)
+      JobServer.isCleanupEnabled(
+        ConfigFactory.parseString("spark.jobserver.startup_dao_cleanup_class=\"\"")) should be(false)
+      JobServer.isCleanupEnabled(ConfigFactory.parseString(
+        "spark.jobserver.startup_dao_cleanup_class=spark.jobserver.util.ZKCleanup")) should be(true)
+    }
+
+    it("should create an instance of DAOCleanup correctly") {
+      val config = ConfigFactory.parseString(
+        s"spark.jobserver.startup_dao_cleanup_class=${classOf[dummyCleanup].getName}")
+      JobServer.doStartupCleanup(config) should be(true)
+    }
+
+    it("should fail if wrong class is passed in") {
+      val config = ConfigFactory.parseString(
+        s"spark.jobserver.startup_dao_cleanup_class=wrongClass")
+      intercept[ClassNotFoundException] {
+        JobServer.doStartupCleanup(config)
+      }
+    }
+  }
+
+  describe("Join Akka Cluster tests") {
+    it("should join itself if no slave is available and no HA setup is configured") {
+      val cluster = Cluster(actorSystem)
+      cluster.subscribe(testActor, ClusterEvent.InitialStateAsSnapshot, classOf[ClusterEvent.MemberEvent])
+      expectMsgClass(classOf[ClusterEvent.CurrentClusterState])
+
+      JobServer.joinAkkaCluster(cluster, List.empty, List.empty)
+
+      expectMsgClass(classOf[ClusterEvent.MemberUp])
+
+      within(5.seconds) {
+        awaitAssert {
+          cluster.state.members.size should === (1)
+          cluster.state.members.head.status should === (MemberStatus.Up)
+          cluster.state.members.head.address === cluster.selfAddress
+        }
+      }
+    }
+  }
+}
+
+class dummyCleanup(config: Config) extends DAOCleanup {
+  override def cleanup(): Boolean = {
+    true
   }
 }

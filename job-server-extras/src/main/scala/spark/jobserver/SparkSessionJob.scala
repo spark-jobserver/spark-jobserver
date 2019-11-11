@@ -3,7 +3,7 @@ package spark.jobserver
 import com.typesafe.config.Config
 import org.apache.spark.sql.SparkSession
 import org.scalactic._
-import spark.jobserver.api.{SparkJobBase, JobEnvironment, ValidationProblem}
+import spark.jobserver.api.{JobEnvironment, ValidationProblem}
 import spark.jobserver.context.SparkSessionContextLikeWrapper
 
 trait SparkSessionJob extends spark.jobserver.api.SparkJobBase {

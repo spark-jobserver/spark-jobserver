@@ -11,10 +11,12 @@ import org.apache.commons.io.FileUtils
 import org.slf4j.LoggerFactory
 import spark.jobserver.common.akka.actor.ProductionReaper
 import spark.jobserver.common.akka.actor.Reaper.WatchMe
+import spark.jobserver.util.JobServerRoles
 import spark.jobserver.io.{JobDAO, JobDAOActor}
 import spark.jobserver.util.{HadoopFSFacade, NetworkAddressFactory, Utils}
 
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.Await
+import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -31,9 +33,21 @@ object JobManager {
   def start(args: Array[String], makeSystem: Config => ActorSystem,
             waitForTermination: (ActorSystem, String, String) => Unit) {
 
-    val clusterAddress = AddressFromURIString.parse(args(0))
+    val masterAddresses = args(0)
+    val masterSeedNodes = Try {
+      masterAddresses
+        .split(',')
+        .map(AddressFromURIString.parse)
+        .toList
+      }.getOrElse {
+        logger.info(s"Failed to parse master seed node address(es) ${masterAddresses} in JVM arguments.")
+        exitJVM
+      }
+    logger.info(s"Found master seed nodes are: ${masterAddresses}")
+
     val managerName = args(1)
-    val loadedConfig = getConfFromFS(args(2)).getOrElse(exitJVM)
+    val loadedConfig = getConfFromFS(args(2)).getOrElse(exitJVM).withValue(
+      JobServerRoles.propertyName, ConfigValueFactory.fromAnyRef(JobServerRoles.jobserverSlave))
     val defaultConfig = ConfigFactory.load()
     var systemConfig = loadedConfig.withFallback(defaultConfig)
     val master = Try(systemConfig.getString("spark.master")).toOption
@@ -74,7 +88,13 @@ object JobManager {
       config.getConfig("spark").root.render())
 
     val masterAddress = systemConfig.getBoolean("spark.jobserver.kill-context-on-supervisor-down") match {
-      case true => clusterAddress.toString + "/user/context-supervisor"
+      /*
+       * TODO
+       * Note: This zombie killing logic has to be replaced by a proper split brain
+       * resolver, since the fix of resolving the AkkaClusterSupervisor no longer works
+       * when there is more than one Jobserver in the cluster (as it might be there or not).
+       */
+      case true => masterSeedNodes.head.toString + "/user/singleton/context-supervisor"
       case false => ""
     }
 
@@ -82,9 +102,9 @@ object JobManager {
     val jobManager = system.actorOf(JobManagerActor.props(daoActor, masterAddress, contextId,
         getManagerInitializationTimeout(systemConfig)), managerName)
 
-    //Join akka cluster
-    logger.info("Joining cluster at address {}", clusterAddress)
-    Cluster(system).join(clusterAddress)
+    // Join akka cluster
+    logger.info("Joining cluster at address(es) {}", masterSeedNodes.mkString(", "))
+    Cluster(system).joinSeedNodes(masterSeedNodes)
 
     val reaper = system.actorOf(Props[ProductionReaper])
     reaper ! WatchMe(jobManager)
@@ -120,7 +140,10 @@ object JobManager {
   /**
     * 0 is used as exit code to avoid restart of JVM by Spark in supervise mode
     */
-  private def exitJVM = sys.exit(0)
+  private def exitJVM = {
+    logger.warn("Exiting the JVM with status code of 0")
+    sys.exit(0)
+  }
 
   def main(args: Array[String]) {
     import scala.collection.JavaConverters._
@@ -138,12 +161,15 @@ object JobManager {
         // the driver process, that why we have to wait here.
         // Calling System.exit results in a failed YARN application result:
         // org.apache.spark.deploy.yarn.ApplicationMaster#runImpl() in Spark
-        system.awaitTermination
+        Await.result(system.terminate(), Duration.Inf)
       } else {
         // Spark Standalone Cluster Mode:
         // We have to call System.exit(0) otherwise the driver process keeps running
         // after the context has been stopped.
-        system.registerOnTermination(System.exit(0))
+        system.registerOnTermination {
+          logger.info("Actor system terminated. Exiting the JVM with exit code 0.")
+          System.exit(0)
+        }
       }
     }
 
@@ -155,4 +181,3 @@ object JobManager {
         TimeUnit.MILLISECONDS), TimeUnit.MILLISECONDS)
   }
 }
-

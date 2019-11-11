@@ -156,16 +156,17 @@ class SqlCommon(config: Config) {
   }
 
   def jobInfoFromRow(row: (String, String, String, String, String,
-    Timestamp, String, String, Timestamp, Option[Timestamp],
+    Timestamp, Array[Byte], String, String, Timestamp, Option[Timestamp],
     Option[String], Option[String], Option[String])): JobInfo = row match {
-    case (id, contextId, contextName, app, binType, upload, classpath,
+    case (id, contextId, contextName, app, binType, upload, binHash, classpath,
         state, start, end, err, errCls, errStTr) =>
       val errorInfo = err.map(ErrorData(_, errCls.getOrElse(""), errStTr.getOrElse("")))
       JobInfo(
         id,
         contextId,
         contextName,
-        BinaryInfo(app, BinaryType.fromString(binType), convertDateSqlToJoda(upload)),
+        BinaryInfo(app, BinaryType.fromString(binType), convertDateSqlToJoda(upload),
+          Some(BinaryDAO.hashBytesToString(binHash))),
         classpath,
         state,
         convertDateSqlToJoda(start),
@@ -249,8 +250,8 @@ class SqlCommon(config: Config) {
                           case None => j.binId === bin.binId
                 })
     } yield {
-      (j.jobId, j.contextId, j.contextName, bin.appName, bin.binaryType, bin.uploadTime, j.classPath,
-          j.state, j.startTime, j.endTime, j.error, j.errorClass, j.errorStackTrace)
+      (j.jobId, j.contextId, j.contextName, bin.appName, bin.binaryType, bin.uploadTime, bin.binHash,
+        j.classPath, j.state, j.startTime, j.endTime, j.error, j.errorClass, j.errorStackTrace)
     }
     val sortQuery = joinQuery.sortBy(_._9.desc)
     val limitQuery = sortQuery.take(limit)
@@ -269,8 +270,8 @@ class SqlCommon(config: Config) {
                           case _ => j.binId === bin.binId && j.contextId === contextId
                 })
     } yield {
-      (j.jobId, j.contextId, j.contextName, bin.appName, bin.binaryType, bin.uploadTime, j.classPath,
-          j.state, j.startTime, j.endTime, j.error, j.errorClass, j.errorStackTrace)
+      (j.jobId, j.contextId, j.contextName, bin.appName, bin.binaryType, bin.uploadTime, bin.binHash,
+        j.classPath, j.state, j.startTime, j.endTime, j.error, j.errorClass, j.errorStackTrace)
     }
     db.run(joinQuery.result).map(_.map(jobInfoFromRow))
   }
@@ -281,11 +282,38 @@ class SqlCommon(config: Config) {
       bin <- binaries
       j <- jobs if j.binId === bin.binId && j.jobId === id
     } yield {
-      (j.jobId, j.contextId, j.contextName, bin.appName, bin.binaryType, bin.uploadTime, j.classPath,
-         j.state, j.startTime, j.endTime, j.error, j.errorClass, j.errorStackTrace)
+      (j.jobId, j.contextId, j.contextName, bin.appName, bin.binaryType, bin.uploadTime, bin.binHash,
+        j.classPath, j.state, j.startTime, j.endTime, j.error, j.errorClass, j.errorStackTrace)
     }
     for (r <- db.run(joinQuery.result)) yield {
       r.map(jobInfoFromRow).headOption
     }
+  }
+
+  /**
+    * Final query is
+    * select x2.*, x3.*
+      from "BINARIES" x3, "JOBS" x2
+      where (
+        (x2."BIN_ID" = x3."BIN_ID") and
+        (x3."APP_NAME" = '$binName')) and
+        (x2."STATE" in ('$statuses'))
+    * @param binName The name of the binary to be looked up
+    * @param statuses List of job statuses to look up
+    * @return List of found jobs
+    */
+  def getJobsByBinaryName(binName: String, statuses: Option[Seq[String]] = None): Future[Seq[JobInfo]] = {
+    val joinQuery = for {
+      bin <- binaries
+      j <- jobs if ((binName, statuses) match {
+        case (binName, Some(s)) => j.binId === bin.binId && bin.appName === binName && j.state.inSet(s)
+        case (binName, None) => j.binId === bin.binId && bin.appName === binName
+      })
+    } yield {
+      (j.jobId, j.contextId, j.contextName, bin.appName, bin.binaryType, bin.uploadTime, bin.binHash,
+        j.classPath, j.state, j.startTime, j.endTime, j.error, j.errorClass, j.errorStackTrace)
+    }
+
+    db.run(joinQuery.result).map(_.map(jobInfoFromRow))
   }
 }

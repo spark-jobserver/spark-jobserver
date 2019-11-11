@@ -37,13 +37,14 @@ object JobDAOActor {
   case class GetJobConfig(jobId: String) extends JobDAORequest
   case class CleanContextJobInfos(contextId: String, endTime: DateTime)
 
-  case class GetLastUploadTimeAndType(appName: String) extends JobDAORequest
+  case class GetLastBinaryInfo(appName: String) extends JobDAORequest
   case class SaveContextInfo(contextInfo: ContextInfo)  extends JobDAORequest
   case class UpdateContextById(contextId: String, attributes: ContextModifiableAttributes)
   case class GetContextInfo(id: String) extends JobDAORequest
   case class GetContextInfoByName(name: String) extends JobDAORequest
   case class GetContextInfos(limit: Option[Int] = None,
       statuses: Option[Seq[String]] = None) extends JobDAORequest
+  case class GetJobsByBinaryName(appName: String, statuses: Option[Seq[String]] = None) extends JobDAORequest
 
   //Responses
   sealed trait JobDAOResponse
@@ -51,7 +52,7 @@ object JobDAOActor {
   case class BinaryPath(binPath: String) extends JobDAOResponse
   case class JobInfos(jobInfos: Seq[JobInfo]) extends JobDAOResponse
   case class JobConfig(jobConfig: Option[Config]) extends JobDAOResponse
-  case class LastUploadTimeAndType(uploadTimeAndType: Option[(DateTime, BinaryType)]) extends JobDAOResponse
+  case class LastBinaryInfo(lastBinaryInfo: Option[BinaryInfo]) extends JobDAOResponse
   case class ContextResponse(contextInfo: Option[ContextInfo]) extends JobDAOResponse
   case class ContextInfos(contextInfos: Seq[ContextInfo]) extends JobDAOResponse
 
@@ -89,6 +90,9 @@ class JobDAOActor(dao: JobDAO) extends InstrumentedActor {
     case GetBinaryPath(appName, binType, uploadTime) =>
       sender() ! BinaryPath(dao.getBinaryFilePath(appName, binType, uploadTime))
 
+    case GetJobsByBinaryName(binName, statuses) =>
+      dao.getJobsByBinaryName(binName, statuses).map(JobInfos).pipeTo(sender)
+
     case SaveContextInfo(contextInfo) =>
       saveContextAndRespond(sender, contextInfo)
 
@@ -113,8 +117,8 @@ class JobDAOActor(dao: JobDAO) extends InstrumentedActor {
     case GetJobConfig(jobId) =>
       dao.getJobConfig(jobId).map(JobConfig).pipeTo(sender)
 
-    case GetLastUploadTimeAndType(appName) =>
-      sender() ! LastUploadTimeAndType(dao.getLastUploadTimeAndType(appName))
+    case GetLastBinaryInfo(appName) =>
+      sender() ! LastBinaryInfo(dao.getBinaryInfo(appName))
 
     case CleanContextJobInfos(contextId, endTime) =>
       dao.cleanRunningJobInfosForContext(contextId, endTime)

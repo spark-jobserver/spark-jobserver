@@ -63,6 +63,14 @@ trait JobDAO {
   def getBinaryFilePath(appName: String, binaryType: BinaryType, uploadTime: DateTime): String
 
   /**
+    * Return all jobs using a certain binary
+    * @param binName Name of binary
+    * @param statuses List of job statuses
+    * @return Sequence of all job infos matching query
+    */
+  def getJobsByBinaryName(binName: String, statuses: Option[Seq[String]] = None): Future[Seq[JobInfo]]
+
+  /**
    * Persist a context info.
    *
    * @param contextInfo
@@ -125,10 +133,12 @@ trait JobDAO {
     */
   def cleanRunningJobInfosForContext(contextId: String, endTime: DateTime): Future[Unit] = {
     import spark.jobserver.JobManagerActor.ContextTerminatedException
-    getJobInfosByContextId(contextId, Some(Seq(JobStatus.Running))).map { infos =>
-      JobDAO.logger.info("cleaning {} running jobs for {}", infos.size, contextId)
+    getJobInfosByContextId(contextId, Some(JobStatus.getNonFinalStates())).map { infos =>
+      JobDAO.logger.info("cleaning {} non-final state job(s) {} for context {}",
+        infos.size.toString, infos.map(_.jobId).mkString(", "), contextId)
       for (info <- infos) {
         val updatedInfo = info.copy(
+          state = JobStatus.Error,
           endTime = Some(endTime),
           error = Some(ErrorData(ContextTerminatedException(contextId))))
         saveJobInfo(jobInfo = updatedInfo)
@@ -154,5 +164,5 @@ trait JobDAO {
    * Returns the last upload time for a given app name.
    * @return Some(lastUploadedTime) if the app exists and the list of times is nonempty, None otherwise
    */
-  def getLastUploadTimeAndType(appName: String): Option[(DateTime, BinaryType)]
+  def getBinaryInfo(appName: String): Option[BinaryInfo]
 }

@@ -10,6 +10,7 @@ import org.apache.commons.io.FileUtils
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfterAll, FunSpecLike, Matchers}
 import slick.SlickException
+import spark.jobserver.JobManagerActor.ContextTerminatedException
 import spark.jobserver.JobServer.InvalidConfiguration
 import spark.jobserver.util.{DeleteBinaryInfoFailedException, NoSuchBinaryException, SaveBinaryException}
 
@@ -44,19 +45,12 @@ object CombinedDAOTestHelper {
 class CombinedDAOSpec extends CombinedDAOSpecBase with FunSpecLike with BeforeAndAfterAll
   with Matchers{
 
-    val rootDirKey = "spark.jobserver.combineddao.rootdir"
-    val baseRootDir = "/tmp/spark-job-server-test"
-    val rootDir = s"$baseRootDir/combineddao"
-    def config: Config = ConfigFactory.parseString(
-      s"""
-        |$rootDirKey = $rootDir,
-        |spark.jobserver.combineddao.binarydao.class = spark.jobserver.io.DummyBinaryDAO,
-        |spark.jobserver.combineddao.metadatadao.class = spark.jobserver.io.DummyMetaDataDAO
-        |spark.jobserver.cache-on-upload = false
-      """.stripMargin
-    )
-    val daoTimeout: FiniteDuration = 3 seconds
-    var dao: CombinedDAO = new CombinedDAO(config)
+    def config: Config = ConfigFactory.load("local.test.combineddao.conf")
+    private val rootDirKey = "spark.jobserver.combineddao.rootdir"
+    private val baseRootDir = config.getString(rootDirKey)
+    private val rootDir = s"$baseRootDir/combineddao"
+    private val daoTimeout: FiniteDuration = 3 seconds
+    private var dao: CombinedDAO = new CombinedDAO(config)
 
     override def beforeAll() {
       Files.createDirectories(Paths.get(rootDir))
@@ -256,7 +250,7 @@ class CombinedDAOSpec extends CombinedDAOSpecBase with FunSpecLike with BeforeAn
     it("should create cache on save binary and delete on delete binary if enabled") {
       val binName = "success"
       val jarFile = new File(config.getString("spark.jobserver.combineddao.rootdir"),
-        binName + "-" + CombinedDAOTestHelper.defaultDate.toString("yyyyMMdd_hhmmss_SSS") + ".jar")
+        binName + "-" + CombinedDAOTestHelper.defaultDate.toString("yyyyMMdd_HHmmss_SSS") + ".jar")
 
       jarFile.exists() should be(false)
 
@@ -274,7 +268,7 @@ class CombinedDAOSpec extends CombinedDAOSpecBase with FunSpecLike with BeforeAn
     it("should not cache any binary if disabled") {
       val binName = "success"
       val jarFile = new File(config.getString("spark.jobserver.combineddao.rootdir"),
-        binName + "-" + CombinedDAOTestHelper.defaultDate.toString("yyyyMMdd_hhmmss_SSS") + ".jar")
+        binName + "-" + CombinedDAOTestHelper.defaultDate.toString("yyyyMMdd_HHmmss_SSS") + ".jar")
 
       saveBinaryAndCheckResponse(binName, dao)
 
@@ -342,6 +336,29 @@ class CombinedDAOSpec extends CombinedDAOSpecBase with FunSpecLike with BeforeAn
       intercept[SlickException] {
         dao.saveJobInfo(jobInfoWithoutId(jobId))
       }
+    }
+  }
+
+  describe("cleanRunningJobsForContext tests") {
+    it("should set jobs to error state if running") {
+      val date = DateTime.now()
+      val contextId = "ctxId"
+      val jobId = "dummy"
+      val endTime = DateTime.now()
+      val terminatedException = Some(ErrorData(ContextTerminatedException(contextId)))
+      val runningJob = JobInfo(jobId, contextId, "",
+        BinaryInfo("", BinaryType.Jar, date), "", JobStatus.Running, date, None, None)
+
+      dao.saveJobInfo(runningJob) // synchronous call
+
+      Await.result(dao.cleanRunningJobInfosForContext(contextId, endTime), 3.seconds)
+
+      val fetchedJob = Await.result(dao.getJobInfo(jobId), 5.seconds).get
+      fetchedJob.contextId should be (contextId)
+      fetchedJob.jobId should be (jobId)
+      fetchedJob.state should be (JobStatus.Error)
+      fetchedJob.endTime.get should be(endTime)
+      fetchedJob.error.get.message should be (terminatedException.get.message)
     }
   }
 }
@@ -499,9 +516,21 @@ class DummyMetaDataDAO(config: Config) extends MetaDataDAO {
     }
   }
 
-  override def getJobsByContextId(contextId: String, statuses: Option[Seq[String]]): Future[Seq[JobInfo]] = ???
+  override def getJobsByContextId(contextId: String, statuses: Option[Seq[String]]): Future[Seq[JobInfo]] = {
+    Future {
+      val jobsAgainstContextId = jobInfos.filter(_._2.contextId == contextId)
+      val filteredJobs = statuses match {
+        case None => jobsAgainstContextId
+        case Some(status) => jobsAgainstContextId.filter(j => status.contains(j._2.state))
+      }
+      filteredJobs.map(_._2).toSeq
+    }
+  }
 
   override def getJobs(limit: Int, status: Option[String]): Future[Seq[JobInfo]] = ???
+
+  override def getJobsByBinaryName(binName: String, statuses: Option[Seq[String]] = None):
+    Future[Seq[JobInfo]] = ???
 
   override def getJob(id: String): Future[Option[JobInfo]] = {
     Future.successful(jobInfos.get(id))
@@ -509,7 +538,7 @@ class DummyMetaDataDAO(config: Config) extends MetaDataDAO {
 
   override def saveJob(jobInfo: JobInfo): Future[Boolean] = {
     jobInfo.jobId match {
-      case "jid" =>
+      case "jid" | "dummy" =>
         Future {
           Thread.sleep(1000) // mimic long save operation
           jobInfos(jobInfo.jobId) = jobInfo

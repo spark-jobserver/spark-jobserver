@@ -1,6 +1,7 @@
 
 import Dependencies._
 
+updateOptions := updateOptions.value.withCachedResolution(true)
 transitiveClassifiers in Global := Seq(Artifact.SourceClassifier)
 lazy val dirSettings = Seq()
 
@@ -18,7 +19,7 @@ lazy val jobServer = Project(id = "job-server", base = file("job-server"))
   .settings(
     description := "Spark as a Service: a RESTful job server for Apache Spark",
     libraryDependencies ++= sparkDeps ++ slickDeps ++ cassandraDeps ++
-    securityDeps ++ coreTestDeps ++ miscTestDeps,
+    securityDeps ++ coreTestDeps ++ zookeeperDeps ++ miscTestDeps,
     test in Test := (test in Test).dependsOn(packageBin in Compile in jobServerTestJar)
       .dependsOn(clean in Compile in jobServerTestJar)
       .dependsOn(buildPython in jobServerPython)
@@ -28,7 +29,7 @@ lazy val jobServer = Project(id = "job-server", base = file("job-server"))
       .dependsOn(clean in Compile in jobServerTestJar)
       .dependsOn(buildPython in jobServerPython)
       .dependsOn(clean in Compile in jobServerPython)
-      .inputTaskValue,
+      .evaluated,
     console in Compile := Defaults.consoleTask(fullClasspath in Compile, console in Compile).value,
     fullClasspath in Compile := (fullClasspath in Compile).map { classpath =>
       extraJarPaths ++ classpath
@@ -70,7 +71,7 @@ lazy val jobServerExtras = Project(id = "job-server-extras", base = file("job-se
       .dependsOn(buildPython in jobServerPython)
       .dependsOn(buildPyExamples in jobServerPython)
       .dependsOn(clean in Compile in jobServerPython)
-      .inputTaskValue
+      .evaluated
   )
   .dependsOn(jobServerApi, jobServer % "compile->compile; test->test")
   .disablePlugins(SbtScalariform)

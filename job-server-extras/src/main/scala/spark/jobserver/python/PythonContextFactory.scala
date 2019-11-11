@@ -64,8 +64,7 @@ trait PythonContextFactory extends SparkContextFactory {
                                   jobCache: JobCache): J Or LoadingError = {
     Try(jobCache.getPythonJob(appName, uploadTime, classPath)) match {
       case Success(jobInfo) => Good(PythonJobContainer(buildJob(jobInfo.eggPath, classPath)))
-      case Failure(ex: Exception) => Bad(JobLoadError(ex))
-      case Failure(ex) => Bad(JobLoadError(new Exception(ex)))
+      case Failure(t) => Bad(JobLoadError(t))
     }
   }
 

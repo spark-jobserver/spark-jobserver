@@ -153,6 +153,11 @@ class JobFileDAO(config: Config) extends JobDAO {
   override def getBinaryFilePath(appName: String, binaryType: BinaryType, uploadTime: DateTime): String =
     new File(rootDir, createJarName(appName, uploadTime) + s".${binaryType.extension}").getAbsolutePath
 
+  override def getJobsByBinaryName(binName: String, statuses: Option[Seq[String]] = None):
+      Future[Seq[JobInfo]] = {
+    throw new NotImplementedError()
+  }
+
   private def createJarName(appName: String, uploadTime: DateTime): String =
     appName + "-" + uploadTime.toString().replace(':', '_')
 
@@ -244,8 +249,8 @@ class JobFileDAO(config: Config) extends JobDAO {
     configs.get(jobId)
   }
 
-  override def getLastUploadTimeAndType(appName: String): Option[(DateTime, BinaryType)] = {
-    apps(appName).headOption.map(uploadTime => (uploadTime, BinaryType.Jar))
+  override def getBinaryInfo(appName: String): Option[BinaryInfo] = {
+    apps(appName).headOption.map(uploadTime => BinaryInfo(appName, BinaryType.Jar, uploadTime))
   }
 
   private def writeJobConfig(out: DataOutputStream, jobId: String, jobConfig: Config) {

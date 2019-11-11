@@ -13,7 +13,7 @@ import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 
 import scala.concurrent.Await
 import spark.jobserver.common.akka.AkkaTestUtils
-import spark.jobserver.util.HDFSClusterLike
+import spark.jobserver.util.HDFSCluster
 
 sealed case class JVMExitException(status: Int) extends SecurityException("sys.exit() is not allowed") {
 }
@@ -30,7 +30,7 @@ sealed class NoExitSecurityManager extends SecurityManager {
 }
 
 class JobManagerSpec extends FunSpecLike with Matchers with BeforeAndAfter
-    with BeforeAndAfterAll with HDFSClusterLike {
+    with BeforeAndAfterAll with HDFSCluster {
 
   import akka.testkit._
   import com.typesafe.config._
@@ -274,6 +274,18 @@ class JobManagerSpec extends FunSpecLike with Matchers with BeforeAndAfter
       }
 
       super.shutdownHDFS()
+    }
+
+    it("should exit jvm if master seed nodes cannot be parsed") {
+      def makeSystem(config: Config): ActorSystem = {
+        fail("Cannot reach this point as JVM should already be exited")
+        system
+      }
+
+      intercept[JVMExitException] {
+        JobManager.start(Seq("wrong_address", "test-manager", "").toArray,
+          makeSystem, waitForTerminationDummy)
+      }
     }
   }
 }

@@ -9,12 +9,19 @@ import org.slf4j.LoggerFactory
 import slick.SlickException
 import spark.jobserver.JobServer.InvalidConfiguration
 import spark.jobserver.util._
+import spark.jobserver.io.CombinedDAO._
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
 import scala.util.Success
 import spark.jobserver.common.akka.metrics.YammerMetrics
+
+object CombinedDAO {
+  val binaryDaoPath = "spark.jobserver.combineddao.binarydao.class"
+  val metaDataDaoPath = "spark.jobserver.combineddao.metadatadao.class"
+  val rootDirPath = "spark.jobserver.combineddao.rootdir"
+}
 
 /**
   * @param config config of jobserver
@@ -35,9 +42,6 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
 
   var binaryDAO: BinaryDAO = _
   var metaDataDAO: MetaDataDAO = _
-  private val binaryDaoPath = "spark.jobserver.combineddao.binarydao.class"
-  private val metaDataDaoPath = "spark.jobserver.combineddao.metadatadao.class"
-  private val rootDirPath = "spark.jobserver.combineddao.rootdir"
   if (!(config.hasPath(binaryDaoPath) && config.hasPath(metaDataDaoPath) && config.hasPath(rootDirPath))) {
     throw new InvalidConfiguration(
       "To use CombinedDAO root directory and BinaryDAO, MetaDataDAO classes should be specified"
@@ -119,9 +123,9 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
     metaDataDAO.getJobConfig(jobId)
   }
 
-  override def getLastUploadTimeAndType(name: String): Option[(DateTime, BinaryType)] = {
+  override def getBinaryInfo(name: String): Option[BinaryInfo] = {
     val binaryInfo = Await.result(metaDataDAO.getBinary(name), defaultAwaitTime).getOrElse(return None)
-    Some((binaryInfo.uploadTime, binaryInfo.binaryType))
+    Some(binaryInfo)
   }
 
   override def saveBinary(name: String,
@@ -178,7 +182,8 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
             if (Await.result(metaDataDAO.deleteBinary(name), defaultAwaitTime)) {
               val binInfosForHash = Await.result(metaDataDAO.getBinariesByStorageId(hash), defaultAwaitTime)
               if (binInfosForHash.exists(_.appName != binaryInfo.appName)) {
-                logger.error(s"$name binary is used by other applications, not deleting it from storage")
+                logger.warn(s"The binary '$name' is also uploaded under a different name. "
+                    + s"The metadata for $name is deleted, but the binary is kept in the binary storage.")
                 totalSuccessfulDeleteRequests.inc()
               } else {
                 binaryDAO.delete(hash).map {_ =>
@@ -235,5 +240,10 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
         logger.warn(s"Couldn't find meta data information for $name")
         ""
     }
+  }
+
+  override def getJobsByBinaryName(binName: String, statuses: Option[Seq[String]] = None):
+      Future[Seq[JobInfo]] = {
+    metaDataDAO.getJobsByBinaryName(binName, statuses)
   }
 }

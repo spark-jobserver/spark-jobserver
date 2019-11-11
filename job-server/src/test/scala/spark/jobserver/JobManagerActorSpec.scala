@@ -7,24 +7,117 @@ import akka.actor.{ActorIdentity, ActorRef, Cancellable, PoisonPill, Props, Rece
 import akka.testkit.TestProbe
 import org.joda.time.DateTime
 import com.typesafe.config.{Config, ConfigFactory}
+import org.apache.spark.SparkEnv
+import org.slf4j.LoggerFactory
 import spark.jobserver.DataManagerActor.RetrieveData
-import spark.jobserver.JobManagerActor.KillJob
+import spark.jobserver.JobManagerActor.{Initialize, KillJob}
 import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.CommonMessages.{JobRestartFailed, JobStarted, JobValidationFailed, Subscribe}
 import spark.jobserver.io._
-import spark.jobserver.ContextSupervisor.{SparkContextStopped, ContextStopError, ContextStopInProgress}
+import spark.jobserver.ContextSupervisor.{ContextStopError, ContextStopInProgress, SparkContextStopped}
 import spark.jobserver.io.JobDAOActor.SavedSuccessfully
-import spark.jobserver.util.{ContextKillingItselfException, NoJobConfigFoundException,
-  StandaloneForcefulKill, NotStandaloneModeException}
+import spark.jobserver.util._
 
 import scala.collection.mutable
-import scala.concurrent.duration.FiniteDuration
+import scala.concurrent.{Await, Future}
+import scala.concurrent.duration._
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.util.Try
+
+/**
+  * SparkContext is designed to run only 1 instance per JVM due to extensive sharing and caching going on
+  * but in test setups spark allows to have multiple contexts if spark.driver.allowMultipleContexts=true.
+  * Jobserver is setting this property to true.
+  *
+  * The problem occurs when 1 context is shutting down and in parallel another one is coming up.
+  * Both threads are using a static class SparkEnv. The thread which is shutting down is executing
+  * SparkEnv.set(null) and the thread which is coming up is trying to do SparkEnv.get,
+  * if the timing is correct then we get a NullPointerException and tests become flaky.
+  *
+  * The reason why both threads are doing this in parallel is that Spark reports a bit early that
+  * context has stopped (onApplicationEnd event) and then performs the cleanup (SparkEnv.set(null))
+  * and since Jobserver relies on this event, it moves to the next testcase and starts a new context.
+  *
+  * The idea is to not rely on onApplicationEnd and call stop synchronously so we can be sure that the
+  * next testcase will get a clean SparkEnv. Further, if context is already stopped we check if SparkEnv
+  * is null or not, if not we retry upto 10 times.
+  *
+  * Any extension of JobManagerActor for test purposes should extend this trait.
+  */
+abstract class CleanlyStoppingSparkContextJobManagerActor(daoActor: ActorRef, supervisorActorAddress: String,
+    contextId: String, initializationTimeout: FiniteDuration)
+  extends JobManagerActor(daoActor, supervisorActorAddress, contextId, initializationTimeout) {
+
+  override def wrappedReceive: Receive = {
+    this.cleanSparkContextReceive.orElse(super.wrappedReceive)
+  }
+
+  def cleanSparkContextReceive: Receive = {
+    case "CleanSparkContext" => {
+      stopContextSynchronously(jobContext) match {
+        case true =>
+          logger.debug("Cleaned the context")
+          sender ! "Cleaned"
+        case false =>
+          logger.debug("Failed to clean the context")
+          sender ! "FailedToClean"
+      }
+    }
+  }
+
+  def stopContextSynchronously(context: ContextLike): Boolean = {
+    logger.debug("Trying to stop spark context")
+    Option(context) match {
+      case None =>
+        logger.debug("Context is already stopped, checking SparkEnv ...")
+        waitForSparkEnvToBeNull()
+        true
+      case Some(context) =>
+        context.stop()
+        logger.debug(s"Spark context stopped. SparkEnv is ${SparkEnv.get}")
+        true
+    }
+  }
+
+  def waitForSparkEnvToBeNull(): Unit = {
+    logger.debug("Starting to do multiple retries for SparkEnv = null")
+    Utils.retry(10, 500) {
+      if (SparkEnv.get != null) {
+        logger.debug(s"SparkEnv is still not null, retrying .... ${SparkEnv.get}")
+        throw new Exception("Spark Env is still not null")
+      }
+    }
+    logger.debug("SparkEnv is null")
+  }
+}
 
 object JobManagerActorSpec extends JobSpecConfig
+
+object JobManagerActorSpyStateUpdate {
+  def props(daoActor: ActorRef, supervisorActorAddress: String,
+            initializationTimeout: FiniteDuration,
+            contextId: String, spyActorRef: ActorRef): Props =
+    Props(classOf[JobManagerActorSpyStateUpdate], daoActor, supervisorActorAddress,
+      initializationTimeout, contextId, spyActorRef)
+}
+
+class JobManagerActorSpyStateUpdate(daoActor: ActorRef, supervisorActorAddress: String,
+                         initializationTimeout: FiniteDuration, contextId: String, spyActorRef: ActorRef)
+    extends CleanlyStoppingSparkContextJobManagerActor(
+      daoActor, supervisorActorAddress, contextId, initializationTimeout) {
+
+  override protected def getUpdateContextByIdFuture(contextId: String,
+        attributes: ContextModifiableAttributes): Future[JobDAOActor.SaveResponse] = {
+    super.getUpdateContextByIdFuture(contextId, attributes).andThen {
+      case _ => spyActorRef ! "Save Complete"
+    }
+  }
+}
 
 object JobManagerActorSpy {
   case object TriggerExternalKill
   case object UnhandledException
+  case object GetStatusActorRef
 
   def props(daoActor: ActorRef, supervisorActorAddress: String,
       initializationTimeout: FiniteDuration,
@@ -35,7 +128,8 @@ object JobManagerActorSpy {
 class JobManagerActorSpy(daoActor: ActorRef, supervisorActorAddress: String,
     initializationTimeout: FiniteDuration, contextId: String, spyProbe: TestProbe,
     restartCandidates: Int = 0)
-    extends JobManagerActor(daoActor, supervisorActorAddress, contextId, initializationTimeout) {
+    extends CleanlyStoppingSparkContextJobManagerActor(
+      daoActor, supervisorActorAddress, contextId, initializationTimeout) {
 
   totalJobsToRestart = restartCandidates
 
@@ -58,11 +152,15 @@ class JobManagerActorSpy(daoActor: ActorRef, supervisorActorAddress: String,
       sender ! "Stopped"
 
     case JobManagerActorSpy.UnhandledException => throw new Exception("I am unhandled")
+
+    case JobManagerActorSpy.GetStatusActorRef => sender ! statusActor
   }
 
-  override def wrappedReceive: Receive = {
-    stubbedWrappedReceive.orElse(super.wrappedReceive)
-  }
+  override def stoppingStateReceive: Receive =
+    super.cleanSparkContextReceive.orElse(super.stoppingStateReceive)
+
+  override def wrappedReceive: Receive =
+    this.stubbedWrappedReceive.orElse(super.wrappedReceive)
 
   override protected def sendStartJobMessage(receiverActor: ActorRef, msg: JobManagerActor.StartJob) {
     spyProbe.ref ! "StartJob Received"
@@ -87,12 +185,49 @@ class JobManagerActorSpy(daoActor: ActorRef, supervisorActorAddress: String,
   }
 }
 
+object JobManagerTestActor {
+  def props(daoActor: ActorRef, supervisorActorAddress: String = "", contextId: String = "",
+            initializationTimeout: FiniteDuration = 40.seconds): Props =
+    Props(classOf[JobManagerTestActor], daoActor, supervisorActorAddress, contextId, initializationTimeout)
+}
+class JobManagerTestActor(daoActor: ActorRef,
+                          supervisorActorAddress: String,
+                          contextId: String,
+                          initializationTimeout: FiniteDuration) extends
+  CleanlyStoppingSparkContextJobManagerActor(daoActor: ActorRef,
+      supervisorActorAddress: String,
+      contextId: String,
+      initializationTimeout: FiniteDuration) {
+
+  override def wrappedReceive: Receive = {
+    this.initializeReceive.orElse(super.wrappedReceive)
+  }
+
+  /**
+    * There are some testcases where the test is checking if the "manager" is terminated.
+    * Since, jobserver relies on onApplicationEnd to find out if context is stopped or not,
+    * it can happen that we move to the next testcase and SparkEnv is not clean. This can lead
+    * to unwanted flakiness in the tests.
+    *
+    * The following override makes sure that before starting a context, SparkEnv is null.
+    */
+  def initializeReceive: Receive = {
+    case msg @ Initialize(ctxConfig, resOpt, dataManagerActor) =>
+      logger.debug("""
+                   |Checking if SparkEnv is null. This is important because non-null
+                   |SparkEnv can cause tests to fails with Null Pointer Exception""".stripMargin)
+      waitForSparkEnvToBeNull()
+      super.wrappedReceive(msg)
+  }
+}
+
 class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) {
   import akka.testkit._
   import CommonMessages._
   import JobManagerActorSpec.MaxJobsPerContext
   import scala.concurrent.duration._
 
+  val logger = LoggerFactory.getLogger(getClass)
   val classPrefix = "spark.jobserver."
   private val wordCountClass = classPrefix + "WordCountExample"
   private val newWordCountClass = classPrefix + "WordCountExampleNewApi"
@@ -109,15 +244,30 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
   var contextConfig: Config = _
 
   before {
+    logger.debug("Before block - started")
     dao = new InMemoryDAO
     daoActor = system.actorOf(JobDAOActor.props(dao))
     contextConfig = JobManagerActorSpec.getContextConfig(adhoc = false)
-    manager = system.actorOf(JobManagerActor.props(daoActor, "", contextId, 40.seconds))
+    manager = system.actorOf(JobManagerTestActor.props(daoActor, "", contextId, 40.seconds))
+    logger.debug("Before block - finished")
   }
 
   after {
+    logger.debug("After block - started")
+    stopSparkContextIfAlive()
     AkkaTestUtils.shutdownAndWait(manager)
     Option(supervisor).foreach(AkkaTestUtils.shutdownAndWait(_))
+    logger.debug("After block - finished")
+  }
+
+  private def stopSparkContextIfAlive(): Unit = {
+    Try(Some(Await.result(
+      system.actorSelection(manager.path).resolveOne()(5.seconds), 5.seconds))).getOrElse(None) match {
+      case None => logger.debug("Manager is not alive")
+      case _: Some[ActorRef] =>
+        manager ! "CleanSparkContext"
+        expectMsg(3.seconds, "Cleaned")
+    }
   }
 
   describe("starting jobs") {
@@ -223,6 +373,16 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobManagerActor.StartJob("demo", classPrefix + "MyErrorJob", emptyConfig, errorEvents)
       val errorMsg = expectMsgClass(startJobWait, classOf[JobErroredOut])
       errorMsg.err.getClass should equal (classOf[IllegalArgumentException])
+    }
+
+    it("should return error if job throws a fatal error") {
+      manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+
+      uploadTestJar()
+      manager ! JobManagerActor.StartJob("demo", classPrefix + "MyFatalErrorJob", emptyConfig, errorEvents)
+      val errorMsg = expectMsgClass(startJobWait, classOf[JobErroredOut])
+      errorMsg.err.getClass should equal (classOf[OutOfMemoryError])
     }
 
     it("job should get jobConfig passed in to StartJob message") {
@@ -435,7 +595,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
   describe("kill-context-on-supervisor-down feature tests") {
     it("should not kill itself if kill-context-on-supervisor-down is disabled") {
-      manager = system.actorOf(JobManagerActor.props(daoActor, "", contextId, 1.seconds.dilated))
+      manager = system.actorOf(JobManagerTestActor.props(daoActor, "", contextId, 1.seconds.dilated))
       val managerProbe = TestProbe()
       managerProbe.watch(manager)
 
@@ -443,7 +603,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
     }
 
     it("should kill itself if response to Identify message is not received when kill-context-on-supervisor-down is enabled") {
-      manager = system.actorOf(JobManagerActor.props(daoActor, "fake-path", contextId, 1.seconds.dilated))
+      manager = system.actorOf(JobManagerTestActor.props(daoActor, "fake-path", contextId, 1.seconds.dilated))
       val managerProbe = TestProbe()
       managerProbe.watch(manager)
 
@@ -456,7 +616,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       // A valid actor which responds to Identify message sent by JobManagerActor
       supervisor = system.actorOf(
           Props(classOf[LocalContextSupervisorActor], TestProbe().ref, dataManagerActor), "context-supervisor")
-      manager = system.actorOf(JobManagerActor.props(daoActor,
+      manager = system.actorOf(JobManagerTestActor.props(daoActor,
           s"${supervisor.path.address.toString}${supervisor.path.toStringWithoutAddress}", contextId, 3.seconds.dilated))
 
       val supervisorProbe = TestProbe()
@@ -477,7 +637,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
       supervisor = system.actorOf(
           Props(classOf[LocalContextSupervisorActor], TestProbe().ref, dataManagerActor), "context-supervisor")
-      manager = system.actorOf(JobManagerActor.props(daoActor,
+      manager = system.actorOf(JobManagerTestActor.props(daoActor,
           s"${supervisor.path.address.toString}${supervisor.path.toStringWithoutAddress}", contextId, 2.seconds.dilated))
 
       val managerProbe = TestProbe()
@@ -495,7 +655,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
       supervisor = system.actorOf(
           Props(classOf[LocalContextSupervisorActor], TestProbe().ref, dataManagerActor), "context-supervisor")
-      manager = system.actorOf(JobManagerActor.props(daoActor,
+      manager = system.actorOf(JobManagerTestActor.props(daoActor,
           s"${supervisor.path.address.toString}${supervisor.path.toStringWithoutAddress}", contextId, 3.seconds.dilated))
       // Wait for Identify/ActorIdentify message exchange
       Thread.sleep(2000)
@@ -823,8 +983,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val contextName = "context-name"
       val daoProbe = TestProbe()
       uploadTestJar("test-jar")
-      val binInfo = dao.getLastUploadTimeAndType("test-jar")
-      val binaryInfo = BinaryInfo("test-jar", binInfo.get._2, binInfo.get._1)
+      val binaryInfo = dao.getBinaryInfo("test-jar").get
       val jobInfo = JobInfo("jobId", contextId, contextName,
           binaryInfo, wordCountClass, JobStatus.Running, DateTime.now(), None, None)
       manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, spyProbe))
@@ -857,7 +1016,6 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val spyProbe = TestProbe()
       val contextId = "dummy-context"
       val deathWatcher = TestProbe()
-      val daoProbe = TestProbe()
       val binaryInfo = BinaryInfo("demo", BinaryType.Jar, DateTime.now())
       val jobInfo = JobInfo("jobId", contextId, "context-name",
           binaryInfo, wordCountClass, JobStatus.Running, DateTime.now(), None, None)
@@ -870,12 +1028,14 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       uploadTestJar()
       dao.saveJobInfo(jobInfo)
       dao.saveJobConfig(jobInfo.jobId, stringConfig)
-      dao.saveJobInfo(jobInfo.copy(jobId = "jobId1"))
+      dao.saveJobInfo(jobInfo.copy(jobId = "jobId1")) // Not saving config for jobId1 causes restart failure
 
       manager ! JobManagerActor.RestartExistingJobs
 
-      spyProbe.expectMsg("StartJob Received")
-      spyProbe.expectMsgAllClassOf(classOf[JobStarted], classOf[JobRestartFailed])
+      val messages = spyProbe.expectMsgAllClassOf(
+        classOf[String], classOf[JobStarted], classOf[JobRestartFailed])
+      messages.filter(_.isInstanceOf[String]).head should be("StartJob Received")
+
       spyProbe.expectNoMsg()
       deathWatcher.expectNoMsg()
     }
@@ -891,6 +1051,23 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobManagerActor.StopContextAndShutdown
       expectMsg(SparkContextStopped)
       deathWatcher.expectTerminated(manager)
+    }
+
+    it("should stop context, kill status actor and shutdown itself (in order)") {
+      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, TestProbe(), 1))
+      watch(manager)
+      manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+
+      manager ! JobManagerActorSpy.GetStatusActorRef
+      val statusActorRef = expectMsgType[ActorRef]
+      watch(statusActorRef)
+
+      manager ! JobManagerActor.StopContextAndShutdown
+
+      expectTerminated(statusActorRef)
+      expectMsg(SparkContextStopped)
+      expectTerminated(manager)
     }
 
     it("should update DAO if an external kill event is fired to stop the context") {
@@ -942,22 +1119,26 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
     }
 
     it("should start a job in adhoc context and should stop context once finished") {
-      val deathWatcher = TestProbe()
+      manager = system.actorOf(JobManagerActorSpyStateUpdate.props(daoActor, "", 5.seconds, contextId, self))
       val adhocContextConfig = JobManagerActorSpec.getContextConfig(adhoc = true)
       daoActor ! JobDAOActor.SaveContextInfo(ContextInfo(contextId, "ctx", "",
         None, DateTime.now(), None, ContextStatus.Running, None))
       expectMsg(SavedSuccessfully)
+
       manager ! JobManagerActor.Initialize(adhocContextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
-      deathWatcher.watch(manager)
+      watch(manager)
+
       uploadTestJar()
 
+      // action
       manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, allEvents)
 
       expectMsgClass(startJobWait, classOf[JobStarted])
       expectMsgAllClassOf(classOf[JobFinished], classOf[JobResult])
-      deathWatcher.expectTerminated(manager)
-      expectNoMsg(2.seconds)
+      expectMsg("Save Complete") // State STOPPING has been updated
+      expectTerminated(manager)
+
       daoActor ! JobDAOActor.GetContextInfo(contextId)
       expectMsgPF(3.seconds, "") {
         case JobDAOActor.ContextResponse(Some(contextInfo)) =>
@@ -965,6 +1146,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
           contextInfo.endTime should be(None)
         case unexpectedMsg @ _ => fail(s"State is not stopping. Message received $unexpectedMsg")
       }
+      expectNoMsg(500.milliseconds)
     }
   }
 
@@ -979,6 +1161,23 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobManagerActor.StopContextForcefully
       expectMsg(SparkContextStopped)
       deathWatcher.expectTerminated(manager)
+    }
+
+    it("should forcefully stop context, kill status actor and shutdown itself (in order)") {
+      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, TestProbe(), 1))
+      watch(manager)
+      manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+
+      manager ! JobManagerActorSpy.GetStatusActorRef
+      val statusActorRef = expectMsgType[ActorRef]
+      watch(statusActorRef)
+
+      manager ! JobManagerActor.StopContextForcefully
+
+      expectTerminated(statusActorRef)
+      expectMsg(SparkContextStopped)
+      expectTerminated(manager)
     }
 
     it("should send ContextStopError in case of an exception for forceful context stop") {

@@ -27,6 +27,7 @@ trait JobSpecConfig {
 
   lazy val config = {
     val ConfigMap = Map(
+      "akka.loglevel" -> "OFF",
       "spark.jobserver.job-result-cache-size" -> JobResultCacheSize,
       "spark.jobserver.dao-timeout" -> "3s",
       "spark.jobserver.context-deletion-timeout" -> "5s",
@@ -36,8 +37,11 @@ trait JobSpecConfig {
       "spark.jobserver.named-object-creation-timeout" -> "60 s",
       "akka.log-dead-letters" -> Integer.valueOf(0),
       "spark.master" -> "local[*]",
+      "spark.driver.host" -> "127.0.0.1",
       "context-factory" -> contextFactory,
       "spark.context-settings.test" -> "",
+      "akka.test.single-expect-default" -> "6s",
+      "akka.test.timefactor" -> 2,
       "spark.driver.allowMultipleContexts" -> true
     )
     ConfigFactory.parseMap(ConfigMap.asJava).withFallback(ConfigFactory.defaultOverrides())
@@ -55,7 +59,10 @@ trait JobSpecConfig {
       "streaming.stopGracefully" -> Boolean.box(false),
       "streaming.stopSparkContext" -> Boolean.box(true)
     )
-    ConfigFactory.parseMap(ConfigMap.asJava).withFallback(ConfigFactory.defaultOverrides())
+    ConfigFactory
+      .parseMap(ConfigMap.asJava)
+      .withFallback(config)
+      .withFallback(ConfigFactory.defaultOverrides())
   }
 
   lazy val contextConfigWithGracefulShutdown = {

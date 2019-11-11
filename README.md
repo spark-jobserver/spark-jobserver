@@ -40,14 +40,16 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
 - [Deployment](#deployment)
   - [Manual steps](#manual-steps)
   - [Context per JVM](#context-per-jvm)
+  - [Configuring Spark Jobserver backend](#configuring-spark-jobserver-backend)
     - [Configuring Spark Jobserver H2 Database backend](#configuring-spark-jobserver-h2-database-backend)
     - [Configuring Spark Jobserver PostgreSQL Database backend](#configuring-spark-jobserver-postgresql-database-backend)
     - [Configuring Spark Jobserver MySQL Database backend](#configuring-spark-jobserver-mysql-database-backend)
+    - [Configuring Spark Jobserver Zookeeper + HDFS Database backend](#configuring-spark-jobserver-zookeeper--hdfs-database-backend)
+  - [HA Deployment (beta)](#ha-deployment-beta)
   - [Chef](#chef)
 - [Architecture](#architecture)
 - [API](#api)
   - [Binaries](#binaries)
-  - [Jars (deprecated)](#jars-deprecated)
   - [Contexts](#contexts)
   - [Jobs](#jobs)
   - [Data](#data)
@@ -109,6 +111,7 @@ Spark Job Server is included in Datastax Enterprise!
 - Named Objects (such as RDDs or DataFrames) to cache and retrieve RDDs or DataFrames by name, improving object sharing and reuse among jobs.
 - Supports Scala 2.10 and 2.11
 - Support for supervise mode of Spark (EXPERIMENTAL)
+- Possible to be deployed in an [HA setup](#ha-deployment-beta) of multiple jobservers (beta)
 
 ## Version Information
 
@@ -427,7 +430,6 @@ You have a couple options to package and upload dependency jars.
         ````
         The jars /myjars/deps01.jar & /myjars/deps02.jar (present only on the SJS node) will be loaded and made available for the Spark driver & executors.
     - Use the `--package` option with Maven coordinates with `server_start.sh`.
-    - Put the extra jars in the SPARK_CLASSPATH
 
 ### Named Objects
 #### Using Named RDDs
@@ -601,6 +603,13 @@ Log files are separated out for each context (assuming `context-per-jvm` is `tru
 Note: to test out the deploy to a local staging dir, or package the job server for Mesos,
 use `bin/server_package.sh <environment>`.
 
+### Configuring Spark Jobserver backend
+
+Spark Jobserver offers a variety of options for backend storage such as:
+- H2/PostreSQL or other SQL Databases
+- Cassandra
+- Combination of SQL DB or Zookeeper with HDFS
+
 #### Configuring Spark Jobserver H2 Database backend
 By default, H2 database is used for storing Spark Jobserver related meta data.
 This can be overridden if you prefer to use PostgreSQL or MySQL.
@@ -762,6 +771,35 @@ To use MySQL as backend add the following configuration to local.conf.
     # also add the following line at the root level.
     flyway.locations="db/mysql/migration"
 
+#### Configuring Spark Jobserver Zookeeper + HDFS Database backend
+
+To use Zookeeper (for metadata) and HDFS (for binaries) as backend add the following
+configuration to local.conf.
+
+```
+    combineddao {
+      rootdir = "/tmp/combineddao"
+      binarydao {
+        class = spark.jobserver.io.HdfsBinaryDAO
+        dir = "hdfs:///spark-jobserver/binaries"
+      }
+      metadatadao {
+        class = spark.jobserver.io.zookeeper.MetaDataZookeeperDAO
+      }
+    }
+
+    zookeeperdao {
+      dir = "jobserver/db"
+      connection-string = "localhost:2181"
+    }
+```
+
+More information on setting up different backends for binaries and jobserver meta data: [setting up dao](doc/dao-setup.md).
+
+### HA Deployment (beta)
+
+It is possible to run multiple Spark Jobservers in a highly available setup. For a documentation of a Jobserver HA setup, refer to the [Jobserver HA documentation](doc/HA.md).
+
 ### Chef
 
 There is also a [Chef cookbook](https://github.com/spark-jobserver/chef-spark-jobserver) which can be used to deploy Spark Jobserver.
@@ -790,19 +828,12 @@ Flow diagrams are checked in in the doc/ subdirectory.  .diagram files are for w
 
 When POSTing new binaries, the content-type header must be set to one of the types supported by the subclasses of the `BinaryType` trait. e.g. "application/java-archive" or application/python-archive". If you are using curl command, then you must pass "-H 'Content-Type: application/python-archive'" or "-H 'Content-Type: application/java-archive'".
 
-### Jars (deprecated)
-
-    GET /jars                   - lists all the jars and the last upload timestamp
-    POST /jars/<appName>        - uploads a new jar under <appName>
-
-These routes are kept for legacy purposes but are deprecated in favour of the /binaries routes
-
 ### Contexts
 
     GET /contexts               - lists all current contexts
     GET /contexts/<name>        - gets info about a context, such as the spark UI url
     POST /contexts/<name>       - creates a new context
-    DELETE /contexts/<name>     - stops a context and all jobs running in it
+    DELETE /contexts/<name>     - stops a context and all jobs running in it. Additionally, you can pass ?force=true to stop a context forcefully. This is equivalent to killing the application from SparkUI (works for spark standalone only).
     PUT /contexts?reset=reboot  - shuts down all contexts and re-loads only the contexts from config. Use ?sync=false to execute asynchronously.
 
 Spark context configuration params can follow `POST /contexts/<name>` as query params. See section below for more details.
@@ -977,7 +1008,15 @@ for instance: `sbt ++2.11.6 job-server/compile`
 - From the "master" project, please run "test" to ensure nothing is broken.
    - You may need to set `SPARK_LOCAL_IP` to `localhost` to ensure Akka port can bind successfully
    - Note for Windows users: very few tests fail on Windows. Thus, run `testOnly -- -l WindowsIgnore` from SBT shell to ignore them.
-- Logging for tests goes to "job-server-test.log"
+- Logging for tests goes to "job-server-test.log". To see test logging in console also, add the following to your log4j.properties (`job-server/src/test/resources/log4j.properties`)
+```$xslt
+log4j.rootLogger=INFO, LOGFILE, console
+
+log4j.appender.console=org.apache.log4j.ConsoleAppender
+log4j.appender.console.target=System.err
+log4j.appender.console.layout=org.apache.log4j.PatternLayout
+log4j.appender.console.layout.ConversionPattern=[%d] %-5p %.26c [%X{testName}] [%X{akkaSource}] - %m%n
+```
 - Run `scoverage:test` to check the code coverage and improve it.
   - Windows users: run `; coverage ; testOnly -- -l WindowsIgnore ; coverageReport` from SBT shell.
 - Please run scalastyle to ensure your code changes don't break the style guide.

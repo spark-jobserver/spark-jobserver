@@ -33,7 +33,6 @@ object ContextSupervisor {
   case class GetSparkContexData(name: String)
   case class RestartOfTerminatedJobsFailed(contextId: String)
   case class ForkedJVMInitTimeout(contextActorName: String, contextInfo: ContextInfo)
-  case class RegainWatchOnExistingContexts(actorRefs: Seq[ActorRef])
   case object SparkContextStopped extends StopContextResponse with StopForcefullyContextResponse
 
   // Errors/Responses

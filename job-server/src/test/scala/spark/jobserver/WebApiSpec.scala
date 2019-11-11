@@ -55,7 +55,7 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
   val jobDaoActor = system.actorOf(JobDAOActor.props(new InMemoryDAO))
   val statusActor = system.actorOf(JobStatusActor.props(jobDaoActor))
 
-  val api = new WebApi(system, config, dummyPort, dummyActor, dummyActor, dummyActor, dummyActor)
+  val api = new WebApi(system, config, dummyPort, dummyActor, dummyActor, dummyActor, dummyActor, null)
   val routes = api.myRoutes
 
   val dt = DateTime.parse("2013-05-29T00Z")
@@ -152,6 +152,8 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
       case StoreBinary(_, _, _)         => sender ! BinaryStored
 
       case DeleteBinary("badbinary") => sender ! NoSuchBinary
+      case DeleteBinary("active") => sender ! BinaryInUse(Seq("job-active"))
+      case DeleteBinary("failure") => sender ! BinaryDeletionFailure(new Exception("deliberate"))
       case DeleteBinary(_) => sender ! BinaryDeleted
 
       case DataManagerActor.StoreData("errorfileToRemove", _) => sender ! DataManagerActor.Error

@@ -19,14 +19,15 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
   override def config: Config = ConfigFactory.load("local.test.metadatasqldao.conf")
   val timeout = 60 seconds
   var dao: MetaDataSqlDAO = _
+  private val helper: SqlTestHelpers = new SqlTestHelpers(config)
 
   // *** TEST DATA ***
   val time: DateTime = new DateTime()
   val throwable: Throwable = new Throwable("test-error")
   // jar test data
   val rootDirKey = "spark.jobserver.combineddao.rootdir"
-  val jarInfo: BinaryInfo = genJarInfo(false, false)
   val jarBytes: Array[Byte] = Files.toByteArray(testJar)
+  val jarInfo: BinaryInfo = genJarInfo(false, false)
   var jarFile: File = new File(
       config.getString(rootDirKey),
       jarInfo.appName + "-" + jarInfo.uploadTime.toString("yyyyMMdd_hhmmss_SSS") + ".jar"
@@ -39,7 +40,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
 
   // jobInfo test data
   val jobInfoNoEndNoErr: JobInfo = genJobInfo(jarInfo, false, JobStatus.Running)
-  val expectedJobInfo = jobInfoNoEndNoErr
+  val expectedJobInfo: JobInfo = jobInfoNoEndNoErr
   val jobInfoSomeEndNoErr: JobInfo = genJobInfo(jarInfo, false, JobStatus.Finished)
   val jobInfoSomeEndSomeErr: JobInfo = genJobInfo(jarInfo, false, ContextStatus.Error)
 
@@ -58,7 +59,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
       val app = "test-appName" + appCount
       val upload = if (newTime) time.plusMinutes(timeCount) else time
 
-      BinaryInfo(app, BinaryType.Jar, upload)
+      BinaryInfo(app, BinaryType.Jar, upload, Some(BinaryDAO.calculateBinaryHashString(jarBytes)))
     }
 
     genTestJarInfo _
@@ -104,11 +105,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
   }
 
   after {
-    val bins = Await.result(dao.getBinaries, timeout)
-    bins.foreach {
-      b => val del = Await.result(dao.deleteBinary(b.appName), timeout)
-           del should equal (true)
-    }
+    Await.result(helper.cleanupMetadataTables(), timeout)
   }
 
   describe("binaries") {
@@ -316,6 +313,51 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
       jobs4.last.error.get.message should equal (throwable.getMessage)
       jobs4.last.error.get.errorClass should equal (throwable.getClass.getName)
       jobs4.last.error.get.stackTrace should not be empty
+    }
+
+    it("should return empty list if no job exists using binary") {
+      Await.result(dao.getJobsByBinaryName("I-don't-exist"), timeout) should equal(Seq.empty)
+    }
+
+    it("should get jobs by binary name") {
+      val isSaved = Await.result(dao.saveBinary(jarInfo.appName, BinaryType.Jar,
+        jarInfo.uploadTime, BinaryDAO.calculateBinaryHashString(jarBytes)), timeout)
+      isSaved should equal(true)
+
+      Await.result(dao.saveJob(jobInfoNoEndNoErr), timeout) should equal(true)
+
+      Await.result(dao.getJobsByBinaryName(jarInfo.appName), timeout).head should equal(jobInfoNoEndNoErr)
+    }
+
+    it("should get jobs by binary name and status") {
+      // setup
+      val isSaved = Await.result(dao.saveBinary(jarInfo.appName, BinaryType.Jar,
+        jarInfo.uploadTime, BinaryDAO.calculateBinaryHashString(jarBytes)), timeout)
+      isSaved should equal(true)
+
+      val runningJob = jobInfoNoEndNoErr
+      val restartingJob = jobInfoNoEndNoErr.copy(jobId = "restarting", state = JobStatus.Restarting)
+      val finishedJob = jobInfoNoEndNoErr.copy(jobId = "finished", state = JobStatus.Finished)
+
+      Await.result(dao.saveJob(runningJob), timeout) should equal(true)
+      Await.result(dao.saveJob(restartingJob), timeout) should equal(true)
+      Await.result(dao.saveJob(finishedJob), timeout) should equal(true)
+
+      // test
+      val getRunningJobResult = Await.result(
+        dao.getJobsByBinaryName(jarInfo.appName, Some(Seq(JobStatus.Running))), timeout)
+
+      // assert
+      getRunningJobResult.length should be(1)
+      getRunningJobResult.head should equal(runningJob)
+
+      // test-2
+      val getRunningAndFinishedJobsResult = Await.result(
+        dao.getJobsByBinaryName(jarInfo.appName, Some(Seq(JobStatus.Running, JobStatus.Finished))), timeout)
+
+      // assert-2
+      getRunningAndFinishedJobsResult.length should be(2)
+      getRunningAndFinishedJobsResult should contain allOf(runningJob, finishedJob)
     }
   }
 }

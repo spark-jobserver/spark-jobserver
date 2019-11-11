@@ -70,7 +70,7 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
     val testConfig = config.withValue("shiro.authentication-timeout",
       ConfigValueFactory.fromAnyRef(authTimeout))
       .withValue("shiro.use-as-proxy-user", ConfigValueFactory.fromAnyRef(useAsProxyUser))
-    val api = new WebApi(system, testConfig, dummyPort, dummyActor, dummyActor, dummyActor, dummyActor) {
+    val api = new WebApi(system, testConfig, dummyPort, dummyActor, dummyActor, dummyActor, dummyActor, null) {
       private def asShiroAuthenticatorWithWait(authTimeout: Int)
           (implicit ec: ExecutionContext): AuthMagnet[AuthInfo] = {
         val logger = LoggerFactory.getLogger(getClass)
@@ -155,27 +155,6 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
         //dev support when adding new test cases:
         sys.error("Unhandled message: " + m)
         sender ! m.toString
-    }
-  }
-
-  describe("jars routes") {
-    it("should allow user with valid authorization") {
-      Get("/jars").withHeaders(authorization) ~> sealRoute(routesWithProxyUser) ~> check {
-        status should be(OK)
-      }
-    }
-
-    it("should not allow user with invalid password") {
-      Post("/jars/foobar", Array[Byte](0, 1, 2)).
-        withHeaders(authorizationInvalidPassword) ~> sealRoute(routesWithProxyUser) ~> check {
-        status should be(Unauthorized)
-      }
-    }
-
-    it("should not allow unknown user") {
-      Get("/jars").withHeaders(authorizationUnknownUser) ~> sealRoute(routesWithProxyUser) ~> check {
-        status should be(Unauthorized)
-      }
     }
   }
 
@@ -474,13 +453,6 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
     it("jobs should not allow user with valid authorization when timeout") {
       Get("/jobs/foobar").withHeaders(authorization) ~>
         sealRoute(routesWithTimeout(true, 0)) ~> check {
-          status should be(InternalServerError)
-        }
-    }
-
-    it("jars should not allow user with valid authorization when timeout") {
-      Get("/jars").withHeaders(authorization) ~>
-        sealRoute(routesWithTimeout(false, 0)) ~> check {
           status should be(InternalServerError)
         }
     }
