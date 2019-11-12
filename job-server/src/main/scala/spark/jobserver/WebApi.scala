@@ -15,9 +15,9 @@ import org.apache.shiro.config.IniSecurityManagerFactory
 import org.apache.http.HttpStatus
 import org.joda.time.DateTime
 import spark.jobserver.auth._
-import spark.jobserver.io.{BinaryType, ContextInfo, ErrorData, JobInfo, JobStatus}
+import spark.jobserver.io.{BinaryType, ContextInfo, ErrorData, JobInfo, JobStatus, JobDAOActor}
 import spark.jobserver.routes.DataRoutes
-import spark.jobserver.util.{SSLContextFactory, SparkJobUtils}
+import spark.jobserver.util.{HealthCheck, SSLContextFactory, SparkJobUtils}
 import spray.http.HttpHeaders.{Location, `Content-Type`}
 import spray.http._
 import spray.httpx.SprayJsonSupport.sprayJsonMarshaller
@@ -153,7 +153,8 @@ class WebApi(system: ActorSystem,
              binaryManager: ActorRef,
              dataManager: ActorRef,
              supervisor: ActorRef,
-             jobInfoActor: ActorRef)
+             jobInfoActor: ActorRef,
+             healthCheckInst: HealthCheck)
     extends MeteredHttpService with CommonRoutes with DataRoutes with SJSAuthenticator with CORSSupport
                         with ChunkEncodedStreamingSupport {
   import CommonMessages._
@@ -561,9 +562,20 @@ class WebApi(system: ActorSystem,
    *    GET /healthz              - return OK or error message
    */
   def healthzRoutes: Route = pathPrefix("healthz") {
-    //no authentication required
     get { ctx =>
-      ctx.complete("OK")
+      try {
+        if (healthCheckInst != null && healthCheckInst.isHealthy()) {
+          ctx.complete(StatusCodes.OK)
+        } else {
+          ctx.complete(StatusCodes.InternalServerError, errMap("Required actors not alive"))
+        }
+      }
+      catch {
+        case ex: Exception => {
+          logger.error("Exception in healthz", ex)
+          ctx.complete(StatusCodes.InternalServerError, errMap("Exception while invoking health check"))
+        }
+      }
     }
   }
 
