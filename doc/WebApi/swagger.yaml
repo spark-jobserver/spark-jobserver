@@ -1,0 +1,677 @@
+swagger: "2.0"
+info:
+  description: "A RESTful interface for submitting and managing Apache Spark jobs, jars, and job contexts.\nSee https://github.com/spark-jobserver/spark-jobserver"
+  version: "0.9.1"
+  title: "Spark Jobserver"
+host: "localhost:8090"
+basePath: "/"
+schemes:
+- "https"
+- "http"
+paths:
+
+#
+# BINARIES
+#
+
+  /binaries:
+
+#
+# GET /binaries/
+#
+    get:
+      tags:
+      - "Binaries"
+      summary: "List all binaries"
+      description: "Returns a list of all currently uploaded binary files"
+      produces:
+      - "application/json"
+      responses:
+        200:
+          description: "Successful operation.\nNote that the list is returned as an object/map, not as an actual json array."
+          schema:
+            $ref: '#/definitions/BinaryList'
+        500:
+          description: "Internal server error"
+          schema:
+            $ref: '#/definitions/ErrorMap'
+
+#
+# GET /binaries/{name}
+#
+  /binaries/{name}:
+    get:
+      tags:
+      - "Binaries"
+      summary: "Returns info for a binary"
+      description: "Returns binary information for the most recent binary uploaded under this name"
+      produces:
+      - "application/json"
+      parameters:
+      - in: "path"
+        name: "name"
+        required: true
+        type: "string"
+      responses:
+        200:
+          description: "Successful operation"
+          schema:
+            $ref: '#/definitions/BinaryInfo'
+        404:
+          description: "Binary not found"
+          schema:
+            $ref: '#/definitions/ErrorMap'
+        500:
+          description: "Internal server error"
+          schema:
+            $ref: '#/definitions/ErrorMap'
+
+#
+# POST /binaries/{name}
+#
+    post:
+      tags:
+      - "Binaries"
+      summary: "Upload a new binary file"
+      description: "Uploads a new binary file under this name.\nIf a binary under this name already existed, it is updated.\nAlready running jobs continue to run with the old version of the binary, but new submits and restarts of a job will run the new binary."
+      consumes:
+      - "application/java-archive"
+      - "application/python-archive"
+      produces:
+      - "application/json"
+      parameters:
+      - in: "path"
+        name: "name"
+        required: true
+        type: "string"
+      - in: body
+        name: "binary"
+        description: "Raw .jar or .egg binary file"
+        required: true
+        schema:
+          type: string
+          example: <<Raw binary content>>
+          format: binary
+      responses:
+        201:
+          description: "Binary created"
+          schema:
+            $ref: '#/definitions/Empty'
+        400:
+          description: Wrong binary format
+          schema:
+            $ref: '#/definitions/ErrorMap'
+        415:
+          description: Unsupported media type (specified in request content-type header)
+          schema:
+            $ref: '#/definitions/ErrorMap'
+        500:
+          description: "Internal server error"
+          schema:
+            $ref: '#/definitions/ErrorMap'
+
+#
+# DELETE /binaries/{name}
+#
+    delete:
+      tags:
+      - "Binaries"
+      summary: "Delete a binary"
+      description: "Deletes all binaries stored under this name"
+      produces:
+      - "application/json"
+      parameters:
+      - in: "path"
+        name: "name"
+        required: true
+        type: "string"
+      responses:
+        200:
+          description: Successful operation
+          schema:
+            $ref: '#/definitions/Empty'
+        403:
+          description: The deletion is forbidden, because the binary is still in use by running jobs
+          schema:
+            $ref: '#/definitions/ErrorMap'
+        404:
+          description: Binary not found
+          schema:
+            $ref: '#/definitions/ErrorMap'
+        500:
+          description: "Internal server error"
+          schema:
+            $ref: '#/definitions/ErrorMap'
+
+#
+# CONTEXTS
+#
+
+  /contexts:
+
+#
+# GET /contexts/
+#
+    get:
+      tags:
+      - "Contexts"
+      summary: "List all running contexts"
+      description: "Returns a list of all currently running contexts"
+      produces:
+      - "application/json"
+      responses:
+        200:
+          description: "Successful operation"
+          schema:
+            $ref: '#/definitions/ContextList'
+        500:
+          description: "Internal server error"
+          schema:
+            $ref: '#/definitions/ErrorMap'
+
+#
+# GET /contexts/{name}
+#
+  /contexts/{name}:
+    get:
+      tags:
+      - "Contexts"
+      summary: "Returns info for a context"
+      description: "Returns context information for the last context started with this name"
+      produces:
+      - "application/json"
+      parameters:
+      - in: "path"
+        name: "name"
+        required: true
+        type: "string"
+      responses:
+        200:
+          description: "Successful operation"
+          schema:
+            $ref: '#/definitions/ContextInfo'
+        404:
+          description: "Context not found"
+          schema:
+            $ref: '#/definitions/ErrorMap'
+        500:
+          description: "Internal server error"
+          schema:
+            $ref: '#/definitions/ErrorMap'
+
+#
+# POST /contexts/{name}
+#
+    post:
+      tags:
+      - "Contexts"
+      summary: "Create a new context"
+      description: "Creates a new context with this name.\n In addition the the query parameters below any spark configuration parameter can be can be overriden as a query parameter.\nFor more details see: https://github.com/spark-jobserver/spark-jobserver#context-configuration"
+      produces:
+      - "application/json"
+      parameters:
+      - in: "path"
+        name: "name"
+        required: true
+        type: "string"
+      - in: "query"
+        name: "dependent-jar-uris"
+        type: "string"
+      - in: "query"
+        name: "context-factory"
+        type: "string"
+        description: "Allows to specify context factories for specific types of contexts, e.g:\nspark.jobserver.context.StreamingContextFactory, spark.jobserver.python.PythonFactory, ..."
+      responses:
+        200:
+          description: Successful operation
+          schema:
+            $ref: '#/definitions/SuccessMap'
+        400:
+          description: "Bad request.\nCommon examples: Context name does not start with a letter, context with this name is already running, context config contains malformed URLs"
+          schema:
+            $ref: '#/definitions/ErrorMap'
+        500:
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/ErrorMap'
+
+#
+# DELETE /contexts/{name}
+#
+    delete:
+      tags:
+      - "Contexts"
+      summary: "Stop a context"
+      description: "Stops a running context with the given name.\nExecutors will be shut down and all cached RDDs and currently running jobs will be lost.  Use with care!"
+      produces:
+      - "application/json"
+      parameters:
+      - in: "path"
+        name: "name"
+        required: true
+        type: "string"
+      - in: "query"
+        name: "force"
+        type: "boolean"
+        default: false
+        description: "If true, Jobserver will kill the context forcefully"
+      responses:
+        200:
+          description: Successful operation
+          schema:
+            $ref: '#/definitions/SuccessMap'
+        202:
+          description: Accepted (context stop in progress)
+        404:
+          description: Context not found
+          schema:
+            $ref: '#/definitions/ErrorMap'
+        500:
+          description: "Internal server error"
+          schema:
+            $ref: '#/definitions/ErrorMap'
+
+#
+# JOBS
+#
+
+  /jobs:
+
+#
+# GET /jobs/
+#
+    get:
+      tags:
+      - "Jobs"
+      summary: "List jobs"
+      description: "Returns a list of jobs"
+      produces:
+      - "application/json"
+      parameters:
+      - in: "query"
+        name: "limit"
+        type: "integer"
+        default: 50
+        description: "Limit the number of jobs returned"
+      - in: "query"
+        name: "status"
+        type: "string"
+        description: "Show only jobs with this state. Shows all states if not specified."
+      responses:
+        200:
+          description: "Successful operation"
+          schema:
+            $ref: '#/definitions/JobList'
+        500:
+          description: "Internal server error"
+          schema:
+            $ref: '#/definitions/ErrorMap'
+
+#
+# GET /jobs/{id}
+#
+  /jobs/{id}:
+    get:
+      tags:
+      - "Jobs"
+      summary: "Returns info for a job"
+      description: "Returns job information for a job with this id"
+      produces:
+      - "application/json"
+      parameters:
+      - in: "path"
+        name: "id"
+        required: true
+        type: "string"
+      responses:
+        200:
+          description: "Successful operation.\nJob results are shown if the job is in state FINISHED and results are still cached."
+          schema:
+            $ref: '#/definitions/JobInfoResult'
+        404:
+          description: "Job not found"
+          schema:
+            $ref: '#/definitions/ErrorMap'
+        500:
+          description: "Internal server error"
+          schema:
+            $ref: '#/definitions/ErrorMap'
+
+#
+# POST /jobs/{id}
+#
+    post:
+      tags:
+      - "Jobs"
+      summary: "Start a new job"
+      description: "Starts a new job from a specified binary. "
+      produces:
+      - "application/json"
+      parameters:
+      - in: "path"
+        name: "id"
+        required: true
+        type: "string"
+      - in: body
+        name: "config"
+        description: "Typesafe-formatted config containing optional job configuration parameters"
+        schema:
+          type: string
+          example: "input.string = a b c a b see"
+      - in: "query"
+        name: "cp"
+        type: "string"
+        description: "A list of uploaded binaries or URIs to binaries that together form the class path with which the job is started"
+        required: true
+      - in: "query"
+        name: "mainClass"
+        type: "string"
+        description: "The fully qualified name of the class which is run when the job is started. Needs to implement the `SparkJob` interface."
+        required: true
+      - in: "query"
+        name: "context"
+        type: "string"
+        description: "The name of the context in which the job is run. If not specified, then a temporary context (\"ad hoc context\") is allocated for the job."
+      - in: "query"
+        name: "sync"
+        type: "boolean"
+        description: "If true, then wait for and return results, otherwise return job Id"
+        default: false
+      - in: "query"
+        name: "timeout"
+        type: "integer"
+        description: "The number of seconds to wait for the results if `sync` is specified"
+        default: false
+      - in: "query"
+        name: "appName"
+        type: "string"
+        description: "Deprecated, use `cp` instead"
+      - in: "query"
+        name: "classPath"
+        type: "string"
+        description: "Deprecated, use `mainClass` instead"
+      responses:
+        200:
+          description: Successful operation
+          schema:
+            $ref: '#/definitions/JobResultResponse'
+        202:
+          description: Job started
+          schema:
+            $ref: '#/definitions/JobInfo'
+        400:
+          description: "Bad request: Job validation failed, invalid job type or malformed URI"
+          schema:
+            $ref: '#/definitions/ErrorMap'
+        404:
+          description: Main class or binary in class path (`cp`) not found
+          schema:
+            $ref: '#/definitions/ErrorMap'
+        409:
+          description: "Conflict: Context stop in progress"
+          schema:
+            $ref: '#/definitions/ErrorMap'
+        500:
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/ErrorMap'
+        503:
+          description: "Too many runnings jobs for this context"
+          schema:
+            $ref: '#/definitions/ErrorMap'
+
+#
+# DELETE /jobs/{id}
+#
+    delete:
+      tags:
+      - "Jobs"
+      summary: "Stop a job"
+      description: "Stops a running job with this id"
+      produces:
+      - "application/json"
+      parameters:
+      - in: "path"
+        name: "id"
+        required: true
+        type: "string"
+      responses:
+        200:
+          description: Successful operation
+          schema:
+            type: "object"
+            properties:
+              status:
+                type: "string"
+                example: "KILLED"
+        404:
+          description: No running job found
+          schema:
+            $ref: '#/definitions/ErrorMap'
+        500:
+          description: "Internal server error"
+          schema:
+            $ref: '#/definitions/ErrorMap'
+
+#
+# GET /jobs/{id}/config
+#
+  /jobs/{id}/config:
+    get:
+      tags:
+      - "Jobs"
+      summary: "Returns the job configuration"
+      description: "Returns the configuration used to launch the job under this id"
+      produces:
+      - "application/json"
+      parameters:
+      - in: "path"
+        name: "id"
+        required: true
+        type: "string"
+      responses:
+        200:
+          description: "Successful operation"
+          schema:
+            type: object
+            example: {
+              input : {
+                string : "a b c a b see"
+              }
+            }
+        404:
+          description: "Job not found"
+          schema:
+            $ref: '#/definitions/ErrorMap'
+        500:
+          description: "Internal server error"
+          schema:
+            $ref: '#/definitions/ErrorMap'
+
+#
+# Health
+#
+
+  /healthz:
+    get:
+      tags:
+      - "Other"
+      summary: "Returns jobserver health"
+      description: "Responds with 200 to indicate that the Jobserver API is up and running.\nOther kinds of health checks are configurable via the `spark.jobserver.healthcheck`  property."
+      produces:
+      - "application/json"
+      responses:
+        200:
+          description: "Successful operation"
+          schema:
+            $ref: '#/definitions/Empty'
+
+#
+# DEFINITIONS
+#
+
+definitions:
+
+  Empty:
+    type: "object"
+
+  ErrorMap:
+    type: "object"
+    properties:
+      status:
+        type: "string"
+        example: "ERROR"
+      result:
+        type: "object"
+        example: "Error details"
+
+  SuccessMap:
+    type: "object"
+    properties:
+      status:
+        type: "string"
+        example: "SUCCESS"
+      result:
+        type: "object"
+        example: "Success message"
+
+  BinaryList:
+    type: "object"
+    properties:
+      app1:
+        type: "object"
+        properties:
+          binary-type:
+            type: "string"
+            example: "Jar"
+          upload-time:
+            type: "string"
+            format: "date-time"
+      app2:
+        type: "object"
+        properties:
+          binary-type:
+            type: "string"
+            example: "Jar"
+          upload-time:
+            type: "string"
+            format: "date-time"
+
+  BinaryInfo:
+    type: "object"
+    properties:
+      app-name:
+        type: "string"
+        example: "app1"
+      binary-type:
+        type: "string"
+        example: "Jar"
+      upload-time:
+        type: "string"
+        format: "date-time"
+
+  ContextList:
+    type: "array"
+    items:
+      type: "string"
+    example : ["context1", "context2"]
+
+  ContextInfo:
+    type: "object"
+    properties:
+      name:
+        type: "string"
+        example: "context1"
+      startTime:
+        type: "string"
+        format: "date-time"
+      state:
+        type: "string"
+        example: "FINISHED"
+      endTime:
+        type: "string"
+        format: "date-time"
+      id:
+        type: "string"
+        format: "uuid"
+
+  JobInfo:
+    type: "object"
+    properties:
+      duration:
+        type: "string"
+        example: "Job not done yet"
+      classPath:
+        type: "string"
+        example: "spark.jobserver.WordCountExample"
+      startTime:
+        type: "string"
+        format: "date-time"
+      context:
+        type: "string"
+        example: "context1"
+      status:
+        type: "string"
+        example: "STARTED"
+      jobId:
+        type: "string"
+        format: "uuid"
+      contextId:
+        type: "string"
+        format: "uuid"
+
+  JobInfoResult:
+    type: "object"
+    properties:
+      duration:
+        type: "string"
+        example: "1.234 secs"
+      classPath:
+        type: "string"
+        example: "spark.jobserver.WordCountExample"
+      startTime:
+        type: "string"
+        format: "date-time"
+      context:
+        type: "string"
+        example: "context1"
+      result:
+        $ref: '#/definitions/JobResult'
+      status:
+        type: "string"
+        example: "FINISHED"
+      jobId:
+        type: "string"
+        format: "uuid"
+      contextId:
+        type: "string"
+        format: "uuid"
+
+  JobResultResponse:
+    type: "object"
+    properties:
+      jobId:
+        type: "string"
+        format: "uuid"
+      result:
+        $ref: '#/definitions/JobResult'
+
+  JobResult:
+    type: "object"
+    properties:
+      jobId:
+        type: "string"
+        format: "uuid"
+      result:
+        type: object
+        example: {
+          "b": 2,
+          "a": 2,
+          "see": 1,
+          "c": 1
+        }
+
+  JobList:
+    type: "array"
+    items:
+      $ref: '#/definitions/JobInfo'
