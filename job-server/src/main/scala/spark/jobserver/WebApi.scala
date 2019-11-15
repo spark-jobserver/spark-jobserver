@@ -887,7 +887,7 @@ class WebApi(system: ActorSystem,
                             case _: MalformedURLException => logAndComplete(
                               ctx, "JOB LOADING FAILED: Malformed URL", StatusCodes.BadRequest, err)
                             case _ => logAndComplete (
-                              ctx, "JOB LOADING FAILED", StatusCodes.InternalServerError, err)
+                              ctx, "JOB LOADING FAILED", StatusCodes.BadRequest, err)
                           }
                           case ContextStopInProgress =>
                             logAndComplete(ctx, "Context stop in progress", StatusCodes.Conflict)
