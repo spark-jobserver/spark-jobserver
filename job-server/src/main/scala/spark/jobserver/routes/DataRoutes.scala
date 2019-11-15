@@ -41,7 +41,7 @@ trait DataRoutes extends HttpService {
       future.map { names =>
         ctx.complete(names)
       }.recover {
-        case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+        case e: Exception => ctx.complete(StatusCodes.InternalServerError, errMap(e, "ERROR"))
       }
     } ~
       // DELETE /data/filename delete the given file
@@ -54,7 +54,7 @@ trait DataRoutes extends HttpService {
               case Error =>
                 logAndComplete(ctx, "Unable to delete data file '" + filename + "'.", StatusCodes.BadRequest)
             }.recover {
-              case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+              case e: Exception => ctx.complete(StatusCodes.InternalServerError, errMap(e, "ERROR"))
             }
           }
         }
@@ -75,7 +75,7 @@ trait DataRoutes extends HttpService {
                     case Error =>
                       logAndComplete(ctx, "Unable to delete data folder", StatusCodes.BadRequest)
                   }.recover {
-                    case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+                    case e: Exception => ctx.complete(StatusCodes.InternalServerError, errMap(e, "ERROR"))
                   }
                 }
               }
@@ -98,7 +98,7 @@ trait DataRoutes extends HttpService {
                 case Error =>
                   logAndComplete(ctx, "Failed to store data file '" + filename + "'.", StatusCodes.BadRequest)
               }.recover {
-                case e: Exception => ctx.complete(500, errMap(e, "ERROR"))
+                case e: Exception => ctx.complete(StatusCodes.InternalServerError, errMap(e, "ERROR"))
               }
             }
           }
