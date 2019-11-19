@@ -29,7 +29,7 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
 
   // Test environment
   val bin = "tests.jar"
-  val streamingbin = "BasicTest.jar"
+  val streamingbin = "extras.jar"
   val appName = "IntegrationTestApp"
   val contextName = "IntegrationTestContext"
   val app = "IntegrationTestTestsJar"
@@ -301,7 +301,7 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
         val contextJson = Json.parse(contextResponse.body.merge)
         (contextJson \ "status").as[String] should equal("SUCCESS")
         // Start job
-        val request = sttp.post(uri"$SJS/jobs?cp=$streamingApp&mainClass=com.sap.hcpbd.Streaming&context=$jobContext")
+        val request = sttp.post(uri"$SJS/jobs?cp=$streamingApp&mainClass=spark.jobserver.StreamingTestJob&context=$jobContext")
         val response = request.send()
         response.code should equal(202)
         val json = Json.parse(response.body.merge)
@@ -473,7 +473,7 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
           val contextJson = Json.parse(contextResponse.body.merge)
           (contextJson \ "status").as[String] should equal("SUCCESS")
           // Start job
-          val request = sttp.post(uri"$SJS/jobs?appName=$streamingApp&classPath=com.sap.hcpbd.Streaming&context=$jobContext")
+          val request = sttp.post(uri"$SJS/jobs?appName=$streamingApp&classPath=spark.jobserver.StreamingTestJob&context=$jobContext")
           val response = request.send()
           response.code should equal(202)
           val json = Json.parse(response.body.merge)
@@ -524,7 +524,7 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
       }
 
       "POST /jobs should fail if there is no such context" in {
-        val request = sttp.post(uri"$SJS/jobs?appName=$streamingApp&classPath=com.sap.hcpbd.Streaming&context=NonExistingContext")
+        val request = sttp.post(uri"$SJS/jobs?appName=$streamingApp&classPath=spark.jobserver.StreamingTestJob&context=NonExistingContext")
         val response = request.send()
         response.code should equal(404)
         val json = Json.parse(response.body.merge)
