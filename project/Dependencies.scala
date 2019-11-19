@@ -12,7 +12,8 @@ object Dependencies {
     "org.scalactic" %% "scalactic" % scalatic,
     "org.mockito" % "mockito-core" % mockito,
     "org.joda" % "joda-convert" % jodaConvert,
-    "joda-time" % "joda-time" % jodaTime
+    "joda-time" % "joda-time" % jodaTime,
+    "xerces" % "xercesImpl" % xerces
   )
 
   lazy val akkaDeps = Seq(
@@ -34,7 +35,7 @@ object Dependencies {
   )
 
   lazy val sparkExtraDeps = Seq(
-    "org.apache.hadoop" % "hadoop-client" % hadoop % Provided excludeAll excludeQQ,
+    "org.apache.hadoop" % "hadoop-client" % hadoop % Provided excludeAll (excludeQQ, excludeJackson),
     "org.apache.spark" %% "spark-mllib" % spark % Provided excludeAll excludeQQ,
     "org.apache.spark" %% "spark-sql" % spark % Provided excludeAll excludeQQ,
     "org.apache.spark" %% "spark-streaming" % spark % Provided excludeAll excludeQQ,
@@ -80,9 +81,11 @@ object Dependencies {
   )
 
   lazy val miscTestDeps = Seq(
-    "org.apache.hadoop" % "hadoop-hdfs" % hadoop % Test classifier "tests" excludeAll(excludeCurator),
-    "org.apache.hadoop" % "hadoop-common" % hadoop % Test classifier "tests" excludeAll(excludeCurator),
-    "org.apache.hadoop" % "hadoop-minicluster" % hadoop % Test excludeAll(excludeCurator),
+    "org.apache.hadoop" % "hadoop-hdfs" % hadoop % Test classifier "tests" excludeAll(
+      excludeCurator, excludeJackson),
+    "org.apache.hadoop" % "hadoop-common" % hadoop % Test classifier "tests" excludeAll(
+      excludeCurator, excludeJackson),
+    "org.apache.hadoop" % "hadoop-minicluster" % hadoop % Test excludeAll(excludeCurator, excludeJackson),
     "org.apache.curator" % "curator-test" % curatorTest % Test excludeAll(excludeGuava)
   )
 

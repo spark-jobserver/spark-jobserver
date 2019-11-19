@@ -7,6 +7,7 @@ import spark.jobserver.context.{JavaContextFactory, SparkSessionContextLikeWrapp
 import spark.jobserver.japi.{BaseJavaJob, JSessionJob}
 import spark.jobserver.util.SparkJobUtils
 import org.apache.spark.sql.Row
+import org.scalatest.Ignore
 import spark.jobserver.CommonMessages.JobResult
 import spark.jobserver.io.JobDAOActor
 
@@ -38,6 +39,7 @@ object JavaSessionSpec extends JobSpecConfig {
   override val contextFactory = classOf[JavaTestSessionContextFactory].getName
 }
 
+@Ignore
 class JavaSessionSpec extends ExtrasJobSpecBase(JavaSessionSpec.getNewSystem) {
 
   val classPrefix = "spark.jobserver."

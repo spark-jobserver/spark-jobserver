@@ -9,7 +9,7 @@ object Versions {
   lazy val commons = "1.4"
   lazy val derby = "10.12.1.1"
   lazy val flyway = "3.2.1"
-  lazy val hadoop = "2.7.3"
+  lazy val hadoop = "3.2.0"
   lazy val h2 = "1.3.176"
   lazy val java = sys.env.getOrElse("JAVA_VERSION", "8-jdk")
   lazy val jodaConvert = "1.8.1"
@@ -31,4 +31,5 @@ object Versions {
   lazy val cassandraConnector = "2.4.0"
   lazy val curator = "4.2.0"
   lazy val curatorTest = "4.2.0"
+  lazy val xerces = "2.9.1"
 }

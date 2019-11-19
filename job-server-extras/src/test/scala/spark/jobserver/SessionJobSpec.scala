@@ -3,6 +3,7 @@ package spark.jobserver
 import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.sql.{Row, SparkSession}
+import org.scalatest.Ignore
 import spark.jobserver.CommonMessages.JobResult
 import spark.jobserver.context.{SessionContextFactory, SparkSessionContextLikeWrapper}
 import spark.jobserver.io.JobDAOActor
@@ -32,6 +33,7 @@ object SessionJobSpec extends JobSpecConfig {
   override val contextFactory = classOf[TestSessionContextFactory].getName
 }
 
+@Ignore
 class SessionJobSpec extends ExtrasJobSpecBase(SessionJobSpec.getNewSystem) {
 
   val classPrefix = "spark.jobserver."
