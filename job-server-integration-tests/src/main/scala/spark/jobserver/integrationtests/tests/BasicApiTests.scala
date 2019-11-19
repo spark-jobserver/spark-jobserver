@@ -1,7 +1,5 @@
 package spark.jobserver.integrationtests.tests
 
-import java.io.File
-
 import org.joda.time.DateTime
 import org.scalatest.BeforeAndAfterAllConfigMap
 import org.scalatest.ConfigMap
@@ -15,13 +13,13 @@ import play.api.libs.json.Json
 import spark.jobserver.integrationtests.util.TestHelper
 import com.typesafe.config.Config
 
-class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigMap{
+class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigMap {
 
   // Configuration
   var SJS = ""
   implicit val backend = HttpURLConnectionBackend()
 
-  override def beforeAll(configMap: ConfigMap) = {
+  override def beforeAll(configMap: ConfigMap): Unit = {
     val config = configMap.getRequired[Config]("config")
     val jobservers = config.getStringList("jobserverAddresses")
     SJS = jobservers.get(0)
@@ -36,16 +34,17 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
   val streamingApp = "IntegrationTestStreamingApp"
   val batchContextName = "IntegrationTestBatchContext"
   val streamingContextName = "IntegrationTestStreamingContext"
+  val streamingMain = "spark.jobserver.StreamingTestJob"
 
   "/binaries" - {
-    var binaryUploadDate : DateTime = null
+    var binaryUploadDate: DateTime = null
 
     "POST /binaries/<app> should upload a binary" in {
       val byteArray = TestHelper.fileToByteArray(bin)
 
       val request = sttp.post(uri"$SJS/binaries/$appName")
-          .body(byteArray)
-          .contentType("application/java-archive")
+        .body(byteArray)
+        .contentType("application/java-archive")
       val response = request.send()
       response.code should equal(200)
     }
@@ -73,8 +72,8 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
     "POST /binaries/<app> should overwrite a binary with a new version" in {
       val byteArray = TestHelper.fileToByteArray(streamingbin)
       val request = sttp.post(uri"$SJS/binaries/$appName")
-          .body(byteArray)
-          .contentType("application/java-archive")
+        .body(byteArray)
+        .contentType("application/java-archive")
       val response = request.send()
       response.code should equal(200)
       // See if date has been updated
@@ -202,24 +201,24 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
 
   "/jobs" - {
 
-    var adHocJobId : String = ""
+    var adHocJobId: String = ""
     var batchJobId: String = ""
-    var streamingJobId : String = ""
-    var jobContext : String = ""
+    var streamingJobId: String = ""
+    var jobContext: String = ""
 
     "(preparation) uploading job binaries for job testing should not fail" in {
       val byteArray1 = TestHelper.fileToByteArray(bin)
       val byteArray2 = TestHelper.fileToByteArray(streamingbin)
       sttp.post(uri"$SJS/binaries/$app")
-          .body(byteArray1)
-          .contentType("application/java-archive")
-          .send()
-          .code should equal(200)
+        .body(byteArray1)
+        .contentType("application/java-archive")
+        .send()
+        .code should equal(200)
       sttp.post(uri"$SJS/binaries/$streamingApp")
-          .body(byteArray2)
-          .contentType("application/java-archive")
-          .send().
-          code should equal(200)
+        .body(byteArray2)
+        .contentType("application/java-archive")
+        .send().
+        code should equal(200)
       val response = sttp.get(uri"$SJS/binaries").send()
       response.code should equal(200)
       val binaries = Json.parse(response.body.merge)
@@ -260,23 +259,24 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
     "batch jobs" - {
       "POST /jobs?context=<context>&cp=..&mainClass=., should start a job in an " +
         "existing (batch) context" in {
-        // Start context
-        jobContext = batchContextName
-        val contextRequest = sttp.post(uri"$SJS/contexts/$jobContext")
-        val contextResponse = contextRequest.send()
-        contextResponse.code should equal(200)
-        val contextJson = Json.parse(contextResponse.body.merge)
-        (contextJson \ "status").as[String] should equal("SUCCESS")
-        // Start job
-        val request = sttp.post(uri"$SJS/jobs?cp=$app&mainClass=spark.jobserver.WordCountExample&context=$jobContext")
-          .body("input.string = a b c a b see")
-        val response = request.send()
-        response.code should equal(202)
-        val json = Json.parse(response.body.merge)
-        (json \ "status").as[String] should equal("STARTED")
-        (json \ "context").as[String] should equal(jobContext)
-        batchJobId = (json \ "jobId").as[String]
-      }
+          // Start context
+          jobContext = batchContextName
+          val contextRequest = sttp.post(uri"$SJS/contexts/$jobContext")
+          val contextResponse = contextRequest.send()
+          contextResponse.code should equal(200)
+          val contextJson = Json.parse(contextResponse.body.merge)
+          (contextJson \ "status").as[String] should equal("SUCCESS")
+          // Start job
+          val request = sttp.post(
+            uri"$SJS/jobs?cp=$app&mainClass=spark.jobserver.WordCountExample&context=$jobContext")
+            .body("input.string = a b c a b see")
+          val response = request.send()
+          response.code should equal(202)
+          val json = Json.parse(response.body.merge)
+          (json \ "status").as[String] should equal("STARTED")
+          (json \ "context").as[String] should equal(jobContext)
+          batchJobId = (json \ "jobId").as[String]
+        }
 
       "the termination of the job should not terminate the context" in {
         TestHelper.waitForJobTermination(SJS, batchJobId, 15)
@@ -295,13 +295,14 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
       "POST /jobs?context=<streamingContext> should start a job in an existing (streaming) context" in {
         // Start context
         jobContext = batchContextName
-        val contextRequest = sttp.post(uri"$SJS/contexts/$jobContext?context-factory=spark.jobserver.context.StreamingContextFactory")
+        val contextRequest = sttp.post(
+          uri"$SJS/contexts/$jobContext?context-factory=spark.jobserver.context.StreamingContextFactory")
         val contextResponse = contextRequest.send()
         contextResponse.code should equal(200)
         val contextJson = Json.parse(contextResponse.body.merge)
         (contextJson \ "status").as[String] should equal("SUCCESS")
         // Start job
-        val request = sttp.post(uri"$SJS/jobs?cp=$streamingApp&mainClass=spark.jobserver.StreamingTestJob&context=$jobContext")
+        val request = sttp.post(uri"$SJS/jobs?cp=$streamingApp&mainClass=$streamingMain&context=$jobContext")
         val response = request.send()
         response.code should equal(202)
         val json = Json.parse(response.body.merge)
@@ -438,7 +439,8 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
           val contextJson = Json.parse(contextResponse.body.merge)
           (contextJson \ "status").as[String] should equal("SUCCESS")
           // Start job
-          val request = sttp.post(uri"$SJS/jobs?appName=$app&classPath=spark.jobserver.WordCountExample&context=$jobContext")
+          val request = sttp.post(
+            uri"$SJS/jobs?appName=$app&classPath=spark.jobserver.WordCountExample&context=$jobContext")
             .body("input.string = a b c a b see")
           val response = request.send()
           response.code should equal(202)
@@ -467,13 +469,15 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
         "POST /jobs?context=<streamingContext> should start a job in an existing (streaming) context" in {
           // Start context
           jobContext = batchContextName
-          val contextRequest = sttp.post(uri"$SJS/contexts/$jobContext?context-factory=spark.jobserver.context.StreamingContextFactory")
+          val contextRequest = sttp.post(
+            uri"$SJS/contexts/$jobContext?context-factory=spark.jobserver.context.StreamingContextFactory")
           val contextResponse = contextRequest.send()
           contextResponse.code should equal(200)
           val contextJson = Json.parse(contextResponse.body.merge)
           (contextJson \ "status").as[String] should equal("SUCCESS")
           // Start job
-          val request = sttp.post(uri"$SJS/jobs?appName=$streamingApp&classPath=spark.jobserver.StreamingTestJob&context=$jobContext")
+          val request = sttp.post(
+            uri"$SJS/jobs?appName=$streamingApp&classPath=$streamingMain&context=$jobContext")
           val response = request.send()
           response.code should equal(202)
           val json = Json.parse(response.body.merge)
@@ -514,7 +518,8 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
     "Error scenarios" - {
 
       "POST /jobs should fail if there is no such app" in {
-        val request = sttp.post(uri"$SJS/jobs?appName=NonExistingAppName&classPath=spark.jobserver.WordCountExample")
+        val request = sttp.post(
+          uri"$SJS/jobs?appName=NonExistingAppName&classPath=spark.jobserver.WordCountExample")
         val response = request.send()
         response.code should equal(404)
         val json = Json.parse(response.body.merge)
@@ -524,7 +529,8 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
       }
 
       "POST /jobs should fail if there is no such context" in {
-        val request = sttp.post(uri"$SJS/jobs?appName=$streamingApp&classPath=spark.jobserver.StreamingTestJob&context=NonExistingContext")
+        val request = sttp.post(
+          uri"$SJS/jobs?appName=$streamingApp&classPath=$streamingMain&context=NonExistingContext")
         val response = request.send()
         response.code should equal(404)
         val json = Json.parse(response.body.merge)
@@ -614,7 +620,7 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
     }
   }
 
-  override def afterAll(configMap: ConfigMap) = {
+  override def afterAll(configMap: ConfigMap): Unit = {
     // Clean up test entities in general
     sttp.delete(uri"$SJS/binaries/$app")
     sttp.delete(uri"$SJS/binaries/$streamingApp")

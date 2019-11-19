@@ -10,7 +10,7 @@ import com.typesafe.config.Config
  */
 abstract class DeploymentController(config: Config) {
 
-  def stopJobserver(id: String) : Boolean
+  def stopJobserver(id: String): Boolean
 
   def startJobserver(id: String): Boolean
 
@@ -22,7 +22,7 @@ object DeploymentController {
   /**
    * Load a concrete implementation of a DeploymentController which is specified in the config file.
    */
-  def fromConfig(config: Config) : DeploymentController = {
+  def fromConfig(config: Config): DeploymentController = {
     val packageName = this.getClass.getPackage.getName
     try {
       val className = config.getString("deploymentController")

@@ -18,10 +18,10 @@ class TwoJobserverTests extends FreeSpec with Matchers with BeforeAndAfterAllCon
   var SJS2 = ""
   implicit val backend = HttpURLConnectionBackend()
 
-  override def beforeAll(configMap: ConfigMap) = {
+  override def beforeAll(configMap: ConfigMap): Unit = {
     val config = configMap.getRequired[Config]("config")
     val jobservers = config.getStringList("jobserverAddresses")
-    if(jobservers.size() < 2){
+    if (jobservers.size() < 2) {
       println("You need to specify two jobserver addresses in the config to run HA tests.")
       sys.exit(-1)
     }
@@ -95,7 +95,7 @@ class TwoJobserverTests extends FreeSpec with Matchers with BeforeAndAfterAllCon
 
   }
 
-  override def afterAll(configMap: ConfigMap) = {
+  override def afterAll(configMap: ConfigMap): Unit = {
     sttp.delete(uri"$SJS1/contexts/$context1")
     sttp.delete(uri"$SJS1/contexts/$context2")
   }

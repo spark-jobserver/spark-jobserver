@@ -19,11 +19,11 @@ class BoshController(config: Config) extends DeploymentController(config: Config
   val deployment = getDeploymentFromConfig(config)
   val instances = getInstances(deployment)
 
-  private def getDeploymentFromConfig(config: Config) : String = {
+  private def getDeploymentFromConfig(config: Config): String = {
     try {
       config.getString("deployment")
     } catch {
-      case e : ConfigException =>
+      case e: ConfigException =>
         println("Configuration is invalid. Cannot run tests.")
         e.printStackTrace()
         sys.exit(-1)
@@ -45,7 +45,7 @@ class BoshController(config: Config) extends DeploymentController(config: Config
     val uri = uri"$address"
     val ip = uri.host
     instances.foreach { instance =>
-      if((instance \ "ips").as[String] == ip){
+      if ((instance \ "ips").as[String] == ip) {
         return Some((instance \ "instance").as[String])
       }
     }
@@ -58,11 +58,11 @@ class BoshController(config: Config) extends DeploymentController(config: Config
    * Interface
    */
 
-  override def stopJobserver(address: String) : Boolean = {
+  override def stopJobserver(address: String): Boolean = {
     val uri = uri"$address"
     val ip = uri.host
     val instanceId = getInstanceIDByIp(ip)
-    if(instanceId.isDefined){
+    if (instanceId.isDefined) {
       val command = s"bosh -d $deployment stop -n ${instanceId.get}"
       (command !!)
       true
@@ -76,7 +76,7 @@ class BoshController(config: Config) extends DeploymentController(config: Config
     val uri = uri"$address"
     val ip = uri.host
     val instanceId = getInstanceIDByIp(ip)
-    if(instanceId.isDefined){
+    if (instanceId.isDefined) {
       val command = s"bosh -d $deployment -n start ${instanceId.get}"
       (command !!)
       true
@@ -86,12 +86,12 @@ class BoshController(config: Config) extends DeploymentController(config: Config
   }
 
   override def isJobserverUp(address: String): Boolean = {
-    try{
+    try {
       implicit val backend = HttpURLConnectionBackend()
       val healthCheck = sttp.get(uri"$address/healthz").send()
       return healthCheck.code == 200
     } catch {
-      case _ : Throwable => return false
+      case _: Throwable => return false
     }
   }
 

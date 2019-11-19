@@ -18,12 +18,12 @@ class HAFailoverTest extends FreeSpec with Matchers with BeforeAndAfterAllConfig
   var SJS1 = ""
   var SJS2 = ""
   implicit val backend = HttpURLConnectionBackend()
-  var controller : DeploymentController = _
+  var controller: DeploymentController = _
 
-  override def beforeAll(configMap: ConfigMap) = {
+  override def beforeAll(configMap: ConfigMap): Unit = {
     val config = configMap.getRequired[Config]("config")
     val jobservers = config.getStringList("jobserverAddresses")
-    if(jobservers.size() < 2){
+    if (jobservers.size() < 2) {
       println("You need to specify two jobserver addresses in the config to run HA tests.")
       sys.exit(-1)
     }
@@ -138,7 +138,7 @@ class HAFailoverTest extends FreeSpec with Matchers with BeforeAndAfterAllConfig
 
   }
 
-  override def afterAll(configMap: ConfigMap) = {
+  override def afterAll(configMap: ConfigMap): Unit = {
     // Clean up used contexts
     sttp.delete(uri"$SJS1/binaries/$contextName")
   }

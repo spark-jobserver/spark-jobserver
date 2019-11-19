@@ -17,7 +17,7 @@ class CornerCasesTests extends FreeSpec with Matchers with BeforeAndAfterAllConf
   var SJS = ""
   implicit val backend = HttpURLConnectionBackend()
 
-  override def beforeAll(configMap: ConfigMap) = {
+  override def beforeAll(configMap: ConfigMap): Unit = {
     val config = configMap.getRequired[Config]("config")
     val jobservers = config.getStringList("jobserverAddresses")
     SJS = jobservers.get(0)
@@ -29,20 +29,20 @@ class CornerCasesTests extends FreeSpec with Matchers with BeforeAndAfterAllConf
   val deletionTestApp = "IntegrationTestDeletionTest"
 
   "DELETE /binaries should not delete binaries with running jobs" in {
-    var jobId : String = ""
+    var jobId: String = ""
 
     // upload binary
     val byteArray = TestHelper.fileToByteArray(bin)
     val response1 = sttp.post(uri"$SJS/binaries/$deletionTestApp")
-        .body(byteArray)
-        .contentType("application/java-archive")
-        .send()
+      .body(byteArray)
+      .contentType("application/java-archive")
+      .send()
     response1.code should equal(200)
 
     // submit long running job
     val response2 = sttp.post(uri"$SJS/jobs?appName=$deletionTestApp&classPath=spark.jobserver.LongPiJob")
-        .body("stress.test.longpijob.duration = 10")
-        .send()
+      .body("stress.test.longpijob.duration = 10")
+      .send()
     response2.code should equal(202)
     val json2 = Json.parse(response2.body.merge)
     (json2 \ "status").as[String] should equal("STARTED")
@@ -50,7 +50,7 @@ class CornerCasesTests extends FreeSpec with Matchers with BeforeAndAfterAllConf
 
     // try to delete binary
     val response3 = sttp.delete(uri"$SJS/binaries/$deletionTestApp")
-        .send()
+      .send()
     response3.code should equal(403)
     val json3 = Json.parse(response3.body.merge)
     val message = (json3 \ "result").as[String]
@@ -66,11 +66,11 @@ class CornerCasesTests extends FreeSpec with Matchers with BeforeAndAfterAllConf
 
     // deletion should succeed finally
     val response4 = sttp.delete(uri"$SJS/binaries/$deletionTestApp")
-        .send()
+      .send()
     response4.code should equal(200)
   }
 
-  override def afterAll(configMap: ConfigMap) = {
+  override def afterAll(configMap: ConfigMap): Unit = {
     // Clean up test entities just in case something went wrong
     sttp.delete(uri"$SJS/binaries/$deletionTestApp")
   }

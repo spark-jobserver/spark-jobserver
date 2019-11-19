@@ -13,19 +13,19 @@ import spark.jobserver.integrationtests.util.TestHelper
 object IntegrationTests extends App {
 
   // Parse config
-  if(args.length != 1){
+  if (args.length != 1) {
     printUsage()
     sys.exit(-1)
   }
   val file = new File(args(0))
-  if(!file.exists()){
+  if (!file.exists()) {
     println(s"Could not find a config file for path ${file.getAbsolutePath}")
     sys.exit(-1)
   }
-  val config = try{
+  val config = try {
     ConfigFactory.parseFile(file)
   } catch {
-    case t : Throwable =>
+    case t: Throwable =>
       println("Could not parse config file: ")
       t.printStackTrace()
       sys.exit(-1)
@@ -34,12 +34,12 @@ object IntegrationTests extends App {
   // Validate config
   try {
     val addresses = config.getStringList("jobserverAddresses")
-    if(addresses.isEmpty()){
+    if (addresses.isEmpty()) {
       println("The list of jobserverAddresses is empty. Not running any tests.")
       sys.exit(-1)
     }
     val testsToRun = config.getStringList("runTests")
-    if(testsToRun.isEmpty()){
+    if (testsToRun.isEmpty()) {
       println("The list of tests to run is empty. Not running any tests.")
       sys.exit(-1)
     }
@@ -50,7 +50,7 @@ object IntegrationTests extends App {
   }
 
   // In case HTTPS is used, just disable verification
-  if(config.hasPath("useSSL") && config.getBoolean("useSSL")) {
+  if (config.hasPath("useSSL") && config.getBoolean("useSSL")) {
     TestHelper.disableSSLVerification()
   }
 
@@ -58,7 +58,7 @@ object IntegrationTests extends App {
   println("Running integration tests with the following configuration:")
   println(config.root().render(ConfigRenderOptions.concise().setFormatted(true).setJson(true)))
   val testsToRun = config.getStringList("runTests").toArray()
-  testsToRun.foreach{ t =>
+  testsToRun.foreach { t =>
     val testName = s"spark.jobserver.integrationtests.tests.$t"
     val clazz = Class.forName(testName)
     val test = clazz.getDeclaredConstructor()
@@ -67,7 +67,7 @@ object IntegrationTests extends App {
   }
 
   // Usage
-  def printUsage(){
+  def printUsage() {
     println("Usage: IntegrationTests </path/to/config/file>")
   }
 
