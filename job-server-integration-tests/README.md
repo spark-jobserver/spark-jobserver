@@ -6,8 +6,8 @@ This way it can be verified that the whole stack (including configuration, spark
 Integration tests can be run locally with a regular test runner or by invoking the provided main class `IntegrationTest`.
 To run the tests against an arbitrary jobserver from a remote environment you can:
 ```shell
-# Assemble a fat jar
-sbt assembly
+# Assemble a fat jar (from root dir)
+sbt job-server-integration-tests/assembly
 
 # Move the fat jar to a remote location
 scp target/scala-*/job-server-integration-tests-assembly-*.jar <remote-path>/integration-tests.jar

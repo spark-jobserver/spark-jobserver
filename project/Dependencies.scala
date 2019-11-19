@@ -86,6 +86,13 @@ object Dependencies {
     "org.apache.curator" % "curator-test" % curatorTest % Test excludeAll(excludeGuava)
   )
 
+  lazy val integrationTestDeps = Seq(
+    "com.typesafe" % "config" % typeSafeConfig,
+    "org.scalatest" %% "scalatest" % scalaTest,
+    "com.softwaremill.sttp" %% "core" % "1.6.3",
+    "com.typesafe.play" %% "play-json" % "2.7.4"
+  )
+
   lazy val securityDeps = Seq(
     "org.apache.shiro" % "shiro-core" % shiro
   )
