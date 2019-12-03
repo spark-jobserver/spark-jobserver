@@ -7,6 +7,8 @@ import org.apache.spark.SparkConf
 import org.joda.time.DateTime
 import spark.jobserver._
 import spark.jobserver.api.JobEnvironment
+import spark.jobserver.util.JobserverConfig
+
 import scala.concurrent.duration.FiniteDuration
 
 case class DummyJobEnvironment(jobId: String, contextConfig: Config) extends JobEnvironment {
@@ -103,6 +105,7 @@ object PythonSparkContextFactorySpec {
        |]
        |
       |python.executable = "python"
+      |${JobserverConfig.IS_SPARK_SESSION_HIVE_ENABLED} = true
     """.replace("\\", "\\\\") // Windows-compatibility
       .stripMargin)
 
