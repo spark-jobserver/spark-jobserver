@@ -1,7 +1,7 @@
 import scala.util.Properties.isJavaAtLeast
 
 object Versions {
-  lazy val spark = sys.env.getOrElse("SPARK_VERSION", "2.3.2")
+  lazy val spark = sys.env.getOrElse("SPARK_VERSION", "2.4.4")
 
   lazy val akka = "2.4.20"
   lazy val cassandra = "3.3.0"
@@ -28,7 +28,7 @@ object Versions {
   lazy val spray = "1.3.3"
   lazy val sprayJson = "1.3.2"
   lazy val typeSafeConfig = if (isJavaAtLeast("1.8")) "1.3.0" else "1.2.1"
-  lazy val cassandraConnector = "2.3.2"
-  lazy val curator = "2.6.0"
-  lazy val curatorTest = "2.12.0"
+  lazy val cassandraConnector = "2.4.0"
+  lazy val curator = "4.2.0"
+  lazy val curatorTest = "4.2.0"
 }

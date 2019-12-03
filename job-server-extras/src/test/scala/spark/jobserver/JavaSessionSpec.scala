@@ -50,7 +50,7 @@ class JavaSessionSpec extends ExtrasJobSpecBase(JavaSessionSpec.getNewSystem) {
     """.stripMargin)
   val queryConfig = ConfigFactory.parseString(
     """
-      |sql = "SELECT firstName, lastName FROM `default`.`test_addresses` WHERE city = 'San Jose'"
+      |sql = "SELECT firstName, lastName FROM `test_addresses` WHERE city = 'San Jose'"
       |cp = ["demo"]
       |""".stripMargin
   )

@@ -130,7 +130,7 @@ Spark Job Server is included in Datastax Enterprise!
 | 0.6.2       | 1.6.1         |
 | 0.7.0       | 1.6.2         |
 | 0.8.0       | 2.2.0    |
-| 0.9.0-SNAPSHOT | 2.3.2 |
+| 0.9.0-SNAPSHOT | 2.4.4 |
 
 For release notes, look in the `notes/` directory.
 

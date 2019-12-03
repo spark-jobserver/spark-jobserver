@@ -61,6 +61,7 @@ abstract class Launcher(config: Config, sparkLauncher: SparkLauncher, enviornmen
       launcher.setDeployMode(deployMode)
       launcher.setAppResource(sjsJarPath)
       launcher.setVerbose((getEnvironmentVariable("SPARK_LAUNCHER_VERBOSE") == "1"))
+      launcher.setConf("spark.master.rest.enabled", "true")
     }
 
     protected def validate(): (Boolean, String) = {
