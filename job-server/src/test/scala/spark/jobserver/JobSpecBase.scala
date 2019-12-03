@@ -9,6 +9,7 @@ import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.context.DefaultSparkContextFactory
 import spark.jobserver.io.{BinaryInfo, BinaryType, JobDAO}
+import spark.jobserver.util.JobserverConfig
 
 import scala.concurrent.duration._
 
@@ -44,7 +45,8 @@ trait JobSpecConfig {
       "spark.context-settings.test" -> "",
       "akka.test.single-expect-default" -> "6s",
       "akka.test.timefactor" -> 2,
-      "spark.driver.allowMultipleContexts" -> true
+      "spark.driver.allowMultipleContexts" -> true,
+      JobserverConfig.IS_SPARK_SESSION_HIVE_ENABLED -> "true"
     )
     ConfigFactory.parseMap(ConfigMap.asJava).withFallback(ConfigFactory.defaultOverrides())
   }
