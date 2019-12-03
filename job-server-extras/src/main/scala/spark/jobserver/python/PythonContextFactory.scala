@@ -12,7 +12,7 @@ import org.scalactic.{Bad, Good, Or}
 import org.slf4j.LoggerFactory
 import spark.jobserver._
 import spark.jobserver.context.{JobLoadError, LoadingError, SparkContextFactory}
-import spark.jobserver.util.SparkJobUtils
+import spark.jobserver.util.{JobserverConfig, SparkJobUtils}
 
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
@@ -179,15 +179,21 @@ class PythonSessionContextFactory extends PythonContextFactory {
                            contextName: String): C = {
     val builder = SparkSession.builder().config(sparkConf.set("spark.yarn.isPython", "true"))
     builder.appName(contextName)
-    try {
-      builder.enableHiveSupport()
-    } catch {
-      case e: IllegalArgumentException => println(s"Hive support not enabled - ${e.getMessage()}")
-    }
+    setupHiveSupport(contextConfig, builder)
     val spark = builder.getOrCreate()
     for ((k, v) <- SparkJobUtils.getHadoopConfig(contextConfig))
       spark.sparkContext.hadoopConfiguration.set(k, v)
     context = PythonSessionContextLikeWrapper(spark, contextConfig)
     context
+  }
+
+  protected def setupHiveSupport(config: Config, builder: SparkSession.Builder) = {
+    if (config.getBoolean(JobserverConfig.IS_SPARK_SESSION_HIVE_ENABLED)) {
+      try {
+        builder.enableHiveSupport()
+      } catch {
+        case e: IllegalArgumentException => println(s"Hive support not enabled - ${e.getMessage()}")
+      }
+    }
   }
 }

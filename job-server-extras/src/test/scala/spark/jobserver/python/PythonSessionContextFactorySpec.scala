@@ -10,7 +10,8 @@ import akka.testkit.{TestKit, TestProbe}
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.sql.SparkSession
 import spark.jobserver.{InMemoryDAO, JavaStreamingSpec, JobsLoader, WindowsIgnore}
-import spark.jobserver.util.SparkJobUtils
+import spark.jobserver.{JavaStreamingSpec, JobsLoader, WindowsIgnore}
+import spark.jobserver.util.{JobserverConfig, SparkJobUtils}
 
 import scala.collection.JavaConverters._
 import org.scalatest._
@@ -34,19 +35,8 @@ object PythonSessionContextFactorySpec {
   }
 }
 
-class TestPythonSessionContextFactory extends PythonContextFactory {
-
-  override type C = PythonSessionContextLikeWrapper
-  var context : PythonSessionContextLikeWrapper = _
-
-  override def py4JImports: Seq[String] =
-    PythonContextFactory.hiveContextImports
-
-  override def doMakeContext(sc: SparkContext,
-                             contextConfig: Config,
-                             contextName: String): C = {
-    context
-  }
+//@Ignore
+class TestPythonSessionContextFactory extends PythonSessionContextFactory {
 
   override def makeContext(sparkConf: SparkConf,
                            contextConfig: Config,
@@ -62,11 +52,7 @@ class TestPythonSessionContextFactory extends PythonContextFactory {
       builder.appName(contextName).master("local")
       builder.config("javax.jdo.option.ConnectionURL", "jdbc:derby:memory:myDB;create=true")
       builder.config("javax.jdo.option.ConnectionDriverName", "org.apache.derby.jdbc.EmbeddedDriver")
-      try {
-        builder.enableHiveSupport()
-      } catch {
-        case e: IllegalArgumentException => println(s"Hive support not enabled - ${e.getMessage()}")
-      }
+      super.setupHiveSupport(contextConfig, builder)
       val spark = builder.getOrCreate()
       for ((k, v) <- SparkJobUtils.getHadoopConfig(contextConfig))
         spark.sparkContext.hadoopConfiguration.set(k, v)
@@ -139,10 +125,11 @@ with BeforeAndAfterAll {
 
     def runSessionTest(factory: TestPythonSessionContextFactory,
                    context: PythonSessionContextLikeWrapper,
-                   c: Config): Unit = {
+                   c: Config,
+                   pythonJobName: String = "example_jobs.session_window.SessionWindowJob"): Unit = {
       val loadResult = factory.loadAndValidateJob(
         Seq("sql-average"),
-        "example_jobs.session_window.SessionWindowJob",
+        pythonJobName,
         DummyJobCache)
       loadResult.isGood should be (true)
       val jobContainer = loadResult.get
@@ -186,6 +173,22 @@ with BeforeAndAfterAll {
         """.stripMargin).withFallback(config)
       context = factory.makeContext(sparkConf, p3Config, "test-create")
       runSessionTest(factory, context, p3Config)
+    }
+
+    it("should throw exception if hive is disabled and hive job is executed") {
+      val configWithHiveDisabled = ConfigFactory.parseString(
+        s"${JobserverConfig.IS_SPARK_SESSION_HIVE_ENABLED}=false").withFallback(config)
+      val factory = new TestPythonSessionContextFactory()
+      context = factory.makeContext(sparkConf, configWithHiveDisabled, "test-create")
+
+      val exception = intercept[java.lang.Exception] {
+        runSessionTest(factory, context, configWithHiveDisabled,
+          "example_jobs.hive_support_job.HiveSupportJob")
+      }
+
+      exception.getMessage().contains(
+        "Hive support is required to CREATE Hive TABLE (AS SELECT)") should be(true)
+      exception.getMessage().contains("check_support") should be(true)
     }
   }
 }
