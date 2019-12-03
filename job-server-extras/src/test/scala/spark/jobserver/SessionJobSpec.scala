@@ -6,7 +6,7 @@ import org.apache.spark.sql.{Row, SparkSession}
 import spark.jobserver.CommonMessages.JobResult
 import spark.jobserver.context.{SessionContextFactory, SparkSessionContextLikeWrapper}
 import spark.jobserver.io.JobDAOActor
-import spark.jobserver.util.SparkJobUtils
+import spark.jobserver.util.{JobserverConfig, SparkJobUtils}
 
 import scala.concurrent.duration._
 
@@ -17,11 +17,7 @@ class TestSessionContextFactory extends SessionContextFactory {
     builder.config(sparkConf).appName(contextName).master("local")
     builder.config("javax.jdo.option.ConnectionURL", "jdbc:derby:memory:myDB;create=true")
     builder.config("javax.jdo.option.ConnectionDriverName", "org.apache.derby.jdbc.EmbeddedDriver")
-    try {
-      builder.enableHiveSupport()
-    } catch {
-      case e: IllegalArgumentException => logger.warn(s"Hive support not enabled - ${e.getMessage()}")
-    }
+    super.setupHiveSupport(config, builder)
     val spark = builder.getOrCreate()
     for ((k, v) <- SparkJobUtils.getHadoopConfig(config)) spark.sparkContext.hadoopConfiguration.set(k, v)
     SparkSessionContextLikeWrapper(spark)
@@ -78,6 +74,34 @@ class SessionJobSpec extends ExtrasJobSpecBase(SessionJobSpec.getNewSystem) {
           result(0)(0) should equal ("Bob")
       }
       expectNoMsg(1.seconds)
+    }
+
+    /**
+      * The nature of exception can vary e.g. if you are trying to use Hive
+      * with Spark 2.4.4 and Hadoop 3.2.0, then you will get
+      * "Unrecognized Hadoop major version number: 3.2.0" since Hive is not fully
+      * compatible but if you are using Spark/Hadoop which is compatible with Hive
+      * then you will get
+      * "org.apache.spark.sql.AnalysisException: Hive support is required to CREATE Hive TABLE (AS SELECT);;"
+      */
+    it("should throw exception if hive is disabled") {
+      val configWithHiveDisabled = ConfigFactory.parseString(
+        s"${JobserverConfig.IS_SPARK_SESSION_HIVE_ENABLED}=false").withFallback(contextConfig)
+
+      val exception = intercept[java.lang.AssertionError] {
+        manager ! JobManagerActor.Initialize(configWithHiveDisabled, None, emptyActor)
+        expectMsgClass(30 seconds, classOf[JobManagerActor.Initialized])
+
+        val testBinInfo = uploadTestJar()
+        manager ! JobManagerActor.StartJob(
+          hiveLoaderClass, Seq(testBinInfo), emptyConfig, syncEvents ++ errorEvents)
+        expectMsgPF(120 seconds, "Did not get JobResult") {
+          case JobResult(_, result: Long) => result should equal (3L)
+        }
+      }
+
+      exception.getMessage.contains(
+        "org.apache.spark.sql.AnalysisException: Hive support is required") should be(true)
     }
   }
 }
