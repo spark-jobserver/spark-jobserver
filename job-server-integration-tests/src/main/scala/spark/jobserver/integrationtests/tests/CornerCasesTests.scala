@@ -37,7 +37,7 @@ class CornerCasesTests extends FreeSpec with Matchers with BeforeAndAfterAllConf
       .body(byteArray)
       .contentType("application/java-archive")
       .send()
-    response1.code should equal(200)
+    response1.code should equal(201)
 
     // submit long running job
     val response2 = sttp.post(uri"$SJS/jobs?appName=$deletionTestApp&classPath=spark.jobserver.LongPiJob")

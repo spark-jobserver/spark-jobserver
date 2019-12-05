@@ -46,7 +46,7 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
         .body(byteArray)
         .contentType("application/java-archive")
       val response = request.send()
-      response.code should equal(200)
+      response.code should equal(201)
     }
 
     "GET /binaries should list all available binaries" in {
@@ -75,7 +75,7 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
         .body(byteArray)
         .contentType("application/java-archive")
       val response = request.send()
-      response.code should equal(200)
+      response.code should equal(201)
       // See if date has been updated
       val getrequest = sttp.get(uri"$SJS/binaries")
       val getresponse = getrequest.send()
@@ -213,12 +213,12 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
         .body(byteArray1)
         .contentType("application/java-archive")
         .send()
-        .code should equal(200)
+        .code should equal(201)
       sttp.post(uri"$SJS/binaries/$streamingApp")
         .body(byteArray2)
         .contentType("application/java-archive")
         .send().
-        code should equal(200)
+        code should equal(201)
       val response = sttp.get(uri"$SJS/binaries").send()
       response.code should equal(200)
       val binaries = Json.parse(response.body.merge)
