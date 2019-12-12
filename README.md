@@ -989,7 +989,8 @@ To add to the underlying Hadoop configuration in a Spark context, add the hadoop
         }
     }
 
-`stop-context-on-job-error=true` can be passed to context if you want the context to stop immediately after first error is reported by a job. The default value is false.
+`stop-context-on-job-error=true` can be passed to context if you want the context to stop immediately after first error is reported by a job. The default value is false but for StreamingContextFactory the default is true.
+You can also change the default value globally in application.conf `context-settings` section.
 
 For the exact context configuration parameters, see JobManagerActor docs as well as application.conf.
 
