@@ -222,12 +222,6 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
       val (ctxAlreadyStopped, ctxStoppingInvalidActorRef) =
         createContext("ctxStoppingInvalid", ContextStatus.Stopping, false)
 
-      def genJob(jobId: String, ctx: ContextInfo, status: String) = {
-        val dt = DateTime.parse("2013-05-29T00Z")
-        JobInfo(jobId, ctx.id, ctx.name, BinaryInfo("demo", BinaryType.Jar, dt), "com.abc.meme",
-            status, dt, None, None)
-      }
-
       val jobToBeTerminated = genJob("jid2", ctxToBeTerminated, JobStatus.Running)
       val jobOfAlreadyStoppedCtx = genJob("jid3", ctxAlreadyStopped, JobStatus.Running)
 
