@@ -45,7 +45,7 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
     - [Configuring Spark Jobserver PostgreSQL Database backend](#configuring-spark-jobserver-postgresql-database-backend)
     - [Configuring Spark Jobserver MySQL Database backend](#configuring-spark-jobserver-mysql-database-backend)
     - [Configuring Spark Jobserver Zookeeper + HDFS Database backend](#configuring-spark-jobserver-zookeeper--hdfs-database-backend)
-    - [Configuring Spark Jobserver Cassandra backend](#configuring-spark-jobserver-cassandra-backend)
+    - [Configuring Spark Jobserver Cassandra backend (deprecated)](#configuring-spark-jobserver-cassandra-backend-deprecated)
   - [HA Deployment (beta)](#ha-deployment-beta)
   - [Chef](#chef)
 - [Architecture](#architecture)
@@ -807,7 +807,9 @@ configuration to local.conf.
 
 More information on setting up different backends for binaries and jobserver meta data: [setting up dao](doc/dao-setup.md).
 
-#### Configuring Spark Jobserver Cassandra backend
+#### Configuring Spark Jobserver Cassandra backend (deprecated)
+
+Cassandra DAO is deprecated. Please use SQL/HDFS/Zookeeper DAOs instead.
 
 To use Cassandra db as a backend, setup Cassandra and add the following configuration to local.conf:
 
