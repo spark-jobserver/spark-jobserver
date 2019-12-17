@@ -64,38 +64,33 @@ Job routes
 - get a list of JobInfo(jobId, contextName, JarInfo, classPath, startTime, Option(endTime), Option(Throwable)) of all known jobs
 
         user->WebApi: GET /jobs
-        WebApi->JobInfoActor: GetJobStatuses
-        note over JobInfoActor: JobDao.getJobInfos...
-        JobInfoActor->WebApi: Seq[JobInfo]
+        WebApi->JobDAOActor:GetJobInfos
+        note over JobDAOActor: JobDao.getJobInfos...
+        JobDAOActor->WebApi:JobInfos(Seq[JobInfo])
         WebApi->user: 200 + JSON
 
 - get job result with jobId
 
         user->WebApi: GET /jobs/<jobId>
-        WebApi->JobInfoActor: GetJobResult(jobId)
-        note over JobInfoActor: JobDao.getJobInfos.get(jobId)
+        WebApi->JobDAOActor:GetJobInfo(jobId)
+        note over JobDAOActor: JobDao.getJobInfos.get(jobId)
         opt if jobId not found:
-          JobInfoActor->WebApi: NoSuchJobId
+          JobDAOActor->WebApi:None
           WebApi->user: 404
         end
         opt if job is running or error out:
-          JobInfoActor->WebApi: JobInfo
-          WebApi->user: 200 + "RUNNING" | "ERROR"
+          JobDAOActor->WebApi:Some(jobInfo)
+          WebApi->user:200 + "RUNNING" | "ERROR | "KILLED"
         end
-        JobInfoActor->LocalContextSupervisor:GetContext(contextName)
-        opt if no such context:
-          LocalContextSupervisor->JobInfoActor: NoSuchContext
-          note over JobInfoActor: NOT HANDLED
-        end
-        LocalContextSupervisor->JobInfoActor: (JobManager, JobResultActor)
-        JobInfoActor->JobResultActor: GetJobResult(jobId)
+        WebApi -> LocalContextSupervisor:GetResultActor(contextName)
+        LocalContextSupervisor -> WebApi: (ActorRef)
+        WebApi -> JobResultActor: GetJobResult(jobId)
         opt if jobId not in cache:
-            JobResultActor->JobInfoActor: NoSuchJobId
-            JobInfoActor->WebApi: NoSuchJobId
-            WebApi->user: 404
+            JobResultActor->WebApi: NoSuchJobId
+            WebApi->user: 200, jobs json without result
         end
-        JobResultActor->JobInfoActor: JobResult(jobId, Any)
-        JobInfoActor->WebApi: JobResult(jobId, Any)
+
+        JobResultActor->WebApi: JobResult(jobId, Any)
         WebApi->user: 200 + resultToTable(result)
 
 - submit a job
@@ -164,20 +159,29 @@ Job routes
 - kill a job with jobId
 
         user->WebApi: DELETE /jobs/<jobId>
-        WebApi->JobInfoActor: GetJobResult(jobId)
-        note over JobInfoActor: JobDao.getJobInfos.get(jobId)
+        WebApi->JobDAOActor: GetJobInfo(jobId)
+        note over JobDAOActor: JobDao.getJobInfos.get(jobId)
         opt if jobId not found:
-          JobInfoActor->WebApi: NoSuchJobId
+          JobDAOActor->WebApi: None
           WebApi->user: 404
         end
+
         opt if job is running:
+          note over WebApi: getJobManagerForContext(contextname, config, classpath)
           WebApi->JobManager: KillJob(jobId)
           JobManager->WebApi: future{}
           WebApi->user: 200 + "KILLED"
         end
         opt if job has error out:
-           JobInfoActor->WebApi: JobInfo
+           JobDAOActor->WebApi: JobInfo
            WebApi->user: 200 + "ERROR"
+        end
+        opt if job has state finished or killed:
+           JobDAOActor->WebApi: JobInfo
+           WebApi->user: 404 + "No running job with id <jobId>"
+        end
+        opt if fetching resulted in unexpected exception:
+           WebApi->user: 500 + "Received an unexpected message"
         end
 
 AkkaClusterSupervisor (context-per-jvm=true)
