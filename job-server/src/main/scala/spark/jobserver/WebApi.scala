@@ -8,17 +8,16 @@ import javax.net.ssl.SSLContext
 import akka.actor.{ActorRef, ActorSystem}
 import akka.pattern.ask
 import akka.util.Timeout
-import com.typesafe.config.{Config, ConfigException, ConfigFactory, ConfigRenderOptions, ConfigValueFactory}
+import com.typesafe.config._
 import spark.jobserver.common.akka.web.JsonUtils.AnyJsonFormat
 import spark.jobserver.common.akka.web.{CommonRoutes, WebService}
 import org.apache.shiro.SecurityUtils
 import org.apache.shiro.config.IniSecurityManagerFactory
 import org.joda.time.DateTime
 import spark.jobserver.auth._
-import spark.jobserver.io.{BinaryType, ContextInfo, ErrorData, JobInfo, JobStatus}
+import spark.jobserver.io._
 import spark.jobserver.routes.DataRoutes
-import spark.jobserver.util.{
-  InsufficientConfiguration, MeteredHttpService, SSLContextFactory, SparkJobUtils, Utils}
+import spark.jobserver.util._
 import spray.http.HttpHeaders.{Location, `Content-Type`}
 import spray.http._
 import spray.httpx.SprayJsonSupport.sprayJsonMarshaller
@@ -30,7 +29,7 @@ import spray.routing.{RequestContext, Route}
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.Try
 import org.slf4j.LoggerFactory
-import spark.jobserver.io.JobDAOActor.LastBinaryInfo
+import spark.jobserver.io.JobDAOActor._
 
 object WebApi {
 
@@ -145,7 +144,7 @@ class WebApi(system: ActorSystem,
              binaryManager: ActorRef,
              dataManager: ActorRef,
              supervisor: ActorRef,
-             jobInfoActor: ActorRef)
+             daoActor: ActorRef)
     extends MeteredHttpService with CommonRoutes with DataRoutes with SJSAuthenticator with CORSSupport
                         with ChunkEncodedStreamingSupport {
   import CommonMessages._
@@ -626,7 +625,6 @@ class WebApi(system: ActorSystem,
    * Main routes for starting a job, listing existing jobs, getting job results
    */
   def jobRoutes: Route = pathPrefix("jobs") {
-    import JobInfoActor._
     import JobManagerActor._
 
     // user authentication
@@ -641,12 +639,12 @@ class WebApi(system: ActorSystem,
         val timer = configGet.time()
         val renderOptions = ConfigRenderOptions.defaults().setComments(false).setOriginComments(false)
 
-        val future = jobInfoActor ? GetJobConfig(jobId)
+        val future = (daoActor ? GetJobConfig(jobId)).mapTo[JobConfig]
         respondWithMediaType(MediaTypes.`application/json`) { ctx =>
           future.map {
-            case NoSuchJobId =>
+            case JobConfig(None) =>
               logAndComplete(ctx, "No such job ID " + jobId, StatusCodes.NotFound)
-            case cnf: Config =>
+            case JobConfig(Some(cnf)) =>
               val getConfig = cnf.root().render(renderOptions)
               logger.info(getConfig)
               ctx.complete(getConfig)
@@ -664,30 +662,39 @@ class WebApi(system: ActorSystem,
         // Returned JSON contains result attribute if status is "FINISHED"
         (get & path(Segment)) { jobId =>
           val timer = jobGetSingle.time()
-          val statusFuture = jobInfoActor ? GetJobStatus(jobId)
+          val getJobInfoFuture = (daoActor ? GetJobInfo(jobId)).mapTo[Option[JobInfo]]
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-            statusFuture.map {
-              case NoSuchJobId =>
+            getJobInfoFuture.map {
+              case None =>
                 logAndComplete(ctx, "No such job ID " + jobId, StatusCodes.NotFound)
-              case info: JobInfo =>
+              case Some(info) =>
                 val jobReport = getJobReport(info)
-                val resultFuture = jobInfoActor ? GetJobResult(jobId)
-                resultFuture.map {
-                  case JobResult(_, result) =>
-                    result match {
-                      case s: Stream[_] =>
-                        sendStreamingResponse(ctx, ResultChunkSize,
-                          resultToByteIterator(jobReport, s.toIterator))
-                      case _ =>
-                        logger.info(jobReport.toString() + ", " + result)
-                        ctx.complete(jobReport ++ resultToTable(result))
-                    }
-                  case _ =>
-                    logger.info(jobReport.toString())
-                    ctx.complete(jobReport)
-                }.recover {
-                  case e: Exception =>
-                    logAndComplete(ctx, "ERROR", StatusCodes.InternalServerError, e)
+                if (info.state != JobStatus.Finished) {
+                  logger.info(jobReport.toString())
+                  ctx.complete(jobReport)
+                } else {
+                  val resultFuture = for {
+                    resultActor <- (supervisor ?
+                      ContextSupervisor.GetResultActor(info.contextName)).mapTo[ActorRef]
+                    result <- resultActor ? GetJobResult(jobId)
+                  } yield result
+                  resultFuture.map {
+                    case JobResult(_, result) =>
+                      result match {
+                        case s: Stream[_] =>
+                          sendStreamingResponse(ctx, ResultChunkSize,
+                            resultToByteIterator(jobReport, s.toIterator))
+                        case _ =>
+                          logger.info(jobReport.toString() + ", " + result)
+                          ctx.complete(jobReport ++ resultToTable(result))
+                      }
+                    case _ =>
+                      logger.info(jobReport.toString())
+                      ctx.complete(jobReport)
+                  }.recover {
+                    case e: Exception =>
+                      logAndComplete(ctx, "ERROR", StatusCodes.InternalServerError, e)
+                  }
                 }
             }.recover {
               case e: Exception =>
@@ -702,12 +709,12 @@ class WebApi(system: ActorSystem,
         //  will continue to run
         (delete & path(Segment)) { jobId =>
           val timer = jobDelete.time()
-          val future = jobInfoActor ? GetJobStatus(jobId)
+          val future = daoActor ? GetJobInfo(jobId)
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
             future.map {
-              case NoSuchJobId =>
+              case None =>
                 logAndComplete(ctx, "No such job ID " + jobId, StatusCodes.NotFound)
-              case JobInfo(_, _, contextName, _, classPath, _, None, _, _) =>
+              case Some(JobInfo(_, _, contextName, _, classPath, _, None, _, _)) =>
                 val jobManager = getJobManagerForContext(Some(contextName), config, classPath)
                 val future = jobManager.get ? KillJob(jobId)
                 future.map {
@@ -718,9 +725,9 @@ class WebApi(system: ActorSystem,
                   case e: Exception => logAndComplete(
                     ctx, "ERROR", StatusCodes.InternalServerError, e)
                 }
-              case JobInfo(_, _, _, _, state, _, _, Some(ex), _) if state.equals(JobStatus.Error) =>
+              case Some(JobInfo(_, _, _, _, state, _, _, Some(ex), _)) if state.equals(JobStatus.Error) =>
                 ctx.complete(Map(StatusKey -> JobStatus.Error, "ERROR" -> formatException(ex)))
-              case JobInfo(_, _, _, _, state, _, _, _, _)
+              case Some(JobInfo(_, _, _, _, state, _, _, _, _))
                 if (state.equals(JobStatus.Finished) || state.equals(JobStatus.Killed)) =>
                 logAndComplete(ctx, "No running job with ID " + jobId, StatusCodes.NotFound)
               case _ => logAndComplete(
@@ -756,10 +763,10 @@ class WebApi(system: ActorSystem,
               case Some(status) => Some(status.toUpperCase())
               case _ => None
             }
-            val future = (jobInfoActor ? GetJobStatuses(Some(limit), statusUpperCaseOpt)).mapTo[Seq[JobInfo]]
+            val future = (daoActor ? GetJobInfos(limit, statusUpperCaseOpt)).mapTo[JobInfos]
             respondWithMediaType(MediaTypes.`application/json`) { ctx =>
               future.map { infos =>
-                val jobReport = infos.map { info =>
+                val jobReport = infos.jobInfos.map { info =>
                   getJobReport(info)
                 }
                 logger.info("Number of jobs in JobReport: " + jobReport.length)
@@ -859,7 +866,7 @@ class WebApi(system: ActorSystem,
                             ctx.complete(Map[String, String]("jobId" -> jobId) ++ errMap(ex, "ERROR")
                             )
                           case JobStarted(_, jobInfo) =>
-                            val future = jobInfoActor ? StoreJobConfig(jobInfo.jobId, postedJobConfig)
+                            val future = daoActor ? SaveJobConfig(jobInfo.jobId, postedJobConfig)
                             future.map {
                               case JobConfigStored =>
                                 val jobReport = getJobReport(jobInfo, jobStarted = true)

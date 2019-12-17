@@ -13,7 +13,7 @@ import spark.jobserver.io._
 import spray.client.pipelining._
 import JobServerSprayProtocol._
 import org.scalatest.time.{Seconds, Span}
-import spray.http.{ContentType, HttpHeader, HttpHeaders, HttpRequest, MediaTypes}
+import spray.http._
 import spray.httpx.{SprayJsonSupport, UnsuccessfulResponseException}
 import spray.routing.HttpService
 import spray.testkit.ScalatestRouteTest
@@ -26,7 +26,7 @@ import org.apache.xerces.util.URI.MalformedURIException
 
 import scala.concurrent.duration.Duration
 import spark.jobserver.util.{NoSuchBinaryException, Utils}
-import spark.jobserver.io.JobDAOActor.LastBinaryInfo
+import spark.jobserver.io.JobDAOActor._
 
 // Tests web response codes and formatting
 // Does NOT test underlying Supervisor / JarManager functionality
@@ -86,7 +86,6 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
 
     import CommonMessages._
     import ContextSupervisor._
-    import JobInfoActor._
     import JobManagerActor._
 
     def getStateBasedOnEvents(events: Set[Class[_]]): String = {
@@ -97,49 +96,56 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
     }
 
     def receive: PartialFunction[Any, Unit] = {
-      case GetJobStatus("_mapseq") =>
-        sender ! finishedJobInfo
+      case GetJobInfo("_mapseq") =>
+        sender ! Some(finishedJobInfo)
       case GetJobResult("_mapseq") =>
         val map = Map("first" -> Seq(1, 2, Seq("a", "b")))
         sender ! JobResult("_seqseq", map)
-      case GetJobStatus("_mapmap") =>
-        sender ! finishedJobInfo
+      case GetJobInfo("_mapmap") =>
+        sender ! Some(finishedJobInfo)
       case GetJobResult("_mapmap") =>
         val map = Map("second" -> Map("K" -> Map("one" -> 1)))
         sender ! JobResult("_mapmap", map)
-      case GetJobStatus("_seq") =>
-        sender ! finishedJobInfo
+      case GetJobInfo("_seq") =>
+        sender ! Some(finishedJobInfo)
       case GetJobResult("_seq") =>
         sender ! JobResult("_seq", Seq(1, 2, Map("3" -> "three")))
       case GetJobResult("_stream") =>
         sender ! JobResult("_stream", "\"1, 2, 3, 4, 5, 6, 7\"".getBytes().toStream)
-      case GetJobStatus("_stream") =>
-        sender ! finishedJobInfo
-      case GetJobStatus("_num") =>
-        sender ! finishedJobInfo
+      case GetJobInfo("_stream") =>
+        sender ! Some(finishedJobInfo)
+      case GetJobInfo("_num") =>
+        sender ! Some(finishedJobInfo)
       case GetJobResult("_num") =>
         sender ! JobResult("_num", 5000)
-      case GetJobStatus("_unk") =>
-        sender ! finishedJobInfo
+      case GetJobInfo("_unk") =>
+        sender ! Some(finishedJobInfo)
       case GetJobResult("_unk") => sender ! JobResult("_case", Seq(1, math.BigInt(101)))
-      case GetJobStatus("_running") =>
-        sender ! baseJobInfo
+      case GetJobInfo("_running") =>
+        sender ! Some(baseJobInfo)
       case GetJobResult("_running") =>
         sender ! baseJobInfo
-      case GetJobStatus("_finished") =>
-        sender ! finishedJobInfo
-      case GetJobStatus("_no_status") =>
+      case GetJobInfo("_finished") =>
+        sender ! Some(finishedJobInfo)
+      case GetJobInfo("_no_status") =>
+        sender ! None
+      case GetJobInfo("fail_to_fetch_result") =>
+        sender ! Some(finishedJobInfo)
+      case GetJobResult("fail_to_fetch_result") =>
         sender ! NoSuchJobId
-      case GetJobStatus("job_to_kill") => sender ! baseJobInfo
-      case GetJobStatus(id) => sender ! baseJobInfo
+      case GetJobInfo("job_to_kill") => sender ! Some(baseJobInfo)
+      case GetJobInfo("wrong_job_id") => sender ! None
+      case GetJobInfo("job_kill_with_error") => sender ! Some(errorJobInfo)
+      case GetJobInfo("already_killed") => sender ! Some(killedJobInfo)
+      case GetJobInfo(id) => sender ! Some(baseJobInfo)
       case GetJobResult(id) => sender ! JobResult(id, id + "!!!")
-      case GetJobStatuses(limitOpt, statusOpt) => {
+      case GetJobInfos(limitOpt, statusOpt) => {
         statusOpt match {
-          case Some(JobStatus.Error) => sender ! Seq(errorJobInfo)
-          case Some(JobStatus.Killed) => sender ! Seq(killedJobInfo)
-          case Some(JobStatus.Finished) => sender ! Seq(finishedJobInfo)
-          case Some(JobStatus.Running) => sender ! Seq(baseJobInfo)
-          case _ => sender ! Seq(baseJobInfo, finishedJobInfo)
+          case Some(JobStatus.Error) => sender ! JobInfos(Seq(errorJobInfo))
+          case Some(JobStatus.Killed) => sender ! JobInfos(Seq(killedJobInfo))
+          case Some(JobStatus.Finished) => sender ! JobInfos(Seq(finishedJobInfo))
+          case Some(JobStatus.Running) => sender ! JobInfos(Seq(baseJobInfo))
+          case _ => sender ! JobInfos(Seq(baseJobInfo, finishedJobInfo))
         }
       }
 
@@ -156,9 +162,9 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
       case GetBinary("demo") => sender ! LastBinaryInfo(Some(binaryInfo))
       case GetBinary(_) => sender ! LastBinaryInfo(None)
       // Ok these really belong to a JarManager but what the heck, type unsafety!!
-      case StoreBinary("badjar", _, _)  => sender ! InvalidBinary
+      case StoreBinary("badjar", _, _) => sender ! InvalidBinary
       case StoreBinary("daofail", _, _) => sender ! BinaryStorageFailure(new Exception("DAO failed to store"))
-      case StoreBinary(_, _, _)         => sender ! BinaryStored
+      case StoreBinary(_, _, _) => sender ! BinaryStored
 
       case DeleteBinary("badbinary") => sender ! NoSuchBinary("badbinary")
       case DeleteBinary("active") => sender ! BinaryInUse(Seq("job-active"))
@@ -249,10 +255,10 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
             statusActor ! Unsubscribe ("foo.stream", sender)
           case "context-already-stopped" => sender ! ContextStopInProgress
         }
-      case GetJobConfig("badjobid") => sender ! NoSuchJobId
-      case GetJobConfig(_)          => sender ! config
+      case GetJobConfig("badjobid") => sender ! JobConfig(None)
+      case GetJobConfig(_) => sender ! JobConfig(Some(config))
 
-      case StoreJobConfig(_, _) => sender ! JobConfigStored
+      case SaveJobConfig(_, _) => sender ! JobConfigStored
       case KillJob(jobId) => sender ! JobKilled(jobId, DateTime.now())
 
       case GetSparkContexData("context1") => sender ! SparkContexData("context1", Some("local-1337"), Some("http://spark:4040"))
@@ -264,6 +270,7 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
       // Adding extra cases to test both
       case GetSparkContexData("contextWithInfo") => sender ! SparkContexData(contextInfo, Some("local-1337"), Some("http://spark:4040"))
       case GetSparkContexData("finishedContextWithInfo") => sender ! SparkContexData(finishedContextInfo, None, None)
+      case ContextSupervisor.GetResultActor(_) => sender ! self
     }
   }
 
