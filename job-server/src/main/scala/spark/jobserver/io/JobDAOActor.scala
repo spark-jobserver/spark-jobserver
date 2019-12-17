@@ -32,7 +32,7 @@ object JobDAOActor {
                            uploadTime: DateTime) extends JobDAORequest
 
   case class SaveJobInfo(jobInfo: JobInfo) extends JobDAORequest
-  case class GetJobInfos(limit: Int) extends JobDAORequest
+  case class GetJobInfos(limit: Int, statuses: Option[String] = None) extends JobDAORequest
   case class GetJobInfosByContextId(contextId: String, jobStatuses: Option[Seq[String]]) extends JobDAORequest
 
   case class SaveJobConfig(jobId: String, jobConfig: Config) extends JobDAORequest
@@ -114,8 +114,8 @@ class JobDAOActor(dao: JobDAO) extends InstrumentedActor {
     case SaveJobInfo(jobInfo) =>
       sender ! dao.saveJobInfo(jobInfo)
 
-    case GetJobInfos(limit) =>
-      dao.getJobInfos(limit).map(JobInfos).pipeTo(sender)
+    case GetJobInfos(limit, statuses) =>
+      dao.getJobInfos(limit, statuses).map(JobInfos).pipeTo(sender)
 
     case SaveJobConfig(jobId, jobConfig) =>
       dao.saveJobConfig(jobId, jobConfig)
