@@ -414,4 +414,34 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       expectMsg(JobConfig(Some((jobConfig))))
     }
   }
+
+  describe("GetJobInfo tests using InMemoryDAO") {
+    it("should return job info when requested for jobId that exists") {
+      val dt = DateTime.parse("2013-05-29T00Z")
+      val jobInfo = JobInfo("foo", "cid", "context", "com.abc.meme",
+        JobStatus.Running, dt, None, None, Seq(BinaryInfo("demo", BinaryType.Jar, dt)))
+      inMemoryDao.saveJobInfo(jobInfo)
+
+      inMemoryDaoActor ! GetJobInfo("foo")
+
+      expectMsg(Some(jobInfo))
+    }
+
+    it("should return job info when requested for jobId that exists, where the job is a Python job") {
+      val dt = DateTime.parse("2013-05-29T00Z")
+      val jobInfo = JobInfo(
+        "bar", "cid", "context",
+        "com.abc.meme", JobStatus.Running, dt, None, None, Seq(BinaryInfo("demo", BinaryType.Egg, dt)))
+      inMemoryDao.saveJobInfo(jobInfo)
+
+      inMemoryDaoActor ! GetJobInfo("bar")
+
+      expectMsg(Some(jobInfo))
+    }
+
+    it("should return error if job info is requested for jobId that does not exist") {
+      inMemoryDaoActor ! GetJobInfo("foo")
+      expectMsg(None)
+    }
+  }
 }
