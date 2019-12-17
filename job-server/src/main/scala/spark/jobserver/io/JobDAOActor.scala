@@ -64,6 +64,7 @@ object JobDAOActor {
 
   case object InvalidJar extends JobDAOResponse
   case object JarStored extends JobDAOResponse
+  case object JobConfigStored
 
   sealed trait SaveResponse
   case object SavedSuccessfully extends SaveResponse
@@ -119,6 +120,7 @@ class JobDAOActor(dao: JobDAO) extends InstrumentedActor {
 
     case SaveJobConfig(jobId, jobConfig) =>
       dao.saveJobConfig(jobId, jobConfig)
+      sender ! JobConfigStored
 
     case GetJobConfig(jobId) =>
       dao.getJobConfig(jobId).map(JobConfig).pipeTo(sender)
