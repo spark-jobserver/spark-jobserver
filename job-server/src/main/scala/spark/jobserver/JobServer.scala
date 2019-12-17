@@ -135,14 +135,14 @@ object JobServer {
     // Add initial job JARs, if specified in configuration.
     storeInitialBinaries(config, binManager)
 
-    val webApiPF = new WebApi(system, config, port, binManager, dataManager, _: ActorRef, _: ActorRef,
+    val webApiPF = new WebApi(system, config, port, binManager, dataManager, _: ActorRef, daoActor,
         _: HealthCheck)
     contextPerJvm match {
       case false =>
         val supervisor = system.actorOf(Props(classOf[LocalContextSupervisorActor],
             daoActor, dataManager), AkkaClusterSupervisorActor.ACTOR_NAME)
         supervisor ! ContextSupervisor.AddContextsFromConfig  // Create initial contexts
-        startWebApi(system, supervisor, jobDAO, webApiPF, daoActor, config)
+        webApiPF(supervisor, getHealthCheckInstance(supervisor, daoActor, config)).start()
       case true =>
         val cluster = Cluster(system)
 
@@ -158,23 +158,21 @@ object JobServer {
               "context-supervisor-proxy")
 
           proxy ! ContextSupervisor.AddContextsFromConfig  // Create initial contexts
-          startWebApi(system, proxy, jobDAO, webApiPF, daoActor, config)
+          webApiPF(proxy, getHealthCheckInstance(proxy, daoActor, config)).start()
         }
     }
   }
 
-  def startWebApi(system: ActorSystem, supervisor: ActorRef, jobDAO: JobDAO,
-      webApiPF: (ActorRef, ActorRef, HealthCheck) => WebApi, daoActor: ActorRef, config: Config) {
-    val jobInfo = system.actorOf(Props(classOf[JobInfoActor], jobDAO, supervisor), "job-info")
+  def getHealthCheckInstance(supervisor: ActorRef, daoActor: ActorRef, config: Config): HealthCheck = {
     val healthClass = Class.forName(config.getString("spark.jobserver.healthcheck"))
     var healthCheckInst: HealthCheck = null
     if (healthClass.getName() == "spark.jobserver.util.ActorsHealthCheck") {
       val healthCtr = healthClass.getConstructors()(0)
-      healthCheckInst = healthCtr.newInstance(supervisor, jobInfo, daoActor).asInstanceOf[HealthCheck]
+      healthCheckInst = healthCtr.newInstance(supervisor, daoActor).asInstanceOf[HealthCheck]
     } else {
       healthCheckInst = healthClass.newInstance.asInstanceOf[HealthCheck]
     }
-    webApiPF(supervisor, jobInfo, healthCheckInst).start()
+    healthCheckInst
   }
 
   /**

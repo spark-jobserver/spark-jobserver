@@ -29,6 +29,8 @@ import spray.routing.authentication.BasicAuth
 import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeoutException
 
+import spark.jobserver.io.JobDAOActor.GetJobInfo
+
 // Tests authorization only, actual responses are tested elsewhere
 // Does NOT test underlying Supervisor / JarManager functionality
 // HttpService trait is needed for the sealRoute() which wraps exception handling
@@ -133,10 +135,10 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
 
   class DummyActor extends Actor {
     import CommonMessages._
-    import JobInfoActor._
+
     def receive = {
       case ListBinaries(_)                => sender ! Map()
-      case GetJobStatus(id)               => sender ! jobInfo
+      case GetJobInfo(id)               => sender ! Some(jobInfo)
       case GetJobResult(id)               => sender ! JobResult(id, id + "!!!")
       case ContextSupervisor.ListContexts => sender ! addedContexts.toSeq
       case ContextSupervisor.AddContext(name, _) =>

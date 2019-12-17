@@ -456,6 +456,21 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       }
     }
 
+    it("should return json without result if result actor fails to return or job is not in cache") {
+      Get("/jobs/fail_to_fetch_result") ~> sealRoute(routes) ~> check {
+        status should be (OK)
+        responseAs[Map[String, String]] should be (Map(
+          "jobId" -> "foo-1",
+          "contextId" -> "cid",
+          "startTime" -> "2013-05-29T00:00:00.000Z",
+          "classPath" -> "com.abc.meme",
+          "context"  -> "context",
+          "duration" -> "300.0 secs",
+          StatusKey -> JobStatus.Finished
+        ))
+      }
+    }
+
     it("should respond with 404 Not Found and meaningful message if status of jobId does not exist") {
       Get("/jobs/_no_status") ~> sealRoute(routes) ~> check {
         status should be (NotFound)
@@ -470,6 +485,36 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         responseAs[Map[String, String]] should be (Map(
           StatusKey -> JobStatus.Killed
         ))
+      }
+    }
+
+    it("should be able to kill job from /jobs/<id> route and return error if occurred") {
+      Delete("/jobs/job_kill_with_error") ~> sealRoute(routes) ~> check {
+        status should be (OK)
+        val result = responseAs[Map[String, Any]]
+        result(StatusKey).toString should be (JobStatus.Error)
+        val errorMap = result("ERROR").asInstanceOf[Map[String, String]]
+        errorMap("message") should be ("test-error")
+        errorMap("errorClass") should be ("java.lang.Throwable")
+        errorMap("stack") should startWith ("java.lang.Throwable: test-error")
+      }
+    }
+
+    it("should respond with 404 and meaningful message if jobId does not exist") {
+      val wrongJobId = "wrong_job_id"
+      Delete(s"/jobs/$wrongJobId") ~> sealRoute(routes) ~> check {
+        status should be (NotFound)
+        val result = responseAs[Map[String, String]]
+        result(ResultKey) should startWith (s"No such job ID $wrongJobId")
+      }
+    }
+
+    it("should respond with 404 and meaningful message if jobId was already killed") {
+      val alreadyKilledJobId = "already_killed"
+      Delete(s"/jobs/$alreadyKilledJobId") ~> sealRoute(routes) ~> check {
+        status should be (NotFound)
+        val result = responseAs[Map[String, String]]
+        result(ResultKey) should startWith (s"No running job with ID $alreadyKilledJobId")
       }
     }
 
@@ -585,7 +630,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       Get("/jobs/_unk") ~> sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, Any]] should be (
-          getJobStatusInfoMap ++ Map(ResultKey -> Seq(1,  "101"))
+          getJobStatusInfoMap ++ Map(ResultKey -> Seq(1, "101"))
         )
       }
     }

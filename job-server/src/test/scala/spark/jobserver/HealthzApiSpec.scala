@@ -1,9 +1,10 @@
 package spark.jobserver
 
-import akka.actor.{Actor, ActorSystem, Props, PoisonPill}
+import akka.actor.{Actor, ActorSystem, PoisonPill, Props}
 import com.typesafe.config.ConfigFactory
 import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
 import spark.jobserver.io.JobDAOActor
+import spark.jobserver.io.JobDAOActor.GetJobInfo
 import spark.jobserver.util.ActorsHealthCheck
 import spray.http.StatusCodes._
 import spray.routing.HttpService
@@ -44,34 +45,34 @@ with ScalatestRouteTest with HttpService {
   class AliveActor extends Actor {
     import CommonMessages._
     import ContextSupervisor._
-    import JobInfoActor._
     import JobDAOActor.JobInfos
     import JobDAOActor.GetJobInfos
 
     def receive: PartialFunction[Any, Unit] = {
-      case GetJobStatus("dummyjobid") =>
-        sender ! NoSuchJobId
+      case GetJobInfo("dummyjobid") =>
+        sender ! None
       case GetContext("dummycontext") =>
         sender ! NoSuchContext
-      case GetJobInfos(1) =>
+      case GetJobInfos(1, None) =>
         sender ! JobInfos(null)
       case GetJobResult("dummyjobid") =>
         sender ! NoSuchJobId
+      case GetResultActor("getDefaultGlobalActor") =>
+        sender ! self // To receive the next message also
     }
   }
   
   class DeadActor extends Actor {
     import CommonMessages._
     import ContextSupervisor._
-    import JobInfoActor._
     import JobDAOActor.GetJobInfos
 
     def receive: PartialFunction[Any, Unit] = {
-      case GetJobStatus("dummyjobid") =>
+      case GetJobInfo("dummyjobid") =>
         self ! PoisonPill
       case GetContext("dummycontext") =>
         self ! PoisonPill
-      case GetJobInfos(1) =>
+      case GetJobInfos(1, None) =>
         self ! PoisonPill
       case GetJobResult("dummyjobid") =>
         self ! PoisonPill
@@ -79,7 +80,7 @@ with ScalatestRouteTest with HttpService {
   }
   
   describe("healthz - all actors alive") {
-    val healthCheckInst = new ActorsHealthCheck(aliveActor, aliveActor, aliveActor)
+    val healthCheckInst = new ActorsHealthCheck(aliveActor, aliveActor)
     val api = new WebApi(system, config, dummyPort, aliveActor, aliveActor, aliveActor, aliveActor, healthCheckInst)
     val routes = api.myRoutes
     it("should return OK") {
@@ -90,7 +91,7 @@ with ScalatestRouteTest with HttpService {
   }
   
   describe("healthz - all actors dead") {
-    val healthCheckInst = new ActorsHealthCheck(deadActor, deadActor, deadActor)
+    val healthCheckInst = new ActorsHealthCheck(deadActor, deadActor)
     val api = new WebApi(system, config, dummyPort, deadActor, deadActor, deadActor, deadActor, healthCheckInst)
     val routes = api.myRoutes
     it("should return 500") {
@@ -104,7 +105,7 @@ with ScalatestRouteTest with HttpService {
   }
   
   describe("healthz - supervisor dead") {
-    val healthCheckInst = new ActorsHealthCheck(deadActor, aliveActor, aliveActor)
+    val healthCheckInst = new ActorsHealthCheck(deadActor, aliveActor)
     val api = new WebApi(system, config, dummyPort, aliveActor, aliveActor, deadActor, aliveActor, healthCheckInst)
     val routes = api.myRoutes
     it("should return 500") {
@@ -117,8 +118,8 @@ with ScalatestRouteTest with HttpService {
     }
   }
   
-  describe("healthz - JobInfo dead") {
-    val healthCheckInst = new ActorsHealthCheck(aliveActor, aliveActor, deadActor)
+  describe("healthz - JobDaoActor dead") {
+    val healthCheckInst = new ActorsHealthCheck(aliveActor, deadActor)
     val api = new WebApi(system, config, dummyPort, aliveActor, aliveActor, aliveActor, deadActor, healthCheckInst)
     val routes = api.myRoutes
     it("should return 500") {
