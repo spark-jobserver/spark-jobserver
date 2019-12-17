@@ -2,13 +2,13 @@ package spark.jobserver.io
 
 import akka.actor.{ActorRef, ActorSystem}
 import akka.testkit.{ImplicitSender, TestKit, TestProbe}
-import com.typesafe.config.Config
+import com.typesafe.config.{Config, ConfigFactory}
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 import spark.jobserver.InMemoryDAO
 import spark.jobserver.io.JobDAOActor._
 
-import scala.concurrent.Future
+import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 import spark.jobserver.common.akka.AkkaTestUtils
@@ -327,7 +327,7 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
     }
   }
 
-  describe("JobDAOActor tests using InMemoryDAO") {
+  describe("GetJobInfos tests using InMemoryDAO") {
     it("should return list of job infos when requested for job statuses") {
       val dt1 = DateTime.parse("2013-05-28T00Z")
       val dt2 = DateTime.parse("2013-05-29T00Z")
@@ -393,6 +393,25 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
     it("should return empty list if jobs doest not exist") {
       inMemoryDaoActor ! GetJobInfos(1)
       expectMsg(JobInfos(Seq.empty))
+    }
+  }
+
+  describe("SaveJobConfig tests using InMemoryDAO") {
+    val jobId = "jobId"
+    val jobConfig = ConfigFactory.empty()
+
+    it("should store a job configuration") {
+      inMemoryDaoActor ! SaveJobConfig(jobId, jobConfig)
+      expectMsg(2.second, JobConfigStored)
+      val storedJobConfig = Await.result(inMemoryDao.getJobConfig(jobId), 10 seconds)
+      storedJobConfig should be (Some(jobConfig))
+    }
+
+    it("should return a job configuration when the jobId exists") {
+      inMemoryDaoActor ! SaveJobConfig(jobId, jobConfig)
+      expectMsg(2.seconds, JobConfigStored)
+      inMemoryDaoActor ! GetJobConfig(jobId)
+      expectMsg(JobConfig(Some((jobConfig))))
     }
   }
 }
