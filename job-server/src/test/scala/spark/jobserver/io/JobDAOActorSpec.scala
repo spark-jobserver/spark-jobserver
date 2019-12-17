@@ -396,7 +396,7 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
     }
   }
 
-  describe("SaveJobConfig tests using InMemoryDAO") {
+  describe("SaveJobConfig/GetJobConfig tests using InMemoryDAO") {
     val jobId = "jobId"
     val jobConfig = ConfigFactory.empty()
 
@@ -412,6 +412,11 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       expectMsg(2.seconds, JobConfigStored)
       inMemoryDaoActor ! GetJobConfig(jobId)
       expectMsg(JobConfig(Some((jobConfig))))
+    }
+
+    it("should return error if jobId does not exist") {
+      inMemoryDaoActor ! GetJobConfig(jobId)
+      expectMsg(JobConfig(None))
     }
   }
 

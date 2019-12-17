@@ -175,7 +175,6 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
       Await.result(actorSystem.actorSelection("/user/data-manager").resolveOne, 2 seconds) shouldBe a[ActorRef]
       Await.result(actorSystem.actorSelection("/user/binary-manager").resolveOne, 2 seconds) shouldBe a[ActorRef]
       Await.result(actorSystem.actorSelection("/user/context-supervisor").resolveOne, 2 seconds) shouldBe a[ActorRef]
-      Await.result(actorSystem.actorSelection("/user/job-info").resolveOne, 2 seconds) shouldBe a[ActorRef]
     }
 
     it("should startup correctly in other modes (client/cluster)") {
@@ -193,7 +192,6 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
       resolveActorRef("/user/singleton") shouldNot be (None)
       resolveActorRef("/user/singleton/context-supervisor") shouldNot be (None)
       resolveActorRef("/user/context-supervisor-proxy") shouldNot be (None)
-      resolveActorRef("/user/job-info") shouldNot be(None)
     }
 
     def createContext(name: String, status: String, genActor: Boolean): (ContextInfo, Option[ActorRef]) = {

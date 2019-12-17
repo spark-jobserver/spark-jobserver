@@ -1,9 +1,11 @@
 package spark.jobserver.util
 
-import akka.actor.{ActorIdentity, ActorSystem, ActorRef, Identify}
+import akka.actor.{ActorIdentity, ActorRef, ActorSystem, Identify}
 import akka.pattern.ask
 import akka.util.Timeout
 import org.slf4j.LoggerFactory
+import spark.jobserver.ContextSupervisor
+
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -21,7 +23,7 @@ trait HealthCheck {
 
 }
 
-class ActorsHealthCheck(supervisor: ActorRef, jobInfo: ActorRef, daoActor: ActorRef)
+class ActorsHealthCheck(supervisor: ActorRef, daoActor: ActorRef)
     extends HealthCheck {
 
     val logger = LoggerFactory.getLogger(getClass)
@@ -29,18 +31,19 @@ class ActorsHealthCheck(supervisor: ActorRef, jobInfo: ActorRef, daoActor: Actor
     def isHealthy() : Boolean = {
       logger.info("Receiving healthz check request")
       import spark.jobserver.ContextSupervisor._
-      import spark.jobserver.JobManagerActor._
-      import spark.jobserver.JobInfoActor._
       import JobDAOActor._
       import spark.jobserver.CommonMessages._
       var actorsAlive: Int = 0
       implicit val duration: Timeout = 30 seconds
       val supervisorFuture = (supervisor ? GetContext("dummycontext")).mapTo[NoSuchContext.type]
-      val jobInfofuture = (jobInfo ? GetJobStatus("dummyjobid")).mapTo[NoSuchJobId.type]
-      val jobDaofuture = (daoActor ? GetJobInfos(1)).mapTo[JobInfos]
-      val jobResultfuture = (jobInfo ? GetJobResult("dummyjobid")).mapTo[NoSuchJobId.type]
+      val jobDaoFuture = (daoActor ? GetJobInfos(1, None)).mapTo[JobInfos]
+      val jobResultFuture = (for {
+        resultActor <- (supervisor ? GetResultActor("getDefaultGlobalActor")).mapTo[ActorRef]
+        result <- resultActor ? GetJobResult("dummyjobid")
+      } yield result).mapTo[NoSuchJobId.type]
 
-      val listOfFutures = Seq(supervisorFuture, jobInfofuture, jobDaofuture, jobResultfuture)
+
+      val listOfFutures = Seq(supervisorFuture, jobDaoFuture, jobResultFuture)
       val futureOfList = Future.sequence(listOfFutures)
       try {
         val results = Await.result(futureOfList, 60 seconds)
@@ -56,7 +59,7 @@ class ActorsHealthCheck(supervisor: ActorRef, jobInfo: ActorRef, daoActor: Actor
         case ex: Exception => logger.error(ex.getMessage())
       }
 
-      if (actorsAlive == 4) {
+      if (actorsAlive == listOfFutures.length) {
         logger.info("Required actors alive")
         true
       }
