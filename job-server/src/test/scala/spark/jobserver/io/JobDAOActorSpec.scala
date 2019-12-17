@@ -1,10 +1,11 @@
 package spark.jobserver.io
 
-import akka.actor.ActorSystem
+import akka.actor.{ActorRef, ActorSystem}
 import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import com.typesafe.config.Config
 import org.joda.time.DateTime
-import org.scalatest.{BeforeAndAfterAll, FunSpecLike, Matchers}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
+import spark.jobserver.InMemoryDAO
 import spark.jobserver.io.JobDAOActor._
 
 import scala.concurrent.Future
@@ -125,11 +126,18 @@ object JobDAOActorSpec {
 }
 
 class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSender
-  with FunSpecLike with Matchers with BeforeAndAfterAll {
+  with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
   import JobDAOActorSpec._
 
   val daoActor = system.actorOf(JobDAOActor.props(DummyDao))
+  var inMemoryDaoActor: ActorRef = _
+  var inMemoryDao: JobDAO = _
+
+  before {
+    inMemoryDao = new InMemoryDAO
+    inMemoryDaoActor = system.actorOf(JobDAOActor.props(inMemoryDao))
+  }
 
   override def afterAll() {
     AkkaTestUtils.shutdownAndWait(system)
@@ -316,6 +324,75 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
 
       val response = expectMsgType[GetBinaryInfosForCpFailed]
       response.error.getMessage.startsWith("java.net.URISyntaxException: Expected scheme name at index")
+    }
+  }
+
+  describe("JobDAOActor tests using InMemoryDAO") {
+    it("should return list of job infos when requested for job statuses") {
+      val dt1 = DateTime.parse("2013-05-28T00Z")
+      val dt2 = DateTime.parse("2013-05-29T00Z")
+      val jobInfo1 =
+        JobInfo(
+          "foo-1", "cid", "context",
+          "com.abc.meme", JobStatus.Running, dt2, None, None, Seq(BinaryInfo("demo", BinaryType.Jar, dt1))
+        )
+      val jobInfo2 =
+        JobInfo(
+          "foo-2", "cid", "context",
+          "com.abc.meme", JobStatus.Running, dt2, None, None, Seq(BinaryInfo("demo", BinaryType.Jar, dt2))
+        )
+      inMemoryDao.saveJobInfo(jobInfo1)
+      inMemoryDao.saveJobInfo(jobInfo2)
+      inMemoryDaoActor ! GetJobInfos(10)
+      expectMsg(JobInfos(Seq[JobInfo](jobInfo1, jobInfo2)))
+    }
+
+    it("should return as many number of job infos as requested") {
+      val dt1 = DateTime.parse("2013-05-28T00Z")
+      val dt2 = DateTime.parse("2013-05-29T00Z")
+      val jobInfo1 = JobInfo("foo-1", "cid", "context", "com.abc.meme",
+        JobStatus.Running, dt1, None, None, Seq(BinaryInfo("demo", BinaryType.Jar, dt1)))
+      val jobInfo2 = JobInfo("foo-2", "cid", "context", "com.abc.meme",
+        JobStatus.Running, dt2, None, None, Seq(BinaryInfo("demo", BinaryType.Egg, dt2)))
+      inMemoryDao.saveJobInfo(jobInfo1)
+      inMemoryDao.saveJobInfo(jobInfo2)
+      inMemoryDaoActor ! GetJobInfos(1)
+      expectMsg(JobInfos(Seq[JobInfo](jobInfo1)))
+    }
+
+    it("should return job infos as requested status") {
+      val dt1 = DateTime.parse("2013-05-28T00Z")
+      val dt2 = dt1.plusMinutes(5)
+      val dt3 = dt2.plusMinutes(5)
+      val dt4 = dt3.plusMinutes(5)
+      val binaryInfo = BinaryInfo("demo", BinaryType.Jar, dt1)
+      val someError = Some(ErrorData(new Throwable("test-error")))
+      val runningJob = JobInfo("running-1", "cid", "context", "com.abc.meme",
+        JobStatus.Running, dt1, None, None, Seq(binaryInfo))
+      val errorJob = JobInfo("error-1", "cid", "context", "com.abc.meme",
+        JobStatus.Error, dt2, Some(dt2), someError, Seq(binaryInfo))
+      val finishedJob = JobInfo("finished-1", "cid", "context", "com.abc.meme",
+        JobStatus.Finished, dt3, Some(dt4), None, Seq(binaryInfo))
+
+      inMemoryDao.saveJobInfo(runningJob)
+      inMemoryDao.saveJobInfo(errorJob)
+      inMemoryDao.saveJobInfo(finishedJob)
+
+      inMemoryDaoActor ! GetJobInfos(1, Some(JobStatus.Running))
+      expectMsg(JobInfos(Seq[JobInfo](runningJob)))
+      inMemoryDaoActor ! GetJobInfos(1, Some(JobStatus.Error))
+      expectMsg(JobInfos(Seq[JobInfo](errorJob)))
+      inMemoryDaoActor ! GetJobInfos(1, Some(JobStatus.Finished))
+      expectMsg(JobInfos(Seq[JobInfo](finishedJob)))
+      inMemoryDaoActor ! GetJobInfos(10, None)
+      expectMsg(JobInfos(Seq[JobInfo](runningJob, errorJob, finishedJob)))
+      inMemoryDaoActor ! GetJobInfos(10)
+      expectMsg(JobInfos(Seq[JobInfo](runningJob, errorJob, finishedJob)))
+    }
+
+    it("should return empty list if jobs doest not exist") {
+      inMemoryDaoActor ! GetJobInfos(1)
+      expectMsg(JobInfos(Seq.empty))
     }
   }
 }
