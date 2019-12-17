@@ -42,7 +42,7 @@ class DummyZookeeperDAOActor(dao : MetaDataZookeeperDAO) extends InstrumentedAct
   val timeout = 60 seconds
   override def wrappedReceive: Receive = {
     case GetContextInfos(_,_) => sender ! ContextInfos(Await.result(dao.getContexts(None, None), timeout))
-    case GetJobInfos(_) => sender ! JobInfos(Await.result(dao.getJobs(5000, None), timeout))
+    case GetJobInfos(_, _) => sender ! JobInfos(Await.result(dao.getJobs(5000, None), timeout))
   }
 }
 
