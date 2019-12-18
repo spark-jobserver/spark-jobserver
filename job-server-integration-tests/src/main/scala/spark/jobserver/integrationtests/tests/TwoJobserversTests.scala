@@ -70,7 +70,7 @@ class TwoJobserverTests extends FreeSpec with Matchers with BeforeAndAfterAllCon
       val json1 = Json.parse(response1.body.merge)
       (json1 \ "status").as[String] should equal("SUCCESS")
       // Read from SJS2
-      TestHelper.waitForContextTermination(SJS2, context2, 3)
+      TestHelper.waitForContextTermination(SJS2, context2)
       val response2 = sttp.get(uri"$SJS2/contexts/$context2").send()
       response2.code should equal(200)
       val json2 = Json.parse(response2.body.merge)
@@ -85,7 +85,7 @@ class TwoJobserverTests extends FreeSpec with Matchers with BeforeAndAfterAllCon
       val json1 = Json.parse(response1.body.merge)
       (json1 \ "status").as[String] should equal("SUCCESS")
       // Read from SJS1
-      TestHelper.waitForContextTermination(SJS1, context1, 3)
+      TestHelper.waitForContextTermination(SJS1, context1)
       val response2 = sttp.get(uri"$SJS1/contexts/$context1").send()
       response2.code should equal(200)
       val json2 = Json.parse(response2.body.merge)

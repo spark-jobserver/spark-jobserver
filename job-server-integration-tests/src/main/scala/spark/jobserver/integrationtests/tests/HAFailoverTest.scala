@@ -56,8 +56,8 @@ class HAFailoverTest extends FreeSpec with Matchers with BeforeAndAfterAllConfig
       response.code should equal(200)
     }
 
-    "waiting for 20s until the cluster has fully recovered..." in {
-      Thread.sleep(20000)
+    "waiting for 30s until the cluster has fully recovered..." in {
+      Thread.sleep(30000)
     }
 
     "POST /contexts should still work on Jobserver 2" in {
@@ -84,7 +84,7 @@ class HAFailoverTest extends FreeSpec with Matchers with BeforeAndAfterAllConfig
       val json = Json.parse(response.body.merge)
       (json \ "status").as[String] should equal("SUCCESS")
       // status finished?
-      TestHelper.waitForContextTermination(SJS2, contextName, 3)
+      TestHelper.waitForContextTermination(SJS2, contextName)
       val request2 = sttp.get(uri"$SJS2/contexts/$contextName")
       val response2 = request2.send()
       response2.code should equal(200)
@@ -128,7 +128,7 @@ class HAFailoverTest extends FreeSpec with Matchers with BeforeAndAfterAllConfig
       val json = Json.parse(response.body.merge)
       (json \ "status").as[String] should equal("SUCCESS")
       // status finished?
-      TestHelper.waitForContextTermination(SJS1, contextName, 3)
+      TestHelper.waitForContextTermination(SJS1, contextName)
       val request2 = sttp.get(uri"$SJS1/contexts/$contextName")
       val response2 = request2.send()
       response2.code should equal(200)

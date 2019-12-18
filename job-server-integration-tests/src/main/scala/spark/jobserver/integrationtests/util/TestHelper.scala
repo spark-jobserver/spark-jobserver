@@ -30,7 +30,7 @@ object TestHelper {
     }
   }
 
-  def waitForContextTermination(sjs: String, contextName: String, retries: Int) {
+  def waitForContextTermination(sjs: String, contextName: String, retries: Int = 10) {
     implicit val backend = HttpURLConnectionBackend()
     val SLEEP_BETWEEN_RETRIES = 1000;
     val request = sttp.get(uri"$sjs/contexts/$contextName")
@@ -47,7 +47,7 @@ object TestHelper {
     }
   }
 
-  def waitForJobTermination(sjs: String, jobId: String, retries: Int) {
+  def waitForJobTermination(sjs: String, jobId: String, retries: Int = 10) {
     implicit val backend = HttpURLConnectionBackend()
     val request = sttp.get(uri"$sjs/jobs/$jobId")
     var response = request.send()

@@ -154,7 +154,7 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
       val json = Json.parse(response.body.merge)
       (json \ "status").as[String] should equal("SUCCESS")
       // state finished?
-      TestHelper.waitForContextTermination(SJS, contextName, 5)
+      TestHelper.waitForContextTermination(SJS, contextName)
       val request2 = sttp.get(uri"$SJS/contexts/$contextName")
       val response2 = request2.send()
       response2.code should equal(200)
@@ -241,7 +241,7 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
 
       "the termination of the job should also terminate the adHoc context" in {
         // Context finished?
-        TestHelper.waitForContextTermination(SJS, jobContext, 5)
+        TestHelper.waitForContextTermination(SJS, jobContext)
         val request = sttp.get(uri"$SJS/contexts/$jobContext")
         val response = request.send()
         response.code should equal(200)
@@ -279,7 +279,7 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
         }
 
       "the termination of the job should not terminate the context" in {
-        TestHelper.waitForJobTermination(SJS, batchJobId, 15)
+        TestHelper.waitForJobTermination(SJS, batchJobId)
         val contextRequest = sttp.get(uri"$SJS/contexts/$jobContext")
         val contextResponse = contextRequest.send()
         contextResponse.code should equal(200)
@@ -414,7 +414,7 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
 
         "the termination of the job should also terminate the adHoc context" in {
           // Context finished?
-          TestHelper.waitForContextTermination(SJS, jobContext, 5)
+          TestHelper.waitForContextTermination(SJS, jobContext)
           val request = sttp.get(uri"$SJS/contexts/$jobContext")
           val response = request.send()
           response.code should equal(200)
@@ -452,7 +452,7 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
 
         "the termination of the job should not terminate the context" in {
           // Job finished?
-          TestHelper.waitForJobTermination(SJS, batchJobId, 10)
+          TestHelper.waitForJobTermination(SJS, batchJobId)
           // Context running?
           val contextRequest = sttp.get(uri"$SJS/contexts/$jobContext")
           val contextResponse = contextRequest.send()
