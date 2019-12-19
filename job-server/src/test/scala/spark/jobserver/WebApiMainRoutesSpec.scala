@@ -2,7 +2,7 @@ package spark.jobserver
 
 import com.typesafe.config.ConfigFactory
 import spark.jobserver.io.BinaryType
-import spray.http.{HttpHeader, HttpHeaders, MediaTypes}
+import spray.http.{HttpHeaders, MediaTypes}
 import spray.http.StatusCodes._
 import spark.jobserver.io.{ContextStatus, JobStatus}
 import spark.jobserver.util.SparkJobUtils
@@ -12,7 +12,6 @@ import spark.jobserver.util.SparkJobUtils
 // HttpService trait is needed for the sealRoute() which wraps exception handling
 class WebApiMainRoutesSpec extends WebApiSpec {
   import spark.jobserver.common.akka.web.JsonUtils._
-  import spray.httpx.SprayJsonSupport._
   import spray.json.DefaultJsonProtocol._
 
   val getJobStatusInfoMap = {

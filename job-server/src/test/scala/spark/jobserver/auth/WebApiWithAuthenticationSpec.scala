@@ -1,45 +1,38 @@
 package spark.jobserver.auth
 
-import akka.actor.{ActorSystem, Actor, Props}
-import akka.testkit.TestKit
-import com.typesafe.config.{ ConfigFactory, ConfigValueFactory }
-import spark.jobserver._
-import spark.jobserver.util.SparkJobUtils
-import spark.jobserver.io.{BinaryType, BinaryInfo, JobInfo, JobStatus}
-import org.joda.time.DateTime
-import org.scalatest.{ Matchers, FunSpec, BeforeAndAfterAll }
-import spray.http.StatusCodes._
-import spray.http.HttpHeaders.Authorization
-import spray.http.BasicHttpCredentials
-import spray.routing.{ HttpService, Route }
-import spray.routing.directives.AuthMagnet
-import spray.testkit.ScalatestRouteTest
-import org.apache.shiro.config.IniSecurityManagerFactory
-import org.apache.shiro.mgt.{ DefaultSecurityManager, SecurityManager }
-import org.apache.shiro.realm.Realm
-import org.apache.shiro.SecurityUtils
-import org.apache.shiro.config.Ini
-import scala.collection.mutable.SynchronizedSet
-import scala.util.Try
-import scala.concurrent.{ Await, ExecutionContext, Future }
-import scala.concurrent.duration._
-import spray.routing.directives.AuthMagnet
-import spray.routing.authentication.UserPass
-import spray.routing.authentication.BasicAuth
-import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeoutException
 
+import akka.actor.{Actor, ActorSystem, Props}
+import akka.testkit.TestKit
+import com.typesafe.config.{ConfigFactory, ConfigValueFactory}
+import org.apache.shiro.SecurityUtils
+import org.apache.shiro.config.{Ini, IniSecurityManagerFactory}
+import org.joda.time.DateTime
+import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
+import org.slf4j.LoggerFactory
+import spark.jobserver._
 import spark.jobserver.io.JobDAOActor.GetJobInfo
+import spark.jobserver.io.{BinaryInfo, BinaryType, JobInfo, JobStatus}
+import spark.jobserver.util.SparkJobUtils
+import spray.http.BasicHttpCredentials
+import spray.http.HttpHeaders.Authorization
+import spray.http.StatusCodes._
+import spray.routing.authentication.{BasicAuth, UserPass}
+import spray.routing.directives.AuthMagnet
+import spray.routing.{HttpService, Route}
+import spray.testkit.ScalatestRouteTest
+
+import scala.collection.mutable.SynchronizedSet
+import scala.concurrent.duration._
+import scala.concurrent.{Await, ExecutionContext, Future}
 
 // Tests authorization only, actual responses are tested elsewhere
 // Does NOT test underlying Supervisor / JarManager functionality
 // HttpService trait is needed for the sealRoute() which wraps exception handling
 class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndAfterAll
     with ScalatestRouteTest with HttpService {
-  import scala.collection.JavaConverters._
   import spray.httpx.SprayJsonSupport._
   import spray.json.DefaultJsonProtocol._
-  import spark.jobserver.common.akka.web.JsonUtils._
 
   def actorRefFactory: ActorSystem = system
 
@@ -60,7 +53,7 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
 
   val dummyPort = 9997
 
-  override def afterAll():Unit = {
+  override def afterAll(): Unit = {
     TestKit.shutdownActorSystem(system)
   }
 
@@ -136,10 +129,10 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
   class DummyActor extends Actor {
     import CommonMessages._
 
-    def receive = {
-      case ListBinaries(_)                => sender ! Map()
-      case GetJobInfo(id)               => sender ! Some(jobInfo)
-      case GetJobResult(id)               => sender ! JobResult(id, id + "!!!")
+    def receive: PartialFunction[Any, Unit] = {
+      case ListBinaries(_) => sender ! Map()
+      case GetJobInfo(id) => sender ! Some(jobInfo)
+      case GetJobResult(id) => sender ! JobResult(id, id + "!!!")
       case ContextSupervisor.ListContexts => sender ! addedContexts.toSeq
       case ContextSupervisor.AddContext(name, _) =>
         if (addedContexts.contains(name)) {
