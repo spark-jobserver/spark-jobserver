@@ -14,18 +14,10 @@ import spray.client.pipelining._
 import JobServerSprayProtocol._
 import org.scalatest.time.{Seconds, Span}
 import spray.http._
-import spray.httpx.{SprayJsonSupport, UnsuccessfulResponseException}
+import spray.httpx.SprayJsonSupport
 import spray.routing.HttpService
 import spray.testkit.ScalatestRouteTest
-
-import scala.concurrent.{Await, Future}
-import scala.util.{Failure, Success}
-import java.util.concurrent.TimeUnit
-
-import org.apache.xerces.util.URI.MalformedURIException
-
-import scala.concurrent.duration.Duration
-import spark.jobserver.util.{NoSuchBinaryException, Utils}
+import scala.concurrent.Future
 import spark.jobserver.io.JobDAOActor._
 
 // Tests web response codes and formatting
@@ -185,12 +177,12 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
       case GetBinaryInfoListForCp(cp) =>
         sender ! BinaryInfoListForCp(cp.map(name => binaryInfo.copy(appName = name)))
 
-      case ListContexts =>  sender ! Seq("context1", "context2")
+      case ListContexts => sender ! Seq("context1", "context2")
       case StopContext("none", _) => sender ! NoSuchContext
       case StopContext("timeout-ctx", _) => sender ! ContextStopError(new Throwable("Some Throwable"))
       case StopContext("unexp-err", _) => sender ! UnexpectedError
       case StopContext("ctx-stop-in-progress", _) => sender ! ContextStopInProgress
-      case StopContext(_, _)      => sender ! ContextStopped
+      case StopContext(_, _) => sender ! ContextStopped
       case AddContext("one", _) => sender ! ContextAlreadyExists
       case AddContext("custom-ctx", c) =>
         // see WebApiMainRoutesSpec => "context routes" =>
@@ -203,10 +195,10 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
       case AddContext("initError-URI-ctx", _) =>
         sender ! ContextInitError(new MalformedURLException("Some Throwable"))
       case AddContext("unexp-err", _) => sender ! UnexpectedError
-      case AddContext(_, _)     => sender ! ContextInitialized
+      case AddContext(_, _) => sender ! ContextInitialized
 
       case GetContext("no-context") => sender ! NoSuchContext
-      case GetContext(_)            => sender ! (self)
+      case GetContext(_) => sender ! (self)
 
       case StartAdHocContext(_, _) => sender ! (self)
 
@@ -261,15 +253,18 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
       case SaveJobConfig(_, _) => sender ! JobConfigStored
       case KillJob(jobId) => sender ! JobKilled(jobId, DateTime.now())
 
-      case GetSparkContexData("context1") => sender ! SparkContexData("context1", Some("local-1337"), Some("http://spark:4040"))
+      case GetSparkContexData("context1") => sender ! SparkContexData(
+        "context1", Some("local-1337"), Some("http://spark:4040"))
       case GetSparkContexData("context2") => sender ! SparkContexData("context2", Some("local-1337"), None)
       case GetSparkContexData("unexp-err") => sender ! UnexpectedError
 
       // On a GetSparkContexData LocalContextSupervisorActor returns only name of the context, api and url,
       // AkkaClusterSupervisorActor returns whole contextInfo instead.
       // Adding extra cases to test both
-      case GetSparkContexData("contextWithInfo") => sender ! SparkContexData(contextInfo, Some("local-1337"), Some("http://spark:4040"))
-      case GetSparkContexData("finishedContextWithInfo") => sender ! SparkContexData(finishedContextInfo, None, None)
+      case GetSparkContexData("contextWithInfo") => sender ! SparkContexData(
+        contextInfo, Some("local-1337"), Some("http://spark:4040"))
+      case GetSparkContexData("finishedContextWithInfo") => sender ! SparkContexData(
+        finishedContextInfo, None, None)
       case ContextSupervisor.GetResultActor(_) => sender ! self
     }
   }
@@ -277,11 +272,11 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
   implicit override val patienceConfig =
     PatienceConfig(timeout = Span(5, Seconds), interval = Span(1, Seconds))
 
-  override def beforeAll():Unit = {
+  override def beforeAll(): Unit = {
     api.start()
   }
 
-  override def afterAll():Unit = {
+  override def afterAll(): Unit = {
     TestKit.shutdownActorSystem(system)
   }
 
@@ -291,8 +286,8 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
 
     it ("Should return valid JSON when resetting a context") {
       val p = sendReceive ~> unmarshal[JobServerResponse]
-      val valid:Future[JobServerResponse] = p(Put("http://127.0.0.1:9999/contexts?reset=reboot"))
-      whenReady(valid) { r=>
+      val valid: Future[JobServerResponse] = p(Put("http://127.0.0.1:9999/contexts?reset=reboot"))
+      whenReady(valid) { r =>
         r.isSuccess shouldBe true
         r.status shouldBe "SUCCESS"
         r.result shouldBe "Context reset"
