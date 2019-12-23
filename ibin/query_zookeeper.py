@@ -1,7 +1,8 @@
 import argparse
 import json
+import logging
 import kazoo.client
-from kazoo.exceptions import NodeExistsError, NoNodeError
+from kazoo.exceptions import NoNodeError
 
 JOBSERVER_DB = '/jobserver/db/{}'
 MAPPING = {
@@ -47,6 +48,12 @@ class ZookeeperClient(object):
         self.__zk_client.sync(node_path)
         zk_tuple = self.__zk_client.get(node_path)
         return json.loads(zk_tuple[0])
+
+    def delete_node(self, node_path):
+        try:
+            self.__zk_client.delete(node_path, recursive=True)
+        except NoNodeError:
+            logging.error("Couldn't delete node %s: node doesn't exist" % node_path)
 
     def set_node(self, node_path, value_dict):
         node_value = json.dumps(value_dict)
@@ -134,6 +141,16 @@ def get_user_confirmation(question_text):
     return user_answer == "y" or user_answer == "yes"
 
 
+def delete_nodes(nodes):
+    if nodes and get_user_confirmation("Are you sure you want to delete all selected {} node(s)?".format(len(nodes))):
+        for node in nodes:
+            if node_type == "binaries":
+                full_node_path = node_path + "/" + node[0]["appName"]
+            else:
+                full_node_path = node_path + "/" + node.get("id", node.get("jobId"))
+            client.delete_node(full_node_path)
+
+
 def update_nodes(nodes, field_to_update, new_value):
     if nodes and field_to_update and new_value:
         if node_type not in NODE_TYPES_TO_CHANGE:
@@ -193,6 +210,7 @@ parser.add_argument('--update-value', dest='update_value',
 parser.add_argument('--update-end-time-string', type=str, dest='update_end_time',
                     help='new end time for selected nodes')
 parser.add_argument('--limit', type=int, dest='limit', help='limit number of results')
+parser.add_argument('--delete', action='store_true', dest='delete', help='delete selected nodes')
 parser.add_argument('--sort-by', type=str, dest='sort_by', help='name of the field to sort by. Not for binaries!')
 
 args = parser.parse_args()
@@ -232,5 +250,7 @@ try:
             nodes = nodes[:args.limit]
     print_json(nodes, args.only_names)
     update_nodes(nodes, args.update_field, args.update_value)
+    if args.delete:
+        delete_nodes(nodes)
 finally:
     client.close()
