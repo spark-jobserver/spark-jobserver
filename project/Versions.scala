@@ -31,4 +31,6 @@ object Versions {
   lazy val cassandraConnector = "2.4.0"
   lazy val curator = "4.2.0"
   lazy val curatorTest = "4.2.0"
+  lazy val xerces = "2.9.1"
+  lazy val commonConfigurations = "1.10"
 }
