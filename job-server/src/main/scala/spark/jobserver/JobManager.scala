@@ -4,16 +4,18 @@ import java.io.InputStreamReader
 import java.nio.file.Files
 import java.util.concurrent.TimeUnit
 
-import akka.actor.{ActorSystem, AddressFromURIString, Props}
+import akka.actor.{ActorRef, ActorSystem, AddressFromURIString, Props}
 import akka.cluster.Cluster
+import akka.pattern.ask
+import akka.util.Timeout
 import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import org.apache.commons.io.FileUtils
 import org.slf4j.LoggerFactory
 import spark.jobserver.common.akka.actor.ProductionReaper
 import spark.jobserver.common.akka.actor.Reaper.WatchMe
-import spark.jobserver.util.JobServerRoles
-import spark.jobserver.io.{JobDAO, JobDAOActor}
-import spark.jobserver.util.{HadoopFSFacade, NetworkAddressFactory, Utils}
+import spark.jobserver.io.JobDAOActor.{GetContextInfo, GetContextInfoByName}
+import spark.jobserver.util.{HadoopFSFacade, JobServerRoles, JobserverConfig, NetworkAddressFactory, Utils}
+import spark.jobserver.io.{ContextStatus, JobDAO, JobDAOActor}
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -31,7 +33,7 @@ object JobManager {
   // Args: workDir clusterAddress systemConfig
   // Allow custom function to wait for termination. Useful in tests.
   def start(args: Array[String], makeSystem: Config => ActorSystem,
-            waitForTermination: (ActorSystem, String, String) => Unit) {
+            waitForTermination: (ActorSystem, String, String, ActorRef, String) => Unit) {
 
     val masterAddresses = args(0)
     val masterSeedNodes = Try {
@@ -98,7 +100,7 @@ object JobManager {
       case false => ""
     }
 
-    val contextId = managerName.replace(AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX, "")
+    val contextId = managerName.replace(JobserverConfig.MANAGER_ACTOR_PREFIX, "")
     val jobManager = system.actorOf(JobManagerActor.props(daoActor, masterAddress, contextId,
         getManagerInitializationTimeout(systemConfig)), managerName)
 
@@ -109,7 +111,7 @@ object JobManager {
     val reaper = system.actorOf(Props[ProductionReaper])
     reaper ! WatchMe(jobManager)
 
-    waitForTermination(system, master, deployMode)
+    waitForTermination(system, master, deployMode, daoActor, contextId)
   }
 
   private def getConfFromFS(path: String): Option[Config] = {
@@ -154,7 +156,9 @@ object JobManager {
       ActorSystem(name, configWithRole)
     }
 
-    def waitForTermination(system: ActorSystem, master: String, deployMode: String) {
+    def waitForTermination(system: ActorSystem, master: String,
+                           deployMode: String, daoActor: ActorRef,
+                           contextId: String) {
       if (master == "yarn" && deployMode == "cluster") {
         // YARN Cluster Mode:
         // Finishing the main method means that the job has been done and immediately finishes
@@ -169,6 +173,39 @@ object JobManager {
         system.registerOnTermination {
           logger.info("Actor system terminated. Exiting the JVM with exit code 0.")
           System.exit(0)
+        }
+
+        // We have to call Runtime.getRuntime.halt(-1) otherwise the driver process may be stopped
+        // although it was just a network glitch. MemberRemoved event should happen even if
+        // driver exits the cluster by itself. Exiting with -1 is okay as Jobserver won't allow
+        // stopped context to join again.
+        // Increase system termination timeout so that system has time to shutdown by
+        // itself (in case of a planned shutdown).
+        Cluster(system).registerOnMemberRemoved {
+          logger.info("JobManagerActor was removed from the Akka cluster.")
+          val futureTimeout = 180.seconds
+          implicit val akkaTimeout = Timeout(futureTimeout)
+          if (Try(Await.ready(system.whenTerminated, futureTimeout)).isFailure) {
+            Try(Await.result(daoActor ? GetContextInfo(contextId), futureTimeout)) match {
+              case Success(response) =>
+                val contextInfo = response.asInstanceOf[JobDAOActor.ContextResponse].contextInfo
+                contextInfo match {
+                  case Some(info) if ContextStatus.getNonFinalStates().contains(info.state) =>
+                    logger.info(s"JobManagerActor has status ${info.state}, but was kicked out of " +
+                      s"the cluster minimum 3 minutes ago. Exiting JVM with -1.")
+                    Runtime.getRuntime.halt(-1)
+                  case Some(info) =>
+                    logger.info(s"Context ${info.name} is in state ${info.state}. Akka hook for removal" +
+                      s" from the cluster won't take any action in this case.")
+                  case None =>
+                    logger.info(s"Akka hook for removal from the cluster couldn't obtain context " +
+                      s"information for context id $contextId")
+                }
+              case Failure(_) =>
+                logger.info(s"Akka hook for removal from the cluster couldn't get information from" +
+                  s" DAO actor. Taking no action.")
+            }
+          }
         }
       }
     }

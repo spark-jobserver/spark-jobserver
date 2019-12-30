@@ -148,6 +148,7 @@ object JobServer {
         webApiPF(supervisor, getHealthCheckInstance(supervisor, daoActor, config)).start()
       case true =>
         val cluster = Cluster(system)
+        setupAkkaClusterHooks(system)
 
         // Check if all contexts marked as running are still available and get the ActorRefs
         val existingManagerActorRefs = getExistingManagerActorRefs(system, daoActor)
@@ -216,7 +217,7 @@ object JobServer {
   def getManagerActorRef(contextInfo: ContextInfo, system: ActorSystem): Option[ActorRef] = {
     val duration = FiniteDuration(3, SECONDS)
     val clusterAddress = contextInfo.actorAddress.getOrElse(return None)
-    val address = clusterAddress + "/user/" + AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX +
+    val address = clusterAddress + "/user/" + JobserverConfig.MANAGER_ACTOR_PREFIX +
         contextInfo.id
     try {
       val actorResolveFuture = system.actorSelection(address).resolveOne(duration)
@@ -230,6 +231,30 @@ object JobServer {
       case ex: Exception =>
         logger.error("Unexpected exception occurred", ex)
         None
+    }
+  }
+
+  def setupAkkaClusterHooks(system: ActorSystem): Unit = {
+    system.registerOnTermination {
+      logger.info("Actor system terminated. Exiting the JVM with exit code 0.")
+      System.exit(0)
+    }
+
+    // Exit JVM if actor system was removed from the cluster. Jobserver Web API can't function
+    // correctly without connection to other nodes.
+    Cluster(system).registerOnMemberRemoved {
+      new Thread {
+        override def run(): Unit = {
+          val actorSystemTerminationTimeout = 60.seconds
+          if (Try(Await.ready(system.whenTerminated, actorSystemTerminationTimeout)).isFailure) {
+            logger.info("Actor system shutdown took to long, exit JVM with exit code 0.")
+            System.exit(0)
+          }
+        }
+      }.start()
+
+      logger.info("Actor system left cluster. Trigger shutdown of actor system and exit JVM.")
+      system.terminate().wait() // blocking call
     }
   }
 
