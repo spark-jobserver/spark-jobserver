@@ -1,4 +1,4 @@
-package db.metadata.h2.migration.V0_7_1
+package db.combineddao.h2.migration
 
 import java.sql.Connection
 
@@ -18,7 +18,7 @@ import scala.util.control.NonFatal
  * adds two new columns to JobInfo table: bin_ids and uris. Additionally data from old bin_id column
  * is migrated to bin_ids column.
  */
-class V0_7_1__jobinfo_contains_uris extends JdbcMigration{
+class V2__jobinfo_contains_uris extends JdbcMigration{
   private val logger = LoggerFactory.getLogger(getClass)
   private val timeout = 10 minutes
   private def logErrors = PartialFunction[Throwable, Unit] {

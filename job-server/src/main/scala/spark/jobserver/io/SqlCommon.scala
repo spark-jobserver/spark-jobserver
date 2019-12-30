@@ -1,34 +1,25 @@
 package spark.jobserver.io
 
 import java.sql.Timestamp
-import javax.sql.DataSource
 
-import scala.concurrent.{Await, Future}
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration.DurationInt
-import scala.reflect.runtime.universe
-import com.typesafe.config.Config
-import com.typesafe.config.ConfigFactory
-import com.typesafe.config.ConfigRenderOptions
-import org.apache.commons.dbcp.BasicDataSource
-import org.flywaydb.core.Flyway
+import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
-import slick.driver.JdbcProfile
+import spark.jobserver.util.SqlDBUtils
 
-class SqlCommon(config: Config) {
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration.DurationInt
+import scala.concurrent.{Await, Future}
+
+/**
+ * Common SQL methods for MetaDataSqlDAO and JobSqlDAO. Deprecated and planned
+ * to be removed, shouldn't be used in any new scenarios.
+ */
+@Deprecated
+class SqlCommon(config: Config) extends SqlDBUtils(config){
   private val logger = LoggerFactory.getLogger(getClass)
-  val slickDriverClass = config.getString("spark.jobserver.sqldao.slick-driver")
-  val jdbcDriverClass = config.getString("spark.jobserver.sqldao.jdbc-driver")
-
-  val runtimeMirror = universe.runtimeMirror(getClass.getClassLoader)
-  val profileModule = runtimeMirror.staticModule(slickDriverClass)
-  val profile = runtimeMirror.reflectModule(profileModule).instance.asInstanceOf[JdbcProfile]
-
-  val timeout = 10.seconds
-
+  private val timeout = 10.seconds
   import profile.api._
-
   // Definition of the tables
   //scalastyle:off
   // Explicitly avoiding to label 'jarId' as a foreign key to avoid dealing with
@@ -87,47 +78,6 @@ class SqlCommon(config: Config) {
 
   val binaries = TableQuery[Binaries]
   //scalastyle:on
-
-  // DB initialization
-  val jdbcUrl = config.getString("spark.jobserver.sqldao.jdbc.url")
-  val jdbcUser = config.getString("spark.jobserver.sqldao.jdbc.user")
-  val jdbcPassword = config.getString("spark.jobserver.sqldao.jdbc.password")
-  val enableDbcp = config.getBoolean("spark.jobserver.sqldao.dbcp.enabled")
-  val db = if (enableDbcp) {
-    logger.info("DBCP enabled")
-    val dbcpMaxActive = config.getInt("spark.jobserver.sqldao.dbcp.maxactive")
-    val dbcpMaxIdle = config.getInt("spark.jobserver.sqldao.dbcp.maxidle")
-    val dbcpInitialSize = config.getInt("spark.jobserver.sqldao.dbcp.initialsize")
-    val dataSource: DataSource = {
-      val ds = new BasicDataSource
-      ds.setDriverClassName(jdbcDriverClass)
-      ds.setUsername(jdbcUser)
-      ds.setPassword(jdbcPassword)
-      ds.setMaxActive(dbcpMaxActive)
-      ds.setMaxIdle(dbcpMaxIdle)
-      ds.setInitialSize(dbcpInitialSize)
-      ds.setUrl(jdbcUrl)
-      ds
-    }
-    Database.forDataSource(dataSource)
-  } else {
-    logger.info("DBCP disabled")
-    Database.forURL(jdbcUrl, driver = jdbcDriverClass, user = jdbcUser, password = jdbcPassword)
-  }
-
-  def initFlyway() {
-    // TODO: migrateLocations should be removed when tests have a running configuration
-    val migrateLocations = config.getString("flyway.locations")
-    val initOnMigrate = config.getBoolean("flyway.initOnMigrate")
-
-    // Flyway migration
-    val flyway = new Flyway()
-    flyway.setDataSource(jdbcUrl, jdbcUser, jdbcPassword)
-    // TODO: flyway.setLocations(migrateLocations) should be removed when tests have a running configuration
-    flyway.setLocations(migrateLocations)
-    flyway.setBaselineOnMigrate(initOnMigrate)
-    flyway.migrate()
-  }
 
   // Convert from joda DateTime to java.sql.Timestamp
   def convertDateJodaToSql(dateTime: DateTime): Timestamp = new Timestamp(dateTime.getMillis)
