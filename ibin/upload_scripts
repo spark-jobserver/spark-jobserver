@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-DESTINATION_DIR="/tmp"
+DESTINATION_DIR="/mnt/workspace"
 JUMPBOX_IP=""
 
 if [[ ${USER} == "" ]]; then
