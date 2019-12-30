@@ -5,7 +5,9 @@
 - [CombinedDAO](#combineddao)
   - [Configuration](#configuration)
     - [HDFS + Zookeeper](#hdfs--zookeeper)
-    - [HDFS + SQL](#hdfs--sql)
+      - [Autopurge feature](#autopurge-feature)
+    - [HDFS + H2](#hdfs--h2)
+    - [H2](#h2)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -80,19 +82,94 @@ The autopurge feature introduces an option to automatically remove old contexts 
 
 It works by starting an `AutoPurgeActor` on Jobserver startup, which every hour checks the zookeeper tree for jobs and contexts which have been finished for more than `autopurge_age` hours and deletes them.
 
-#### HDFS + SQL
-Please configure SQL backend as described [here](../README.md#configuring-spark-jobserver-backend)
+#### HDFS + H2
+Please configure H2 backend as described [here](../README.md#configuring-spark-jobserver-backend)
 
-To set up the CombinedDAO with HDFS and SQL, include the following lines in the configuration file (e.g. `local.conf`):
+To set up the CombinedDAO with HDFS and H2, include the following lines in the configuration file (e.g. `local.conf`):
 
 ```
-    jobdao = spark.jobserver.io.CombinedDAO
-    combineddao {
-      binarydao {
-        class = spark.jobserver.io.HdfsBinaryDAO
-      }
-      metadatadao {
-        class = spark.jobserver.io.MetaDataSqlDAO
-      }
+    spark {
+        jobserver {
+            jobdao = spark.jobserver.io.CombinedDAO
+            combineddao {
+              rootdir = "/tmp/combineddao"
+              binarydao {
+                class = spark.jobserver.io.HdfsBinaryDAO
+              }
+              metadatadao {
+                    class = spark.jobserver.io.MetaDataSqlDAO
+                  }
+            }
+            sqldao {
+                  # Slick database driver, full classpath
+                  slick-driver = slick.driver.H2Driver
+
+                  # JDBC driver, full classpath
+                  jdbc-driver = org.h2.Driver
+
+                  # Directory where default H2 driver stores its data. Only needed for H2.
+                  rootdir = "/tmp/spark-jobserver/metasqldao/data"
+
+                  jdbc {
+                    url = "jdbc:h2:file:/tmp/spark-jobserver/metasqldao/data/h2-db"
+                    user = "secret"
+                    password = "secret"
+                  }
+
+                  dbcp {
+                    maxactive = 20
+                    maxidle = 10
+                    initialsize = 10
+                  }
+             }
+        }
     }
+
+    flyway.locations="db/combineddao/h2/migration"
+```
+
+#### H2
+Please configure H2 backend as described [here](../README.md#configuring-spark-jobserver-backend)
+
+To set up the CombinedDAO only with H2 backend, include the following lines in the configuration file (e.g. `local.conf`):
+
+```
+    spark {
+        jobserver {
+            jobdao = spark.jobserver.io.CombinedDAO
+            combineddao {
+              rootdir = "/tmp/combineddao"
+              binarydao {
+                class = spark.jobserver.io.BinarySqlDAO
+              }
+              metadatadao {
+                    class = spark.jobserver.io.MetaDataSqlDAO
+                  }
+            }
+            sqldao {
+                  # Slick database driver, full classpath
+                  slick-driver = slick.driver.H2Driver
+
+                  # JDBC driver, full classpath
+                  jdbc-driver = org.h2.Driver
+
+                  # Directory where default H2 driver stores its data. Only needed for H2.
+                  rootdir = "/tmp/spark-jobserver/metasqldao/data"
+
+                  jdbc {
+                    url = "jdbc:h2:file:/tmp/spark-jobserver/metasqldao/data/h2-db"
+                    user = "secret"
+                    password = "secret"
+                  }
+
+                  dbcp {
+                    maxactive = 20
+                    maxidle = 10
+                    initialsize = 10
+                  }
+             }
+        }
+    }
+
+    flyway.locations="db/combineddao/h2/migration"
 ```
