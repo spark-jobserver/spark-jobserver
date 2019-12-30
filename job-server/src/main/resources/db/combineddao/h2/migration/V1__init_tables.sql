@@ -35,3 +35,8 @@ CREATE TABLE CONTEXTS (
   STATE                 VARCHAR(255)    NOT NULL,
   ERROR                 CLOB
 );
+
+CREATE TABLE BLOBS (
+  BIN_ID       VARCHAR(255)       NOT NULL PRIMARY KEY,
+  BINARY       BYTEA              NOT NULL
+);
