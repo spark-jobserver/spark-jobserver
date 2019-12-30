@@ -92,10 +92,13 @@ def apply_filters(data, filters):
             data = [node for node in data if node["state"] in filter_value]
         if f == "binary":
             if node_type == "binaries":
+                found = False
+                result = []
                 for bin_info in data:
                     if bin_info[0]["appName"] == filter_value:
-                        data = bin_info
-                        break
+                        result.append(bin_info)
+                        found = True
+                data = result if found else []
             else:
                 data = [node for node in data if node["binaryInfo"]["appName"] == filter_value]
         if f == "context-name":
