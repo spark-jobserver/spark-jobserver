@@ -8,6 +8,7 @@
       - [Autopurge feature](#autopurge-feature)
     - [HDFS + H2](#hdfs--h2)
     - [H2](#h2)
+    - [PostgreSQL](#postgresql)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -123,7 +124,6 @@ To set up the CombinedDAO with HDFS and H2, include the following lines in the c
                   }
              }
         }
-    }
 
     flyway.locations="db/combineddao/h2/migration"
 ```
@@ -172,4 +172,62 @@ To set up the CombinedDAO only with H2 backend, include the following lines in t
     }
 
     flyway.locations="db/combineddao/h2/migration"
+```
+
+#### PostgreSQL
+
+Ensure that you have spark_jobserver database created with necessary rights
+granted to user.
+
+    # create database user jobserver and database spark_jobserver:
+    $ createuser --username=<superuser> -RDIElPS jobserver
+    $ createdb -Ojobserver -Eutf8 spark_jobserver
+    CTRL-D -> logout from psql
+
+    # logon as superuser and enable the large object extension:
+    $ psql -U <superuser> spark_jobserver
+    spark_jobserver=# CREATE EXTENSION lo;
+    CTRL-D -> logout from psql
+
+    # you can connect to the database using the psql command line client:
+    $ psql -U jobserver spark_jobserver
+
+To set up the CombinedDAO only with PostgreSQL backend, include the following lines in the configuration file (e.g. `local.conf`):
+
+```
+    spark {
+        jobserver {
+            jobdao = spark.jobserver.io.CombinedDAO
+            combineddao {
+              rootdir = "/tmp/combineddao"
+              binarydao {
+                    class = spark.jobserver.io.BinarySqlDAO
+                  }
+              metadatadao {
+                    class = spark.jobserver.io.MetaDataSqlDAO
+                  }
+            }
+            sqldao {
+                  # Slick database driver, full classpath
+                  slick-driver = slick.driver.PostgresDriver
+
+                  # JDBC driver, full classpath
+                  jdbc-driver = org.postgresql.Driver
+
+                  jdbc {
+                    url = "jdbc:postgresql://db_host/spark_jobserver"
+                    user = "jobserver"
+                    password = "secret"
+                  }
+
+                  dbcp {
+                    maxactive = 20
+                    maxidle = 10
+                    initialsize = 10
+                  }
+             }
+        }
+    }
+
+    flyway.locations="db/combineddao/postgresql/migration"
 ```
