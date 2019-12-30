@@ -50,8 +50,11 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
     Files.deleteIfExists(configFile)
   }
 
+  override def beforeAll(): Unit = System.setSecurityManager(new NoExitSecurityManager)
+
   override def afterAll() {
     akka.AkkaTestUtils.shutdownAndWait(JobServerSpec.system)
+    System.setSecurityManager(null)
   }
 
   def writeConfigFile(configMap: Map[String, Any]): String = {
@@ -209,7 +212,7 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
 
       genActor match {
         case true =>
-          val actor = actorSystem.actorOf(Props.empty, name = AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX + uuid)
+          val actor = actorSystem.actorOf(Props.empty, name = JobserverConfig.MANAGER_ACTOR_PREFIX + uuid)
           (ContextInfoPF(Some(actor.path.address.toString)), Some(actor))
         case false =>
           (ContextInfoPF(Some("invalidAddress")), None)

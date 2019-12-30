@@ -27,4 +27,9 @@ object JobserverConfig {
    */
   val BINARY_SQL_DAO_CLASS = "spark.jobserver.io.BinarySqlDAO"
   val METADATA_SQL_DAO_CLASS = "spark.jobserver.io.MetaDataSqlDAO"
+
+  /**
+   * Prefix used for naming JobManagerActor. Name is constructed as prefix + context id.
+   */
+  val MANAGER_ACTOR_PREFIX = "jobManager-"
 }

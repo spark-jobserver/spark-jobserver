@@ -67,7 +67,8 @@ class JobManagerSpec extends FunSpecLike with Matchers with BeforeAndAfter
   }
 
   def makeSupervisorSystem(config: Config): ActorSystem = system
-  def waitForTerminationDummy(system: ActorSystem, master: String, deployMode: String) { }
+  def waitForTerminationDummy(system: ActorSystem, master: String, deployMode: String,
+                              daoActor: ActorRef, contextId: String) { }
   implicit val timeout: Timeout = 3 seconds
 
   describe("starting job manager") {
@@ -222,7 +223,8 @@ class JobManagerSpec extends FunSpecLike with Matchers with BeforeAndAfter
 
     it ("calls wait for termination") {
       var called = false
-      def waitForTermination(system: ActorSystem, master: String, deployMode: String) {
+      def waitForTermination(system: ActorSystem, master: String, deployMode: String,
+                             daoActor: ActorRef, contextId: String) {
         called = true
       }
       val configFileName = writeConfigFile(Map(

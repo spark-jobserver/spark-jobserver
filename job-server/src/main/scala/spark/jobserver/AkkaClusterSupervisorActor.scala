@@ -25,7 +25,6 @@ import akka.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerS
   ClusterSingletonProxy, ClusterSingletonProxySettings}
 
 object AkkaClusterSupervisorActor {
-  val MANAGER_ACTOR_PREFIX = "jobManager-"
   val ACTOR_NAME = "context-supervisor"
 
   def props(daoActor : ActorRef, dataManager : ActorRef, cluster : Cluster) : Props =
@@ -94,7 +93,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
     contextInfo.actorAddress match {
       case Some(address) =>
         val actorPath = contextInfo.actorAddress.get + "/user/" +
-          AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX + contextInfo.id
+          JobserverConfig.MANAGER_ACTOR_PREFIX + contextInfo.id
         jobManagerActorRefs.exists(_._1 == actorPath) match {
           case true => Some(jobManagerActorRefs(actorPath))
           case false =>
@@ -170,7 +169,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
         if (actorName.startsWith("jobManager")) {
           logger.info("Received identify response, attempting to initialize context at {}", memberActors)
 
-          val contextId = actorName.replace(AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX, "")
+          val contextId = actorName.replace(JobserverConfig.MANAGER_ACTOR_PREFIX, "")
           val contextFromDAO =
             getDataFromDAO[JobDAOActor.ContextResponse](JobDAOActor.GetContextInfo(contextId))
           val callbacks = contextInitInfos.remove(actorName)
@@ -377,7 +376,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
   protected def handleTerminatedEvent(actorRef: ActorRef) {
     val name: String = actorRef.path.name
     logger.info("Actor terminated: {}", name)
-    val contextId = name.split(AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX).apply(1)
+    val contextId = name.split(JobserverConfig.MANAGER_ACTOR_PREFIX).apply(1)
     val resp = getDataFromDAO[JobDAOActor.ContextResponse](JobDAOActor.GetContextInfo(contextId))
     resp match {
       case Some(JobDAOActor.ContextResponse(Some(c))) =>
@@ -486,7 +485,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
   private def initContextHelp(actorName: String, clusterAddress: Option[String],
       state: String, error: Option[Throwable]) : Option[Throwable] = {
     import akka.pattern.ask
-    val managerActorName = actorName.replace(AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX, "")
+    val managerActorName = actorName.replace(JobserverConfig.MANAGER_ACTOR_PREFIX, "")
 
     val resp = getDataFromDAO[JobDAOActor.ContextResponse](JobDAOActor.GetContextInfo(managerActorName))
     resp match {
@@ -519,7 +518,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
                           (successFunc: ActorRef => Unit)(failureFunc: Throwable => Unit): Unit = {
 
     val contextId = java.util.UUID.randomUUID().toString
-    val contextActorName = AkkaClusterSupervisorActor.MANAGER_ACTOR_PREFIX + contextId
+    val contextActorName = JobserverConfig.MANAGER_ACTOR_PREFIX + contextId
 
     logger.info("Starting context with actor name {}", contextActorName)
 
