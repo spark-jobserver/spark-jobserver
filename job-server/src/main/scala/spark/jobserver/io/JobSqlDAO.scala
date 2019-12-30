@@ -30,7 +30,8 @@ class JobSqlDAO(config: Config, sqlCommon: SqlCommon) extends JobDAO with FileCa
   }
 
   val runtimeMirror = universe.runtimeMirror(getClass.getClassLoader)
-  val profile = runtimeMirror.reflectModule(sqlCommon.profileModule).instance.asInstanceOf[JdbcProfile]
+  val profile = runtimeMirror.reflectModule(
+    sqlCommon.profileModule).instance.asInstanceOf[JdbcProfile]
 
   import profile.api._
 
