@@ -1019,7 +1019,8 @@ log4j.appender.console.target=System.err
 log4j.appender.console.layout=org.apache.log4j.PatternLayout
 log4j.appender.console.layout.ConversionPattern=[%d] %-5p %.26c [%X{testName}] [%X{akkaSource}] - %m%n
 ```
-- Run `scoverage:test` to check the code coverage and improve it.
+- Run `sbt clean coverage test` to check the code coverage and improve it. You can generate reports by running
+`sbt coverageReport` or `sbt coverageAggregate` for the full overview.
   - Windows users: run `; coverage ; testOnly -- -l WindowsIgnore ; coverageReport` from SBT shell.
 - Please run scalastyle to ensure your code changes don't break the style guide.
 - Do "reStart" from SBT for quick restarts of the job server process
