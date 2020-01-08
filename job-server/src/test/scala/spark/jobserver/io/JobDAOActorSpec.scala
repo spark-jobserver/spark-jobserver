@@ -309,5 +309,13 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       response.map(_.appName) should be (cp)
       response.map(_.binaryType) should be (Seq(BinaryType.Jar, BinaryType.URI))
     }
+
+    it("should return GetBinaryInfosForCpFailed if during URI parsing some exception occurs") {
+      val cp = Seq("foo", "://uri2:/uri")
+      daoActor ! GetBinaryInfosForCp(cp)
+
+      val response = expectMsgType[GetBinaryInfosForCpFailed]
+      response.error.getMessage.startsWith("java.net.URISyntaxException: Expected scheme name at index")
+    }
   }
 }
