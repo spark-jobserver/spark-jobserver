@@ -9,11 +9,13 @@ import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfterAll, FunSpecLike, Matchers}
 import spark.jobserver.common.akka.{AkkaTestUtils, InstrumentedActor}
 import spark.jobserver.io.{BinaryInfo, BinaryType, JobInfo, JobStatus}
+import spark.jobserver.io.JobDAOActor.LastBinaryInfo
 
 object BinaryManagerSpec {
   val system = ActorSystem("binary-manager-test")
 
   val dt = DateTime.now
+  val binaryInfo = BinaryInfo("binary", BinaryType.Jar, dt, None)
 
   val binInfo = BinaryInfo("demo", BinaryType.Egg, DateTime.now)
 
@@ -25,6 +27,10 @@ object BinaryManagerSpec {
         "com.abc.meme", JobStatus.Running, DateTime.now, None, None, Seq(binInfo))
 
     override def wrappedReceive: Receive = {
+      case GetLastBinaryInfo("binary") =>
+        sender ! LastBinaryInfo(Some(binaryInfo))
+      case GetLastBinaryInfo("nonexistingbinary") =>
+        sender ! LastBinaryInfo(None)
       case GetApps(_) =>
         sender ! Apps(Map("app1" -> (BinaryType.Jar, dt)))
       case SaveBinary("failOnThis", _, _, _) =>
@@ -66,6 +72,16 @@ class BinaryManagerSpec extends TestKit(BinaryManagerSpec.system) with ImplicitS
     it("should list binaries") {
       binaryManager ! ListBinaries(None)
       expectMsg(Map("app1" -> (BinaryType.Jar, dt)))
+    }
+
+    it("should return a binary by name"){
+      binaryManager ! GetBinary("binary")
+      expectMsg(LastBinaryInfo(Some(binaryInfo)))
+    }
+
+    it("should return a proper response when queried for a non-existing binary"){
+      binaryManager ! GetBinary("nonexistingbinary")
+      expectMsg(LastBinaryInfo(None))
     }
 
     it("should respond when binary is saved successfully") {
