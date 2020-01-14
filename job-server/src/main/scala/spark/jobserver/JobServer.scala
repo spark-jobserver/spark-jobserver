@@ -93,11 +93,9 @@ object JobServer {
     checkIfAkkaTcpPortSpecifiedForSuperviseMode(driverMode, superviseModeEnabled, akkaTcpPort)
 
     // Check if we are using correct DB backend when context-per-jvm is enabled.
-    // JobFileDAO and H2 mem is not supported.
+    // H2 mem is not supported.
     if (contextPerJvm) {
-      if (jobDaoClass.getName == "spark.jobserver.io.JobFileDAO") {
-        throw new InvalidConfiguration("JobFileDAO is not supported with context-per-jvm, use JobSqlDAO.")
-      } else if (jobDaoClass.getName == "spark.jobserver.io.JobSqlDAO" &&
+      if (jobDaoClass.getName == "spark.jobserver.io.JobSqlDAO" &&
         config.getString("spark.jobserver.sqldao.jdbc.url").startsWith("jdbc:h2:mem")) {
         throw new InvalidConfiguration("H2 mem backend is not support with context-per-jvm.")
       }

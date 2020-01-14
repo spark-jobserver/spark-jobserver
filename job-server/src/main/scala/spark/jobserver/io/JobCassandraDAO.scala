@@ -4,24 +4,29 @@ import java.io.File
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.util.UUID
-import collection.JavaConverters._
 
-import scala.collection.convert.WrapAsJava
-import scala.collection.convert.Wrappers.JListWrapper
-import scala.concurrent.{Await, Future}
-import scala.concurrent.duration.DurationInt
-import scala.util.Try
 import com.datastax.driver.core._
-import com.datastax.driver.core.querybuilder.{Insert, QueryBuilder => QB}
 import com.datastax.driver.core.querybuilder.QueryBuilder._
-import com.datastax.driver.core.schemabuilder.{Create, SchemaBuilder}
+import com.datastax.driver.core.querybuilder.{Insert, QueryBuilder => QB}
 import com.datastax.driver.core.schemabuilder.SchemaBuilder.Direction
+import com.datastax.driver.core.schemabuilder.{Create, CreateType, SchemaBuilder}
 import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import spark.jobserver.cassandra.Cassandra.Resultset.toFuture
 
+import scala.collection.JavaConversions
+import scala.collection.JavaConverters._
+import scala.collection.convert.WrapAsJava
+import scala.collection.convert.Wrappers.JListWrapper
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration.DurationInt
+import scala.concurrent.{Await, Future}
+import scala.util.Try
+
 object Metadata {
+  val keyspace = "spark_jobserver"
+
   val BinariesTable = "binaries"
   val BinariesChronologicalTable = "binaries_chronological"
   val BinaryId = "binary_id"
@@ -52,22 +57,21 @@ object Metadata {
   val Error = "error"
   val ErrorClass = "error_class"
   val ErrorStackTrace = "error_stack_trace"
+  val Cp = "cp"
 
+  val BinInfo = "binaryInfo"
 }
 
 class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
 
-  import scala.concurrent.ExecutionContext.Implicits.global
   private val logger = LoggerFactory.getLogger(getClass)
-  val session = setup(config)
-  val chunkSizeInKb = Try(config.getInt("spark.jobserver.cassandra.chunk-size-in-kb")).getOrElse(1024)
+  private val session = setup(config)
+  private val chunkSizeInKb = Try(config.getInt("spark.jobserver.cassandra.chunk-size-in-kb")).getOrElse(1024)
   setupSchema()
 
-
-  // NOTE: below is only needed for H2 drivers
-  override val rootDir = config.getString("spark.jobserver.sqldao.rootdir")
+  override val rootDir = config.getString("spark.jobserver.cassandradao.rootdir")
   override val rootDirFile = new File(rootDir)
-  logger.info("rootDir is " + rootDirFile.getAbsolutePath)
+  logger.info("File caching rootDir is " + rootDirFile.getAbsolutePath)
   initFileDirectory()
 
   override def saveBinary(appName: String,
@@ -239,7 +243,7 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
   override def getJobInfos(limit: Int, status: Option[String] = None): Future[Seq[JobInfo]] = {
     val query = QB.select(
       JobId, ContextId, ContextName, AppName, BType, UploadTime, Classpath, State, StartTime, EndTime,
-      Error, ErrorClass, ErrorStackTrace
+      Error, ErrorClass, ErrorStackTrace, Cp
     ).from(JobsChronologicalTable).where(QB.eq(StartDate, today())).limit(limit)
 
     session.executeAsync(query).map { rs =>
@@ -260,7 +264,7 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
       contextId: String, jobStatuses: Option[Seq[String]] = None): Future[Seq[JobInfo]] = {
     var query = QB.select(
       JobId, ContextId, ContextName, AppName, BType, UploadTime, Classpath, State, StartTime, EndTime,
-      Error, ErrorClass, ErrorStackTrace
+      Error, ErrorClass, ErrorStackTrace, Cp
     ).from(JobsByContextIdTable).where(QB.eq(ContextId, UUID.fromString(contextId)))
 
     query = jobStatuses match {
@@ -323,27 +327,40 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
       val stackTrace = if (row.isNull(ErrorStackTrace)) "" else row.getString(ErrorStackTrace)
       ErrorData(error, errorClass, stackTrace)
     }
-    JobInfo(
-      row.getUUID(Metadata.JobId).toString,
-      row.getUUID(ContextId).toString(),
-      row.getString(ContextName),
-      BinaryInfo(
+    val cpBinaryInfos = if (row.isNull(Cp)) Seq.empty else {
+      val cpRow = row.getSet(Cp, classOf[UDTValue])
+      cpRow.asScala.map(r => BinaryInfo(
+        r.getString(AppName),
+        BinaryType.fromString(r.getString(BType)),
+        new DateTime(r.getTime(UploadTime))
+      )).toSeq
+    }
+    // Binary info for Jobs was moved to cp value (and Cassandra tables were changed accordingly).
+    // This is compatability code, which takes into account data written before the migration.
+    val legacyBinInfoData = if (row.isNull(AppName)) Seq.empty else {
+      Seq(BinaryInfo(
         row.getString(AppName),
         BinaryType.fromString(row.getString(BType)),
         new DateTime(row.getTimestamp(UploadTime))
-      ),
+      ))
+    }
+    JobInfo(
+      row.getUUID(Metadata.JobId).toString,
+      row.getUUID(ContextId).toString,
+      row.getString(ContextName),
       row.getString(Classpath),
       row.getString(State),
       new DateTime(row.getTimestamp(StartTime)),
       Option(row.getTimestamp(EndTime)).map(new DateTime(_)),
-      errorData
+      errorData,
+      cpBinaryInfos ++ legacyBinInfoData
     )
   }
 
   override def getJobInfo(jobId: String): Future[Option[JobInfo]] = {
     val query = QB.select(
       JobId, ContextId, ContextName, AppName, BType, UploadTime, Classpath, State, StartTime, EndTime,
-      Error, ErrorClass, ErrorStackTrace
+      Error, ErrorClass, ErrorStackTrace, Cp
     ).from(JobsTable).
       where(QB.eq(JobId, UUID.fromString(jobId))).
       limit(1)
@@ -355,23 +372,31 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
   }
 
   override def saveJobInfo(jobInfo: JobInfo): Unit = {
-    val JobInfo(jobId, contextId, contextName, binaryInfo, classPath, state,
-        startTime, endTime, error) = jobInfo
-
+    val JobInfo(jobId, contextId, contextName, classPath, state,
+        startTime, endTime, error, cp) = jobInfo
     val localDate: LocalDate = LocalDate.fromMillisSinceEpoch(jobInfo.startTime.getMillis)
+    val binType = session.getCluster.getMetadata.getKeyspace(keyspace).getUserType(BinInfo)
+
+    // convert to JavaList to avoid "Value 6 of type class scala.collection.immutable.$colon$colon
+    // does not correspond to any CQL3 type" exception during insert
+    val binInfos = JavaConversions.seqAsJavaList(
+      jobInfo.cp.map(bin => {
+      binType.newValue().
+        setString(AppName, bin.appName).
+        setString(BType, bin.binaryType.name).
+        setTime(UploadTime, bin.uploadTime.getMillis)
+    }))
 
     def fillInsert(insert: Insert): Insert = {
       insert.
         value(JobId, UUID.fromString(jobId)).
         value(ContextId, UUID.fromString(contextId)).
         value(ContextName, contextName).
-        value(AppName, binaryInfo.appName).
-        value(BType, binaryInfo.binaryType.name).
-        value(UploadTime, binaryInfo.uploadTime.getMillis).
         value(Classpath, classPath).
         value(State, state).
         value(StartTime, startTime.getMillis).
-        value(StartDate, localDate)
+        value(StartDate, localDate).
+        value(Cp, binInfos)
 
       endTime.foreach{e => insert.value(EndTime, e.getMillis)}
       error.foreach { err =>
@@ -409,7 +434,6 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
     val consistencyLevel = Try(
       ConsistencyLevel.valueOf(cassandraConfig.getString("consistency"))
     ).getOrElse(ConsistencyLevel.ONE)
-    val keyspace = "spark_jobserver"
     val addrs = hosts.map(_.trim()).map(input => {
       var port: Int = 9042
       var host: String = input
@@ -490,6 +514,14 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
 
     session.execute(orderedContextsByStateTableStateStatement)
 
+    val binariesDataTypeStatement: CreateType = SchemaBuilder.createType(BinInfo).ifNotExists.
+      addColumn(AppName, DataType.text).
+      addColumn(BType, DataType.text).
+      addColumn(UploadTime, DataType.time)
+
+    session.execute(binariesDataTypeStatement)
+
+    val binInfoType = session.getCluster.getMetadata.getKeyspace(keyspace).getUserType(BinInfo)
     val jobsTableStatement = SchemaBuilder.createTable(JobsTable).ifNotExists.
       addPartitionKey(JobId, DataType.uuid).
       addColumn(ContextId, DataType.uuid).
@@ -505,7 +537,8 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
       addColumn(EndTime, DataType.timestamp).
       addColumn(Error, DataType.text).
       addColumn(ErrorClass, DataType.text).
-      addColumn(ErrorStackTrace, DataType.text)
+      addColumn(ErrorStackTrace, DataType.text).
+      addColumn(Cp, DataType.frozenSet(binInfoType))
 
     session.execute(jobsTableStatement)
 
@@ -525,7 +558,8 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
       addColumn(Error, DataType.text).
       addColumn(ErrorClass, DataType.text).
       addColumn(ErrorStackTrace, DataType.text).
-      withOptions().clusteringOrder(StartTime, Direction.DESC)
+      addColumn(Cp, DataType.frozenSet(binInfoType)).
+    withOptions().clusteringOrder(StartTime, Direction.DESC)
 
     session.execute(jobsChronologicalView)
 
@@ -544,8 +578,28 @@ class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
       addColumn(EndTime, DataType.timestamp).
       addColumn(Error, DataType.text).
       addColumn(ErrorClass, DataType.text).
-      addColumn(ErrorStackTrace, DataType.text)
+      addColumn(ErrorStackTrace, DataType.text).
+      addColumn(Cp, DataType.frozenSet(binInfoType))
 
     session.execute(jobsByContextIdView)
+
+    migrateJobInfo()
+  }
+
+  private def migrateJobInfo() = {
+    val migrated = session.getCluster.getMetadata.getKeyspace(
+      keyspace).getTable(JobsTable).getColumn(Cp)
+
+    if (migrated == null) {
+      val bt = session.getCluster.getMetadata.getKeyspace(keyspace).getUserType(BinInfo)
+      val jobsTableStatement = SchemaBuilder.alterTable(JobsTable).addColumn(Cp).`type`(bt)
+      session.execute(jobsTableStatement)
+
+      val jobsChronologicalView = SchemaBuilder.alterTable(JobsChronologicalTable).addColumn(Cp).`type`(bt)
+      session.execute(jobsChronologicalView)
+
+      val jobsByContextIdView = SchemaBuilder.alterTable(JobsByContextIdTable).addColumn(Cp).`type`(bt)
+      session.execute(jobsByContextIdView)
+    }
   }
 }

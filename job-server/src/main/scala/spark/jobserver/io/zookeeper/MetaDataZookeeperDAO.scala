@@ -194,15 +194,19 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
   }
 
   override def getJobConfig(jobId: String): Future[Option[Config]] = {
-    logger.debug(s"Retrieving job config for $jobId")
-    Future {
-      Utils.usingResource(zookeeperUtils.getClient) {
-        client =>
-          val path = s"$jobsDir/$jobId/config"
-          zookeeperUtils.sync(client, path)
-          zookeeperUtils.read[String](client, path)
-            .flatMap(render => Some(ConfigFactory.parseString(render)))
+      Future {
+        readJobConfig(jobId)
       }
+  }
+
+  def readJobConfig(jobId: String): Option[Config] = {
+    logger.debug(s"Retrieving job config for $jobId")
+    Utils.usingResource(zookeeperUtils.getClient) {
+      client =>
+        val path = s"$jobsDir/$jobId/config"
+        zookeeperUtils.sync(client, path)
+        zookeeperUtils.read[String](client, path)
+          .flatMap(render => Some(ConfigFactory.parseString(render)))
     }
   }
 
@@ -303,20 +307,23 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
     */
   override def getJobsByBinaryName(binName: String, statuses: Option[Seq[String]] = None):
       Future[Seq[JobInfo]] = {
-    Future {
-      Utils.usingResource(zookeeperUtils.getClient) {
-        client =>
-          zookeeperUtils.sync(client, binariesDir)
-          lazy val jobsUsingBinName = zookeeperUtils.list(client, jobsDir)
-                                        .flatMap(id => readJobInfo(client, id))
-                                        .filter(_.binaryInfo.appName == binName)
-          statuses match {
-            case None =>
-              jobsUsingBinName
-            case Some(states) =>
-              jobsUsingBinName.filter(j => states.contains(j.state))
-          }
+      Future {
+        Utils.usingResource(zookeeperUtils.getClient) {
+          client =>
+            logger.debug(s"Retrieving jobs by binary name $binName (states: $statuses)")
+            zookeeperUtils.sync(client, binariesDir)
+            val jobs = zookeeperUtils.list(client, jobsDir)
+              .flatMap(id => readJobInfo(client, id))
+            lazy val jobsUsingBinName = zookeeperUtils.list(client, jobsDir)
+              .flatMap(id => readJobInfo(client, id))
+              .filter(j => j.cp.map(_.appName).contains(binName))
+            statuses match {
+              case None =>
+                jobsUsingBinName
+              case Some(states) =>
+                jobsUsingBinName.filter(j => states.contains(j.state))
+            }
+        }
       }
-    }
   }
 }

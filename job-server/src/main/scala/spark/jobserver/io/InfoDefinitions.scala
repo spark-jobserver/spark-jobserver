@@ -24,9 +24,18 @@ object BinaryType {
     val contentType = HttpHeaders.`Content-Type`(mediaType)
   }
 
+  case object URI extends BinaryType {
+    // WARNING: only for internal use (not accepted for upload from user)
+    val extension = "uri"
+    val name = "Uri"
+    val mediaType: MediaType = MediaTypes.register(MediaType.custom("text/uri-list"))
+    val contentType = HttpHeaders.`Content-Type`(mediaType)
+  }
+
   def fromString(typeString: String): BinaryType = typeString match {
     case "Jar" => Jar
     case "Egg" => Egg
+    case "Uri" => URI
   }
 
   def fromMediaType(mediaType: MediaType): Option[BinaryType] = mediaType match {
@@ -38,10 +47,10 @@ object BinaryType {
 
 // Both a response and used to track job progress
 // NOTE: if endTime is not None, then the job has finished.
-case class JobInfo(jobId: String, contextId: String, contextName: String,
-                   binaryInfo: BinaryInfo, classPath: String, state: String,
+case class JobInfo(jobId: String, contextId: String, contextName: String, mainClass: String, state: String,
                    startTime: DateTime, endTime: Option[DateTime],
-                   error: Option[ErrorData]) {
+                   error: Option[ErrorData], cp: Seq[BinaryInfo]) {
+
   def jobLengthMillis: Option[Long] = endTime.map { end => new Duration(startTime, end).getMillis }
 }
 

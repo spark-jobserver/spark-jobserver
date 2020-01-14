@@ -26,7 +26,7 @@ object ContextSupervisor {
   case object AddContextsFromConfig // Start up initial contexts
   case object ListContexts
   case class AddContext(name: String, contextConfig: Config)
-  case class StartAdHocContext(classPath: String, contextConfig: Config)
+  case class StartAdHocContext(mainClass: String, contextConfig: Config)
   case class GetContext(name: String) // returns JobManager, JobResultActor
   case class GetResultActor(name: String)  // returns JobResultActor
   case class StopContext(name: String, force: Boolean = false)

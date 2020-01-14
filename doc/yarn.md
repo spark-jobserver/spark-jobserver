@@ -41,7 +41,7 @@ Example docker.conf:
         jobdao = spark.jobserver.io.JobSqlDAO
 
         sqldao {
-          # Directory where default H2 driver stores its data. Only needed for H2.
+          # Directory where binaries are cached and default H2 driver stores its data
           rootdir = /database
 
           # Full JDBC URL / init string.  Sorry, needs to match above.

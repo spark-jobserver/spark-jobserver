@@ -3,7 +3,7 @@ package spark.jobserver
 import java.io.File
 import java.nio.file.{Files, StandardOpenOption}
 
-import akka.actor.{ActorIdentity, ActorRef, Cancellable, PoisonPill, Props, ReceiveTimeout}
+import akka.actor.{ActorRef, Cancellable, PoisonPill, Props}
 import akka.testkit.TestProbe
 import org.joda.time.DateTime
 import com.typesafe.config.{Config, ConfigFactory}
@@ -12,7 +12,7 @@ import org.slf4j.LoggerFactory
 import spark.jobserver.DataManagerActor.RetrieveData
 import spark.jobserver.JobManagerActor.{Initialize, KillJob}
 import spark.jobserver.common.akka.AkkaTestUtils
-import spark.jobserver.CommonMessages.{JobRestartFailed, JobStarted, JobValidationFailed, Subscribe}
+import spark.jobserver.CommonMessages.{JobRestartFailed, JobStarted, JobValidationFailed}
 import spark.jobserver.io._
 import spark.jobserver.ContextSupervisor.{ContextStopError, ContextStopInProgress, SparkContextStopped}
 import spark.jobserver.io.JobDAOActor.SavedSuccessfully
@@ -234,7 +234,10 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
   private val javaJob = classPrefix + "JavaHelloWorldJob"
   val sentence = "The lazy dog jumped over the fish"
   val counts = sentence.split(" ").groupBy(x => x).mapValues(_.length)
-  protected val stringConfig = ConfigFactory.parseString(s"input.string = $sentence")
+  protected val baseJobConfig = ConfigFactory.parseString("cp = [\"demo\"]")
+  protected val stringConfig = ConfigFactory.parseString(s"""
+    |input.string = $sentence
+    """.stripMargin).withFallback(baseJobConfig)
   protected val emptyConfig = ConfigFactory.parseString("spark.master = bar")
   val contextId = java.util.UUID.randomUUID().toString()
 
@@ -275,8 +278,8 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
-      uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, allEvents)
+      val testJar = uploadTestJar()
+      manager ! JobManagerActor.StartJob(wordCountClass, List(testJar), stringConfig, allEvents)
       expectMsgClass(startJobWait, classOf[JobStarted])
       expectMsgAllClassOf(classOf[JobFinished], classOf[JobResult])
       expectNoMsg()
@@ -286,8 +289,8 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
-      uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, allEvents)
+      val testJar = uploadTestJar()
+      manager ! JobManagerActor.StartJob(wordCountClass, List(testJar), stringConfig, allEvents)
       expectMsgClass(startJobWait, classOf[JobStarted])
       expectMsgClass(classOf[JobResult])
       expectMsgClass(classOf[JobFinished])
@@ -298,14 +301,14 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
-      uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, allEvents)
+      val testJar = uploadTestJar()
+      manager ! JobManagerActor.StartJob(wordCountClass, List(testJar), stringConfig, allEvents)
       expectMsgClass(startJobWait, classOf[JobStarted])
       expectMsgAllClassOf(classOf[JobFinished], classOf[JobResult])
       expectNoMsg()
 
       // should be ok to run the same more again
-      manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, allEvents)
+      manager ! JobManagerActor.StartJob(wordCountClass, List(testJar), stringConfig, allEvents)
       expectMsgClass(startJobWait, classOf[JobStarted])
       expectMsgAllClassOf(classOf[JobFinished], classOf[JobResult])
       expectNoMsg()
@@ -315,8 +318,9 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
-      uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, syncEvents ++ errorEvents)
+      val testJar = uploadTestJar()
+      manager ! JobManagerActor.StartJob(
+        wordCountClass, List(testJar), stringConfig, syncEvents ++ errorEvents)
       expectMsgPF(startJobWait, "Did not get JobResult") {
         case JobResult(_, result) => result should equal (counts)
       }
@@ -329,8 +333,9 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
-      uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, syncEvents ++ errorEvents)
+      val testJar = uploadTestJar()
+      manager ! JobManagerActor.StartJob(
+        wordCountClass, List(testJar), stringConfig, syncEvents ++ errorEvents)
       expectMsgPF(startJobWait, "Did not get JobResult") {
         case JobResult(_, result) => result should equal (counts)
       }
@@ -348,8 +353,9 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobManagerActor.Initialize(ctxConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
-      uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, syncEvents ++ errorEvents)
+      val testJar = uploadTestJar()
+      manager ! JobManagerActor.StartJob(
+        wordCountClass, List(testJar), stringConfig, syncEvents ++ errorEvents)
       expectMsgPF(startJobWait, "Did not get JobResult") {
         case JobResult(_, result) => result should equal (counts)
       }
@@ -367,20 +373,22 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobManagerActor.Initialize(ctxConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
-      uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, syncEvents ++ errorEvents)
+      val testJar = uploadTestJar()
+      manager ! JobManagerActor.StartJob(
+        wordCountClass, List(testJar), stringConfig, syncEvents ++ errorEvents)
       expectMsgPF(startJobWait, "Did not get JobResult") {
         case JobResult(_, result) => result should equal (counts)
       }
       deathWatch.expectNoMsg(1.seconds)
 
-      manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, syncEvents ++ errorEvents)
+      manager ! JobManagerActor.StartJob(
+        wordCountClass, List(testJar), stringConfig, syncEvents ++ errorEvents)
       expectMsgPF(startJobWait, "Did not get JobResult") {
         case JobResult(_, result) => result should equal (counts)
       }
       deathWatch.expectNoMsg(1.seconds)
 
-      manager ! JobManagerActor.StartJob("demo", classPrefix + "MyErrorJob", emptyConfig, errorEvents)
+      manager ! JobManagerActor.StartJob(classPrefix + "MyErrorJob", List(testJar), emptyConfig, errorEvents)
       val errorMsg = expectMsgClass(startJobWait, classOf[JobErroredOut])
       errorMsg.err.getClass should equal (classOf[IllegalArgumentException])
       deathWatch.expectTerminated(manager, 3.seconds)
@@ -390,8 +398,9 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
-      uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", newWordCountClass, stringConfig, syncEvents ++ errorEvents)
+      val testJar = uploadTestJar()
+      manager ! JobManagerActor.StartJob(
+        newWordCountClass, List(testJar), stringConfig, syncEvents ++ errorEvents)
       expectMsgPF(startJobWait, "Did not get JobResult") {
         case JobResult(_, result) => result should equal (counts)
       }
@@ -402,8 +411,9 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
-      uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, errorEvents ++ asyncEvents)
+      val testJar = uploadTestJar()
+      manager ! JobManagerActor.StartJob(
+        wordCountClass, List(testJar), stringConfig, errorEvents ++ asyncEvents)
       expectMsgClass(startJobWait, classOf[JobStarted])
       expectNoMsg()
     }
@@ -415,9 +425,10 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val configWithCtxId = ConfigFactory.parseString(s"context.id=$contextId").withFallback(contextConfig)
       manager ! JobManagerActor.Initialize(configWithCtxId, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
-      uploadTestJar()
+      val testJar = uploadTestJar()
 
-      manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, errorEvents ++ asyncEvents)
+      manager ! JobManagerActor.StartJob(
+        wordCountClass, List(testJar), stringConfig, errorEvents ++ asyncEvents)
 
       expectMsgClass(startJobWait, classOf[JobStarted])
       val jobInfo = Await.result(dao.getJobInfosByContextId(contextId), 5.seconds)
@@ -435,8 +446,9 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
-      uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", classPrefix + "MyErrorJob", emptyConfig, errorEvents)
+      val testJar = uploadTestJar()
+      manager ! JobManagerActor.StartJob(
+        classPrefix + "MyErrorJob", List(testJar), baseJobConfig, errorEvents)
       val errorMsg = expectMsgClass(startJobWait, classOf[JobErroredOut])
       errorMsg.err.getClass should equal (classOf[IllegalArgumentException])
 
@@ -452,9 +464,10 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       deathWatch.watch(manager)
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
-      uploadTestJar()
+      val testJar = uploadTestJar()
 
-      manager ! JobManagerActor.StartJob("demo", classPrefix + "MyErrorJob", emptyConfig, errorEvents)
+      manager ! JobManagerActor.StartJob(
+        classPrefix + "MyErrorJob", List(testJar), baseJobConfig, errorEvents)
 
       val errorMsg = expectMsgClass(startJobWait, classOf[JobErroredOut])
       errorMsg.err.getClass should equal (classOf[IllegalArgumentException])
@@ -465,19 +478,20 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
-      uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", classPrefix + "MyFatalErrorJob", emptyConfig, errorEvents)
+      val testJar = uploadTestJar()
+      manager ! JobManagerActor.StartJob(
+        classPrefix + "MyFatalErrorJob", List(testJar), baseJobConfig, errorEvents)
       val errorMsg = expectMsgClass(startJobWait, classOf[JobErroredOut])
       errorMsg.err.getClass should equal (classOf[OutOfMemoryError])
     }
 
     it("job should get jobConfig passed in to StartJob message") {
-      val jobConfig = ConfigFactory.parseString("foo.bar.baz = 3")
+      val jobConfig = ConfigFactory.parseString("foo.bar.baz = 3").withFallback(baseJobConfig)
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
-      uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", classPrefix + "ConfigCheckerJob", jobConfig,
+      val testJar = uploadTestJar()
+      manager ! JobManagerActor.StartJob(classPrefix + "ConfigCheckerJob", List(testJar), jobConfig,
         syncEvents ++ errorEvents)
       expectMsgPF(startJobWait, "Did not get JobResult") {
         case JobResult(_, keys: Seq[_]) =>
@@ -489,8 +503,8 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
-      uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", classPrefix + "ZookeeperJob", stringConfig,
+      val testJar = uploadTestJar()
+      manager ! JobManagerActor.StartJob(classPrefix + "ZookeeperJob", List(testJar), stringConfig,
         syncEvents ++ errorEvents)
       expectMsgPF(5.seconds.dilated, "Did not get JobResult") {
         case JobResult(_, result: Array[Product]) =>
@@ -502,17 +516,18 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
     it ("should refuse to start a job when too many jobs in the context are running") {
       val jobSleepTimeMillis = 2000L
-      val jobConfig = ConfigFactory.parseString("sleep.time.millis = " + jobSleepTimeMillis)
+      val jobConfig = ConfigFactory.parseString("sleep.time.millis = " + jobSleepTimeMillis).
+        withFallback(baseJobConfig)
 
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
-      uploadTestJar()
+      val testJar = uploadTestJar()
 
       val messageCounts = new mutable.HashMap[Class[_], Int].withDefaultValue(0)
       // Try to start 3 instances of this job. 2 of them should start, and the 3rd should be denied.
       for (i <- 0 until MaxJobsPerContext + 1) {
-        manager ! JobManagerActor.StartJob("demo", classPrefix + "SleepJob", jobConfig, allEvents)
+        manager ! JobManagerActor.StartJob(classPrefix + "SleepJob", List(testJar), jobConfig, allEvents)
       }
 
       while (messageCounts.values.sum < (MaxJobsPerContext * 3 + 1)) {
@@ -539,8 +554,8 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
-      uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", classPrefix + "SimpleObjectJob", emptyConfig,
+      val testJar = uploadTestJar()
+      manager ! JobManagerActor.StartJob(classPrefix + "SimpleObjectJob", List(testJar), baseJobConfig,
         syncEvents ++ errorEvents)
       expectMsgPF(5.seconds.dilated, "Did not get JobResult") {
         case JobResult(_, result: Int) => result should equal (1 + 2 + 3)
@@ -551,8 +566,8 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
-      uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", classPrefix + "LongPiJob", stringConfig, allEvents)
+      val testJar = uploadTestJar()
+      manager ! JobManagerActor.StartJob(classPrefix + "LongPiJob", List(testJar), stringConfig, allEvents)
       expectMsgPF(5.seconds.dilated, "Did not get JobResult") {
         case JobStarted(id, _) =>
           manager ! KillJob(id)
@@ -567,28 +582,85 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
-      uploadTestJar()
-      val jobJarDepsConfigs = ConfigFactory.parseString(
-        s"""
-           |dependent-jar-uris = []
-        """.stripMargin)
+      val testJar = uploadTestJar()
 
-      manager ! JobManagerActor.StartJob("demo", classPrefix + "jobJarDependenciesJob", jobJarDepsConfigs,
-        syncEvents ++ errorEvents)
+      manager ! JobManagerActor.StartJob(
+        classPrefix + "jobJarDependenciesJob", List(testJar), emptyConfig, syncEvents ++ errorEvents)
 
       expectMsgClass(startJobWait, classOf[JobErroredOut])
+    }
+
+    it("should run a job that requires job jar dependencies if dependent-jar-uris are specified correctly"){
+      manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+
+      val testJar = uploadTestJar()
+
+      val binURI = BinaryInfo( // Additional dependency binary, which contains Empty class
+        s"file://${emptyJar.getAbsolutePath}",
+        BinaryType.URI,
+        DateTime.now()
+      )
+      manager ! JobManagerActor.StartJob(
+        classPrefix + "jobJarDependenciesJob", List(testJar, binURI), emptyConfig, syncEvents ++ errorEvents)
+
+      expectMsgClass(startJobWait, classOf[JobResult])
+    }
+
+    it("should run a job that requires job jar dependencies if dependencies " +
+      "are provided as uploaded binaries names"){
+      manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+
+      val testJar = uploadTestJar()
+      val depJar = uploadBinary(dao, emptyJar.getAbsolutePath, "emptyjar", BinaryType.Jar)
+
+      manager ! JobManagerActor.StartJob(
+        classPrefix + "jobJarDependenciesJob", List(testJar, depJar), emptyConfig, syncEvents ++ errorEvents)
+
+      expectMsgClass(startJobWait, classOf[JobResult])
+    }
+
+
+    it("should create context that has jar dependencies and they are given as plain binary names"){
+      uploadBinary(dao, emptyJar.getAbsolutePath, "emptyjar", BinaryType.Jar)
+      val contextConfigWithDependentJar = contextConfig.withFallback(ConfigFactory.parseString(
+        s"""
+           |cp = ["emptyjar"]
+        """.stripMargin))
+      manager ! JobManagerActor.Initialize(contextConfigWithDependentJar, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+    }
+
+    it("should create context that has jar dependencies and they are given as URIs"){
+      val contextConfigWithDependentJar = contextConfig.withFallback(ConfigFactory.parseString(
+        s"""
+           |cp = ["file://${emptyJar.getAbsolutePath}"]
+        """.stripMargin))
+      manager ! JobManagerActor.Initialize(contextConfigWithDependentJar, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+    }
+
+    it("should create context that has dependencies given as mix of URIs and jar names"){
+      uploadBinary(dao, emptyJar.getAbsolutePath, "emptyjar", BinaryType.Jar)
+      val contextConfigWithDependentJar = contextConfig.withFallback(ConfigFactory.parseString(
+        s"""
+           |cp = ["emptyjar", "file://${emptyJar.getAbsolutePath}"]
+        """.stripMargin))
+      manager ! JobManagerActor.Initialize(contextConfigWithDependentJar, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
     }
 
     it("jobs should be able to cache RDDs and retrieve them through getPersistentRDDs") {
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(classOf[JobManagerActor.Initialized])
 
-      uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", classPrefix + "CacheSomethingJob", emptyConfig,
+      val testJar = uploadTestJar()
+      manager ! JobManagerActor.StartJob(classPrefix + "CacheSomethingJob", List(testJar), baseJobConfig,
         errorEvents ++ syncEvents)
       val JobResult(_, sum: Int) = expectMsgClass(classOf[JobResult])
 
-      manager ! JobManagerActor.StartJob("demo", classPrefix + "AccessCacheJob", emptyConfig,
+      manager ! JobManagerActor.StartJob(classPrefix + "AccessCacheJob", List(testJar), baseJobConfig,
         errorEvents ++ syncEvents)
       val JobResult(_, sum2: Int) = expectMsgClass(classOf[JobResult])
 
@@ -599,8 +671,8 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(classOf[JobManagerActor.Initialized])
 
-      uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", classPrefix + "CacheRddByNameJob", emptyConfig,
+      val testJar = uploadTestJar()
+      manager ! JobManagerActor.StartJob(classPrefix + "CacheRddByNameJob", List(testJar), baseJobConfig,
         errorEvents ++ syncEvents)
       expectMsgPF(2 seconds, "Expected a JobResult or JobErroredOut message!") {
         case JobResult(_, sum: Int) => sum should equal (1 + 4 + 9 + 16 + 25)
@@ -611,25 +683,27 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
   describe("error conditions") {
     it("should return errors if appName does not match") {
-      uploadTestJar()
+      val testJar = uploadTestJar()
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
-      manager ! JobManagerActor.StartJob("demo2", wordCountClass, emptyConfig, Set.empty[Class[_]])
-      expectMsg(startJobWait, CommonMessages.NoSuchApplication)
+      val wrongBinInfo = testJar.copy(appName = "SomeFakeName")
+      manager ! JobManagerActor.StartJob(
+        wordCountClass, List(testJar, wrongBinInfo), emptyConfig, Set.empty[Class[_]])
+      expectMsg(startJobWait, CommonMessages.NoSuchFile("SomeFakeName"))
     }
 
     it("should return error message if classPath does not match") {
-      uploadTestJar()
+      val testJar = uploadTestJar()
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
-      manager ! JobManagerActor.StartJob("demo", "no.such.class", emptyConfig, Set.empty[Class[_]])
+      manager ! JobManagerActor.StartJob("no.such.class", List(testJar), baseJobConfig, Set.empty[Class[_]])
       expectMsg(startJobWait, CommonMessages.NoSuchClass)
     }
 
     it("should return error message if classPath does not match (adhoc)") {
       val adhocContextConfig = JobManagerActorSpec.getContextConfig(adhoc = true)
       val deathWatcher = TestProbe()
-      uploadTestJar()
+      val testJar = uploadTestJar()
 
       daoActor ! JobDAOActor.SaveContextInfo(ContextInfo(contextId, "ctx", "",
         None, DateTime.now(), None, ContextStatus.Running, None))
@@ -638,7 +712,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
       deathWatcher.watch(manager)
 
-      manager ! JobManagerActor.StartJob("demo", "no.such.class", emptyConfig, Set.empty[Class[_]])
+      manager ! JobManagerActor.StartJob("no.such.class", List(testJar), baseJobConfig, Set.empty[Class[_]])
 
       expectMsg(startJobWait, CommonMessages.NoSuchClass)
       deathWatcher.expectTerminated(manager)
@@ -651,10 +725,11 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
     }
 
     it("should error out if loading garbage jar") {
-      uploadBinary(dao, "../README.md", "notajar", BinaryType.Jar)
+      val testJar = uploadBinary(dao, "../README.md", "notajar", BinaryType.Jar)
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
-      manager ! JobManagerActor.StartJob("notajar", "no.such.class", emptyConfig, Set.empty[Class[_]])
+      val notAJarConfig = ConfigFactory.parseString("cp = [\"notajar\"]")
+      manager ! JobManagerActor.StartJob("no.such.class", List(testJar), notAJarConfig, Set.empty[Class[_]])
       expectMsg(startJobWait, CommonMessages.NoSuchClass)
     }
 
@@ -662,8 +737,8 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
-      uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", wordCountClass, emptyConfig, allEvents)
+      val testJar = uploadTestJar()
+      manager ! JobManagerActor.StartJob(wordCountClass, List(testJar), baseJobConfig, allEvents)
       expectMsgClass(startJobWait, classOf[CommonMessages.JobValidationFailed])
       expectNoMsg()
     }
@@ -672,8 +747,8 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
-      uploadTestJar()
-      manager ! JobManagerActor.StartJob("demo", newWordCountClass, emptyConfig, allEvents)
+      val testJar = uploadTestJar()
+      manager ! JobManagerActor.StartJob(newWordCountClass, List(testJar), baseJobConfig, allEvents)
       expectMsgClass(startJobWait, classOf[CommonMessages.JobValidationFailed])
       expectNoMsg()
     }
@@ -688,7 +763,8 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       managerProbe.expectNoMsg(2.seconds.dilated)
     }
 
-    it("should kill itself if response to Identify message is not received when kill-context-on-supervisor-down is enabled") {
+    it("should kill itself if response to Identify message is not" +
+      " received when kill-context-on-supervisor-down is enabled") {
       manager = system.actorOf(JobManagerTestActor.props(daoActor, "fake-path", contextId, 1.seconds.dilated))
       val managerProbe = TestProbe()
       managerProbe.watch(manager)
@@ -701,9 +777,13 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
       // A valid actor which responds to Identify message sent by JobManagerActor
       supervisor = system.actorOf(
-          Props(classOf[LocalContextSupervisorActor], TestProbe().ref, dataManagerActor), "context-supervisor")
-      manager = system.actorOf(JobManagerTestActor.props(daoActor,
-          s"${supervisor.path.address.toString}${supervisor.path.toStringWithoutAddress}", contextId, 3.seconds.dilated))
+          Props(classOf[LocalContextSupervisorActor], TestProbe().ref, dataManagerActor),
+        "context-supervisor")
+      manager = system.actorOf(
+        JobManagerTestActor.props(daoActor,
+          s"${supervisor.path.address.toString}${supervisor.path.toStringWithoutAddress}",
+          contextId, 3.seconds.dilated)
+      )
 
       val supervisorProbe = TestProbe()
       supervisorProbe.watch(supervisor)
@@ -722,9 +802,11 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val dataManagerActor = system.actorOf(Props.empty)
 
       supervisor = system.actorOf(
-          Props(classOf[LocalContextSupervisorActor], TestProbe().ref, dataManagerActor), "context-supervisor")
+          Props(classOf[LocalContextSupervisorActor], TestProbe().ref, dataManagerActor),
+        "context-supervisor")
       manager = system.actorOf(JobManagerTestActor.props(daoActor,
-          s"${supervisor.path.address.toString}${supervisor.path.toStringWithoutAddress}", contextId, 2.seconds.dilated))
+          s"${supervisor.path.address.toString}${supervisor.path.toStringWithoutAddress}",
+        contextId, 2.seconds.dilated))
 
       val managerProbe = TestProbe()
       managerProbe.watch(manager)
@@ -762,13 +844,13 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
       manager ! JobManagerActor.Initialize(contextConfig, None, dataFileActor.ref)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
-      uploadTestJar()
+      val testJar = uploadTestJar()
 
       // use already existing file
       val existingFile = File.createTempFile("test-existing-file-", ".dat")
       Files.write(existingFile.toPath, testData, StandardOpenOption.SYNC)
-      manager ! JobManagerActor.StartJob("demo", classPrefix + "RemoteDataFileJob",
-        ConfigFactory.parseString(s"testFile = ${existingFile.getAbsolutePath}"),
+      manager ! JobManagerActor.StartJob(classPrefix + "RemoteDataFileJob", List(testJar),
+        ConfigFactory.parseString(s"testFile = ${existingFile.getAbsolutePath}").withFallback(baseJobConfig),
         errorEvents ++ syncEvents)
       dataFileActor.expectNoMsg()
       val existingFileResult = expectMsgPF() {
@@ -778,8 +860,8 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       existingFileResult should equal (existingFile.getAbsolutePath)
 
       // downloads new file from data file manager
-      val jobConfig = ConfigFactory.parseString("testFile = test-file")
-      manager ! JobManagerActor.StartJob("demo", classPrefix + "RemoteDataFileJob", jobConfig,
+      val jobConfig = ConfigFactory.parseString("testFile = test-file").withFallback(baseJobConfig)
+      manager ! JobManagerActor.StartJob(classPrefix + "RemoteDataFileJob", List(testJar), jobConfig,
         errorEvents ++ syncEvents)
       dataFileActor.expectMsgPF() {
         case RetrieveData(fileName, jobManager) => {
@@ -797,7 +879,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       Files.readAllBytes(cachedFilePath) should equal ("test-data".getBytes)
 
       // uses cached version in second run
-      manager ! JobManagerActor.StartJob("demo", classPrefix + "RemoteDataFileJob", jobConfig,
+      manager ! JobManagerActor.StartJob(classPrefix + "RemoteDataFileJob", List(testJar), jobConfig,
         errorEvents ++ syncEvents)
       dataFileActor.expectNoMsg() // already cached
       val secondResult = expectMsgPF() {
@@ -815,10 +897,10 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
       manager ! JobManagerActor.Initialize(contextConfig, None, dataFileActor.ref)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
-      uploadTestJar()
+      val testJar = uploadTestJar()
 
-      val jobConfig = ConfigFactory.parseString("testFile = test-file")
-      manager ! JobManagerActor.StartJob("demo", classPrefix + "RemoteDataFileJob", jobConfig,
+      val jobConfig = ConfigFactory.parseString("testFile = test-file").withFallback(baseJobConfig)
+      manager ! JobManagerActor.StartJob(classPrefix + "RemoteDataFileJob", List(testJar), jobConfig,
         errorEvents ++ syncEvents)
 
       // return error from file manager
@@ -859,8 +941,8 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, "", TestProbe(), 3))
       deathWatcher.watch(manager)
 
-      val dummyJob = JobInfo("dummy-id2", "", "", BinaryInfo("dummy", BinaryType.Jar, DateTime.now()), "",
-          JobStatus.Running, DateTime.now(), None, None)
+      val dummyJob = JobInfo("dummy-id2", "", "", "", JobStatus.Running,
+        DateTime.now(), None, None, Seq(BinaryInfo("dummy", BinaryType.Jar, DateTime.now())))
 
       manager ! JobRestartFailed("dummy-id", new Exception(""))
       deathWatcher.expectNoMsg(2.seconds)
@@ -935,7 +1017,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val managerWatcher = TestProbe()
       val binaryInfo = BinaryInfo("dummy", BinaryType.Jar, DateTime.now())
       val jobInfo = JobInfo("jobId", contextId, "context-name",
-          binaryInfo, "test-class", JobStatus.Running, DateTime.now(), None, None)
+        "test-class", JobStatus.Running, DateTime.now(), None, None, Seq(binaryInfo))
       manager = system.actorOf(JobManagerActorSpy.props(daoProbe.ref, "", 5.seconds, contextId, TestProbe()))
       managerWatcher.watch(manager)
       manager ! JobManagerActor.RestartExistingJobs
@@ -965,7 +1047,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val managerWatcher = TestProbe()
       val binaryInfo = BinaryInfo("dummy", BinaryType.Jar, DateTime.now())
       val jobInfo = JobInfo("jobId", contextId, "context-name",
-          binaryInfo, "test-class", JobStatus.Running, DateTime.now(), None, None)
+        "test-class", JobStatus.Running, DateTime.now(), None, None, Seq(binaryInfo))
       manager = system.actorOf(JobManagerActorSpy.props(daoProbe.ref, "", 5.seconds, contextId, TestProbe()))
       managerWatcher.watch(manager)
       manager ! JobManagerActor.RestartExistingJobs
@@ -993,17 +1075,39 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val spyProbe = TestProbe()
       val contextId = "dummy-context"
       val daoProbe = TestProbe()
-      val binaryInfo = BinaryInfo("demo", BinaryType.Jar, DateTime.now())
+      val binaryInfo = uploadTestJar()
       val jobInfo = JobInfo("jobId", contextId, "context-name",
-          binaryInfo, wordCountClass, JobStatus.Running, DateTime.now(), None, None)
+        wordCountClass, JobStatus.Running, DateTime.now(), None, None, Seq(binaryInfo))
       manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, spyProbe))
 
       contextConfig = ConfigFactory.parseString(s"context.id=$contextId").withFallback(contextConfig)
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
-      uploadTestJar()
       dao.saveJobInfo(jobInfo)
       dao.saveJobConfig(jobInfo.jobId, stringConfig)
+
+      manager ! JobManagerActor.RestartExistingJobs
+
+      spyProbe.expectMsg("StartJob Received")
+      spyProbe.expectMsgClass(classOf[JobStarted])
+      spyProbe.expectNoMsg()
+    }
+
+
+    it("should restart if running job was found with valid config, but no cp set (based on binaryInfo)") {
+      val spyProbe = TestProbe()
+      val contextId = "dummy-context"
+      val daoProbe = TestProbe()
+      val binaryInfo = uploadTestJar()
+      val jobInfo = JobInfo("jobId", contextId, "context-name",
+        wordCountClass, JobStatus.Running, DateTime.now(), None, None, Seq(binaryInfo))
+      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, spyProbe))
+
+      contextConfig = ConfigFactory.parseString(s"context.id=$contextId").withFallback(contextConfig)
+      manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+      dao.saveJobInfo(jobInfo)
+      dao.saveJobConfig(jobInfo.jobId, ConfigFactory.parseString("input.string = a b c d"))
 
       manager ! JobManagerActor.RestartExistingJobs
 
@@ -1016,15 +1120,14 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val spyProbe = TestProbe()
       val contextId = "dummy-context"
       val daoProbe = TestProbe()
-      val binaryInfo = BinaryInfo("demo", BinaryType.Jar, DateTime.now())
+      val binaryInfo = uploadTestJar()
       val jobInfo = JobInfo("jobId", contextId, "context-name",
-          binaryInfo, wordCountClass, JobStatus.Restarting, DateTime.now(), None, None)
+        wordCountClass, JobStatus.Restarting, DateTime.now(), None, None, Seq(binaryInfo))
       manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, spyProbe))
 
       contextConfig = ConfigFactory.parseString(s"context.id=$contextId").withFallback(contextConfig)
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
-      uploadTestJar()
       dao.saveJobInfo(jobInfo)
       dao.saveJobConfig(jobInfo.jobId, stringConfig)
 
@@ -1039,15 +1142,14 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val spyProbe = TestProbe()
       val contextId = "dummy-context"
       val daoProbe = TestProbe()
-      val binaryInfo = BinaryInfo("demo", BinaryType.Jar, DateTime.now())
+      val binaryInfo = uploadTestJar()
       val jobInfo = JobInfo("jobId", contextId, "context-name",
-          binaryInfo, wordCountClass, JobStatus.Running, DateTime.now(), None, None)
+        wordCountClass, JobStatus.Running, DateTime.now(), None, None, Seq(binaryInfo))
       manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, spyProbe))
 
       contextConfig = ConfigFactory.parseString(s"context.id=$contextId").withFallback(contextConfig)
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
-      uploadTestJar()
       dao.saveJobInfo(jobInfo)
       dao.saveJobConfig(jobInfo.jobId, stringConfig)
       dao.saveJobInfo(jobInfo.copy(jobId = "jobId1", state = JobStatus.Restarting))
@@ -1068,10 +1170,11 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val contextId = "dummy-context"
       val contextName = "context-name"
       val daoProbe = TestProbe()
-      uploadTestJar("test-jar")
+      val testJar = uploadTestJar("test-jar")
       val binaryInfo = dao.getBinaryInfo("test-jar").get
       val jobInfo = JobInfo("jobId", contextId, contextName,
-          binaryInfo, wordCountClass, JobStatus.Running, DateTime.now(), None, None)
+        wordCountClass, JobStatus.Running, DateTime.now(), None, None, Seq(binaryInfo))
+      val testJarJobConfig = ConfigFactory.parseString("cp = [\"test-jar\"]").withFallback(stringConfig)
       manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, spyProbe))
 
       contextConfig = ConfigFactory.parseString(s"context.id=$contextId,context.name=$contextName").withFallback(contextConfig)
@@ -1079,22 +1182,27 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
       dao.saveJobInfo(jobInfo)
-      dao.saveJobConfig(jobInfo.jobId, stringConfig)
+      dao.saveJobConfig(jobInfo.jobId, testJarJobConfig)
       dao.saveJobInfo(jobInfo.copy(jobId = "jobId1", state = JobStatus.Error))
-      dao.saveJobConfig("jobId1", stringConfig)
+      dao.saveJobConfig("jobId1", testJarJobConfig)
       dao.saveJobInfo(jobInfo.copy(jobId = "jobId2", state = JobStatus.Finished))
-      dao.saveJobConfig("jobId2", stringConfig)
+      dao.saveJobConfig("jobId2", testJarJobConfig)
       val jobInfo3 = jobInfo.copy(jobId = "jobId3", state = JobStatus.Restarting)
       dao.saveJobInfo(jobInfo3)
-      dao.saveJobConfig("jobId3", stringConfig)
+      dao.saveJobConfig("jobId3", testJarJobConfig)
 
       manager ! JobManagerActor.RestartExistingJobs
 
       spyProbe.expectMsg("StartJob Received")
       spyProbe.expectMsg("StartJob Received")
 
-      spyProbe.expectMsgAllOf(JobStarted(jobInfo.jobId, jobInfo),
-          JobStarted(jobInfo3.jobId, jobInfo3.copy(state = JobStatus.Running)))
+      spyProbe.expectMsgPF(initMsgWait, "") {
+        case JobStarted(jobId, _) => Seq(jobInfo.jobId, jobInfo3.jobId) should contain (jobId)
+      }
+      spyProbe.expectMsgPF(initMsgWait, "") {
+        case JobStarted(jobId, _) => Seq(jobInfo.jobId, jobInfo3.jobId) should contain (jobId)
+      }
+
       spyProbe.expectNoMsg()
     }
 
@@ -1102,16 +1210,15 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val spyProbe = TestProbe()
       val contextId = "dummy-context"
       val deathWatcher = TestProbe()
-      val binaryInfo = BinaryInfo("demo", BinaryType.Jar, DateTime.now())
+      val binaryInfo = uploadTestJar()
       val jobInfo = JobInfo("jobId", contextId, "context-name",
-          binaryInfo, wordCountClass, JobStatus.Running, DateTime.now(), None, None)
+        wordCountClass, JobStatus.Running, DateTime.now(), None, None, Seq(binaryInfo))
       manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, spyProbe))
       deathWatcher.watch(manager)
 
       contextConfig = ConfigFactory.parseString(s"context.id=$contextId").withFallback(contextConfig)
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
-      uploadTestJar()
       dao.saveJobInfo(jobInfo)
       dao.saveJobConfig(jobInfo.jobId, stringConfig)
       dao.saveJobInfo(jobInfo.copy(jobId = "jobId1")) // Not saving config for jobId1 causes restart failure
@@ -1124,6 +1231,28 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
       spyProbe.expectNoMsg()
       deathWatcher.expectNoMsg()
+    }
+
+    it("should send JobRestartFailed message if failed to find any binary info for restart of the job") {
+      val spyProbe = TestProbe()
+      val contextId = "dummy-context"
+      val contextName = "context-name"
+      val jobInfo = JobInfo("jobId", contextId, contextName,
+        wordCountClass, JobStatus.Running, DateTime.now(), None, None, Seq.empty)
+      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, spyProbe))
+
+      contextConfig = ConfigFactory.parseString(s"context.id=$contextId,context.name=$contextName").withFallback(contextConfig)
+      manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+
+      dao.saveJobInfo(jobInfo)
+      dao.saveJobConfig(jobInfo.jobId, stringConfig)
+
+      manager ! JobManagerActor.RestartExistingJobs
+
+      val msg = spyProbe.expectMsgType[JobRestartFailed]
+      msg.jobId should equal(jobInfo.jobId)
+      msg.err.getMessage should startWith("No binary of cp info in JobInfo for the job")
     }
   }
 
@@ -1215,10 +1344,10 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
       watch(manager)
 
-      uploadTestJar()
+      val testJar = uploadTestJar()
 
       // action
-      manager ! JobManagerActor.StartJob("demo", wordCountClass, stringConfig, allEvents)
+      manager ! JobManagerActor.StartJob(wordCountClass, List(testJar), stringConfig, allEvents)
 
       expectMsgClass(startJobWait, classOf[JobStarted])
       expectMsgAllClassOf(classOf[JobFinished], classOf[JobResult])

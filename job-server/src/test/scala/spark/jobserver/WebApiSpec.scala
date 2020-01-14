@@ -1,5 +1,7 @@
 package spark.jobserver
 
+import java.net.MalformedURLException
+
 import akka.actor.{Actor, ActorSystem, Props}
 import akka.testkit.TestKit
 import com.typesafe.config.ConfigFactory
@@ -11,7 +13,7 @@ import spark.jobserver.io._
 import spray.client.pipelining._
 import JobServerSprayProtocol._
 import org.scalatest.time.{Seconds, Span}
-import spray.http.{ContentType, HttpHeader, HttpHeaders, MediaTypes, HttpRequest}
+import spray.http.{ContentType, HttpHeader, HttpHeaders, HttpRequest, MediaTypes}
 import spray.httpx.{SprayJsonSupport, UnsuccessfulResponseException}
 import spray.routing.HttpService
 import spray.testkit.ScalatestRouteTest
@@ -19,8 +21,11 @@ import spray.testkit.ScalatestRouteTest
 import scala.concurrent.{Await, Future}
 import scala.util.{Failure, Success}
 import java.util.concurrent.TimeUnit
+
+import org.apache.xerces.util.URI.MalformedURIException
+
 import scala.concurrent.duration.Duration
-import spark.jobserver.util.NoSuchBinaryException
+import spark.jobserver.util.{NoSuchBinaryException, Utils}
 
 // Tests web response codes and formatting
 // Does NOT test underlying Supervisor / JarManager functionality
@@ -59,14 +64,14 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
   val routes = api.myRoutes
 
   val dt = DateTime.parse("2013-05-29T00Z")
-  val baseJobInfo =
-    JobInfo("foo-1", "cid", "context", BinaryInfo("demo", BinaryType.Jar, dt), "com.abc.meme",
-        JobStatus.Running, dt, None, None)
-  val finishedJobInfo = baseJobInfo.copy(endTime = Some(dt.plusMinutes(5)),state = JobStatus.Finished)
+  val binaryInfo = BinaryInfo("demo", BinaryType.Jar, dt)
+  val baseJobInfo = JobInfo("foo-1", "cid", "context", "com.abc.meme", JobStatus.Running, dt,
+      None, None, Seq(binaryInfo))
+  val finishedJobInfo = baseJobInfo.copy(endTime = Some(dt.plusMinutes(5)), state = JobStatus.Finished)
   val errorJobInfo = finishedJobInfo.copy(
-      error =  Some(ErrorData(new Throwable("test-error"))), state = JobStatus.Error)
+      error = Some(ErrorData(new Throwable("test-error"))), state = JobStatus.Error)
   val killedJobInfo = finishedJobInfo.copy(
-      error =  Some(ErrorData(JobKilledException(finishedJobInfo.jobId))), state = JobStatus.Killed)
+      error = Some(ErrorData(JobKilledException(finishedJobInfo.jobId))), state = JobStatus.Killed)
   val JobId = "jobId"
   val StatusKey = "status"
   val ResultKey = "result"
@@ -151,7 +156,7 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
       case StoreBinary("daofail", _, _) => sender ! BinaryStorageFailure(new Exception("DAO failed to store"))
       case StoreBinary(_, _, _)         => sender ! BinaryStored
 
-      case DeleteBinary("badbinary") => sender ! NoSuchBinary
+      case DeleteBinary("badbinary") => sender ! NoSuchBinary("badbinary")
       case DeleteBinary("active") => sender ! BinaryInUse(Seq("job-active"))
       case DeleteBinary("failure") => sender ! BinaryDeletionFailure(new Exception("deliberate"))
       case DeleteBinary(_) => sender ! BinaryDeleted
@@ -163,6 +168,12 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
       case DataManagerActor.ListData => sender ! Set("demo1", "demo2")
       case DataManagerActor.DeleteData("/tmp/fileToRemove") => sender ! DataManagerActor.Deleted
       case DataManagerActor.DeleteData("errorfileToRemove") => sender ! DataManagerActor.Error
+      case GetBinaryInfoListForCp(cp) if cp.contains("BinaryNotFound") =>
+        sender ! NoSuchBinary("BinaryNotFound")
+      case GetBinaryInfoListForCp(Seq("Failure")) =>
+        sender ! GetBinaryInfoListForCpFailure(new Exception("failed"))
+      case GetBinaryInfoListForCp(cp) =>
+        sender ! BinaryInfoListForCp(cp.map(name => binaryInfo.copy(appName = name)))
 
       case ListContexts =>  sender ! Seq("context1", "context2")
       case StopContext("none", _) => sender ! NoSuchContext
@@ -179,6 +190,8 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
         c.getInt("override_me") should be(3)
         sender ! ContextInitialized
       case AddContext("initError-ctx", _) => sender ! ContextInitError(new Throwable("Some Throwable"))
+      case AddContext("initError-URI-ctx", _) =>
+        sender ! ContextInitError(new MalformedURLException("Some Throwable"))
       case AddContext("unexp-err", _) => sender ! UnexpectedError
       case AddContext(_, _)     => sender ! ContextInitialized
 
@@ -188,32 +201,50 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
       case StartAdHocContext(_, _) => sender ! (self)
 
       // These routes are part of JobManagerActor
-      case StartJob("no-app", _, _, _, _)   =>  sender ! NoSuchApplication
-      case StartJob(_, "no-class", _, _, _) =>  sender ! NoSuchClass
-      case StartJob("wrong-type", _, _, _, _) => sender ! WrongJobType
-      case StartJob("err", _, config, _, _) =>  sender ! JobErroredOut("foo", dt,
-                                                        new RuntimeException("oops",
-                                                          new IllegalArgumentException("foo")))
-      case StartJob("foo", _, config, events, _)     =>
-        statusActor ! Subscribe("foo", sender, events)
-
-        val jobInfo = JobInfo("foo", "cid", "context", null, "com.abc.meme", getStateBasedOnEvents(events), dt, None, None)
-        statusActor ! JobStatusActor.JobInit(jobInfo)
-        statusActor ! JobStarted(jobInfo.jobId, jobInfo)
-        val map = config.entrySet().asScala.map { entry => entry.getKey -> entry.getValue.unwrapped }.toMap
-        if (events.contains(classOf[JobResult])) sender ! JobResult("foo", map)
-        statusActor ! Unsubscribe("foo", sender)
-
-      case StartJob("foo.stream", _, config, events, _)     =>
-        statusActor ! Subscribe("foo.stream", sender, events)
-        val jobInfo = JobInfo("foo.stream", "cid", "context", null, "", getStateBasedOnEvents(events), dt, None, None)
-        statusActor ! JobStatusActor.JobInit(jobInfo)
-        statusActor ! JobStarted(jobInfo.jobId, jobInfo)
-        val result = "\"1, 2, 3, 4, 5, 6\"".getBytes().toStream
-        if (events.contains(classOf[JobResult])) sender ! JobResult("foo.stream", result)
-        statusActor ! Unsubscribe("foo.stream", sender)
-      case StartJob("context-already-stopped", _, _, _, _) =>  sender ! ContextStopInProgress
-
+      case StartJob("no-class", _, _, _, _) => sender ! NoSuchClass
+      case StartJob(_, cp, config, events, _) =>
+        cp.map(_.appName).head match {
+          case "no-app" => sender ! NoSuchFile ("no-app")
+          case "wrong-type" => sender ! WrongJobType
+          case "err" => sender ! JobErroredOut (
+            "foo", dt, new RuntimeException ("oops", new IllegalArgumentException ("foo") ) )
+          case "loadErr" => sender ! JobLoadingError(new MalformedURLException("foo"))
+          case "multi" =>
+            assert(Seq("multi", "some", "bin") == cp.map(_.appName), "cp path should include all binaries")
+            statusActor ! Subscribe("multi", sender, events)
+            val jobInfo = JobInfo(
+              "multi", "cid", "context", "com.abc.meme",
+              getStateBasedOnEvents(events), dt, None, None, Seq.empty)
+            statusActor ! JobStatusActor.JobInit(jobInfo)
+            statusActor ! JobStarted(jobInfo.jobId, jobInfo)
+            val map = config.entrySet().asScala.map {
+              entry => entry.getKey -> entry.getValue.unwrapped
+            }.toMap
+            if (events.contains(classOf[JobResult])) sender ! JobResult("multi", map)
+            statusActor ! Unsubscribe("multi", sender)
+          case "foo" | "demo" =>
+            statusActor ! Subscribe("foo", sender, events)
+            val jobInfo = JobInfo(
+              "foo", "cid", "context", "com.abc.meme",
+              getStateBasedOnEvents(events), dt, None, None, Seq.empty)
+            statusActor ! JobStatusActor.JobInit(jobInfo)
+            statusActor ! JobStarted(jobInfo.jobId, jobInfo)
+            val map = config.entrySet().asScala.map {
+              entry => entry.getKey -> entry.getValue.unwrapped
+            }.toMap
+            if (events.contains(classOf[JobResult])) sender ! JobResult("foo", map)
+            statusActor ! Unsubscribe("foo", sender)
+          case "foo.stream" =>
+            statusActor ! Subscribe ("foo.stream", sender, events)
+            val jobInfo = JobInfo (
+            "foo.stream", "cid", "context", "", getStateBasedOnEvents (events), dt, None, None, Seq.empty)
+            statusActor ! JobStatusActor.JobInit (jobInfo)
+            statusActor ! JobStarted (jobInfo.jobId, jobInfo)
+            val result = "\"1, 2, 3, 4, 5, 6\"".getBytes ().toStream
+            if (events.contains (classOf[JobResult] ) ) sender ! JobResult ("foo.stream", result)
+            statusActor ! Unsubscribe ("foo.stream", sender)
+          case "context-already-stopped" => sender ! ContextStopInProgress
+        }
       case GetJobConfig("badjobid") => sender ! NoSuchJobId
       case GetJobConfig(_)          => sender ! config
 

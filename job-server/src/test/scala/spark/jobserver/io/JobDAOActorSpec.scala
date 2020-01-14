@@ -90,7 +90,10 @@ object JobDAOActorSpec {
 
     override def getJobConfig(jobId: String): Future[Option[Config]] = ???
 
-    override def getBinaryInfo(appName: String): Option[BinaryInfo] = ???
+    override def getBinaryInfo(appName: String): Option[BinaryInfo] = appName match {
+      case "foo" => Some(BinaryInfo("foo", BinaryType.Jar, DateTime.now()))
+      case _ => None
+    }
 
     override def deleteBinary(appName: String): Unit = {
       appName match {
@@ -106,8 +109,8 @@ object JobDAOActorSpec {
         case "multiple" =>
           val dt = DateTime.parse("2013-05-29T00Z")
           val jobInfo =
-            JobInfo("bar", "cid", "context", BinaryInfo("demo", BinaryType.Egg, dt),
-              "com.abc.meme", JobStatus.Running, dt, None, None)
+            JobInfo("bar", "cid", "context",
+              "com.abc.meme", JobStatus.Running, dt, None, None, Seq(BinaryInfo("demo", BinaryType.Egg, dt)))
 
           Future.successful(Seq(jobInfo, jobInfo.copy(jobId = "kaboom")))
         case _ => Future.failed(new Exception("Unknown message"))
@@ -281,6 +284,38 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       expectMsgPF(5.seconds, "Get the jobs") {
         case JobInfos(jobs) => jobs.map(_.jobId) should contain allOf("bar", "kaboom")
       }
+    }
+
+    it("should return list of URI BinaryInfo objects for cp") {
+      val cp = Seq("hdfs://uri2/uri", "http://uri.com")
+      daoActor ! GetBinaryInfosForCp(cp)
+
+      val response = expectMsgType[BinaryInfosForCp].binInfos
+      response.map(_.appName) should be (cp)
+      response.map(_.binaryType) should be (Seq(BinaryType.URI, BinaryType.URI))
+    }
+
+    it("should return BinaryNotFound if one of the binary is not found") {
+      val cp = Seq("hdfs://uri2/uri", "noBinary", "foo")
+      daoActor ! GetBinaryInfosForCp(cp)
+      expectMsg(BinaryNotFound("noBinary"))
+    }
+
+    it("should return list of BinaryInfo objects from DB and for URIs") {
+      val cp = Seq("foo", "hdfs://uri2/uri")
+      daoActor ! GetBinaryInfosForCp(cp)
+
+      val response = expectMsgType[BinaryInfosForCp].binInfos
+      response.map(_.appName) should be (cp)
+      response.map(_.binaryType) should be (Seq(BinaryType.Jar, BinaryType.URI))
+    }
+
+    it("should return GetBinaryInfosForCpFailed if during URI parsing some exception occurs") {
+      val cp = Seq("foo", "://uri2:/uri")
+      daoActor ! GetBinaryInfosForCp(cp)
+
+      val response = expectMsgType[GetBinaryInfosForCpFailed]
+      response.error.getMessage.startsWith("java.net.URISyntaxException: Expected scheme name at index")
     }
   }
 }

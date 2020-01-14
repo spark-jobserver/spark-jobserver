@@ -34,10 +34,10 @@ class JobSqlDAO(config: Config, sqlCommon: SqlCommon) extends JobDAO with FileCa
 
   import profile.api._
 
-  // NOTE: below is only needed for H2 drivers
   override val rootDir = config.getString("spark.jobserver.sqldao.rootdir")
   override val rootDirFile = new File(rootDir)
-  logger.info("rootDir is " + rootDirFile.getAbsolutePath)
+  logger.info("File caching rootDir is " + rootDirFile.getAbsolutePath)
+  initFileDirectory()
 
   // Definition of the tables
   //scalastyle:off
@@ -50,7 +50,6 @@ class JobSqlDAO(config: Config, sqlCommon: SqlCommon) extends JobDAO with FileCa
   val binariesContents = TableQuery[BinariesContents]
   //scalastyle:on
 
-  initFileDirectory()
   sqlCommon.initFlyway()
 
   override def saveBinary(appName: String,
@@ -224,19 +223,21 @@ class JobSqlDAO(config: Config, sqlCommon: SqlCommon) extends JobDAO with FileCa
   }
 
   override def saveJobInfo(jobInfo: JobInfo): Unit = {
-    val jarId =
+    val jarIds = jobInfo.cp.filter(_.binaryType != BinaryType.URI).map(b => {
       Await.result(
         sqlCommon.queryBinaryId(
-          jobInfo.binaryInfo.appName,
-          jobInfo.binaryInfo.binaryType,
-          jobInfo.binaryInfo.uploadTime),
+          b.appName,
+          b.binaryType,
+          b.uploadTime),
         futureTimeout)
+    }).mkString(",")
+    val uris = jobInfo.cp.filter(_.binaryType == BinaryType.URI).map(_.appName).mkString(",")
     val startTime = sqlCommon.convertDateJodaToSql(jobInfo.startTime)
     val endTime = jobInfo.endTime.map(t => sqlCommon.convertDateJodaToSql(t))
     val error = jobInfo.error.map(e => e.message)
     val errorClass = jobInfo.error.map(e => e.errorClass)
     val errorStackTrace = jobInfo.error.map(e => e.stackTrace)
-    val row = (jobInfo.jobId, jobInfo.contextId, jobInfo.contextName, jarId, jobInfo.classPath,
+    val row = (jobInfo.jobId, jobInfo.contextId, jobInfo.contextName, jarIds, uris, jobInfo.mainClass,
       jobInfo.state, startTime, endTime, error, errorClass, errorStackTrace)
     if (Await.result(sqlCommon.db.run(sqlCommon.jobs.insertOrUpdate(row)), futureTimeout) == 0) {
       throw new SlickException(s"Could not update ${jobInfo.jobId} in the database")

@@ -15,12 +15,14 @@ object BinaryManagerSpec {
 
   val dt = DateTime.now
 
+  val binInfo = BinaryInfo("demo", BinaryType.Egg, DateTime.now)
+
   class DummyDAOActor extends InstrumentedActor {
 
     import spark.jobserver.io.JobDAOActor._
 
-    val jobInfo = JobInfo("bar", "cid", "context", BinaryInfo("demo", BinaryType.Egg, DateTime.now),
-        "com.abc.meme", JobStatus.Running, DateTime.now, None, None)
+    val jobInfo = JobInfo("bar", "cid", "context",
+        "com.abc.meme", JobStatus.Running, DateTime.now, None, None, Seq(binInfo))
 
     override def wrappedReceive: Receive = {
       case GetApps(_) =>
@@ -36,6 +38,12 @@ object BinaryManagerSpec {
           case "empty" => sender ! JobInfos(Seq())
           case "running" => sender ! JobInfos(Seq(jobInfo))
           case "fail" =>
+        }
+      case GetBinaryInfosForCp(classPath) =>
+        classPath match {
+          case Seq("success") => sender ! BinaryInfosForCp(Seq(binInfo))
+          case Seq("notfound") => sender ! BinaryNotFound("notfound")
+          case Seq("failure") => sender ! GetBinaryInfosForCpFailed(new Exception("failure"))
         }
     }
   }
@@ -88,6 +96,21 @@ class BinaryManagerSpec extends TestKit(BinaryManagerSpec.system) with ImplicitS
     it("should handle failures during deletion of binary and within timeout") {
       binaryManager ! DeleteBinary("fail")
       expectMsgType[BinaryDeletionFailure](BinaryManager.DELETE_TIMEOUT + 1.seconds)
+    }
+
+    it("should return list of binary infos for class path") {
+      binaryManager ! GetBinaryInfoListForCp(Seq("success"))
+      expectMsg(3.seconds, BinaryInfoListForCp(Seq(binInfo)))
+    }
+
+    it("should return an error if binary not found") {
+      binaryManager ! GetBinaryInfoListForCp(Seq("notfound"))
+      expectMsg(3.seconds, NoSuchBinary("notfound"))
+    }
+
+    it("should return an error if unexpected event happend") {
+      binaryManager ! GetBinaryInfoListForCp(Seq("failure"))
+      expectMsgType[GetBinaryInfoListForCpFailure]
     }
   }
 }

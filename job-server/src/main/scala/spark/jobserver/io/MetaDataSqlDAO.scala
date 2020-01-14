@@ -65,19 +65,21 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
     * @param jobInfo
     */
   def saveJob(jobInfo: JobInfo): Future[Boolean] = {
-    val binId =
+    val jarIds = jobInfo.cp.filter(_.binaryType != BinaryType.URI).map(b => {
       Await.result(
         sqlCommon.queryBinaryId(
-          jobInfo.binaryInfo.appName,
-          jobInfo.binaryInfo.binaryType,
-          jobInfo.binaryInfo.uploadTime),
-        60 seconds)
+          b.appName,
+          b.binaryType,
+          b.uploadTime),
+        60.seconds)
+    }).mkString(",")
+    val uris = jobInfo.cp.filter(_.binaryType == BinaryType.URI).map(_.appName).mkString(",")
     val startTime = sqlCommon.convertDateJodaToSql(jobInfo.startTime)
     val endTime = jobInfo.endTime.map(t => sqlCommon.convertDateJodaToSql(t))
     val error = jobInfo.error.map(e => e.message)
     val errorClass = jobInfo.error.map(e => e.errorClass)
     val errorStackTrace = jobInfo.error.map(e => e.stackTrace)
-    val row = (jobInfo.jobId, jobInfo.contextId, jobInfo.contextName, binId, jobInfo.classPath,
+    val row = (jobInfo.jobId, jobInfo.contextId, jobInfo.contextName, jarIds, uris, jobInfo.mainClass,
       jobInfo.state, startTime, endTime, error, errorClass, errorStackTrace)
     val result = for {
       result <- sqlCommon.db.run(sqlCommon.jobs.insertOrUpdate(row))

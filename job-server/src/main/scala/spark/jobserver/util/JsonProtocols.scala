@@ -3,8 +3,7 @@ package spark.jobserver.util
 import org.joda.time.DateTime
 import java.text.SimpleDateFormat
 import spark.jobserver.io.{BinaryInfo, BinaryType, ContextInfo, ErrorData, JobInfo}
-import spray.json.{DefaultJsonProtocol, JsNull, JsObject, JsString, JsValue, RootJsonFormat,
-                   deserializationError, pimpAny}
+import spray.json._
 
 object JsonProtocols extends DefaultJsonProtocol {
 
@@ -47,24 +46,34 @@ object JsonProtocols extends DefaultJsonProtocol {
         "jobId" -> JsString(i.jobId),
         "contextId" -> JsString(i.contextId),
         "contextName" -> JsString(i.contextName),
-        "binaryInfo" -> i.binaryInfo.toJson,
-        "classPath" -> JsString(i.classPath),
+        "classPath" -> JsString(i.mainClass),
         "state" -> JsString(i.state),
         "startTime" -> JsString(df.format(i.startTime.getMillis)),
         "endTime" -> i.endTime.map(et => fromJoda(et)).toJson,
-        "error" -> i.error.toJson)
+        "error" -> i.error.toJson,
+        "cp" -> JsArray(i.cp.toVector.map(_.toJson))
+      )
 
     def read(value: JsValue): JobInfo = {
-      value.asJsObject.getFields("jobId", "contextId", "contextName", "binaryInfo", "classPath",
-        "state", "startTime", "endTime", "error") match {
+      value.asJsObject.getFields("jobId", "contextId", "contextName", "classPath",
+        "state", "startTime", "endTime", "error", "cp") match {
           // Correct json format
           case Seq(JsString(jobId), JsString(contextId), JsString(contextName),
-            binaryInfo, JsString(classPath), JsString(state), JsString(startTime), endTime, error) =>
+          JsString(classPath), JsString(state), JsString(startTime), endTime, error, JsArray(cpJson)) =>
             val endTimeOpt = readOpt(endTime, et => toJoda(et.convertTo[String]))
             val errorOpt = error.convertTo[Option[ErrorData]]
             val startTimeObj = toJoda(startTime)
-            JobInfo(jobId, contextId, contextName, binaryInfo.convertTo[BinaryInfo], classPath,
-              state, startTimeObj, endTimeOpt, errorOpt)
+            val cp = cpJson.map(_.convertTo[BinaryInfo])
+            JobInfo(jobId, contextId, contextName, classPath,
+              state, startTimeObj, endTimeOpt, errorOpt, cp)
+          // Legacy json format (for backwards compatibility)
+          case Seq(JsString(jobId), JsString(contextId), JsString(contextName),
+          JsString(classPath), JsString(state), JsString(startTime), endTime, error) =>
+              val endTimeOpt = readOpt(endTime, et => toJoda(et.convertTo[String]))
+              val errorOpt = error.convertTo[Option[ErrorData]]
+              val startTimeObj = toJoda(startTime)
+              JobInfo(jobId, contextId, contextName, classPath,
+                state, startTimeObj, endTimeOpt, errorOpt, Seq.empty)
           // Incorrect json format
           case _ => deserializationError("Fail to parse json content:" +
             "The following Json structure does not match JobInfo structure:\n" + value.prettyPrint)

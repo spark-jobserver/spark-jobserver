@@ -68,6 +68,11 @@ object Utils {
     logger.error(s"${exception.getMessage} : ${sw.toString}")
   }
 
+  def getSeqFromConfig(config: Config, key: String): Seq[String] = {
+    Try(config.getStringList(key).asScala).
+      orElse(Try(config.getString(key).split(",").toSeq)).getOrElse(Nil)
+  }
+
   def getHASeedNodes(config: Config): List[Address] = {
     config.hasPath("spark.jobserver.ha.masters") match {
       case true =>

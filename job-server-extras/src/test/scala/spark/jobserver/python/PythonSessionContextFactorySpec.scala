@@ -6,13 +6,15 @@ import org.scalatest.{BeforeAndAfter, FunSpec, Matchers}
 import java.nio.file.Files
 import java.nio.file.Paths
 
+import akka.testkit.{TestKit, TestProbe}
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.sql.SparkSession
-import spark.jobserver.WindowsIgnore
+import spark.jobserver.{InMemoryDAO, JavaStreamingSpec, JobsLoader, WindowsIgnore}
 import spark.jobserver.util.SparkJobUtils
 
 import scala.collection.JavaConverters._
-
+import org.scalatest._
+import spark.jobserver.common.akka.AkkaTestUtils
 
 object PythonSessionContextFactorySpec {
 
@@ -74,16 +76,24 @@ class TestPythonSessionContextFactory extends PythonContextFactory {
   }
 }
 
-class PythonSessionContextFactorySpec extends FunSpec with Matchers with BeforeAndAfter {
+class PythonSessionContextFactorySpec extends FunSpec with Matchers with BeforeAndAfter
+with BeforeAndAfterAll {
   import PythonSparkContextFactorySpec._
 
   var context: PythonSessionContextLikeWrapper = null
+  implicit val system = JavaStreamingSpec.getNewSystem
+  lazy val conf = new SparkConf().setMaster("local[*]").setAppName("SubprocessSpec")
+  lazy val sc = new SparkContext(conf)
 
   after {
     if (context != null) {
       context.stop()
     }
     PythonSessionContextFactorySpec.resetDerby()
+  }
+
+  override def afterAll() {
+    TestKit.shutdownActorSystem(system)
   }
 
   /**
@@ -97,9 +107,14 @@ class PythonSessionContextFactorySpec extends FunSpec with Matchers with BeforeA
       context shouldBe an[PythonSessionContextLikeWrapper]
     }
 
+    it("should have a flag for JobManager, that it is python job", WindowsIgnore) {
+      val factory = new TestPythonSessionContextFactory()
+      factory.runsPython shouldBe true
+    }
+
     it("should create JobContainers", WindowsIgnore) {
       val factory = new TestPythonSessionContextFactory()
-      val result = factory.loadAndValidateJob("test", DateTime.now(), "path.to.Job", DummyJobCache)
+      val result = factory.loadAndValidateJob(Seq("test"), "path.to.Job", DummyJobCache)
       result.isGood should be (true)
       val jobContainer = result.get
       jobContainer shouldBe an[PythonJobContainer[_]]
@@ -108,12 +123,25 @@ class PythonSessionContextFactorySpec extends FunSpec with Matchers with BeforeA
           PythonContextFactory.hiveContextImports))
     }
 
+    it("should validate the job if only one file is submitted", WindowsIgnore) {
+      val factory = new TestPythonSessionContextFactory()
+      val jobsLoader = new JobsLoader(10, TestProbe().ref, sc, null)
+      val result = factory.loadAndValidateJob(Seq("/tmp/test.egg"), "path.to.Job", jobsLoader)
+      result.isGood should be (true)
+    }
+
+    it("should raise an error if more than one file submitted to start the job", WindowsIgnore) {
+      val factory = new TestPythonSessionContextFactory()
+      val jobsLoader = new JobsLoader(10, TestProbe().ref, sc, null)
+      val result = factory.loadAndValidateJob(Seq("test", "test2"), "path.to.Job", jobsLoader)
+      result.isBad should be (true)
+    }
+
     def runSessionTest(factory: TestPythonSessionContextFactory,
                    context: PythonSessionContextLikeWrapper,
-                   c:Config): Unit = {
+                   c: Config): Unit = {
       val loadResult = factory.loadAndValidateJob(
-        "sql-average",
-        DateTime.now(),
+        Seq("sql-average"),
         "example_jobs.session_window.SessionWindowJob",
         DummyJobCache)
       loadResult.isGood should be (true)

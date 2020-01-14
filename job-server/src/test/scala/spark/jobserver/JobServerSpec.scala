@@ -127,16 +127,6 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
       }
     }
 
-    it("does not support context-per-jvm and JobFileDAO") {
-      val configFileName = writeConfigFile(Map(
-        "spark.jobserver.context-per-jvm " -> true,
-        "spark.jobserver.jobdao" -> "spark.jobserver.io.JobFileDAO"))
-
-      intercept[InvalidConfiguration] {
-        JobServer.start(Seq(configFileName).toArray, makeSupervisorSystem(_))
-      }
-    }
-
     it("does not support context-per-jvm and H2 in-memory DB") {
       val configFileName = writeConfigFile(Map(
         "spark.jobserver.context-per-jvm " -> true,
@@ -221,8 +211,8 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
 
     def genJob(jobId: String, ctx: ContextInfo, status: String): JobInfo = {
       val dt = DateTime.parse("2013-05-29T00Z")
-      JobInfo(jobId, ctx.id, ctx.name, BinaryInfo("demo", BinaryType.Jar, dt), "com.abc.meme",
-          status, dt, None, None)
+      JobInfo(jobId, ctx.id, ctx.name, "com.abc.meme",
+          status, dt, None, None, Seq(BinaryInfo("demo", BinaryType.Jar, dt)))
     }
 
     it("should write error state for contexts and jobs if reconnect failed") {
@@ -231,12 +221,6 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
       val (ctxToBeTerminated, _) = createContext("ctxTerminated", ContextStatus.Running, false)
       val (ctxAlreadyStopped, ctxStoppingInvalidActorRef) =
         createContext("ctxStoppingInvalid", ContextStatus.Stopping, false)
-
-      def genJob(jobId: String, ctx: ContextInfo, status: String) = {
-        val dt = DateTime.parse("2013-05-29T00Z")
-        JobInfo(jobId, ctx.id, ctx.name, BinaryInfo("demo", BinaryType.Jar, dt), "com.abc.meme",
-            status, dt, None, None)
-      }
 
       val jobToBeTerminated = genJob("jid2", ctxToBeTerminated, JobStatus.Running)
       val jobOfAlreadyStoppedCtx = genJob("jid3", ctxAlreadyStopped, JobStatus.Running)

@@ -196,8 +196,28 @@ class WebApiMainRoutesSpec extends WebApiSpec {
           sealRoute(routes) ~> check {
         status should be (BadRequest)
         val result = responseAs[Map[String, String]]
-        result(StatusKey) should equal(JobStatus.Error)
         result(ResultKey) should startWith ("Cannot parse")
+      }
+    }
+
+    it("should respond with bad request if no cp or appName given") {
+      Post("/jobs?classPath=com.abc.meme", "") ~>
+        sealRoute(routes) ~> check {
+        status should be (BadRequest)
+        val result = responseAs[Map[String, String]]
+        result.keys should equal (Set(StatusKey, ResultKey))
+        result(StatusKey) should equal(JobStatus.Error)
+        result(ResultKey) should startWith ("Cannot parse config: To start the job")
+      }
+    }
+
+    it("should respond with internal server error if failed to resolve cp path") {
+      Post("/jobs?cp=Failure&mainClass=com.abc.meme", "") ~>
+        sealRoute(routes) ~> check {
+        status should be (InternalServerError)
+        val result = responseAs[Map[String, Any]]
+        result.keys should equal (Set(StatusKey, ResultKey))
+        result(StatusKey) should equal(JobStatus.Error)
       }
     }
 
@@ -219,6 +239,85 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       }
     }
 
+    it("should merge appName and dependent-jar-uris for starting the job") {
+      Post(
+        "/jobs?appName=demo&classPath=com.abc.meme&context=one&sync=true", "dependent-jar-uris=[\"foo\"]"
+      ) ~>
+        sealRoute(routes) ~> check {
+        status should be (OK)
+        responseAs[Map[String, Any]] should be (Map(
+          JobId -> "foo",
+          ResultKey -> Map(
+            masterConfKey-> masterConfVal,
+            bindConfKey -> bindConfVal,
+            "shiro.authentication" -> "off",
+            "spark.jobserver.short-timeout" -> "3 s",
+            "dependent-jar-uris" -> List("foo")
+          )
+        ))
+      }
+    }
+
+    it("should accept several binary names for cp parameter") {
+      Post(
+        "/jobs?cp=multi,some,bin&mainClass=com.abc.meme&context=one&sync=true", ""
+      ) ~>
+        sealRoute(routes) ~> check {
+        status should be (OK)
+        responseAs[Map[String, Any]] should be (Map(
+          JobId -> "multi",
+          ResultKey -> Map(
+            masterConfKey-> masterConfVal,
+            bindConfKey -> bindConfVal,
+            "shiro.authentication" -> "off",
+            "spark.jobserver.short-timeout" -> "3 s"
+          )
+        ))
+      }
+    }
+
+    it("should return not found if one of the binaries in given cp list is not found") {
+      Post(
+        "/jobs?cp=multi,some,BinaryNotFound&mainClass=com.abc.meme&context=one&sync=true", ""
+      ) ~>
+        sealRoute(routes) ~> check {
+        status should be (NotFound)
+        responseAs[Map[String, String]] should be (Map(
+          StatusKey -> "ERROR",
+          ResultKey -> "appName BinaryNotFound not found"
+        ))
+      }
+    }
+
+    it("async route should return 202 if job starts successfully (from cp value in job config)") {
+      Post("/jobs?mainClass=com.abc.meme&context=one", "cp=[\"foo\"]") ~> sealRoute(routes) ~> check {
+        status should be (Accepted)
+        responseAs[Map[String, String]] should be (Map(
+          "jobId" -> "foo",
+          "contextId" -> "cid",
+          "startTime" -> "2013-05-29T00:00:00.000Z",
+          "classPath" -> "com.abc.meme",
+          "context"  -> "context",
+          "duration" -> "Job not done yet",
+          StatusKey -> JobStatus.Started)
+        )
+      }
+    }
+
+    it("async route should return 202 if job starts successfully (from cp and mainClass values in URI)") {
+      Post("/jobs?mainClass=com.abc.meme&context=one&cp=foo", "") ~> sealRoute(routes) ~> check {
+        status should be (Accepted)
+        responseAs[Map[String, String]] should be (Map(
+          "jobId" -> "foo",
+          "contextId" -> "cid",
+          "startTime" -> "2013-05-29T00:00:00.000Z",
+          "classPath" -> "com.abc.meme",
+          "context"  -> "context",
+          "duration" -> "Job not done yet",
+          StatusKey -> JobStatus.Started)
+        )
+      }
+    }
     it("async route should return 202 if job starts successfully") {
       Post("/jobs?appName=foo&classPath=com.abc.meme&context=one", "") ~> sealRoute(routes) ~> check {
         status should be (Accepted)
@@ -392,6 +491,14 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         status should be (BadRequest)
         val resultMap = responseAs[Map[String, String]]
         resultMap(StatusKey) should be (JobStatus.Error)
+      }
+    }
+
+    it("should respond with 400 if job was not able to load due to malformed URI") {
+      Post("/jobs?appName=loadErr&classPath=com.abc.meme", " ") ~> sealRoute(routes) ~> check {
+        status should be (BadRequest)
+        val resultMap = responseAs[Map[String, Any]]
+        resultMap(StatusKey) should equal("JOB LOADING FAILED: Malformed URL")
       }
     }
 
@@ -610,6 +717,14 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         status should be (InternalServerError)
         val result = responseAs[Map[String, Any]]
         result(StatusKey) should equal("CONTEXT INIT ERROR")
+      }
+    }
+
+    it("should respond with BadRequest if malformed URI error during initialization occurs") {
+      Post("/contexts/initError-URI-ctx", "") ~> sealRoute(routes) ~> check {
+        status should be (BadRequest)
+        val result = responseAs[Map[String, Any]]
+        result(StatusKey) should equal("CONTEXT INIT ERROR: Malformed URL")
       }
     }
 
