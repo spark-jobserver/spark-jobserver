@@ -89,7 +89,7 @@ export YARN_CONF_DIR
 export HADOOP_CONF_DIR
 
 GC_OPTS_BASE="-XX:+UseConcMarkSweepGC
-         -verbose:gc -XX:+PrintGCTimeStamps
+         -verbose:gc -XX:+PrintGCDateStamps
          -XX:MaxPermSize=512m
          -XX:+CMSClassUnloadingEnabled "
 
