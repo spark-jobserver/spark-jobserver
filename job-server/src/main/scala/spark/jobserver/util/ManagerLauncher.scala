@@ -42,9 +42,9 @@ class ManagerLauncher(systemConfig: Config, contextConfig: Config, masterAddress
       if (deployMode == "client") {
         val gcFilePath = new File(contextDir, gcFileName).toString()
         loggingOpts += s" -DLOG_DIR=$contextDir"
-        gcOPTS += s" -Xloggc:$gcFilePath"
+        gcOPTS = s"-Xloggc:$gcFilePath " + gcOPTS
       } else {
-        gcOPTS += s" -Xloggc:$gcFileName"
+        gcOPTS = s"-Xloggc:$gcFileName " + gcOPTS
       }
 
       val contextSparkMaster = Try(contextConfig.getString("launcher.spark.master"))

@@ -273,7 +273,7 @@ class ManagerLauncherSpec extends FunSpec with Matchers with BeforeAndAfter with
        launcher.start()
 
        val driverOptions = stubbedSparkLauncher.getLauncherConfig().get("--driver-java-options").asInstanceOf[java.util.ArrayList[String]]
-       driverOptions.get(0).trim() should be("-Xloggc:/test/directory/gc.out   -DLOG_DIR=/test/directory")
+       driverOptions.get(0).trim() should be("-Xloggc:/test/directory/gc.out    -DLOG_DIR=/test/directory")
      }
    }
 }
