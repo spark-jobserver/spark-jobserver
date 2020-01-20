@@ -9,6 +9,7 @@
     - [HDFS + H2](#hdfs--h2)
     - [H2](#h2)
     - [PostgreSQL](#postgresql)
+    - [MySQL](#mysql)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -230,4 +231,65 @@ To set up the CombinedDAO only with PostgreSQL backend, include the following li
     }
 
     flyway.locations="db/combineddao/postgresql/migration"
+```
+
+#### MySQL
+
+Ensure that you have spark_jobserver database created with necessary rights
+granted to user.
+
+    # secure your mysql installation and define password for mysql root user
+    $ mysql_secure_installation
+
+    # logon as database root
+    $ mysql -u root -p
+
+    # create a database user and a database for spark jobserver:
+    mysql> CREATE USER 'jobserver'@'localhost' IDENTIFIED BY 'secret';
+    mysql> CREATE DATABASE spark_jobserver;
+    mysql> GRANT ALL ON spark_jobserver.* TO 'jobserver'@'localhost';
+    mysql> FLUSH PRIVILEGES;
+    CTRL-D -> logout from mysql
+
+    # you can connect to the database using the mysql command line client:
+    $ mysql -u jobserver -p
+
+To use MySQL as backend include the following lines in the configuration file (e.g. `local.conf`).
+```
+    spark {
+      jobserver {
+        jobdao = spark.jobserver.io.CombinedDAO
+        combineddao {
+          rootdir = "/tmp/combineddao"
+          binarydao {
+                class = spark.jobserver.io.BinarySqlDAO
+              }
+          metadatadao {
+                class = spark.jobserver.io.MetaDataSqlDAO
+              }
+        }
+        sqldao {
+          # Slick database driver, full classpath
+          slick-driver = slick.driver.MySQLDriver
+
+          # JDBC driver, full classpath
+          jdbc-driver = com.mysql.jdbc.Driver
+
+          jdbc {
+            url = "jdbc:mysql://db_host/spark_jobserver"
+            user = "jobserver"
+            password = "secret"
+          }
+
+          dbcp {
+            maxactive = 20
+            maxidle = 10
+            initialsize = 10
+          }
+        }
+      }
+    }
+
+    # also add the following line at the root level.
+    flyway.locations="db/combineddao/mysql/migration"
 ```
