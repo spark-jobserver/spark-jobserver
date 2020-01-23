@@ -15,7 +15,7 @@ import scala.concurrent.duration._
 import spark.jobserver.JobServer.InvalidConfiguration
 import spark.jobserver.common.akka
 import spark.jobserver.io.{BinaryInfo, BinaryType, ContextInfo, ContextStatus, JobDAO, JobDAOActor, JobInfo, JobStatus}
-import spark.jobserver.util.{ContextReconnectFailedException, DAOCleanup}
+import spark.jobserver.util.{ContextReconnectFailedException, DAOCleanup, JobserverConfig}
 
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -130,7 +130,10 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
     it("does not support context-per-jvm and H2 in-memory DB") {
       val configFileName = writeConfigFile(Map(
         "spark.jobserver.context-per-jvm " -> true,
-        "spark.jobserver.jobdao" -> "spark.jobserver.io.JobSqlDAO",
+        "spark.jobserver.jobdao" -> "spark.jobserver.io.CombinedDAO",
+        "spark.jobserver.combineddao.rootdir" -> "/tmp/combineddao",
+        JobserverConfig.BINARY_DAO_CONFIG_PATH -> JobserverConfig.BINARY_SQL_DAO_CLASS,
+        JobserverConfig.METADATA_DAO_CONFIG_PATH -> JobserverConfig.METADATA_SQL_DAO_CLASS,
         "spark.jobserver.sqldao.jdbc.url" -> "jdbc:h2:mem"))
 
       intercept[InvalidConfiguration] {
@@ -142,7 +145,10 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
       val configFileName = writeConfigFile(Map(
         "spark.submit.deployMode" -> "cluster",
         "spark.jobserver.context-per-jvm " -> true,
-        "spark.jobserver.jobdao" -> "spark.jobserver.io.JobSqlDAO",
+        "spark.jobserver.jobdao" -> "spark.jobserver.io.CombinedDAO",
+        "spark.jobserver.combineddao.rootdir" -> "/tmp/combineddao",
+        JobserverConfig.BINARY_DAO_CONFIG_PATH -> JobserverConfig.BINARY_SQL_DAO_CLASS,
+        JobserverConfig.METADATA_DAO_CONFIG_PATH -> JobserverConfig.METADATA_SQL_DAO_CLASS,
         "spark.jobserver.sqldao.jdbc.url" -> "jdbc:h2:mem"))
 
       intercept[InvalidConfiguration] {
@@ -154,7 +160,10 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
       val configFileName = writeConfigFile(Map(
         "spark.submit.deployMode" -> "cluster",
         "spark.jobserver.context-per-jvm " -> true,
-        "spark.jobserver.jobdao" -> "spark.jobserver.io.JobSqlDAO",
+        "spark.jobserver.jobdao" -> "spark.jobserver.io.CombinedDAO",
+        "spark.jobserver.combineddao.rootdir" -> "/tmp/combineddao",
+        JobserverConfig.BINARY_DAO_CONFIG_PATH -> JobserverConfig.BINARY_SQL_DAO_CLASS,
+        JobserverConfig.METADATA_DAO_CONFIG_PATH -> JobserverConfig.METADATA_SQL_DAO_CLASS,
         "spark.jobserver.sqldao.jdbc.url" -> "jdbc:h2:file"))
 
       intercept[InvalidConfiguration] {

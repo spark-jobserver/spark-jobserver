@@ -21,7 +21,7 @@ import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 import scala.collection.mutable.ListBuffer
 import com.google.common.annotations.VisibleForTesting
-import spark.jobserver.util.JobServerRoles
+import spark.jobserver.util.{JobServerRoles, JobserverConfig}
 import spark.jobserver.io.zookeeper.AutoPurgeActor
 
 import scala.util.control.NonFatal
@@ -92,24 +92,27 @@ object JobServer {
     // TODO: This should be removed once auto-discovery is introduced in SJS
     checkIfAkkaTcpPortSpecifiedForSuperviseMode(driverMode, superviseModeEnabled, akkaTcpPort)
 
-    // Check if we are using correct DB backend when context-per-jvm is enabled.
-    // H2 mem is not supported.
-    if (contextPerJvm) {
-      if (jobDaoClass.getName == "spark.jobserver.io.JobSqlDAO" &&
-        config.getString("spark.jobserver.sqldao.jdbc.url").startsWith("jdbc:h2:mem")) {
-        throw new InvalidConfiguration("H2 mem backend is not support with context-per-jvm.")
-      }
-    }
+    if (config.getString(JobserverConfig.BINARY_DAO_CONFIG_PATH) == JobserverConfig.BINARY_SQL_DAO_CLASS||
+      config.getString(JobserverConfig.METADATA_DAO_CONFIG_PATH) == JobserverConfig.METADATA_SQL_DAO_CLASS) {
 
-    // cluster mode requires network base H2 server
-    if (driverMode == "cluster" && jobDaoClass.getName == "spark.jobserver.io.JobSqlDAO") {
-      val jdbcUrl = config.getString("spark.jobserver.sqldao.jdbc.url")
+      if (contextPerJvm) {
+        // Check if we are using correct DB backend when context-per-jvm is enabled.
+        // H2 mem is not supported.
+        if (config.getString("spark.jobserver.sqldao.jdbc.url").startsWith("jdbc:h2:mem")) {
+          throw new InvalidConfiguration("H2 mem backend is not support with context-per-jvm.")
+        }
+      }
+
+      // cluster mode requires network base H2 server
+      if (driverMode == "cluster") {
+        val jdbcUrl = config.getString("spark.jobserver.sqldao.jdbc.url")
         if (jdbcUrl.startsWith("jdbc:h2") && !jdbcUrl.startsWith("jdbc:h2:tcp")
-            && !jdbcUrl.startsWith("jdbc:h2:ssl")) {
+          && !jdbcUrl.startsWith("jdbc:h2:ssl")) {
           throw new InvalidConfiguration(
             """H2 backend and cluster mode is not supported with file or in-memory storage,
                use tcp or ssl server.""")
         }
+      }
     }
 
     // start embedded H2 server
