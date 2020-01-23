@@ -2,6 +2,7 @@ package spark.jobserver.io
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
+import scala.concurrent.ExecutionContext.Implicits.global
 import java.io.File
 
 import com.google.common.io.Files
@@ -19,7 +20,6 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
   override def config: Config = ConfigFactory.load("local.test.metadatasqldao.conf")
   val timeout = 60 seconds
   var dao: MetaDataSqlDAO = _
-  private val helper: SqlTestHelpers = new SqlTestHelpers(config)
 
   // *** TEST DATA ***
   val time: DateTime = new DateTime()
@@ -105,7 +105,18 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
   }
 
   after {
-    Await.result(helper.cleanupMetadataTables(), timeout)
+    val profile = dao.dbUtils.profile
+    import profile.api._
+    Await.result( {
+      for {
+        bins <- dao.dbUtils.db.run(dao.binaries.delete)
+        cont <- dao.dbUtils.db.run(dao.contexts.delete)
+        jobs <- dao.dbUtils.db.run(dao.jobs.delete)
+        conf <- dao.dbUtils.db.run(dao.configs.delete)
+      } yield {
+        bins + cont + jobs + conf
+      }
+    }, timeout)
   }
 
   describe("binaries") {
