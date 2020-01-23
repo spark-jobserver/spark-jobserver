@@ -175,6 +175,33 @@ To set up the CombinedDAO only with H2 backend, include the following lines in t
     flyway.locations="db/combineddao/h2/migration"
 ```
 
+If you are using `context-per-jvm = true`, be sure to add [AUTO_MIXED_MODE](http://h2database.com/html/features.html#auto_mixed_mode) to your
+H2 JDBC URL; this allows multiple processes to share the same H2 database using a lock file.
+
+In yarn-client mode, use H2 in server mode as described below instead of embedded mode.
+- Download the full H2 jar from http://www.h2database.com/html/download.html and follow docs.
+- Note that the version of H2 should match the H2 client version bundled with spark-jobserver, currently 1.3.176.
+
+
+A sample JDBC configuration is below:
+```
+jdbc {
+        url = "jdbc:h2:tcp://localhost//ROOT/PARENT/DIRECTORIES/spark_jobserver"
+        user = "secret"
+        password = "secret"
+      }
+
+```
+Note: /ROOT/PARENT/DIRECTORIES/spark_jobserver is the absolute path to a directory to which H2 has write access.
+
+
+Example command line to launch H2 Server:
+```
+java -cp h2-1.3.176.jar org.h2.tools.Server -tcp
+```
+Use -? on command line to see other options.
+
+
 #### PostgreSQL
 
 Ensure that you have spark_jobserver database created with necessary rights
