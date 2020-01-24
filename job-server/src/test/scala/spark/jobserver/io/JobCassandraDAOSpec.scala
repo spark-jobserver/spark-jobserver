@@ -19,7 +19,7 @@ import spark.jobserver.util.Utils
 class JobCassandraDAOSpec extends TestJarFinder with FunSpecLike with Matchers with BeforeAndAfter
   with BeforeAndAfterAll {
 
-  private val config = ConfigFactory.load("local.test.jobsqldao.conf")
+  private val config = ConfigFactory.load("local.test.cassandradao.conf")
 
   private var dao: JobCassandraDAO = _
 
