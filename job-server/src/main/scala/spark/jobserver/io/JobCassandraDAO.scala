@@ -62,6 +62,7 @@ object Metadata {
   val BinInfo = "binaryInfo"
 }
 
+@Deprecated
 class JobCassandraDAO(config: Config) extends JobDAO with FileCacher {
 
   private val logger = LoggerFactory.getLogger(getClass)
