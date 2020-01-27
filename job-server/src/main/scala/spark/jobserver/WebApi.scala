@@ -35,43 +35,36 @@ import org.slf4j.LoggerFactory
 import spark.jobserver.io.JobDAOActor.LastBinaryInfo
 
 object WebApi {
-
   val StatusKey = "status"
   val ResultKey = "result"
-  val ResultKeyStartBytes = "{\n".getBytes
-  val ResultKeyEndBytes = "}".getBytes
-  val ResultKeyBytes = ("\"" + ResultKey + "\":").getBytes
   val logger = LoggerFactory.getLogger(getClass)
 
-  def badRequest(ctx: RequestContext, msg: String) {
-    ctx.complete(StatusCodes.BadRequest, errMap(msg))
+  def completeWithErrorStatus(ctx: RequestContext, errMsg: String,
+                              stcode: StatusCode, exception: Option[Throwable] = None) {
+    val message = exception match {
+      case None =>
+        logger.info("StatusCode: " + stcode + ", ErrorMessage: " + errMsg)
+        Map(StatusKey -> JobStatus.Error, ResultKey -> errMsg)
+      case _ =>
+        val ex = exception.get
+        logger.info("StatusCode: " + stcode.intValue + ", ErrorMessage: " + errMsg + ", StackTrace: "
+        + ErrorData.getStackTrace(ex))
+        Map(StatusKey -> errMsg, ResultKey -> formatException(ex))
+    }
+    ctx.complete(stcode.intValue, message)
   }
 
-  def notFound(ctx: RequestContext, msg: String) {
-    ctx.complete(StatusCodes.NotFound, errMap(msg))
+  def completeWithException(ctx: RequestContext, errMsg: String, stcode: StatusCode, e: Throwable) {
+    completeWithErrorStatus(ctx, errMsg, stcode, Some(e))
   }
 
-  def logAndComplete(ctx: RequestContext, errMsg: String, stcode: StatusCode) {
-    logger.info("StatusCode: " + stcode + ", ErrorMessage: " + errMsg)
-    ctx.complete(stcode.intValue, errMap(errMsg))
+  def completeWithSuccess(ctx: RequestContext, statusCode: StatusCode, msg: String = ""): Unit = {
+    val resultMap = msg match {
+      case "" => Map(StatusKey -> "SUCCESS")
+      case _ => Map(StatusKey -> "SUCCESS", ResultKey -> msg)
+    }
+    ctx.complete(statusCode, resultMap)
   }
-
-  def logAndComplete(ctx: RequestContext, errMsg: String, stcode: StatusCode, e: Throwable) {
-    logger.info("StatusCode: " + stcode.intValue + ", ErrorMessage: " + errMsg + ", StackTrace: "
-      + ErrorData.getStackTrace(e))
-    ctx.complete(stcode.intValue, errMap(e, errMsg))
-  }
-
-  def completeWithStatusCode(ctx: RequestContext, statusCode: StatusCode): Unit = {
-    ctx.complete(statusCode, Map.empty[String, String])
-  }
-
-  def errMap(errMsg: String) : Map[String, String] = Map(StatusKey -> JobStatus.Error, ResultKey -> errMsg)
-
-  def errMap(t: Throwable, status: String) : Map[String, Any] =
-    Map(StatusKey -> status, ResultKey -> formatException(t))
-
-  def successMap(msg: String): Map[String, String] = Map(StatusKey -> "SUCCESS", ResultKey -> msg)
 
   def getJobDurationString(info: JobInfo): String =
     info.jobLengthMillis.map { ms => ms / 1000.0 + " secs" }.getOrElse("Job not done yet")
@@ -88,22 +81,18 @@ object WebApi {
   }
 
   def resultToByteIterator(jobReport: Map[String, Any], result: Iterator[_]): Iterator[_] = {
-    ResultKeyStartBytes.toIterator ++
+    "{\n".getBytes.toIterator ++
       (jobReport.map(t => Seq(AnyJsonFormat.write(t._1).toString(),
                 AnyJsonFormat.write(t._2).toString()).mkString(":") ).mkString(",") ++
         (if (jobReport.nonEmpty) "," else "")).getBytes().toIterator ++
-      ResultKeyBytes.toIterator ++ result ++ ResultKeyEndBytes.toIterator
+      ("\"" + ResultKey + "\":").getBytes.toIterator ++ result ++ "}".getBytes.toIterator
   }
 
   def formatException(t: Throwable): Any =
-    Map("message" -> t.getMessage,
-      "errorClass" -> t.getClass.getName,
-      "stack" -> ErrorData.getStackTrace(t))
+    Map("message" -> t.getMessage, "errorClass" -> t.getClass.getName, "stack" -> ErrorData.getStackTrace(t))
 
   def formatException(t: ErrorData): Any = {
-    Map("message" -> t.message,
-      "errorClass" -> t.errorClass,
-      "stack" -> t.stackTrace
+    Map("message" -> t.message, "errorClass" -> t.errorClass, "stack" -> t.stackTrace
     )
   }
 
@@ -174,8 +163,6 @@ class WebApi(system: ActorSystem,
   val DefaultSyncTimeout = Timeout(10 seconds)
   val DefaultBinaryDeletionTimeout = Timeout(10.seconds)
   val DefaultJobLimit = 50
-  val StatusKey = "status"
-  val ResultKey = "result"
   val ResultChunkSize = Option("spark.jobserver.result-chunk-size").filter(config.hasPath)
       .fold(100 * 1024)(config.getBytes(_).toInt)
 
@@ -249,7 +236,6 @@ class WebApi(system: ActorSystem,
   }
 
   def start() {
-
     /**
      * activates ssl or tsl encryption between client and SJS if so requested
      * in config
@@ -309,10 +295,12 @@ class WebApi(system: ActorSystem,
                   "binary-type" -> bin.binaryType.name,
                   "upload-time" -> bin.uploadTime.toString())
               ctx.complete(StatusCodes.OK, res)
-            case LastBinaryInfo(None) => notFound(ctx, s"Can't find binary with name $appName")
-            case _ => logAndComplete(ctx, "UNEXPECTED ERROR OCCURRED", StatusCodes.InternalServerError)
+            case LastBinaryInfo(None) =>
+              completeWithErrorStatus(ctx, s"Can't find binary with name $appName", StatusCodes.NotFound)
+            case _ =>
+              completeWithErrorStatus(ctx, "UNEXPECTED ERROR OCCURRED", StatusCodes.InternalServerError)
           }.recover {
-            case e: Exception => logAndComplete(ctx, "ERROR", StatusCodes.InternalServerError, e)
+            case e: Exception => completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
           }.andThen {
             case _ => timer.stop()
           }
@@ -331,7 +319,7 @@ class WebApi(system: ActorSystem,
           }.toMap
           ctx.complete(stringTimeMap)
         }.recover {
-          case e: Exception => logAndComplete(ctx, "ERROR", StatusCodes.InternalServerError, e)
+          case e: Exception => completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
         }.andThen {
           case _ => timer.stop()
         }
@@ -352,18 +340,20 @@ class WebApi(system: ActorSystem,
 
                       future.map {
                         case BinaryStored =>
-                          completeWithStatusCode(ctx, StatusCodes.Created)
-                        case InvalidBinary => badRequest(ctx, "Binary is not of the right format")
-                        case BinaryStorageFailure(ex) => logAndComplete(
+                          completeWithSuccess(ctx, StatusCodes.Created)
+                        case InvalidBinary =>
+                          completeWithErrorStatus(
+                            ctx, "Binary is not of the right format", StatusCodes.BadRequest)
+                        case BinaryStorageFailure(ex) => completeWithException(
                           ctx, "Storage Failure", StatusCodes.InternalServerError, ex)
                       }.recover {
-                        case e: Exception => logAndComplete(
+                        case e: Exception => completeWithException(
                           ctx, "ERROR", StatusCodes.InternalServerError, e)
                       }.andThen {
                         case _ => timer.stop()
                       }
                     case None =>
-                        logAndComplete(
+                        completeWithErrorStatus(
                           ctx, s"Unsupported binary type $x", StatusCodes.UnsupportedMediaType)
                         timer.stop()
                   }
@@ -386,18 +376,19 @@ class WebApi(system: ActorSystem,
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
             future.map {
               case BinaryDeleted =>
-                completeWithStatusCode(ctx, StatusCodes.OK)
+                completeWithSuccess(ctx, StatusCodes.OK)
               case BinaryInUse(jobs) =>
-                logAndComplete(ctx,
+                completeWithErrorStatus(ctx,
                               s"Binary is in use by job(s): ${jobs.mkString(", ")}",
                               StatusCodes.Forbidden)
-              case NoSuchBinary(name) => notFound(ctx, s"can't find binary with name $name")
+              case NoSuchBinary(name) =>
+                completeWithErrorStatus(ctx, s"can't find binary with name $name", StatusCodes.NotFound)
               case BinaryDeletionFailure(ex) =>
-                logAndComplete(ctx,
+                completeWithErrorStatus(ctx,
                               s"Failed to delete binary due to internal error. Check logs.",
                               StatusCodes.InternalServerError)
             }.recover {
-              case e: Exception => logAndComplete(ctx, "ERROR", StatusCodes.InternalServerError, e)
+              case e: Exception => completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
             }.andThen {
               case _ => timer.stop()
             }
@@ -442,12 +433,13 @@ class WebApi(system: ActorSystem,
             case SparkContexData(context, appId, url) =>
               val contextMap = getContextReport(context, appId, url)
               ctx.complete(StatusCodes.OK, contextMap)
-            case NoSuchContext => notFound(ctx, s"can't find context with name $contextName")
-            case UnexpectedError => logAndComplete(
+            case NoSuchContext =>
+              completeWithErrorStatus(ctx, s"can't find context with name $contextName", StatusCodes.NotFound)
+            case UnexpectedError => completeWithErrorStatus(
               ctx, "UNEXPECTED ERROR OCCURRED", StatusCodes.InternalServerError)
           }.recover {
             case e: Exception =>
-              logAndComplete(ctx, "ERROR", StatusCodes.InternalServerError, e)
+              completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
           }.andThen{
             case _ => timer.stop()
           }
@@ -457,7 +449,7 @@ class WebApi(system: ActorSystem,
         val timer = contextGet.time()
         val future = supervisor ? ListContexts
         future.map {
-          case UnexpectedError => logAndComplete(
+          case UnexpectedError => completeWithErrorStatus(
             ctx, "UNEXPECTED ERROR OCCURRED", StatusCodes.InternalServerError)
           case contexts =>
             val getContexts = SparkJobUtils.removeProxyUserPrefix(
@@ -466,7 +458,7 @@ class WebApi(system: ActorSystem,
             ctx.complete(getContexts)
         }.recover {
           case e: Exception =>
-            logAndComplete(ctx, "ERROR", StatusCodes.InternalServerError, e)
+            completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
         }.andThen {
           case _ => timer.stop()
         }
@@ -490,7 +482,9 @@ class WebApi(system: ActorSystem,
             // Enforce user context name to start with letters
             if (!contextName.head.isLetter) {
               timer.stop()
-              complete(StatusCodes.BadRequest, errMap("context name must start with letters"))
+              respondWithMediaType(MediaTypes.`application/json`) { ctx =>
+                completeWithErrorStatus(ctx, "context name must start with letters", StatusCodes.BadRequest)
+              }
             } else {
               parameterMap { (params) =>
                 // parse the config from the body, using url params as fallback values
@@ -500,20 +494,21 @@ class WebApi(system: ActorSystem,
                 val future = (supervisor ? AddContext(cName, config))(contextTimeout.seconds)
                 respondWithMediaType(MediaTypes.`application/json`) { ctx =>
                   future.map {
-                    case ContextInitialized => ctx.complete(StatusCodes.OK,
-                      successMap("Context initialized"))
-                    case ContextAlreadyExists => badRequest(ctx, "context " + contextName + " exists")
+                    case ContextInitialized =>
+                      completeWithSuccess(ctx, StatusCodes.OK, "Context initialized")
+                    case ContextAlreadyExists => completeWithErrorStatus(
+                      ctx, "context " + contextName + " exists", StatusCodes.BadRequest)
                     case ContextInitError(e) => e match {
-                      case _: MalformedURLException => logAndComplete(
+                      case _: MalformedURLException => completeWithException(
                         ctx, "CONTEXT INIT ERROR: Malformed URL", StatusCodes.BadRequest, e)
-                      case _ => logAndComplete(
+                      case _ => completeWithException(
                         ctx, "CONTEXT INIT ERROR", StatusCodes.InternalServerError, e)
                     }
-                    case UnexpectedError => logAndComplete(
+                    case UnexpectedError => completeWithErrorStatus(
                       ctx, "UNEXPECTED ERROR OCCURRED", StatusCodes.InternalServerError)
                   }.recover {
                     case e: Exception =>
-                      logAndComplete(ctx, "ERROR", StatusCodes.InternalServerError, e)
+                      completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
                   }.andThen {
                     case _ => timer.stop()
                   }
@@ -538,19 +533,20 @@ class WebApi(system: ActorSystem,
               respondWithMediaType(MediaTypes.`application/json`) { ctx =>
                 future.map {
                   case ContextStopped =>
-                    ctx.complete(StatusCodes.OK, successMap("Context stopped"))
+                    completeWithSuccess(ctx, StatusCodes.OK, "Context stopped")
                   case ContextStopInProgress =>
                     val response = HttpResponse(
                       status = StatusCodes.Accepted, headers = List(Location(ctx.request.uri)))
                     ctx.complete(response)
-                  case NoSuchContext => notFound(ctx, "context " + contextName + " not found")
-                  case ContextStopError(e) => logAndComplete(
+                  case NoSuchContext => completeWithErrorStatus(
+                    ctx, "context " + contextName + " not found", StatusCodes.NotFound)
+                  case ContextStopError(e) => completeWithException(
                     ctx, "CONTEXT DELETE ERROR", StatusCodes.InternalServerError, e)
-                  case UnexpectedError => logAndComplete(
+                  case UnexpectedError => completeWithErrorStatus(
                     ctx, "UNEXPECTED ERROR OCCURRED", StatusCodes.InternalServerError)
                 }.recover {
                   case e: Exception =>
-                    logAndComplete(ctx, "ERROR", StatusCodes.InternalServerError, e)
+                    completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
                 }.andThen {
                   case _ => timer.stop()
                 }
@@ -574,7 +570,7 @@ class WebApi(system: ActorSystem,
 
                   if (sync.isDefined && !sync.get) {
                     contexts.map(c => supervisor ! StopContext(c))
-                    ctx.complete(StatusCodes.OK, successMap("Context reset requested"))
+                    completeWithSuccess(ctx, StatusCodes.OK, "Context reset requested")
                   } else {
                     val stopFutures = contexts.map(c => supervisor ? StopContext(c))
                     Await.ready(Future.sequence(stopFutures), contextTimeout.seconds)
@@ -583,13 +579,13 @@ class WebApi(system: ActorSystem,
 
                     (supervisor ? AddContextsFromConfig).onFailure {
                       case _ =>
-                        completeWithStatusCode(ctx, StatusCodes.InternalServerError)
+                        completeWithErrorStatus(ctx, "ERROR", StatusCodes.InternalServerError)
                     }
-                    ctx.complete(StatusCodes.OK, successMap("Context reset"))
+                    completeWithSuccess(ctx, StatusCodes.OK, "Context reset")
                   }
                 timer.stop()
                 case _ =>
-                  completeWithStatusCode(ctx, StatusCodes.InternalServerError)
+                  completeWithErrorStatus(ctx, "ERROR", StatusCodes.InternalServerError)
                   timer.stop()
               }
             }
@@ -606,15 +602,16 @@ class WebApi(system: ActorSystem,
     get { ctx =>
       try {
         if (healthCheckInst != null && healthCheckInst.isHealthy()) {
-          completeWithStatusCode(ctx, StatusCodes.OK)
+          completeWithSuccess(ctx, StatusCodes.OK)
         } else {
-          ctx.complete(StatusCodes.InternalServerError, errMap("Required actors not alive"))
+          completeWithErrorStatus(ctx, "Required actors not alive", StatusCodes.InternalServerError)
         }
       }
       catch {
         case ex: Exception => {
           logger.error("Exception in healthz", ex)
-          ctx.complete(StatusCodes.InternalServerError, errMap("Exception while invoking health check"))
+          completeWithErrorStatus(
+            ctx, "Exception while invoking health check", StatusCodes.InternalServerError)
         }
       }
     }
@@ -660,12 +657,12 @@ class WebApi(system: ActorSystem,
         respondWithMediaType(MediaTypes.`application/json`) { ctx =>
           future.map {
             case NoSuchJobId =>
-              notFound(ctx, "No such job ID " + jobId)
+              completeWithErrorStatus(ctx, "No such job ID " + jobId, StatusCodes.NotFound)
             case cnf: Config =>
               ctx.complete(cnf.root().render(renderOptions))
           }.recover {
             case e: Exception =>
-              logAndComplete(ctx, "ERROR", StatusCodes.InternalServerError, e)
+              completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
           }.andThen {
             case _ => timer.stop()
           }
@@ -681,7 +678,7 @@ class WebApi(system: ActorSystem,
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
             statusFuture.map {
               case NoSuchJobId =>
-                notFound(ctx, "No such job ID " + jobId)
+                completeWithErrorStatus(ctx, "No such job ID " + jobId, StatusCodes.NotFound)
               case info: JobInfo =>
                 val jobReport = getJobReport(info)
                 val resultFuture = jobInfoActor ? GetJobResult(jobId)
@@ -697,11 +694,11 @@ class WebApi(system: ActorSystem,
                     ctx.complete(jobReport)
                 }.recover {
                   case e: Exception =>
-                    logAndComplete(ctx, "ERROR", StatusCodes.InternalServerError, e)
+                    completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
                 }
             }.recover {
               case e: Exception =>
-                logAndComplete(ctx, "ERROR", StatusCodes.InternalServerError, e)
+                completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
             }.andThen {
               case _ => timer.stop()
             }
@@ -716,26 +713,26 @@ class WebApi(system: ActorSystem,
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
             future.map {
               case NoSuchJobId =>
-                notFound(ctx, "No such job ID " + jobId)
+                completeWithErrorStatus(ctx, "No such job ID " + jobId, StatusCodes.NotFound)
               case JobInfo(_, _, contextName, _, classPath, _, None, _, _) =>
                 val jobManager = getJobManagerForContext(Some(contextName), config, classPath)
                 val future = jobManager.get ? KillJob(jobId)
                 future.map {
                   case JobKilled(_, _) => ctx.complete(Map(StatusKey -> JobStatus.Killed))
                 }.recover {
-                  case e: Exception => logAndComplete(
+                  case e: Exception => completeWithException(
                     ctx, "ERROR", StatusCodes.InternalServerError, e)
                 }
               case JobInfo(_, _, _, _, state, _, _, Some(ex), _) if state.equals(JobStatus.Error) =>
                 ctx.complete(Map(StatusKey -> JobStatus.Error, "ERROR" -> formatException(ex)))
               case JobInfo(_, _, _, _, state, _, _, _, _)
                 if (state.equals(JobStatus.Finished) || state.equals(JobStatus.Killed)) =>
-                notFound(ctx, "No running job with ID " + jobId)
-              case _ => logAndComplete(
+                completeWithErrorStatus(ctx, "No running job with ID " + jobId, StatusCodes.NotFound)
+              case _ => completeWithErrorStatus(
                 ctx, "Received an unexpected message", StatusCodes.InternalServerError)
             }.recover {
               case e: Exception =>
-                logAndComplete(
+                completeWithException(
                   ctx, "ERROR", StatusCodes.InternalServerError, e)
             }.andThen {
               case _ => timer.stop()
@@ -772,7 +769,7 @@ class WebApi(system: ActorSystem,
                 }
                 ctx.complete(jobReport)
               }.recover {
-                case e: Exception => logAndComplete(
+                case e: Exception => completeWithException(
                   ctx, "ERROR", StatusCodes.InternalServerError, e)
               }.andThen {
                 case _ => timer.stop()
@@ -863,7 +860,8 @@ class WebApi(system: ActorSystem,
                                 ctx.complete(Map[String, Any]("jobId" -> jobId) ++ resultToTable(res))
                             }
                           case JobErroredOut(jobId, _, ex) =>
-                            ctx.complete(Map[String, String]("jobId" -> jobId) ++ errMap(ex, "ERROR")
+                            ctx.complete(Map[String, String]("jobId" -> jobId) ++
+                              Map(StatusKey -> JobStatus.Error, ResultKey -> formatException(ex))
                             )
                           case JobStarted(_, jobInfo) =>
                             val future = jobInfoActor ? StoreJobConfig(jobInfo.jobId, postedJobConfig)
@@ -872,23 +870,25 @@ class WebApi(system: ActorSystem,
                                 val jobReport = getJobReport(jobInfo, jobStarted = true)
                                 ctx.complete(StatusCodes.Accepted, jobReport)
                             }.recover {
-                              case e: Exception => logAndComplete(
+                              case e: Exception => completeWithException(
                                 ctx, "ERROR", StatusCodes.InternalServerError, e)
                             }
                           case JobValidationFailed(_, _, ex) =>
-                            logAndComplete(ctx, "VALIDATION FAILED", StatusCodes.BadRequest, ex)
-                          case NoSuchFile(name) => notFound(ctx, "appName " + name + " not found")
-                          case NoSuchClass => notFound(ctx, "classPath " + providedMainClass + " not found")
-                          case WrongJobType => logAndComplete(
+                            completeWithException(ctx, "VALIDATION FAILED", StatusCodes.BadRequest, ex)
+                          case NoSuchFile(name) => completeWithErrorStatus(
+                            ctx, "appName " + name + " not found", StatusCodes.NotFound)
+                          case NoSuchClass => completeWithErrorStatus(ctx,
+                              "classPath " + providedMainClass + " not found", StatusCodes.NotFound)
+                          case WrongJobType => completeWithErrorStatus(
                             ctx, "Invalid job type for this context", StatusCodes.BadRequest)
                           case JobLoadingError(err) => err match {
-                            case _: MalformedURLException => logAndComplete(
+                            case _: MalformedURLException => completeWithException(
                               ctx, "JOB LOADING FAILED: Malformed URL", StatusCodes.BadRequest, err)
-                            case _ => logAndComplete (
-                              ctx, "JOB LOADING FAILED", StatusCodes.InternalServerError, err)
+                            case _ => completeWithException (
+                              ctx, "JOB LOADING FAILED", StatusCodes.BadRequest, err)
                           }
                           case ContextStopInProgress =>
-                            logAndComplete(ctx, "Context stop in progress", StatusCodes.Conflict)
+                            completeWithErrorStatus(ctx, "Context stop in progress", StatusCodes.Conflict)
                           case NoJobSlotsAvailable(maxJobSlots) =>
                             val errorMsg = "Too many running jobs (" + maxJobSlots.toString +
                               ") for job context '" + contextOpt.getOrElse("ad-hoc") + "'"
@@ -897,42 +897,43 @@ class WebApi(system: ActorSystem,
                               Map(StatusKey -> "NO SLOTS AVAILABLE", ResultKey -> errorMsg)
                             )
                           case ContextInitError(e) => e match {
-                            case _: MalformedURLException => logAndComplete(
+                            case _: MalformedURLException => completeWithException(
                               ctx, "CONTEXT INIT ERROR: Malformed URL", StatusCodes.BadRequest, e)
-                            case _ => logAndComplete(
+                            case _ => completeWithException(
                               ctx, "CONTEXT INIT FAILED", StatusCodes.InternalServerError, e)
                           }
                         }.recover {
-                          case e: Exception => logAndComplete(
+                          case e: Exception => completeWithException(
                             ctx, "ERROR", StatusCodes.InternalServerError, e)
                         }.andThen {
                           case _ => timer.stop()
                         }
                       case NoSuchBinary(name) =>
-                        notFound(ctx, "appName " + name + " not found")
+                        completeWithErrorStatus(ctx, "appName " + name + " not found", StatusCodes.NotFound)
                       case GetBinaryInfoListForCpFailure(ex) =>
-                        logAndComplete(
+                        completeWithException(
                           ctx, "ERROR", StatusCodes.InternalServerError, ex)
                     }.recover {
                       case _: NoSuchElementException =>
-                        ctx.complete(StatusCodes.NotFound, errMap("context " + contextOpt.get + " not found"))
-                      case e: Exception => logAndComplete(
+                        completeWithErrorStatus(
+                          ctx, "context " + contextOpt.get + " not found", StatusCodes.NotFound)
+                      case e: Exception => completeWithException(
                         ctx, "ERROR", StatusCodes.InternalServerError, e)
                     }.andThen {
                       case _ => timer.stop()
                     }
                   }
                 } catch {
-                  case e @ (_: ConfigException | _: InsufficientConfiguration) =>
-                    timer.stop()
-                    complete(StatusCodes.BadRequest, errMap("Cannot parse config: " + e.getMessage))
+                  case e @ (_: ConfigException | _: InsufficientConfiguration) => timer.stop()
+                    respondWithMediaType(MediaTypes.`application/json`) { ctx =>
+                      completeWithErrorStatus(
+                        ctx, "Cannot parse config: " + e.getMessage, StatusCodes.BadRequest)
+                    }
                   case e: Exception =>
-                    val stcode = StatusCodes.InternalServerError.intValue
-                    val errMes = "ERROR"
-                    logger.info("StatusCode: " + stcode + ", ErrorMessage: " + errMes
-                      + ", StackTrace: " + ErrorData.getStackTrace(e))
                     timer.stop()
-                    complete(stcode, errMap(e, errMes))
+                    respondWithMediaType(MediaTypes.`application/json`) { ctx =>
+                      completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
+                    }
                   }
               }
           }
@@ -940,8 +941,12 @@ class WebApi(system: ActorSystem,
     }
   }
 
-  override def timeoutRoute: Route =
-    complete(500, errMap("Request timed out. Try using the /jobs/<jobID>, /jobs APIs to get status/results"))
+  override def timeoutRoute: Route = {
+    respondWithMediaType(MediaTypes.`application/json`) { ctx =>
+      completeWithErrorStatus(ctx, "Request timed out. Try using the /jobs/<jobID>, " +
+        "/jobs APIs to get status/results", StatusCodes.InternalServerError)
+    }
+  }
 
   /**
    * if the shiro user is to be used as the proxy user, then this
@@ -965,8 +970,7 @@ class WebApi(system: ActorSystem,
                                       contextConfig: Config,
                                       mainClass: String): Option[ActorRef] = {
     import ContextSupervisor._
-    val msg =
-      if (context.isDefined) {
+    val msg = if (context.isDefined) {
         GetContext(context.get)
       } else {
         StartAdHocContext(mainClass, contextConfig)
@@ -986,5 +990,4 @@ class WebApi(system: ActorSystem,
       .withFallback(ConfigFactory.parseMap(fallbackParams.asJava))
       .resolve()
   }
-
 }
