@@ -26,11 +26,6 @@ spark {
       rootdir = /tmp/spark-jobserver/upload
     }
 
-    cassandradao {
-      # Directory where binaries are cached
-      rootdir = /tmp/spark-jobserver/cassandradao/data
-    }
-
     sqldao {
       # Slick database driver, full classpath
       slick-driver = slick.driver.H2Driver

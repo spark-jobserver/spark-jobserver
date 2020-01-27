@@ -82,8 +82,7 @@ object Dependencies {
     scalaTestDep,
     "com.typesafe.akka" %% "akka-testkit" % akka % Test,
     "com.typesafe.akka" %% "akka-multi-node-testkit" % akka % Test,
-    "io.spray" %% "spray-testkit" % spray % Test,
-    "org.cassandraunit" % "cassandra-unit" % cassandraUnit % Test excludeAll(excludeJpountz)
+    "io.spray" %% "spray-testkit" % spray % Test
   )
 
   lazy val miscTestDeps = Seq(
