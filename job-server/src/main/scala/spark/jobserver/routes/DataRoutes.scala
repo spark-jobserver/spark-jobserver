@@ -41,7 +41,7 @@ trait DataRoutes extends HttpService {
       future.map { names =>
         ctx.complete(names)
       }.recover {
-        case e: Exception => ctx.complete(StatusCodes.InternalServerError, errMap(e, "ERROR"))
+        case e: Exception => completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
       }
     } ~
       // DELETE /data/filename delete the given file
@@ -52,9 +52,10 @@ trait DataRoutes extends HttpService {
             future.map {
               case Deleted => ctx.complete(StatusCodes.OK)
               case Error =>
-                logAndComplete(ctx, "Unable to delete data file '" + filename + "'.", StatusCodes.BadRequest)
+                completeWithErrorStatus(
+                  ctx, "Unable to delete data file '" + filename + "'.", StatusCodes.BadRequest)
             }.recover {
-              case e: Exception => ctx.complete(StatusCodes.InternalServerError, errMap(e, "ERROR"))
+              case e: Exception => completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
             }
           }
         }
@@ -66,16 +67,17 @@ trait DataRoutes extends HttpService {
               case "reboot" => {
                 if (sync.isDefined && !sync.get) {
                   dataManager ! DeleteAllData
-                  ctx.complete(StatusCodes.OK, successMap("Data reset requested"))
+                  completeWithSuccess(ctx, StatusCodes.OK, "Data reset requested")
                 }
                 else {
                   val future = dataManager ? DeleteAllData
                   future.map {
-                    case Deleted => ctx.complete(StatusCodes.OK, successMap("Data reset"))
+                    case Deleted => completeWithSuccess(ctx, StatusCodes.OK, "Data reset")
                     case Error =>
-                      logAndComplete(ctx, "Unable to delete data folder", StatusCodes.BadRequest)
+                      completeWithErrorStatus(ctx, "Unable to delete data folder", StatusCodes.BadRequest)
                   }.recover {
-                    case e: Exception => ctx.complete(StatusCodes.InternalServerError, errMap(e, "ERROR"))
+                    case e: Exception =>
+                      completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
                   }
                 }
               }
@@ -96,9 +98,10 @@ trait DataRoutes extends HttpService {
                     ResultKey -> Map("filename" -> filename)))
                 }
                 case Error =>
-                  logAndComplete(ctx, "Failed to store data file '" + filename + "'.", StatusCodes.BadRequest)
+                  completeWithErrorStatus(
+                    ctx, "Failed to store data file '" + filename + "'.", StatusCodes.BadRequest)
               }.recover {
-                case e: Exception => ctx.complete(StatusCodes.InternalServerError, errMap(e, "ERROR"))
+                case e: Exception => completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
               }
             }
           }
