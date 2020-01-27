@@ -5,7 +5,6 @@ object Versions {
 
   lazy val akka = "2.4.20"
   lazy val cassandra = "3.3.0"
-  lazy val cassandraUnit = "2.2.2.1"
   lazy val commons = "1.4"
   lazy val derby = "10.12.1.1"
   lazy val flyway = "3.2.1"
