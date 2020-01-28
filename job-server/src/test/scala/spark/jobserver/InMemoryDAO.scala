@@ -15,23 +15,27 @@ import scala.concurrent.duration._
   * In-memory DAO for easy unit testing
   */
 class InMemoryDAO extends JobDAO {
-  var binaries = mutable.HashMap.empty[(String, BinaryType, DateTime), (Array[Byte])]
+  private val binaryDAO = new InMemoryBinaryDAO()
+  private val metaDataDAO = new InMemoryMetaDAO()
+  private val defaultTimeout = 3.seconds
 
   override def saveBinary(appName: String,
                           binaryType: BinaryType,
                           uploadTime: DateTime,
                           binaryBytes: Array[Byte]): Unit = {
-    binaries((appName, binaryType, uploadTime)) = binaryBytes
+    val binHash = BinaryDAO.calculateBinaryHashString(binaryBytes)
+    val saveFuture = for {
+      _ <- binaryDAO.save(binHash, binaryBytes)
+      result <- metaDataDAO.saveBinary(appName, binaryType, uploadTime, binHash)
+    } yield result
+
+    Await.result(saveFuture, defaultTimeout)
   }
 
   override def getApps: Future[Map[String, (BinaryType, DateTime)]] = {
-    Future {
-      binaries.keys
-        .groupBy(_._1)
-        .map { case (appName, appUploadTimeTuples) =>
-          appName -> appUploadTimeTuples.map(t => (t._2, t._3)).toSeq.head
-        }
-    }
+    metaDataDAO.getBinaries.map(
+      binaryInfos => binaryInfos.map(info => info.appName -> (info.binaryType, info.uploadTime)).toMap
+    )
   }
 
   override def getBinaryFilePath(appName: String, binaryType: BinaryType, uploadTime: DateTime): String = {
@@ -40,97 +44,59 @@ class InMemoryDAO extends JobDAO {
     outFile.deleteOnExit()
     val bos = new BufferedOutputStream(new FileOutputStream(outFile))
     try {
-      bos.write(binaries((appName, binaryType, uploadTime)))
+      val binaryBytes = metaDataDAO.getBinary(appName)
+        .flatMap(bin => binaryDAO.get(bin.get.binaryStorageId.get))
+      bos.write(Await.result(binaryBytes, defaultTimeout).get)
       outFile.getAbsolutePath
     } catch {
-      case e: NoSuchElementException => "" // DAOs return empty string if binary not found
+      case _: NoSuchElementException => "" // DAOs return empty string if binary not found
     } finally {
       bos.close()
     }
   }
 
-  val contextInfos = mutable.HashMap.empty[String, ContextInfo]
+  override def deleteBinary(appName: String): Unit = {
+    val future = for {
+      binaryInfo <- metaDataDAO.getBinary(appName)
+      _ <- metaDataDAO.deleteBinary(appName)
+      result <- binaryDAO.delete(binaryInfo.get.binaryStorageId.get)
+    } yield result
+
+    Await.result(future, defaultTimeout)
+  }
 
   override def saveContextInfo(contextInfo: ContextInfo): Unit = {
-    contextInfos(contextInfo.id) = contextInfo
+    Await.result(metaDataDAO.saveContext(contextInfo), defaultTimeout)
   }
 
-  override def getContextInfo(id: String): Future[Option[ContextInfo]] = Future {
-    contextInfos.get(id)
-  }
-
-  private def sortTime(c1: ContextInfo, c2: ContextInfo): Boolean = {
-      // If both dates are the same then it will return false
-      c1.startTime.isAfter(c2.startTime)
-  }
+  override def getContextInfo(id: String): Future[Option[ContextInfo]] =
+    metaDataDAO.getContext(id)
 
   override def getContextInfos(limit: Option[Int] = None, statuses: Option[Seq[String]] = None):
-        Future[Seq[ContextInfo]] = Future {
-    val allContexts = contextInfos.values.toSeq.sortWith(sortTime)
-    val filteredContexts = statuses match {
-      case Some(statuses) =>
-        allContexts.filter(j => statuses.contains(j.state))
-      case _ => allContexts
-    }
+        Future[Seq[ContextInfo]] =
+    metaDataDAO.getContexts(limit, statuses)
 
-    limit match {
-      case Some(l) => filteredContexts.take(l)
-      case _ => filteredContexts
-    }
-  }
+  override def getContextInfoByName(name: String): Future[Option[ContextInfo]] =
+    metaDataDAO.getContextByName(name)
 
-  override def getContextInfoByName(name: String): Future[Option[ContextInfo]] = Future {
-    contextInfos.values.toSeq.sortWith(sortTime).filter(_.name == name).headOption
-  }
+  override def saveJobInfo(jobInfo: JobInfo): Unit =
+    Await.result(metaDataDAO.saveJob(jobInfo), defaultTimeout)
 
-  val jobInfos = mutable.HashMap.empty[String, JobInfo]
+  override def getJobInfos(limit: Int, statusOpt: Option[String] = None): Future[Seq[JobInfo]] =
+    metaDataDAO.getJobs(limit, statusOpt)
 
-  override def saveJobInfo(jobInfo: JobInfo) { jobInfos(jobInfo.jobId) = jobInfo }
+  override def getJobInfosByContextId(contextId: String, jobStatuses: Option[Seq[String]] = None):
+      Future[Seq[JobInfo]] = metaDataDAO.getJobsByContextId(contextId, jobStatuses)
 
-  def getJobInfos(limit: Int, statusOpt: Option[String] = None): Future[Seq[JobInfo]] = Future {
-    val allJobs = jobInfos.values.toSeq.sortBy(_.startTime.toString())
-    val filterJobs = statusOpt match {
-      case Some(JobStatus.Running) => {
-        allJobs.filter(jobInfo => jobInfo.endTime.isEmpty && jobInfo.error.isEmpty)
-      }
-      case Some(JobStatus.Error) => allJobs.filter(_.error.isDefined)
-      case Some(JobStatus.Finished) => {
-        allJobs.filter(jobInfo => jobInfo.endTime.isDefined && jobInfo.error.isEmpty)
-      }
-      case _ => allJobs
-    }
-    filterJobs.take(limit)
-  }
+  override def getJobInfo(jobId: String): Future[Option[JobInfo]] = metaDataDAO.getJob(jobId)
 
-  override def getJobInfosByContextId(
-      contextId: String, jobStatuses: Option[Seq[String]] = None): Future[Seq[JobInfo]] = Future {
-    jobInfos.values.toSeq.filter(j => {
-      (contextId, jobStatuses) match {
-        case (contextId, Some(statuses)) => contextId == j.contextId && statuses.contains(j.state)
-        case _ => contextId == j.contextId
-      }
-    })
-  }
+  override def saveJobConfig(jobId: String, jobConfig: Config): Unit =
+    Await.result(metaDataDAO.saveJobConfig(jobId, jobConfig), defaultTimeout)
 
-  override def getJobInfo(jobId: String): Future[Option[JobInfo]] = Future {
-    jobInfos.get(jobId)
-  }
-
-  val jobConfigs = mutable.HashMap.empty[String, Config]
-
-  override def saveJobConfig(jobId: String, jobConfig: Config) { jobConfigs(jobId) = jobConfig }
-
-  override  def getJobConfig(jobId: String): Future[Option[Config]] = Future {
-    jobConfigs.get(jobId)
-  }
+  override  def getJobConfig(jobId: String): Future[Option[Config]] = metaDataDAO.getJobConfig(jobId)
 
   override def getBinaryInfo(appName: String): Option[BinaryInfo] = {
-    // Copied from the base JobDAO, feel free to optimize this (having in mind this specific storage type)
-    Await.result(getApps, 60 seconds).get(appName).map(t => BinaryInfo(appName, t._1, t._2))
-  }
-
-  override def deleteBinary(appName: String): Unit = {
-    binaries = binaries.filter { case ((name, _, _), _) => appName != name }
+    Await.result(metaDataDAO.getBinary(appName), defaultTimeout)
   }
 
   override def getJobsByBinaryName(binName: String, statuses: Option[Seq[String]] = None):
