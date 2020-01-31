@@ -40,7 +40,6 @@ class build(spi.JavaBuildPlugin):
 
     def java_run(self):
         log.info("TRACE", "entering", "java_run")
-        os.environ["SPARK_LOCAL_IP"] = "127.0.0.1"
 
         launcher_dir = self.get_sbt_launcher_dir()
         command_output = self.build_sjs(launcher_dir)

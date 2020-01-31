@@ -37,7 +37,8 @@ lazy val jobServer = Project(id = "job-server", base = file("job-server"))
     fullClasspath in Compile := (fullClasspath in Compile).map { classpath =>
       extraJarPaths ++ classpath
     }.value,
-    fork in Test := true
+    fork in Test := true,
+    envVars in Test := Map("SPARK_LOCAL_IP" -> "127.0.0.1")
   )
   .settings(publishSettings)
   .dependsOn(akkaApp, jobServerApi)
@@ -105,6 +106,7 @@ lazy val jobServerExtrasSettings = revolverSettings ++ Assembly.settings ++ publ
   // Extras packages up its own jar for testing itself
   test in Test := (test in Test).dependsOn(packageBin in Compile).value,
   fork in Test := true,
+  envVars in Test := Map("SPARK_LOCAL_IP" -> "127.0.0.1"),
   parallelExecution in Test := false,
   // Temporarily disable test for assembly builds so folks can package and get started.  Some tests
   // are flaky in extras esp involving paths.
