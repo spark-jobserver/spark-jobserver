@@ -28,3 +28,8 @@ exec bean:"akka:type=Cluster" get:Members
 exec bean:"akka:type=Cluster" get:Leader
 exec bean:"akka:type=Cluster" get:ClusterStatus
 ```
+
+- To down (remove from the cluster) one of the nodes:
+```
+exec bean:"akka:type=Cluster" op:down params:"akka.tcp://JobServer@..."
+```
