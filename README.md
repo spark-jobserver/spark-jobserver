@@ -94,6 +94,7 @@ Spark Job Server is included in Datastax Enterprise!
 - [Planalytics](http://www.planalytics.com)
 - [Target](http://www.target.com/)
 - [Branch](http://branch.io)
+- [Informatica](https://www.informatica.com/)
 
 ## Features
 
