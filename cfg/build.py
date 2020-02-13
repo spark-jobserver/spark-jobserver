@@ -41,6 +41,7 @@ class build(spi.JavaBuildPlugin):
     def java_run(self):
         log.info("TRACE", "entering", "java_run")
 
+        os.system("rm -r /tmp/spark-jobserver")
         launcher_dir = self.get_sbt_launcher_dir()
         command_output = self.build_sjs(launcher_dir)
 
