@@ -651,6 +651,43 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
     }
 
+
+    it("should run a job that requires job jar dependencies" +
+      "if dependent jars are specified in the context config as cp") {
+      val testJar = uploadTestJar()
+      uploadBinary(dao, emptyJar.getAbsolutePath, "emptyjar", BinaryType.Jar)
+
+      val contextConfigWithDependentJar = contextConfig.withFallback(ConfigFactory.parseString(
+        s"""
+           |cp = ["emptyjar"]
+        """.stripMargin))
+      manager ! JobManagerActor.Initialize(contextConfigWithDependentJar, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+
+      manager ! JobManagerActor.StartJob(
+        classPrefix + "jobJarDependenciesJob", List(testJar), emptyConfig, syncEvents ++ errorEvents)
+
+      expectMsgClass(startJobWait, classOf[JobResult])
+    }
+
+    it("should run a job that requires job jar dependencies" +
+      "if dependent jars are specified in the context config as dependent-jar-uris") {
+      val testJar = uploadTestJar()
+      uploadBinary(dao, emptyJar.getAbsolutePath, "emptyjar", BinaryType.Jar)
+
+      val contextConfigWithDependentJar = contextConfig.withFallback(ConfigFactory.parseString(
+        s"""
+           |dependent-jar-uris = ["emptyjar"]
+        """.stripMargin))
+      manager ! JobManagerActor.Initialize(contextConfigWithDependentJar, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+
+      manager ! JobManagerActor.StartJob(
+        classPrefix + "jobJarDependenciesJob", List(testJar), emptyConfig, syncEvents ++ errorEvents)
+
+      expectMsgClass(startJobWait, classOf[JobResult])
+    }
+
     it("jobs should be able to cache RDDs and retrieve them through getPersistentRDDs") {
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(classOf[JobManagerActor.Initialized])
