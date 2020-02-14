@@ -344,7 +344,8 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
 
       try {
         // Load context side jars first in case the ContextFactory comes from it
-        val cpFromConfig = Utils.getSeqFromConfig(contextConfig, "cp")
+        val cpFromConfig = Utils.getSeqFromConfig(contextConfig, "cp") ++
+          Utils.getSeqFromConfig(contextConfig, "dependent-jar-uris")
         val cp = if (cpFromConfig.nonEmpty) {
           // TODO: can be done without blocking await?
           val daoResponse = Await.result(
