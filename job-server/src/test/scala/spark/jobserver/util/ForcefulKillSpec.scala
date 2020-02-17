@@ -58,6 +58,7 @@ class ForcefulKillSpec extends FunSpec with Matchers {
       val mesosMultiMaster = "mesos://zk://host1:2181,host2:2181,host3:2181/mesos"
       val helper = new StandaloneForcefulKill(_: Config, "app-test")
 
+      intercept[NotStandaloneModeException](helper(buildConfig("master1")).kill())
       intercept[NotStandaloneModeException](helper(buildConfig("local(*)")).kill())
       intercept[NotStandaloneModeException](helper(buildConfig("yarn")).kill())
       intercept[NotStandaloneModeException](helper(buildConfig("mesos://master-1:5050")).kill())
@@ -67,7 +68,7 @@ class ForcefulKillSpec extends FunSpec with Matchers {
     it("should handle gracefully if one or both masters are not in ALIVE state") {
       val helper = new StandaloneForcefulKill(buildConfig("spark://master1:8080,master2:8080"), "app-test") {
         var currentMaster = ForcefulKillSpec.PRIMARY_MASTER
-        override def getHTTPResponse(pipeline: SendReceive, req: HttpRequest): HttpResponse = {
+        override def doRequest(pipeline: SendReceive, req: HttpRequest): HttpResponse = {
           req.method match {
             case HttpMethods.GET =>
               currentMaster match {
@@ -79,10 +80,16 @@ class ForcefulKillSpec extends FunSpec with Matchers {
                   req.uri.toString() should be("http://master2:8080/json/")
                   return HttpResponse(entity = HttpEntity.apply(sparkUIJson("RECOVERING")))
               }
-            case HttpMethods.POST => fail("Request should not be sent")
+            case HttpMethods.POST => fail("Code should not reach this point. No master in ALIVE state")
           }
         }
       }
+
+      intercept[NoAliveMasterException](helper.kill())
+    }
+
+    it("should handle gracefully if one or both masters are not available or throw exception") {
+      val helper = new StandaloneForcefulKill(buildConfig("spark://master1:8080,master2:8080"), "app-test")
 
       intercept[NoAliveMasterException](helper.kill())
     }
@@ -91,7 +98,7 @@ class ForcefulKillSpec extends FunSpec with Matchers {
       // Note: The code doesn't work. Keep on returning the first IP
       val helper = new StandaloneForcefulKill(buildConfig("spark://master1:8080,master2:8080"), "app-test") {
         var currentMaster = ForcefulKillSpec.PRIMARY_MASTER
-        override def getHTTPResponse(pipeline: SendReceive, req: HttpRequest): HttpResponse = {
+        override def doRequest(pipeline: SendReceive, req: HttpRequest): HttpResponse = {
           req.method match {
             case HttpMethods.GET =>
               currentMaster match {
@@ -106,7 +113,20 @@ class ForcefulKillSpec extends FunSpec with Matchers {
             case HttpMethods.POST =>
               req.uri.toString() should be("http://master2:8080/app/kill/")
               req.entity.data.asString should be("id=app-test&terminate=true")
-              HttpResponse(status = StatusCodes.Found)
+              return HttpResponse(status = StatusCodes.Found)
+          }
+        }
+      }
+
+      helper.kill()
+    }
+
+    it("should be able to kill the application if first master is not available or throws exception") {
+      val helper = new StandaloneForcefulKill(buildConfig("spark://master1:8080,master2:8080"), "app-test") {
+        override protected def doRequest(pipeline: SendReceive, req: HttpRequest): HttpResponse = {
+          req.uri.toString().contains("master1") match {
+            case true => throw new Exception("deliberate failure")
+            case false => return HttpResponse(entity = HttpEntity.apply(sparkUIJson()))
           }
         }
       }
@@ -120,7 +140,7 @@ class ForcefulKillSpec extends FunSpec with Matchers {
                                failOnHTTPRequest: Boolean = false,
                                throwException: Boolean = false): StandaloneForcefulKill = {
     val helper = new StandaloneForcefulKill(buildConfig(s"spark://$masterAddressAndPort"), appId) {
-      override def getHTTPResponse(pipeline: SendReceive, req: HttpRequest): HttpResponse = {
+      override def doRequest(pipeline: SendReceive, req: HttpRequest): HttpResponse = {
         if (failOnHTTPRequest) fail("Request is not supposed to be sent")
         if (throwException) throw new Exception("deliberate failure")
 
@@ -131,7 +151,7 @@ class ForcefulKillSpec extends FunSpec with Matchers {
           case HttpMethods.POST =>
             req.uri.toString() should be(s"http://$masterAddressAndPort/app/kill/")
             req.entity.data.asString should be("id=app-test&terminate=true")
-            HttpResponse(status = StatusCodes.Found)
+            return HttpResponse(status = StatusCodes.Found)
         }
       }
     }
