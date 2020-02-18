@@ -8,8 +8,8 @@ import spark.jobserver.japi.{BaseJavaJob, JSessionJob}
 import spark.jobserver.util.{JobserverConfig, SparkJobUtils}
 import org.apache.spark.sql.Row
 import spark.jobserver.CommonMessages.JobResult
-import spark.jobserver.io.JobDAOActor
 import spark.jobserver.common.akka.AkkaTestUtils
+import spark.jobserver.io.{InMemoryBinaryDAO, InMemoryMetaDAO, JobDAOActor}
 
 import scala.concurrent.duration._
 
@@ -50,8 +50,9 @@ class JavaSessionSpec extends ExtrasJobSpecBase(JavaSessionSpec.getNewSystem) {
   lazy val cfg = JavaSessionSpec.getContextConfig(false, JavaSessionSpec.contextConfig)
 
   before {
-    dao = new InMemoryDAO
-    daoActor = system.actorOf(JobDAOActor.props(dao))
+    inMemoryMetaDAO = new InMemoryMetaDAO
+    inMemoryBinDAO = new InMemoryBinaryDAO
+    daoActor = system.actorOf(JobDAOActor.props(inMemoryMetaDAO, inMemoryBinDAO, daoConfig))
     // JobManagerTestActor is used to take advantage of CleanlyStoppingSparkContextJobManagerActor class
     manager = system.actorOf(JobManagerTestActor.props(daoActor))
   }

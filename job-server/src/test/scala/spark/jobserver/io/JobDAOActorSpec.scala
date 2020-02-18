@@ -1,18 +1,21 @@
 package spark.jobserver.io
 
+import akka.pattern.ask
 import akka.actor.{ActorRef, ActorSystem}
 import akka.testkit.{ImplicitSender, TestKit, TestProbe}
+import akka.util.Timeout
 import com.typesafe.config.{Config, ConfigFactory}
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 import spark.jobserver.InMemoryDAO
+import spark.jobserver.JobManagerActor.ContextTerminatedException
 import spark.jobserver.io.JobDAOActor._
 
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 import spark.jobserver.common.akka.AkkaTestUtils
-import spark.jobserver.util.NoMatchingDAOObjectException
+import spark.jobserver.util.{NoMatchingDAOObjectException, Utils}
 
 object JobDAOActorSpec {
   val system = ActorSystem("dao-test")
@@ -23,120 +26,29 @@ object JobDAOActorSpec {
   val unblockingProbe = TestProbe()(system)
   val spyProbe = TestProbe()(system)
 
-  object DummyDao extends JobDAO{
-    override def saveBinary(appName: String, binaryType: BinaryType,
-                            uploadTime: DateTime, binaryBytes: Array[Byte]): Unit = {
-      appName match {
-        case "failOnThis" => throw new Exception("deliberate failure")
-        case "blockDAO" => unblockingProbe.expectMsg(5.seconds, "unblock")
-        case _ => //Do nothing
-      }
-    }
-
-    override def getApps: Future[Map[String, (BinaryType, DateTime)]] =
-      Future.successful(Map(
-        "app1" -> (BinaryType.Jar, dt),
-        "app2" -> (BinaryType.Egg, dtplus1)
-      ))
-
-    override def getBinaryFilePath(appName: String,
-                                   binaryType: BinaryType, uploadTime: DateTime): String = ???
-
-    override def saveContextInfo(contextInfo: ContextInfo): Unit = {
-      contextInfo.id match {
-        case "success" =>
-        case "update-running" | "update-with-address" | "update-non-final" =>
-          spyProbe.ref ! contextInfo
-          unblockingProbe.expectMsg("unblock")
-        case "failure" | "update-fail" => throw new Exception("deliberate failure")
-      }
-    }
-
-    override def getContextInfo(id: String): Future[Option[ContextInfo]] = {
-      id match {
-        case "update-running" => Future.successful(
-          Option(ContextInfo("update-running", "name", "config", None,
-            DateTime.now(), None, ContextStatus.Running, None)))
-        case "update-with-address" => Future.successful(
-          Option(ContextInfo("update-with-address", "name", "config", Some("address"),
-            DateTime.now(), None, ContextStatus.Running, None)))
-        case "update-non-final" => Future.successful(
-          Option(ContextInfo("update-non-final", "name", "config", None,
-            DateTime.now(), None, ContextStatus.Stopping, None)))
-        case "update-dao-fail" => Future.failed(new Exception("deliberate failure"))
-        case "update-not-found" => Future.successful(None)
-        case "update-fail" => Future.successful(
-          Option(ContextInfo("update-fail", "name", "config", None,
-            DateTime.now(), None, ContextStatus.Running, None)))
-        case _ => Future.successful(None)
-      }
-    }
-
-    override def getContextInfos(limit: Option[Int] = None, statuses: Option[Seq[String]] = None):
-      Future[Seq[ContextInfo]] = ???
-
-    override def getContextInfoByName(name: String): Future[Option[ContextInfo]] = ???
-
-    override def saveJobConfig(jobId: String, jobConfig: Config): Unit = ???
-
-    override def getJobInfos(limit: Int, status: Option[String]): Future[Seq[JobInfo]] =
-      Future.successful(Seq())
-
-    override def getJobInfosByContextId(
-        contextId: String, jobStatuses: Option[Seq[String]] = None): Future[Seq[JobInfo]] = ???
-
-    override def getJobInfo(jobId: String): Future[Option[JobInfo]] = ???
-
-    override def saveJobInfo(jobInfo: JobInfo): Unit = ???
-
-    override def getJobConfig(jobId: String): Future[Option[Config]] = ???
-
-    override def getBinaryInfo(appName: String): Option[BinaryInfo] = appName match {
-      case "foo" => Some(BinaryInfo("foo", BinaryType.Jar, DateTime.now()))
-      case _ => None
-    }
-
-    override def deleteBinary(appName: String): Unit = {
-      appName match {
-        case "failOnThis" => throw new Exception("deliberate failure")
-        case _ => //Do nothing
-      }
-    }
-
-    override def getJobsByBinaryName(binName: String, statuses: Option[Seq[String]] = None):
-        Future[Seq[JobInfo]] = {
-      binName match {
-        case "empty" => Future.successful(Seq.empty)
-        case "multiple" =>
-          val dt = DateTime.parse("2013-05-29T00Z")
-          val jobInfo =
-            JobInfo("bar", "cid", "context",
-              "com.abc.meme", JobStatus.Running, dt, None, None, Seq(BinaryInfo("demo", BinaryType.Egg, dt)))
-
-          Future.successful(Seq(jobInfo, jobInfo.copy(jobId = "kaboom")))
-        case _ => Future.failed(new Exception("Unknown message"))
-      }
-    }
-
-    override def cleanRunningJobInfosForContext(contextName: String, endTime: DateTime): Future[Unit] = {
-      cleanupProbe.ref ! contextName
-      Future.successful(())
-    }
-  }
+  def config: Config = ConfigFactory.load("local.test.combineddao.conf")
 }
 
 class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSender
   with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
   import JobDAOActorSpec._
-
-  val daoActor = system.actorOf(JobDAOActor.props(DummyDao))
+  implicit val futureTimeout = Timeout(10.seconds)
+  val defaultTimeout = 10.seconds
+  private val shortTimeout: FiniteDuration = 3 seconds
+  val dummyMetaDataDao = new DummyMetaDataDAO(config)
+  val dummyBinaryDao = new DummyBinaryDAO(config)
+  val daoActor = system.actorOf(JobDAOActor.props(dummyMetaDataDao, dummyBinaryDao, config))
   var inMemoryDaoActor: ActorRef = _
   var inMemoryDao: JobDAO = _
+  var inMemoryMetaDAO: MetaDataDAO = _
+  var inMemoryBinDAO: BinaryDAO = _
 
   before {
     inMemoryDao = new InMemoryDAO
-    inMemoryDaoActor = system.actorOf(JobDAOActor.props(inMemoryDao))
+    inMemoryMetaDAO = new InMemoryMetaDAO
+    inMemoryBinDAO = new InMemoryBinaryDAO
+    inMemoryDaoActor = system.actorOf(JobDAOActor.props(inMemoryMetaDAO, inMemoryBinDAO, config))
   }
 
   override def afterAll() {
@@ -146,63 +58,62 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
   describe("JobDAOActor") {
 
     it("should respond when saving Binary completes successfully") {
-      daoActor ! SaveBinary("succeed", BinaryType.Jar, DateTime.now, Array[Byte]())
+      daoActor ! SaveBinary("success", BinaryType.Jar, DateTime.now, DAOTestsHelper.binaryDAOBytesSuccess)
       expectMsg(SaveBinaryResult(Success({})))
     }
 
     it("should respond when saving Binary fails") {
-      daoActor ! SaveBinary("failOnThis", BinaryType.Jar, DateTime.now, Array[Byte]())
+      daoActor ! SaveBinary("binarySaveFail", BinaryType.Jar, DateTime.now, DAOTestsHelper.binaryDAOBytesFail)
       expectMsgPF(3 seconds){
-        case SaveBinaryResult(Failure(ex)) if ex.getMessage == "deliberate failure" =>
+        case SaveBinaryResult(Failure(ex)) if ex.getMessage.startsWith("can't save binary") =>
       }
     }
 
     it("should not block other calls to DAO if save binary is taking too long") {
-      daoActor ! SaveBinary("blockDAO", BinaryType.Jar, DateTime.now, Array[Byte]())
+      daoActor ! SaveBinary("long-call-400", BinaryType.Jar,
+        DateTime.now, DAOTestsHelper.binaryDAOBytesSuccess)
 
-      daoActor ! GetJobInfos(1)
+      daoActor ! GetJobInfos(0)
       expectMsg(1.seconds, JobInfos(Seq()))
 
-      daoActor ! SaveBinary("succeed", BinaryType.Jar, DateTime.now, Array[Byte]())
+      daoActor ! SaveBinary("success", BinaryType.Jar, DateTime.now, DAOTestsHelper.binaryDAOBytesSuccess)
       expectMsg(1.seconds, SaveBinaryResult(Success({})))
 
       daoActor ! DeleteBinary("failOnThis")
       expectMsgPF(1.seconds){
-        case DeleteBinaryResult(Failure(ex)) if ex.getMessage == "deliberate failure" =>
+        case DeleteBinaryResult(Failure(ex)) if ex.getMessage.startsWith("can't find binary") =>
       }
 
-      unblockingProbe.ref ! "unblock"
       expectMsg(4.seconds, SaveBinaryResult(Success({})))
     }
 
     it("should respond when deleting Binary completes successfully") {
-      daoActor ! DeleteBinary("succeed")
+      daoActor ! DeleteBinary("success")
       expectMsg(DeleteBinaryResult(Success({})))
     }
 
     it("should respond when deleting Binary fails") {
       daoActor ! DeleteBinary("failOnThis")
       expectMsgPF(3 seconds){
-        case DeleteBinaryResult(Failure(ex)) if ex.getMessage == "deliberate failure" =>
+        case DeleteBinaryResult(Failure(ex)) if ex.getMessage.startsWith("can't find binary") =>
       }
     }
 
     it("should return apps") {
       daoActor ! GetApps(None)
+      // TODO: Appnames come from getBinaries function in DummyMetaDataDAO: CLEANUP!
       expectMsg(Apps(Map(
-        "app1" -> (BinaryType.Jar, dt),
-        "app2" -> (BinaryType.Egg, dtplus1)
+        "name-del-info-success" -> (BinaryType.Jar, DAOTestsHelper.defaultDate),
+        "other-name-del-info-success" -> (BinaryType.Jar, DAOTestsHelper.defaultDate),
+        "name3" -> (BinaryType.Jar, DAOTestsHelper.defaultDate),
+        "name4" -> (BinaryType.Jar, DAOTestsHelper.defaultDate),
+        "name5" -> (BinaryType.Jar, DAOTestsHelper.defaultDate)
       )))
     }
 
     it("should get JobInfos") {
-      daoActor ! GetJobInfos(1)
+      daoActor ! GetJobInfos(0)
       expectMsg(JobInfos(Seq()))
-    }
-
-    it("should request jobs cleanup") {
-      daoActor ! CleanContextJobInfos("context", DateTime.now())
-      cleanupProbe.expectMsg("context")
     }
 
     it("should respond with successful message if dao operation was successful") {
@@ -215,70 +126,72 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       daoActor ! SaveContextInfo(ContextInfo("failure", "name", "config", None,
         DateTime.now(), None, ContextStatus.Running, None))
       val failedMsg = expectMsgType[SaveFailed]
-      failedMsg.error.getMessage should be("deliberate failure")
+      failedMsg.error.getMessage should startWith("can't save context")
     }
 
     it("should update context by id with all attributes") {
-      val contextId = "update-running"
-      val endTime = DateTime.now()
-      daoActor ! UpdateContextById(contextId, ContextInfoModifiable(
-          Some("new-address"), Some(endTime), ContextStatus.Error, Some(new Exception("Yay!"))))
+      daoActor ! SaveContextInfo(ContextInfo("success", "name", "config", None,
+        DateTime.now(), None, ContextStatus.Running, None))
+      expectMsg(SavedSuccessfully)
 
-      val msg = spyProbe.expectMsgType[ContextInfo]
-      msg.id should be(contextId)
-      msg.state should be(ContextStatus.Error)
-      msg.actorAddress.get should be("new-address")
-      msg.endTime.get should be(endTime)
-      msg.error.get.getMessage should be("Yay!")
-      unblockingProbe.ref ! "unblock"
-      expectMsg(5.seconds, SavedSuccessfully)
+      val endTime = DateTime.now()
+      daoActor ! UpdateContextById("success", ContextInfoModifiable(
+          Some("new-address"), Some(endTime), ContextStatus.Error, Some(new Exception("Yay!"))))
+      expectMsg(SavedSuccessfully)
+
+      daoActor ! GetContextInfo("success")
+      val msg = expectMsgType[ContextResponse]
+      val context = msg.contextInfo.get
+      context.state should be(ContextStatus.Error)
+      context.actorAddress.get should be("new-address")
+      context.endTime.get should be(endTime)
+      context.error.get.getMessage should be("Yay!")
     }
 
     it("should update with new values and if final state is being set then should also set the end time") {
       val contextId = "update-with-address"
+      daoActor ! SaveContextInfo(ContextInfo(contextId, "name", "config", Some("address"),
+        DateTime.now(), None, ContextStatus.Running, None))
+      expectMsg(SavedSuccessfully)
+
       daoActor ! UpdateContextById(contextId, ContextInfoModifiable(
         ContextStatus.Killed, Some(new Exception("Nooo!"))))
+      expectMsg(SavedSuccessfully)
 
-      val msg = spyProbe.expectMsgType[ContextInfo]
-      msg.id should be(contextId)
-      msg.state should be(ContextStatus.Killed)
-      msg.actorAddress.get should be("address")
-      msg.endTime should not be(None)
-      msg.error.get.getMessage should be("Nooo!")
-      unblockingProbe.ref ! "unblock"
-      expectMsg(5.seconds, SavedSuccessfully)
+      daoActor ! GetContextInfo(contextId)
+      val msg = expectMsgType[ContextResponse]
+      val context = msg.contextInfo.get
+      context.id should be(contextId)
+      context.state should be(ContextStatus.Killed)
+      context.actorAddress.get should be("address")
+      context.endTime should not be(None)
+      context.error.get.getMessage should be("Nooo!")
     }
 
     it("should update with new values and if non-final state is being set then endTime should be None") {
       val contextId = "update-non-final"
+      daoActor ! SaveContextInfo(ContextInfo(contextId, "name", "config", None,
+        DateTime.now(), None, ContextStatus.Running, None))
+      expectMsg(SavedSuccessfully)
+
       daoActor ! UpdateContextById(contextId, ContextInfoModifiable(
         ContextStatus.Stopping))
+      expectMsg(SavedSuccessfully)
 
-      val msg = spyProbe.expectMsgType[ContextInfo]
+      daoActor ! GetContextInfo(contextId)
+      val msg = expectMsgType[ContextResponse].contextInfo.get
       msg.id should be(contextId)
       msg.state should be(ContextStatus.Stopping)
       msg.actorAddress should be(None)
       msg.endTime should be(None)
       msg.error should be(None)
-      unblockingProbe.ref ! "unblock"
-      expectMsg(5.seconds, SavedSuccessfully)
     }
 
-    it("should respond with SaveFailed if DAO calls fails (no context or exceptio)") {
-      val contextId = "update-dao-fail"
-      daoActor ! UpdateContextById(contextId, ContextInfoModifiable(
-        ContextStatus.Restarting))
-      expectMsgType[SaveFailed].error.getMessage() should be("deliberate failure")
-
+    it("should respond with SaveFailed if DAO calls fails (no context found)") {
       val contextId2 = "update-not-found"
       daoActor ! UpdateContextById(contextId2, ContextInfoModifiable(
         ContextStatus.Running))
       expectMsgType[SaveFailed].error.getMessage() should be(NoMatchingDAOObjectException().getMessage)
-
-      val contextId3 = "update-fail"
-      daoActor ! UpdateContextById(contextId3, ContextInfoModifiable(
-        ContextStatus.Started))
-      expectMsgType[SaveFailed].error.getMessage() should be("deliberate failure")
     }
 
     it("should get empty list of jobs if binary name is invalid") {
@@ -310,7 +223,7 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
     }
 
     it("should return list of BinaryInfo objects from DB and for URIs") {
-      val cp = Seq("foo", "hdfs://uri2/uri")
+      val cp = Seq("success", "hdfs://uri2/uri")
       daoActor ! GetBinaryInfosForCp(cp)
 
       val response = expectMsgType[BinaryInfosForCp].binInfos
@@ -319,11 +232,36 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
     }
 
     it("should return GetBinaryInfosForCpFailed if during URI parsing some exception occurs") {
-      val cp = Seq("foo", "://uri2:/uri")
+      val cp = Seq("success", "://uri2:/uri")
       daoActor ! GetBinaryInfosForCp(cp)
 
       val response = expectMsgType[GetBinaryInfosForCpFailed]
       response.error.getMessage.startsWith("java.net.URISyntaxException: Expected scheme name at index")
+    }
+  }
+
+  describe("CleanContextJobInfos tests using InMemoryDAO") {
+    it("should set jobs to error state if running") {
+      val date = DateTime.now()
+      val contextId = "ctxId"
+      val jobId = "dummy"
+      val endTime = DateTime.now()
+      val terminatedException = Some(ErrorData(ContextTerminatedException(contextId)))
+      val runningJob = JobInfo(jobId, contextId, "",
+        "", JobStatus.Running, date, None, None, Seq(BinaryInfo("", BinaryType.Jar, date)))
+
+      Await.result(inMemoryDaoActor ? SaveJobInfo(runningJob), shortTimeout)
+      inMemoryDaoActor ! CleanContextJobInfos(contextId, endTime)
+
+      Utils.retry(10) {
+        val fetchedJob = Await.result(inMemoryDaoActor ? GetJobInfo(jobId), shortTimeout).
+          asInstanceOf[Option[JobInfo]].get
+        fetchedJob.contextId should be(contextId)
+        fetchedJob.jobId should be(jobId)
+        fetchedJob.state should be(JobStatus.Error)
+        fetchedJob.endTime.get should be(endTime)
+        fetchedJob.error.get.message should be(terminatedException.get.message)
+      }
     }
   }
 
@@ -341,8 +279,10 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
           "foo-2", "cid", "context",
           "com.abc.meme", JobStatus.Running, dt2, None, None, Seq(BinaryInfo("demo", BinaryType.Jar, dt2))
         )
-      inMemoryDao.saveJobInfo(jobInfo1)
-      inMemoryDao.saveJobInfo(jobInfo2)
+      val saveJob1Future = inMemoryDaoActor ? SaveJobInfo(jobInfo1)
+      Await.result(saveJob1Future, defaultTimeout)
+      val saveJob2Future = inMemoryDaoActor ? SaveJobInfo(jobInfo2)
+      Await.result(saveJob2Future, defaultTimeout)
       inMemoryDaoActor ! GetJobInfos(10)
       expectMsg(JobInfos(Seq[JobInfo](jobInfo1, jobInfo2)))
     }
@@ -354,8 +294,10 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
         JobStatus.Running, dt1, None, None, Seq(BinaryInfo("demo", BinaryType.Jar, dt1)))
       val jobInfo2 = JobInfo("foo-2", "cid", "context", "com.abc.meme",
         JobStatus.Running, dt2, None, None, Seq(BinaryInfo("demo", BinaryType.Egg, dt2)))
-      inMemoryDao.saveJobInfo(jobInfo1)
-      inMemoryDao.saveJobInfo(jobInfo2)
+      val saveJob1Future = inMemoryDaoActor ? SaveJobInfo(jobInfo1)
+      Await.result(saveJob1Future, defaultTimeout)
+      val saveJob2Future = inMemoryDaoActor ? SaveJobInfo(jobInfo2)
+      Await.result(saveJob2Future, defaultTimeout)
       inMemoryDaoActor ! GetJobInfos(1)
       expectMsg(JobInfos(Seq[JobInfo](jobInfo1)))
     }
@@ -374,9 +316,12 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       val finishedJob = JobInfo("finished-1", "cid", "context", "com.abc.meme",
         JobStatus.Finished, dt3, Some(dt4), None, Seq(binaryInfo))
 
-      inMemoryDao.saveJobInfo(runningJob)
-      inMemoryDao.saveJobInfo(errorJob)
-      inMemoryDao.saveJobInfo(finishedJob)
+      val saveJob1Future = inMemoryDaoActor ? SaveJobInfo(runningJob)
+      Await.result(saveJob1Future, defaultTimeout)
+      val saveJob2Future = inMemoryDaoActor ? SaveJobInfo(errorJob)
+      Await.result(saveJob2Future, defaultTimeout)
+      val saveJob3Future = inMemoryDaoActor ? SaveJobInfo(finishedJob)
+      Await.result(saveJob3Future, defaultTimeout)
 
       inMemoryDaoActor ! GetJobInfos(1, Some(JobStatus.Running))
       expectMsg(JobInfos(Seq[JobInfo](runningJob)))
@@ -403,7 +348,7 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
     it("should store a job configuration") {
       inMemoryDaoActor ! SaveJobConfig(jobId, jobConfig)
       expectMsg(2.second, JobConfigStored)
-      val storedJobConfig = Await.result(inMemoryDao.getJobConfig(jobId), 10 seconds)
+      val storedJobConfig = Await.result(inMemoryMetaDAO.getJobConfig(jobId), 10 seconds)
       storedJobConfig should be (Some(jobConfig))
     }
 
@@ -425,7 +370,8 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       val dt = DateTime.parse("2013-05-29T00Z")
       val jobInfo = JobInfo("foo", "cid", "context", "com.abc.meme",
         JobStatus.Running, dt, None, None, Seq(BinaryInfo("demo", BinaryType.Jar, dt)))
-      inMemoryDao.saveJobInfo(jobInfo)
+      val saveJobFuture = inMemoryDaoActor ? SaveJobInfo(jobInfo)
+      Await.result(saveJobFuture, defaultTimeout)
 
       inMemoryDaoActor ! GetJobInfo("foo")
 
@@ -437,7 +383,8 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       val jobInfo = JobInfo(
         "bar", "cid", "context",
         "com.abc.meme", JobStatus.Running, dt, None, None, Seq(BinaryInfo("demo", BinaryType.Egg, dt)))
-      inMemoryDao.saveJobInfo(jobInfo)
+      val saveJobFuture = inMemoryDaoActor ? SaveJobInfo(jobInfo)
+      Await.result(saveJobFuture, defaultTimeout)
 
       inMemoryDaoActor ! GetJobInfo("bar")
 

@@ -2,6 +2,7 @@ package spark.jobserver
 
 import akka.pattern._
 import akka.testkit.TestProbe
+import akka.util.Timeout
 
 import scala.concurrent.Await
 import com.typesafe.config.{Config, ConfigFactory}
@@ -10,7 +11,8 @@ import org.apache.spark.streaming.StreamingContext
 import spark.jobserver.ContextSupervisor._
 import spark.jobserver.JobManagerActor.{ContexData, GetContexData, StartJob, StopContextAndShutdown}
 import spark.jobserver.context.StreamingContextFactory
-import spark.jobserver.io.{JobDAOActor, JobInfo, JobStatus}
+import spark.jobserver.io.JobDAOActor.GetJobInfo
+import spark.jobserver.io.{InMemoryBinaryDAO, InMemoryMetaDAO, JobDAOActor, JobInfo, JobStatus}
 import spark.jobserver.util.{JobserverConfig, SparkJobUtils}
 
 import scala.collection.mutable
@@ -29,6 +31,7 @@ class StreamingJobSpec extends JobSpecBase(StreamingJobSpec.getNewSystem) {
   import collection.JavaConverters._
   import scala.concurrent.duration._
 
+  implicit private val futureTimeout = Timeout(5.seconds)
   val classPrefix = "spark.jobserver."
   private val streamingJob = classPrefix + "StreamingTestJob"
   private val failingStreamingJob = classPrefix + "StreamingTaskFailedTestJob"
@@ -42,8 +45,9 @@ class StreamingJobSpec extends JobSpecBase(StreamingJobSpec.getNewSystem) {
     false, StreamingJobSpec.contextConfigWithGracefulShutdown)
 
   before {
-    dao = new InMemoryDAO
-    daoActor = system.actorOf(JobDAOActor.props(dao))
+    inMemoryMetaDAO = new InMemoryMetaDAO
+    inMemoryBinDAO = new InMemoryBinaryDAO
+    daoActor = system.actorOf(JobDAOActor.props(inMemoryMetaDAO, inMemoryBinDAO, daoConfig))
     manager = system.actorOf(JobManagerActor.props(daoActor))
   }
 
@@ -75,7 +79,7 @@ class StreamingJobSpec extends JobSpecBase(StreamingJobSpec.getNewSystem) {
       expectNoMsg(2.seconds)
 
       Thread sleep 1000
-      val jobInfo = Await.result(dao.getJobInfo(jobId), 60 seconds)
+      val jobInfo = Await.result(daoActor ? GetJobInfo(jobId), 60 seconds).asInstanceOf[Option[JobInfo]]
       jobInfo.get match {
         case JobInfo(_, _, _, _, state, _, _, _, _) if state == JobStatus.Running => {  }
         case e => fail("Unexpected JobInfo" + e)

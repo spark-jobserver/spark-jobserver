@@ -2,27 +2,31 @@ package spark.jobserver
 
 import akka.actor._
 import akka.cluster.Cluster
+import akka.pattern.ask
 import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import akka.testkit._
 import akka.cluster.ClusterEvent.MemberEvent
 import spark.jobserver.common.akka.AkkaTestUtils
-import spark.jobserver.io.{BinaryInfo, BinaryType, ContextInfo, ContextStatus, JobDAO, JobDAOActor, JobInfo, JobStatus}
+import spark.jobserver.io._
 import ContextSupervisor._
-import spark.jobserver.util.{ContextJVMInitializationTimeout, JobserverConfig, ManagerLauncher, ResolutionFailedOnStopContextException, SparkJobUtils, Utils}
+import spark.jobserver.util.{ContextJVMInitializationTimeout, ManagerLauncher,
+  SparkJobUtils, Utils, JobserverConfig}
 import spark.jobserver.JobManagerActor._
 
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
-import scala.collection.mutable.ArrayBuffer
 import scala.util.Try
-import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions, ConfigValueFactory}
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpec, FunSpecLike, Matchers}
+import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 import org.joda.time.DateTime
 
 import scala.concurrent.Await
 import scala.reflect.ClassTag
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicInteger
+
+import akka.util.Timeout
+import spark.jobserver.io.JobDAOActor._
 
 object AkkaClusterSupervisorActorSpec {
   // All the Actors System should have the same name otherwise they cannot form a cluster
@@ -238,15 +242,19 @@ class StubbedJobManagerActor(contextConfig: Config) extends Actor {
 class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorSpec.system)
   with ImplicitSender with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
+  implicit val futureTimeout = Timeout(5.seconds)
   private val daoTimeout = 5.seconds.dilated
   private val contextInitTimeout = 10.seconds.dilated
   private var supervisor: ActorRef = _
   private var dao: JobDAO = _
+  private var inMemoryMetaDAO: MetaDataDAO = _
+  private var inMemoryBinDAO: BinaryDAO = _
   private var daoActor: ActorRef = _
   private var managerProbe = TestProbe()
   private val contextConfig = AkkaClusterSupervisorActorSpec.config.getConfig("spark.context-settings")
   private val unusedDummyInput = 1
   private val visitedContextIsFinalStatePath = new AtomicInteger(0)
+  private lazy val daoConfig: Config = ConfigFactory.load("local.test.combineddao.conf")
   // This is needed to help tests pass on some MBPs when working from home
   System.setProperty("spark.driver.host", "localhost")
 
@@ -255,7 +263,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
     saveContextInSomeState(contextId, ContextStatus.Restarting)
     val job = JobInfo("specialJobId", contextId, "someContext",
         "com.abc.meme", JobStatus.Restarting, dt, None, None, Seq(BinaryInfo("demo", BinaryType.Jar, dt)))
-    dao.saveJobInfo(job)
+    Await.result(daoActor ? SaveJobInfo(job), daoTimeout)
     job.jobId
   }
 
@@ -291,8 +299,9 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
   }
 
   override def beforeAll() {
-    dao = new InMemoryDAO
-    daoActor = system.actorOf(JobDAOActor.props(dao))
+    inMemoryMetaDAO = new InMemoryMetaDAO
+    inMemoryBinDAO = new InMemoryBinaryDAO
+    daoActor = system.actorOf(JobDAOActor.props(inMemoryMetaDAO, inMemoryBinDAO, daoConfig))
     val cluster = Cluster(system)
     supervisor = system.actorOf(Props(classOf[StubbedAkkaClusterSupervisorActor], daoActor, TestProbe().ref,
         managerProbe, cluster, visitedContextIsFinalStatePath), "supervisor")
@@ -482,9 +491,9 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       val nonfinalJob = JobInfo("nonfinalJob", "contextWithoutActor", "contextWithoutActor",
           "", JobStatus.Running, DateTime.now(),
           None, None, Seq(BinaryInfo("demo", BinaryType.Jar, DateTime.now())))
-      dao.saveContextInfo(contextWithoutActor)
-      dao.saveJobInfo(finalJob)
-      dao.saveJobInfo(nonfinalJob)
+      Await.result(daoActor ? SaveContextInfo(contextWithoutActor), daoTimeout)
+      Await.result(daoActor ? SaveJobInfo(finalJob), daoTimeout)
+      Await.result(daoActor ? SaveJobInfo(nonfinalJob), daoTimeout)
 
       supervisor ! StopContext("contextWithoutActor")
 
@@ -492,12 +501,13 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       Utils.retry(3, 1000){
         // If one of these assertion fails, it's probably because the overall flow is faster than
         // the DAO update (sent with tell). In this case, just retry
-        val c = Await.result(dao.getContextInfo(contextWithoutActor.id), 3. seconds).get
+        val f = Await.result(daoActor ? GetContextInfo(contextWithoutActor.id), 3. seconds).asInstanceOf[ContextResponse]
+        val c = f.contextInfo.get
         c.state should equal(ContextStatus.Error)
         c.error.get.getClass.getSimpleName should equal("ResolutionFailedOnStopContextException")
         c.endTime.isDefined should equal(true)
-        Await.result(dao.getJobInfo("finalJob"), 3. seconds) should equal(Some(finalJob))
-        val j = Await.result(dao.getJobInfo("nonfinalJob"), 3. seconds).get
+        Await.result(daoActor ? GetJobInfo("finalJob"), 3. seconds) should equal(Some(finalJob))
+        val j = Await.result(daoActor ? GetJobInfo("nonfinalJob"), 3. seconds).asInstanceOf[Option[JobInfo]].get
         j.state should equal(ContextStatus.Error)
         j.error.isDefined should equal(true)
         j.endTime.isDefined should equal(true)
@@ -533,7 +543,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       deathWatch.watch(managerProbe.ref)
       val dummyContext = ContextInfo(contextId, "contextName", "", None,
           DateTime.now(), None, ContextStatus.Started, None)
-      dao.saveContextInfo(dummyContext)
+      Await.result(daoActor ? SaveContextInfo(dummyContext), daoTimeout)
 
       supervisor ! ActorIdentity(unusedDummyInput, Some(managerProbe.ref))
 
@@ -553,9 +563,9 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       val nonfinalJob = JobInfo("nonfinalJob", contextId, contextId,
         "", JobStatus.Running, DateTime.now(),
         None, None, Seq(BinaryInfo("demo", BinaryType.Jar, DateTime.now())))
-      dao.saveContextInfo(dummyContext)
-      dao.saveJobInfo(finalJob)
-      dao.saveJobInfo(nonfinalJob)
+      Await.result(daoActor ? SaveContextInfo(dummyContext), daoTimeout)
+      Await.result(daoActor ? SaveJobInfo(finalJob), daoTimeout)
+      Await.result(daoActor ? SaveJobInfo(nonfinalJob), daoTimeout)
 
       supervisor ! ActorIdentity(unusedDummyInput, Some(managerProbe.ref))
 
@@ -564,11 +574,12 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       Utils.retry(3, 1000){
         // If one of these assertion fails, it's probably because the overall flow is faster than
         // the DAO update (sent with tell). In this case, just retry
-        val c = Await.result(dao.getContextInfo(contextId), 3. seconds).get
+        val c = Await.result(daoActor ? GetContextInfo(contextId), 3. seconds).
+          asInstanceOf[ContextResponse].contextInfo.get
         c.state should equal(ContextStatus.Error)
         c.endTime.isDefined should equal(true)
-        Await.result(dao.getJobInfo("finalJob"), 3. seconds) should equal(Some(finalJob))
-        val j = Await.result(dao.getJobInfo("nonfinalJob"), 3. seconds).get
+        Await.result(daoActor ? GetJobInfo("finalJob"), 3. seconds) should equal(Some(finalJob))
+        val j = Await.result(daoActor ? GetJobInfo("nonfinalJob"), 3. seconds).asInstanceOf[Option[JobInfo]].get
         j.state should equal(ContextStatus.Error)
         j.error.isDefined should equal(true)
         j.endTime.isDefined should equal(true)
@@ -623,7 +634,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       val timedOutContextId = timedOutRejoiningManagerProbe.ref.path.name.replace(JobserverConfig.MANAGER_ACTOR_PREFIX, "")
       val timedOutContext = ContextInfo(timedOutContextId, "contextName", "", None, DateTime.now(),
           Some(DateTime.now().plusHours(1)), ContextStatus.Error, Some(ContextJVMInitializationTimeout()))
-      dao.saveContextInfo(timedOutContext)
+      Await.result(daoActor ? SaveContextInfo(timedOutContext), daoTimeout)
 
       supervisor ! ActorIdentity(unusedDummyInput, Some(timedOutRejoiningManagerProbe.ref))
 
@@ -650,13 +661,13 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
         JobserverConfig.MANAGER_ACTOR_PREFIX, "")
       val timedOutContext = ContextInfo(timedOutContextId, "timedOutContext", "", None, DateTime.now(),
           Some(DateTime.now().plusHours(1)), ContextStatus.Error, Some(ContextJVMInitializationTimeout()))
-      dao.saveContextInfo(timedOutContext)
+      Await.result(daoActor ? SaveContextInfo(timedOutContext), daoTimeout)
 
       val finishedContextId = finishRejoiningManagerProbe.ref.path.name.replace(
         JobserverConfig.MANAGER_ACTOR_PREFIX, "")
       val finishedContext = ContextInfo(finishedContextId, "finishedContext", "", None, DateTime.now(),
           Some(DateTime.now().plusHours(1)), ContextStatus.Finished, None)
-      dao.saveContextInfo(finishedContext)
+      Await.result(daoActor ? SaveContextInfo(finishedContext), daoTimeout)
 
       supervisor ! ActorIdentity(unusedDummyInput, Some(timedOutRejoiningManagerProbe.ref))
       supervisor ! ActorIdentity(unusedDummyInput, Some(finishRejoiningManagerProbe.ref))
@@ -679,7 +690,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
         JobserverConfig.MANAGER_ACTOR_PREFIX, "")
       val erroredOutContext = ContextInfo(erroredOutContextId, "contextName", "", None, DateTime.now(),
           Some(DateTime.now().plusHours(1)), ContextStatus.Error, Some(new Exception("random error")))
-      dao.saveContextInfo(erroredOutContext)
+      Await.result(daoActor ? SaveContextInfo(erroredOutContext), daoTimeout)
 
       supervisor ! ActorIdentity(unusedDummyInput, Some(erroredOutRejoiningManagerProbe.ref))
 
@@ -755,7 +766,8 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       expectMsg(contextInitTimeout, ContextInitialized)
 
       Utils.retry(3, 1000) {
-        val context = Await.result(dao.getContextInfoByName("test-context11"), 3 seconds).get
+        val context = Await.result(daoActor ? GetContextInfoByName("test-context11"), 3 seconds).
+          asInstanceOf[ContextResponse].contextInfo.get
         context.state should equal(ContextStatus.Running)
 
         supervisor ! GetSparkContexData("test-context11")
@@ -771,7 +783,8 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       expectMsg(contextInitTimeout, ContextInitialized)
 
       Utils.retry(3, 1000) {
-        val context = Await.result(dao.getContextInfoByName("test-context12"), 3 seconds).get
+        val context = Await.result(daoActor ? GetContextInfoByName("test-context12"), 3 seconds).
+          asInstanceOf[ContextResponse].contextInfo.get
         context.state should equal(ContextStatus.Running)
 
         supervisor ! GetSparkContexData("test-context12")
@@ -786,7 +799,8 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       expectMsg(contextInitTimeout, ContextInitialized)
 
       Utils.retry(3, 1000) {
-        val context = Await.result(dao.getContextInfoByName("test-context13"), 3 seconds).get
+        val context = Await.result(daoActor ? GetContextInfoByName("test-context13"), 3 seconds).
+          asInstanceOf[ContextResponse].contextInfo.get
         context.state should equal(ContextStatus.Running)
 
         supervisor ! GetSparkContexData("test-context13")
@@ -801,7 +815,8 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       expectMsg(contextInitTimeout, ContextInitialized)
 
       Utils.retry(3, 1000) {
-        val context = Await.result(dao.getContextInfoByName("test-context14"), 3 seconds).get
+        val context = Await.result(daoActor ? GetContextInfoByName("test-context14"), 3 seconds).
+          asInstanceOf[ContextResponse].contextInfo.get
         context.state should equal(ContextStatus.Running)
 
         supervisor ! GetSparkContexData("test-context14")
@@ -830,12 +845,12 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       val contextInfoPF = ContextInfo(contextId, contextName, convertedContextConfig, None, DateTime.now(),
           None, _: String, None)
       val restartingContext = contextInfoPF(ContextStatus.Restarting)
-      dao.saveContextInfo(restartingContext)
+      Await.result(daoActor ? SaveContextInfo(restartingContext), daoTimeout)
 
       supervisor ! AddContext(contextName, contextConfig)
       expectMsg(contextInitTimeout, ContextAlreadyExists)
 
-      dao.saveContextInfo(contextInfoPF(ContextStatus.Finished)) // cleanup
+      Await.result(daoActor ? SaveContextInfo(contextInfoPF(ContextStatus.Finished)), daoTimeout) // cleanup
     }
 
     it("should not change final state to STOPPING state") {
@@ -911,7 +926,8 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
           classOf[ContextInitError])
       msg.t.getMessage should be(timeoutExceptionMessage)
 
-      val timedOutContext = Await.result(dao.getContextInfoByName(failingContextName), daoTimeout)
+      val timedOutContext = Await.result(daoActor ? GetContextInfoByName(failingContextName), daoTimeout).
+        asInstanceOf[ContextResponse].contextInfo
       timedOutContext.get.state should be(ContextStatus.Error)
       timedOutContext.get.error.get.getMessage should be(timeoutExceptionMessage)
     }
@@ -924,7 +940,8 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       expectMsg(contextInitTimeout, ContextInitialized)
 
       Utils.retry(3, 1000) {
-        val runningContextInfo = Await.result(dao.getContextInfoByName(contextName), daoTimeout).get
+        val runningContextInfo = Await.result(daoActor ? GetContextInfoByName(contextName), daoTimeout).
+          asInstanceOf[ContextResponse].contextInfo.get
         runningContextInfo.state should equal(ContextStatus.Running)
 
         val runningContextActorRef = JobServer.getManagerActorRef(runningContextInfo, system).get
@@ -936,7 +953,8 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
         deathWatcher.expectTerminated(runningContextActorRef)
 
         Thread.sleep(3000)
-        val updatedContext = Await.result(dao.getContextInfoByName(contextName), daoTimeout)
+        val updatedContext = Await.result(daoActor ? GetContextInfoByName(contextName), daoTimeout).
+          asInstanceOf[ContextResponse].contextInfo
         updatedContext.get.state should be(ContextStatus.Killed)
       }
     }
@@ -962,7 +980,8 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       supervisor ! AddContext("test-context", contextConfig)
       expectMsg(contextInitTimeout, ContextInitialized)
 
-      val contextInfo = Await.result(dao.getContextInfoByName("test-context"), daoTimeout)
+      val contextInfo = Await.result(daoActor ? GetContextInfoByName("test-context"), daoTimeout).
+        asInstanceOf[ContextResponse].contextInfo
       contextInfo should not be None
     }
 
@@ -983,7 +1002,8 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       supervisor ! AddContext("test-context", configWithSuperviseMode)
       expectMsg(contextInitTimeout, ContextInitialized)
 
-      val contextInfo = Await.result(dao.getContextInfoByName("test-context"), daoTimeout)
+      val contextInfo = Await.result(daoActor ? GetContextInfoByName("test-context"), daoTimeout).
+        asInstanceOf[ContextResponse].contextInfo
       contextInfo should not be None
     }
 
@@ -1001,12 +1021,13 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       val contextId = managerProbe.ref.path.name.replace(JobserverConfig.MANAGER_ACTOR_PREFIX, "")
 
       val jobId: String = saveContextAndJobInRestartingState(contextId)
-      val context = Await.result(dao.getContextInfo(contextId), daoTimeout)
+      val context = Await.result(daoActor ? GetContextInfo(contextId), daoTimeout).
+        asInstanceOf[ContextResponse].contextInfo.get
 
       supervisor ! ActorIdentity(context, Some(managerProbe.ref))
 
       Thread.sleep(3000)
-      val jobInfo = Await.result(dao.getJobInfo(jobId), daoTimeout).get
+      val jobInfo = Await.result(daoActor ? GetJobInfo(jobId), daoTimeout).asInstanceOf[Option[JobInfo]].get
       jobInfo.state should be(JobStatus.Error)
     }
 
@@ -1034,7 +1055,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       // lists all contexts and then tries to stop them. Since this manager slave is just a
       // TestProbe it's address doesn't get resolved so, it cannot be stopped. So, we change
       // the status to finish to cleanup.
-      dao.saveContextInfo(context.copy(state = ContextStatus.Finished))
+      Await.result(daoActor ? SaveContextInfo(context.copy(state = ContextStatus.Finished)), daoTimeout)
     }
 
     it("should change states of a context and jobs inside to ERROR on an Error during restart") {
@@ -1053,9 +1074,10 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       supervisor ! ActorIdentity(unusedDummyInput, Some(managerProbe.ref))
 
       Thread.sleep(3000)
-      val context = Await.result(dao.getContextInfo(contextId), daoTimeout)
+      val context = Await.result(daoActor ? GetContextInfo(contextId), daoTimeout).
+        asInstanceOf[ContextResponse].contextInfo
       context.get.state should be(ContextStatus.Error)
-      val job = Await.result(dao.getJobInfo(jobId), daoTimeout)
+      val job = Await.result(daoActor ? GetJobInfo(jobId), daoTimeout).asInstanceOf[Option[JobInfo]]
       job.get.state should be(JobStatus.Error)
     }
 
