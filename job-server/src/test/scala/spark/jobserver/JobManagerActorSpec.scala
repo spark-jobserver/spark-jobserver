@@ -6,6 +6,7 @@ import java.nio.file.{Files, StandardOpenOption}
 import akka.actor.{ActorRef, ActorSystem, Cancellable, PoisonPill, Props}
 import akka.pattern.ask
 import akka.testkit.TestProbe
+import akka.util.Timeout
 import org.joda.time.DateTime
 import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.spark.SparkEnv
@@ -16,7 +17,7 @@ import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.CommonMessages.{JobRestartFailed, JobStarted, JobValidationFailed}
 import spark.jobserver.io._
 import spark.jobserver.ContextSupervisor.{ContextStopError, ContextStopInProgress, SparkContextStopped}
-import spark.jobserver.io.JobDAOActor.SavedSuccessfully
+import spark.jobserver.io.JobDAOActor.{SaveJobConfig, SaveJobInfo, SavedSuccessfully}
 import spark.jobserver.util._
 
 import scala.collection.mutable
@@ -261,15 +262,18 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
   protected val emptyConfig = ConfigFactory.parseString("spark.master = bar")
   val contextId = java.util.UUID.randomUUID().toString()
 
+  implicit private val futureTimeout = Timeout(5.seconds)
   val initMsgWait = 10.seconds.dilated
   val startJobWait = 5.seconds.dilated
+  val defaultSmallTimeout = 5.seconds
 
   var contextConfig: Config = _
 
   before {
     logger.debug("Before block - started")
-    dao = new InMemoryDAO
-    daoActor = system.actorOf(JobDAOActor.props(dao))
+    inMemoryMetaDAO = new InMemoryMetaDAO
+    inMemoryBinDAO = new InMemoryBinaryDAO
+    daoActor = system.actorOf(JobDAOActor.props(inMemoryMetaDAO, inMemoryBinDAO, daoConfig))
     contextConfig = JobManagerActorSpec.getContextConfig(adhoc = false)
     manager = system.actorOf(JobManagerTestActor.props(daoActor, "", contextId, 40.seconds))
     logger.debug("Before block - finished")
@@ -441,7 +445,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
         wordCountClass, List(testJar), stringConfig, errorEvents ++ asyncEvents)
 
       expectMsgClass(startJobWait, classOf[JobStarted])
-      val jobInfo = Await.result(dao.getJobInfosByContextId(contextId), 5.seconds)
+      val jobInfo = Await.result(inMemoryMetaDAO.getJobsByContextId(contextId), defaultSmallTimeout)
       jobInfo should not be (None)
       jobInfo.length should be (1)
       jobInfo.head.contextId should be (contextId)
@@ -623,7 +627,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
       val testJar = uploadTestJar()
-      val depJar = uploadBinary(dao, emptyJar.getAbsolutePath, "emptyjar", BinaryType.Jar)
+      val depJar = uploadBinary(emptyJar.getAbsolutePath, "emptyjar", BinaryType.Jar)
 
       manager ! JobManagerActor.StartJob(
         classPrefix + "jobJarDependenciesJob", List(testJar, depJar), emptyConfig, syncEvents ++ errorEvents)
@@ -633,7 +637,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
 
     it("should create context that has jar dependencies and they are given as plain binary names"){
-      uploadBinary(dao, emptyJar.getAbsolutePath, "emptyjar", BinaryType.Jar)
+      uploadBinary(emptyJar.getAbsolutePath, "emptyjar", BinaryType.Jar)
       val contextConfigWithDependentJar = contextConfig.withFallback(ConfigFactory.parseString(
         s"""
            |cp = ["emptyjar"]
@@ -652,7 +656,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
     }
 
     it("should create context that has dependencies given as mix of URIs and jar names"){
-      uploadBinary(dao, emptyJar.getAbsolutePath, "emptyjar", BinaryType.Jar)
+      uploadBinary(emptyJar.getAbsolutePath, "emptyjar", BinaryType.Jar)
       val contextConfigWithDependentJar = contextConfig.withFallback(ConfigFactory.parseString(
         s"""
            |cp = ["emptyjar", "file://${emptyJar.getAbsolutePath}"]
@@ -665,7 +669,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
     it("should run a job that requires job jar dependencies" +
       "if dependent jars are specified in the context config as cp") {
       val testJar = uploadTestJar()
-      uploadBinary(dao, emptyJar.getAbsolutePath, "emptyjar", BinaryType.Jar)
+      uploadBinary(emptyJar.getAbsolutePath, "emptyjar", BinaryType.Jar)
 
       val contextConfigWithDependentJar = contextConfig.withFallback(ConfigFactory.parseString(
         s"""
@@ -683,7 +687,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
     it("should run a job that requires job jar dependencies" +
       "if dependent jars are specified in the context config as dependent-jar-uris") {
       val testJar = uploadTestJar()
-      uploadBinary(dao, emptyJar.getAbsolutePath, "emptyjar", BinaryType.Jar)
+      uploadBinary(emptyJar.getAbsolutePath, "emptyjar", BinaryType.Jar)
 
       val contextConfigWithDependentJar = contextConfig.withFallback(ConfigFactory.parseString(
         s"""
@@ -772,7 +776,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
     }
 
     it("should error out if loading garbage jar") {
-      val testJar = uploadBinary(dao, "../README.md", "notajar", BinaryType.Jar)
+      val testJar = uploadBinary("../README.md", "notajar", BinaryType.Jar)
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
       val notAJarConfig = ConfigFactory.parseString("cp = [\"notajar\"]")
@@ -961,7 +965,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
   describe("Supervise mode unit tests") {
     it("should kill itself if, the only restart candidate job failed") {
       val deathWatcher = TestProbe()
-      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, "", TestProbe(), 1))
+      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", defaultSmallTimeout, "", TestProbe(), 1))
       deathWatcher.watch(manager)
 
       manager ! JobRestartFailed("dummy-id", new Exception(""))
@@ -970,7 +974,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
     it("should kill itself if, all restart candidates failed") {
       val deathWatcher = TestProbe()
-      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, "", TestProbe(), 3))
+      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", defaultSmallTimeout, "", TestProbe(), 3))
       deathWatcher.watch(manager)
 
       manager ! JobRestartFailed("dummy-id", new Exception(""))
@@ -985,7 +989,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
     it("should not kill itself if atleast one job was restarted") {
       val deathWatcher = TestProbe()
-      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, "", TestProbe(), 3))
+      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", defaultSmallTimeout, "", TestProbe(), 3))
       deathWatcher.watch(manager)
 
       val dummyJob = JobInfo("dummy-id2", "", "", "", JobStatus.Running,
@@ -1004,7 +1008,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
     it("should not do anything if no context was found with specified name") {
       val spyProbe = TestProbe()
       val contextId = "dummy-context"
-      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, spyProbe))
+      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", defaultSmallTimeout, contextId, spyProbe))
       manager ! JobManagerActor.RestartExistingJobs
 
       spyProbe.expectNoMsg()
@@ -1015,7 +1019,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val daoProbe = TestProbe()
       val managerWatcher = TestProbe()
       val contextId = "dummy-context"
-      manager = system.actorOf(JobManagerActorSpy.props(daoProbe.ref, "", 5.seconds, contextId, spyProbe))
+      manager = system.actorOf(JobManagerActorSpy.props(daoProbe.ref, "", defaultSmallTimeout, contextId, spyProbe))
       managerWatcher.watch(manager)
 
       manager ! JobManagerActor.RestartExistingJobs
@@ -1027,7 +1031,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       msg.attributes.state should be(ContextStatus.Error)
       msg.attributes.error.get.getMessage should be(s"Failed to fetch jobs for context $contextId")
       daoProbe.reply(JobDAOActor.SavedSuccessfully)
-      managerWatcher.expectTerminated(manager, 5.seconds)
+      managerWatcher.expectTerminated(manager, defaultSmallTimeout)
     }
 
     it("should kill itself if an unexpected message is received from DAO") {
@@ -1035,7 +1039,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val daoProbe = TestProbe()
       val managerWatcher = TestProbe()
       val contextId = "dummy-context"
-      manager = system.actorOf(JobManagerActorSpy.props(daoProbe.ref, "", 5.seconds, contextId, spyProbe))
+      manager = system.actorOf(JobManagerActorSpy.props(daoProbe.ref, "", defaultSmallTimeout, contextId, spyProbe))
       managerWatcher.watch(manager)
 
       manager ! JobManagerActor.RestartExistingJobs
@@ -1049,7 +1053,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val contextId = "dummy-context"
       val spyProbe = TestProbe()
       val daoProbe = TestProbe()
-      manager = system.actorOf(JobManagerActorSpy.props(daoProbe.ref, "", 5.seconds, contextId, spyProbe))
+      manager = system.actorOf(JobManagerActorSpy.props(daoProbe.ref, "", defaultSmallTimeout, contextId, spyProbe))
 
       manager ! JobManagerActor.RestartExistingJobs
 
@@ -1065,7 +1069,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val binaryInfo = BinaryInfo("dummy", BinaryType.Jar, DateTime.now())
       val jobInfo = JobInfo("jobId", contextId, "context-name",
         "test-class", JobStatus.Running, DateTime.now(), None, None, Seq(binaryInfo))
-      manager = system.actorOf(JobManagerActorSpy.props(daoProbe.ref, "", 5.seconds, contextId, TestProbe()))
+      manager = system.actorOf(JobManagerActorSpy.props(daoProbe.ref, "", defaultSmallTimeout, contextId, TestProbe()))
       managerWatcher.watch(manager)
       manager ! JobManagerActor.RestartExistingJobs
 
@@ -1095,7 +1099,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val binaryInfo = BinaryInfo("dummy", BinaryType.Jar, DateTime.now())
       val jobInfo = JobInfo("jobId", contextId, "context-name",
         "test-class", JobStatus.Running, DateTime.now(), None, None, Seq(binaryInfo))
-      manager = system.actorOf(JobManagerActorSpy.props(daoProbe.ref, "", 5.seconds, contextId, TestProbe()))
+      manager = system.actorOf(JobManagerActorSpy.props(daoProbe.ref, "", defaultSmallTimeout, contextId, TestProbe()))
       managerWatcher.watch(manager)
       manager ! JobManagerActor.RestartExistingJobs
 
@@ -1121,17 +1125,16 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
     it("should restart if running job was found with valid config") {
       val spyProbe = TestProbe()
       val contextId = "dummy-context"
-      val daoProbe = TestProbe()
       val binaryInfo = uploadTestJar()
       val jobInfo = JobInfo("jobId", contextId, "context-name",
         wordCountClass, JobStatus.Running, DateTime.now(), None, None, Seq(binaryInfo))
-      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, spyProbe))
+      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", defaultSmallTimeout, contextId, spyProbe))
 
       contextConfig = ConfigFactory.parseString(s"context.id=$contextId").withFallback(contextConfig)
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
-      dao.saveJobInfo(jobInfo)
-      dao.saveJobConfig(jobInfo.jobId, stringConfig)
+      Await.result(daoActor ? SaveJobInfo(jobInfo), defaultSmallTimeout)
+      Await.result(daoActor ? SaveJobConfig(jobInfo.jobId, stringConfig), defaultSmallTimeout)
 
       manager ! JobManagerActor.RestartExistingJobs
 
@@ -1144,17 +1147,17 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
     it("should restart if running job was found with valid config, but no cp set (based on binaryInfo)") {
       val spyProbe = TestProbe()
       val contextId = "dummy-context"
-      val daoProbe = TestProbe()
       val binaryInfo = uploadTestJar()
       val jobInfo = JobInfo("jobId", contextId, "context-name",
         wordCountClass, JobStatus.Running, DateTime.now(), None, None, Seq(binaryInfo))
-      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, spyProbe))
+      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", defaultSmallTimeout, contextId, spyProbe))
 
       contextConfig = ConfigFactory.parseString(s"context.id=$contextId").withFallback(contextConfig)
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
-      dao.saveJobInfo(jobInfo)
-      dao.saveJobConfig(jobInfo.jobId, ConfigFactory.parseString("input.string = a b c d"))
+      Await.result(daoActor ? SaveJobInfo(jobInfo), defaultSmallTimeout)
+      Await.result(daoActor ? SaveJobConfig(
+        jobInfo.jobId, ConfigFactory.parseString("input.string = a b c d")), defaultSmallTimeout)
 
       manager ! JobManagerActor.RestartExistingJobs
 
@@ -1166,17 +1169,16 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
     it("should restart if a job was found with valid config and state Restarting") {
       val spyProbe = TestProbe()
       val contextId = "dummy-context"
-      val daoProbe = TestProbe()
       val binaryInfo = uploadTestJar()
       val jobInfo = JobInfo("jobId", contextId, "context-name",
         wordCountClass, JobStatus.Restarting, DateTime.now(), None, None, Seq(binaryInfo))
-      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, spyProbe))
+      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", defaultSmallTimeout, contextId, spyProbe))
 
       contextConfig = ConfigFactory.parseString(s"context.id=$contextId").withFallback(contextConfig)
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
-      dao.saveJobInfo(jobInfo)
-      dao.saveJobConfig(jobInfo.jobId, stringConfig)
+      Await.result(daoActor ? SaveJobInfo(jobInfo), defaultSmallTimeout)
+      Await.result(daoActor ? SaveJobConfig(jobInfo.jobId, stringConfig), defaultSmallTimeout)
 
       manager ! JobManagerActor.RestartExistingJobs
 
@@ -1188,19 +1190,19 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
     it("should restart multiple jobs if available for a specific context") {
       val spyProbe = TestProbe()
       val contextId = "dummy-context"
-      val daoProbe = TestProbe()
       val binaryInfo = uploadTestJar()
       val jobInfo = JobInfo("jobId", contextId, "context-name",
         wordCountClass, JobStatus.Running, DateTime.now(), None, None, Seq(binaryInfo))
-      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, spyProbe))
+      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", defaultSmallTimeout, contextId, spyProbe))
 
       contextConfig = ConfigFactory.parseString(s"context.id=$contextId").withFallback(contextConfig)
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
-      dao.saveJobInfo(jobInfo)
-      dao.saveJobConfig(jobInfo.jobId, stringConfig)
-      dao.saveJobInfo(jobInfo.copy(jobId = "jobId1", state = JobStatus.Restarting))
-      dao.saveJobConfig("jobId1", stringConfig)
+      Await.result(daoActor ? SaveJobInfo(jobInfo), defaultSmallTimeout)
+      Await.result(daoActor ? SaveJobConfig(jobInfo.jobId, stringConfig), defaultSmallTimeout)
+      Await.result(daoActor ? SaveJobInfo(
+        jobInfo.copy(jobId = "jobId1", state = JobStatus.Restarting)), defaultSmallTimeout)
+      Await.result(daoActor ? SaveJobConfig("jobId1", stringConfig), defaultSmallTimeout)
 
       manager ! JobManagerActor.RestartExistingJobs
 
@@ -1216,27 +1218,27 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val spyProbe = TestProbe()
       val contextId = "dummy-context"
       val contextName = "context-name"
-      val daoProbe = TestProbe()
       val testJar = uploadTestJar("test-jar")
-      val binaryInfo = dao.getBinaryInfo("test-jar").get
       val jobInfo = JobInfo("jobId", contextId, contextName,
-        wordCountClass, JobStatus.Running, DateTime.now(), None, None, Seq(binaryInfo))
+        wordCountClass, JobStatus.Running, DateTime.now(), None, None, Seq(testJar))
       val testJarJobConfig = ConfigFactory.parseString("cp = [\"test-jar\"]").withFallback(stringConfig)
-      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, spyProbe))
+      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", defaultSmallTimeout, contextId, spyProbe))
 
       contextConfig = ConfigFactory.parseString(s"context.id=$contextId,context.name=$contextName").withFallback(contextConfig)
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
-      dao.saveJobInfo(jobInfo)
-      dao.saveJobConfig(jobInfo.jobId, testJarJobConfig)
-      dao.saveJobInfo(jobInfo.copy(jobId = "jobId1", state = JobStatus.Error))
-      dao.saveJobConfig("jobId1", testJarJobConfig)
-      dao.saveJobInfo(jobInfo.copy(jobId = "jobId2", state = JobStatus.Finished))
-      dao.saveJobConfig("jobId2", testJarJobConfig)
+      Await.result(daoActor ? SaveJobInfo(jobInfo), defaultSmallTimeout)
+      Await.result(daoActor ? SaveJobConfig(jobInfo.jobId, testJarJobConfig), defaultSmallTimeout)
+      Await.result(daoActor ? SaveJobInfo(
+        jobInfo.copy(jobId = "jobId1", state = JobStatus.Error)), defaultSmallTimeout)
+      Await.result(daoActor ? SaveJobConfig("jobId1", testJarJobConfig), defaultSmallTimeout)
+      Await.result(daoActor ? SaveJobInfo(
+        jobInfo.copy(jobId = "jobId2", state = JobStatus.Finished)), defaultSmallTimeout)
+      Await.result(daoActor ? SaveJobConfig("jobId2", testJarJobConfig), defaultSmallTimeout)
       val jobInfo3 = jobInfo.copy(jobId = "jobId3", state = JobStatus.Restarting)
-      dao.saveJobInfo(jobInfo3)
-      dao.saveJobConfig("jobId3", testJarJobConfig)
+      Await.result(daoActor ? SaveJobInfo(jobInfo3), defaultSmallTimeout)
+      Await.result(daoActor ? SaveJobConfig("jobId3", testJarJobConfig), defaultSmallTimeout)
 
       manager ! JobManagerActor.RestartExistingJobs
 
@@ -1260,15 +1262,15 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val binaryInfo = uploadTestJar()
       val jobInfo = JobInfo("jobId", contextId, "context-name",
         wordCountClass, JobStatus.Running, DateTime.now(), None, None, Seq(binaryInfo))
-      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, spyProbe))
+      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", defaultSmallTimeout, contextId, spyProbe))
       deathWatcher.watch(manager)
 
       contextConfig = ConfigFactory.parseString(s"context.id=$contextId").withFallback(contextConfig)
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
-      dao.saveJobInfo(jobInfo)
-      dao.saveJobConfig(jobInfo.jobId, stringConfig)
-      dao.saveJobInfo(jobInfo.copy(jobId = "jobId1")) // Not saving config for jobId1 causes restart failure
+      Await.result(daoActor ? SaveJobInfo(jobInfo), defaultSmallTimeout)
+      Await.result(daoActor ? SaveJobConfig(jobInfo.jobId, stringConfig), defaultSmallTimeout)
+      Await.result(daoActor ? SaveJobInfo(jobInfo.copy(jobId = "jobId1")), defaultSmallTimeout)
 
       manager ! JobManagerActor.RestartExistingJobs
 
@@ -1286,14 +1288,14 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val contextName = "context-name"
       val jobInfo = JobInfo("jobId", contextId, contextName,
         wordCountClass, JobStatus.Running, DateTime.now(), None, None, Seq.empty)
-      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, spyProbe))
+      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", defaultSmallTimeout, contextId, spyProbe))
 
       contextConfig = ConfigFactory.parseString(s"context.id=$contextId,context.name=$contextName").withFallback(contextConfig)
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
-      dao.saveJobInfo(jobInfo)
-      dao.saveJobConfig(jobInfo.jobId, stringConfig)
+      Await.result(daoActor ? SaveJobInfo(jobInfo), defaultSmallTimeout)
+      Await.result(daoActor ? SaveJobConfig(jobInfo.jobId, stringConfig), defaultSmallTimeout)
 
       manager ! JobManagerActor.RestartExistingJobs
 
@@ -1316,7 +1318,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
     }
 
     it("should stop context, kill status actor and shutdown itself (in order)") {
-      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, TestProbe(), 1))
+      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", defaultSmallTimeout, contextId, TestProbe(), 1))
       watch(manager)
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
@@ -1333,7 +1335,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
     }
 
     it("should update DAO if an external kill event is fired to stop the context") {
-      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, TestProbe(), 1))
+      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", defaultSmallTimeout, contextId, TestProbe(), 1))
       val deathWatcher = TestProbe()
       deathWatcher.watch(manager)
 
@@ -1357,7 +1359,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
     }
 
     it("should stop context and cleanup properly in case of unhandled exception") {
-      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, TestProbe(), 1))
+      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", defaultSmallTimeout, contextId, TestProbe(), 1))
       val deathWatcher = TestProbe()
       deathWatcher.watch(manager)
 
@@ -1370,7 +1372,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
       manager ! JobManagerActorSpy.UnhandledException
 
-      deathWatcher.expectTerminated(manager, 5.seconds)
+      deathWatcher.expectTerminated(manager, defaultSmallTimeout)
       daoActor ! JobDAOActor.GetContextInfo(contextId)
       expectMsgPF(3.seconds, "") {
         case JobDAOActor.ContextResponse(Some(contextInfo)) =>
@@ -1381,7 +1383,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
     }
 
     it("should start a job in adhoc context and should stop context once finished") {
-      manager = system.actorOf(JobManagerActorSpyStateUpdate.props(daoActor, "", 5.seconds, contextId, self))
+      manager = system.actorOf(JobManagerActorSpyStateUpdate.props(daoActor, "", defaultSmallTimeout, contextId, self))
       val adhocContextConfig = JobManagerActorSpec.getContextConfig(adhoc = true)
       daoActor ! JobDAOActor.SaveContextInfo(ContextInfo(contextId, "ctx", "",
         None, DateTime.now(), None, ContextStatus.Running, None))
@@ -1415,7 +1417,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
   describe("Forceful context stop tests") {
     it("should stop context forcefully and shutdown itself") {
       val deathWatcher = TestProbe()
-      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, TestProbe(), 1))
+      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", defaultSmallTimeout, contextId, TestProbe(), 1))
       deathWatcher.watch(manager)
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
@@ -1426,7 +1428,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
     }
 
     it("should forcefully stop context, kill status actor and shutdown itself (in order)") {
-      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, TestProbe(), 1))
+      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", defaultSmallTimeout, contextId, TestProbe(), 1))
       watch(manager)
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
@@ -1444,7 +1446,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
     it("should send ContextStopError in case of an exception for forceful context stop") {
       manager = system.actorOf(JobManagerActorSpy.props(
-          daoActor, "", 5.seconds, "forceful_exception", TestProbe(), 1))
+          daoActor, "", defaultSmallTimeout, "forceful_exception", TestProbe(), 1))
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
@@ -1455,7 +1457,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
     it("should be able to stop context forcefully if normal stop timed out") {
       val deathWatcher = TestProbe()
       val contextId = "normal_then_forceful"
-      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", 5.seconds, contextId, TestProbe(), 1))
+      manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", defaultSmallTimeout, contextId, TestProbe(), 1))
       deathWatcher.watch(manager)
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])

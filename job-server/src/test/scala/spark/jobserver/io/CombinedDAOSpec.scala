@@ -23,7 +23,7 @@ abstract class CombinedDAOSpecBase {
   def config : Config
 }
 
-object CombinedDAOTestHelper {
+object DAOTestsHelper {
   implicit val system: ActorSystem = ActorSystem("test")
 
   val binaryDAOBytesSuccess: Array[Byte] = "To test success BinaryDAO".toCharArray.map(_.toByte)
@@ -54,7 +54,7 @@ class CombinedDAOSpec extends CombinedDAOSpecBase with FunSpecLike with BeforeAn
 
     override def beforeAll() {
       Files.createDirectories(Paths.get(rootDir))
-      CombinedDAOTestHelper.testProbe = TestProbe()(ActorSystem("test"))
+      DAOTestsHelper.testProbe = TestProbe()(ActorSystem("test"))
     }
 
     override def afterAll(): Unit = {
@@ -138,79 +138,79 @@ class CombinedDAOSpec extends CombinedDAOSpecBase with FunSpecLike with BeforeAn
       it("should be able to save one binary file") {
         dao.saveBinary("success",
           BinaryType.Jar,
-          CombinedDAOTestHelper.defaultDate,
-          CombinedDAOTestHelper.binaryDAOBytesSuccess)
-        CombinedDAOTestHelper.testProbe.expectMsg("BinaryDAO: Save success")
-        CombinedDAOTestHelper.testProbe.expectMsg("MetaDataDAO: Save success")
-        CombinedDAOTestHelper.testProbe.expectNoMsg(daoTimeout)
+          DAOTestsHelper.defaultDate,
+          DAOTestsHelper.binaryDAOBytesSuccess)
+        DAOTestsHelper.testProbe.expectMsg("BinaryDAO: Save success")
+        DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: Save success")
+        DAOTestsHelper.testProbe.expectNoMsg(daoTimeout)
       }
 
       it("should write no meta if binary file not saved") {
         intercept[SaveBinaryException] {
           dao.saveBinary("",
             BinaryType.Jar,
-            CombinedDAOTestHelper.defaultDate,
-            CombinedDAOTestHelper.binaryDAOBytesFail)
+            DAOTestsHelper.defaultDate,
+            DAOTestsHelper.binaryDAOBytesFail)
         }
-        CombinedDAOTestHelper.testProbe.expectMsg("BinaryDAO: Save failed")
-        CombinedDAOTestHelper.testProbe.expectNoMsg(daoTimeout)
+        DAOTestsHelper.testProbe.expectMsg("BinaryDAO: Save failed")
+        DAOTestsHelper.testProbe.expectNoMsg(daoTimeout)
       }
 
       it("should try to delete binary if meta data save failed") {
         intercept[SaveBinaryException] {
           dao.saveBinary("failed",
             BinaryType.Jar,
-            CombinedDAOTestHelper.defaultDate,
-            CombinedDAOTestHelper.binaryDAOBytesSuccess)
+            DAOTestsHelper.defaultDate,
+            DAOTestsHelper.binaryDAOBytesSuccess)
         }
-        CombinedDAOTestHelper.testProbe.expectMsg("BinaryDAO: Save success")
-        CombinedDAOTestHelper.testProbe.expectMsg("MetaDataDAO: Save failed")
-        CombinedDAOTestHelper.testProbe.expectMsg("MetaDataDAO: getBinariesByStorageId success")
-        CombinedDAOTestHelper.testProbe.expectMsg("BinaryDAO: Delete success")
-        CombinedDAOTestHelper.testProbe.expectNoMsg(daoTimeout)
+        DAOTestsHelper.testProbe.expectMsg("BinaryDAO: Save success")
+        DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: Save failed")
+        DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: getBinariesByStorageId success")
+        DAOTestsHelper.testProbe.expectMsg("BinaryDAO: Delete success")
+        DAOTestsHelper.testProbe.expectNoMsg(daoTimeout)
       }
 
       it("should delete both meta and binary") {
         dao.deleteBinary("success")
-        CombinedDAOTestHelper.testProbe.expectMsg("MetaDataDAO: getBinary success")
-        CombinedDAOTestHelper.testProbe.expectMsg("MetaDataDAO: Delete success")
-        CombinedDAOTestHelper.testProbe.expectMsg("MetaDataDAO: getBinariesByStorageId success")
-        CombinedDAOTestHelper.testProbe.expectMsg("BinaryDAO: Delete success")
-        CombinedDAOTestHelper.testProbe.expectNoMsg(daoTimeout)
+        DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: getBinary success")
+        DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: Delete success")
+        DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: getBinariesByStorageId success")
+        DAOTestsHelper.testProbe.expectMsg("BinaryDAO: Delete success")
+        DAOTestsHelper.testProbe.expectNoMsg(daoTimeout)
       }
 
       it("should not delete binary if meta is not deleted") {
         intercept[DeleteBinaryInfoFailedException] {
           dao.deleteBinary("get-info-success-del-info-failed")
         }
-        CombinedDAOTestHelper.testProbe.expectMsg("MetaDataDAO: getBinary success")
-        CombinedDAOTestHelper.testProbe.expectMsg("MetaDataDAO: Delete failed")
-        CombinedDAOTestHelper.testProbe.expectNoMsg(daoTimeout)
+        DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: getBinary success")
+        DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: Delete failed")
+        DAOTestsHelper.testProbe.expectNoMsg(daoTimeout)
       }
 
       it("should not delete binary if it is still used") {
-        dao.deleteBinary(CombinedDAOTestHelper.someBinaryName)
-        CombinedDAOTestHelper.testProbe.expectMsg("MetaDataDAO: getBinary success")
-        CombinedDAOTestHelper.testProbe.expectMsg("MetaDataDAO: Delete success")
-        CombinedDAOTestHelper.testProbe.expectMsg("MetaDataDAO: getBinariesByStorageId success")
-        CombinedDAOTestHelper.testProbe.expectNoMsg(daoTimeout)
+        dao.deleteBinary(DAOTestsHelper.someBinaryName)
+        DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: getBinary success")
+        DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: Delete success")
+        DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: getBinariesByStorageId success")
+        DAOTestsHelper.testProbe.expectNoMsg(daoTimeout)
       }
 
       it("should delete binary if it is not in use") {
-        dao.deleteBinary(CombinedDAOTestHelper.someOtherBinaryName)
-        CombinedDAOTestHelper.testProbe.expectMsg("MetaDataDAO: getBinary success")
-        CombinedDAOTestHelper.testProbe.expectMsg("MetaDataDAO: Delete success")
-        CombinedDAOTestHelper.testProbe.expectMsg("MetaDataDAO: getBinariesByStorageId success")
-        CombinedDAOTestHelper.testProbe.expectMsg("BinaryDAO: Delete success")
-        CombinedDAOTestHelper.testProbe.expectNoMsg(daoTimeout)
+        dao.deleteBinary(DAOTestsHelper.someOtherBinaryName)
+        DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: getBinary success")
+        DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: Delete success")
+        DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: getBinariesByStorageId success")
+        DAOTestsHelper.testProbe.expectMsg("BinaryDAO: Delete success")
+        DAOTestsHelper.testProbe.expectNoMsg(daoTimeout)
       }
 
       it("should throw NoSuchBinaryException if get info didn't find anything") {
         intercept[NoSuchBinaryException] {
           dao.deleteBinary("get-info-failed")
         }
-        CombinedDAOTestHelper.testProbe.expectMsg("MetaDataDAO: getBinary failed")
-        CombinedDAOTestHelper.testProbe.expectNoMsg(daoTimeout)
+        DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: getBinary failed")
+        DAOTestsHelper.testProbe.expectNoMsg(daoTimeout)
       }
     }
 
@@ -218,11 +218,11 @@ class CombinedDAOSpec extends CombinedDAOSpecBase with FunSpecLike with BeforeAn
       it("should get info for all binaries") {
         val names = Await.result(dao.getApps, 60 seconds)
         names should equal (Map(
-          CombinedDAOTestHelper.someBinaryName -> (BinaryType.Jar, CombinedDAOTestHelper.defaultDate),
-          CombinedDAOTestHelper.someOtherBinaryName -> (BinaryType.Jar, CombinedDAOTestHelper.defaultDate),
-          "name3" -> (BinaryType.Jar, CombinedDAOTestHelper.defaultDate),
-          "name4" -> (BinaryType.Jar, CombinedDAOTestHelper.defaultDate),
-          "name5" -> (BinaryType.Jar, CombinedDAOTestHelper.defaultDate)
+          DAOTestsHelper.someBinaryName -> (BinaryType.Jar, DAOTestsHelper.defaultDate),
+          DAOTestsHelper.someOtherBinaryName -> (BinaryType.Jar, DAOTestsHelper.defaultDate),
+          "name3" -> (BinaryType.Jar, DAOTestsHelper.defaultDate),
+          "name4" -> (BinaryType.Jar, DAOTestsHelper.defaultDate),
+          "name5" -> (BinaryType.Jar, DAOTestsHelper.defaultDate)
         ))
       }
     }
@@ -231,26 +231,26 @@ class CombinedDAOSpec extends CombinedDAOSpecBase with FunSpecLike with BeforeAn
     def saveBinaryAndCheckResponse(binName: String, daoWithCacheEnabled: CombinedDAO): Unit = {
       daoWithCacheEnabled.saveBinary(binName,
         BinaryType.Jar,
-        CombinedDAOTestHelper.defaultDate,
-        CombinedDAOTestHelper.binaryDAOBytesSuccess)
-      CombinedDAOTestHelper.testProbe.expectMsg("BinaryDAO: Save success")
-      CombinedDAOTestHelper.testProbe.expectMsg("MetaDataDAO: Save success")
-      CombinedDAOTestHelper.testProbe.expectNoMsg(daoTimeout)
+        DAOTestsHelper.defaultDate,
+        DAOTestsHelper.binaryDAOBytesSuccess)
+      DAOTestsHelper.testProbe.expectMsg("BinaryDAO: Save success")
+      DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: Save success")
+      DAOTestsHelper.testProbe.expectNoMsg(daoTimeout)
     }
 
     def deleteBinaryAndCheckResponse(binName: String, daoWithCacheEnabled: CombinedDAO): Unit = {
       daoWithCacheEnabled.deleteBinary(binName)
-      CombinedDAOTestHelper.testProbe.expectMsg("MetaDataDAO: getBinary success")
-      CombinedDAOTestHelper.testProbe.expectMsg("MetaDataDAO: Delete success")
-      CombinedDAOTestHelper.testProbe.expectMsg("MetaDataDAO: getBinariesByStorageId success")
-      CombinedDAOTestHelper.testProbe.expectMsg("BinaryDAO: Delete success")
-      CombinedDAOTestHelper.testProbe.expectNoMsg(daoTimeout)
+      DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: getBinary success")
+      DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: Delete success")
+      DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: getBinariesByStorageId success")
+      DAOTestsHelper.testProbe.expectMsg("BinaryDAO: Delete success")
+      DAOTestsHelper.testProbe.expectNoMsg(daoTimeout)
     }
 
     it("should create cache on save binary and delete on delete binary if enabled") {
       val binName = "success"
       val jarFile = new File(config.getString("spark.jobserver.combineddao.rootdir"),
-        binName + "-" + CombinedDAOTestHelper.defaultDate.toString("yyyyMMdd_HHmmss_SSS") + ".jar")
+        binName + "-" + DAOTestsHelper.defaultDate.toString("yyyyMMdd_HHmmss_SSS") + ".jar")
 
       jarFile.exists() should be(false)
 
@@ -268,7 +268,7 @@ class CombinedDAOSpec extends CombinedDAOSpecBase with FunSpecLike with BeforeAn
     it("should not cache any binary if disabled") {
       val binName = "success"
       val jarFile = new File(config.getString("spark.jobserver.combineddao.rootdir"),
-        binName + "-" + CombinedDAOTestHelper.defaultDate.toString("yyyyMMdd_HHmmss_SSS") + ".jar")
+        binName + "-" + DAOTestsHelper.defaultDate.toString("yyyyMMdd_HHmmss_SSS") + ".jar")
 
       saveBinaryAndCheckResponse(binName, dao)
 
@@ -366,38 +366,38 @@ class CombinedDAOSpec extends CombinedDAOSpecBase with FunSpecLike with BeforeAn
 class DummyBinaryDAO(config: Config) extends BinaryDAO {
   override def save(id: String, binaryBytes: Array[Byte]): Future[Boolean] = {
     id match {
-      case CombinedDAOTestHelper.`binaryDAOSuccessId` =>
-        CombinedDAOTestHelper.testProbe.ref ! "BinaryDAO: Save success"
+      case DAOTestsHelper.`binaryDAOSuccessId` =>
+        DAOTestsHelper.testProbe.ref ! "BinaryDAO: Save success"
         Future.successful(true)
-      case CombinedDAOTestHelper.`binaryDAOFailId` =>
-        CombinedDAOTestHelper.testProbe.ref ! "BinaryDAO: Save failed"
+      case DAOTestsHelper.`binaryDAOFailId` =>
+        DAOTestsHelper.testProbe.ref ! "BinaryDAO: Save failed"
         Future.successful(false)
       case _ =>
-        CombinedDAOTestHelper.testProbe.ref ! "BinaryDAO: unexpected id " + id + " in save"
+        DAOTestsHelper.testProbe.ref ! "BinaryDAO: unexpected id " + id + " in save"
         Future.successful(false)
     }
   }
 
   override def delete(id: String): Future[Boolean] = {
     id match {
-      case CombinedDAOTestHelper.`binaryDAOSuccessId` =>
-        CombinedDAOTestHelper.testProbe.ref ! "BinaryDAO: Delete success"
+      case DAOTestsHelper.`binaryDAOSuccessId` =>
+        DAOTestsHelper.testProbe.ref ! "BinaryDAO: Delete success"
         Future.successful(true)
-      case CombinedDAOTestHelper.`binaryDAOFailId` =>
-        CombinedDAOTestHelper.testProbe.ref ! "BinaryDAO: Delete failed"
+      case DAOTestsHelper.`binaryDAOFailId` =>
+        DAOTestsHelper.testProbe.ref ! "BinaryDAO: Delete failed"
         Future.successful(false)
-      case CombinedDAOTestHelper.someOtherBinaryId =>
-        CombinedDAOTestHelper.testProbe.ref ! "BinaryDAO: Delete success"
+      case DAOTestsHelper.someOtherBinaryId =>
+        DAOTestsHelper.testProbe.ref ! "BinaryDAO: Delete success"
         Future.successful(true)
       case _ =>
-        CombinedDAOTestHelper.testProbe.ref ! "BinaryDAO: unexpected id " + id + " in delete"
+        DAOTestsHelper.testProbe.ref ! "BinaryDAO: unexpected id " + id + " in delete"
         Future.successful(false)
     }
   }
 
   override def get(id: String): Future[Option[Array[Byte]]] = {
-    CombinedDAOTestHelper.testProbe.ref ! "BinaryDAO: Get success"
-    Future.successful(Some(CombinedDAOTestHelper.binaryDAOBytesSuccess))
+    DAOTestsHelper.testProbe.ref ! "BinaryDAO: Get success"
+    Future.successful(Some(DAOTestsHelper.binaryDAOBytesSuccess))
   }
 }
 
@@ -412,13 +412,17 @@ class DummyMetaDataDAO(config: Config) extends MetaDataDAO {
                           id: String): Future[Boolean] = {
     name match {
       case message if message.contains("save-info-success") || message == "success" =>
-        CombinedDAOTestHelper.testProbe.ref ! "MetaDataDAO: Save success"
+        DAOTestsHelper.testProbe.ref ! "MetaDataDAO: Save success"
+        Future.successful(true)
+      case message if message.startsWith("long-call") =>
+        val ms = message.split("-").last.toInt
+        Thread.sleep(ms)
         Future.successful(true)
       case message if message.contains("save-info-failed") || message == "failed" =>
-        CombinedDAOTestHelper.testProbe.ref ! "MetaDataDAO: Save failed"
+        DAOTestsHelper.testProbe.ref ! "MetaDataDAO: Save failed"
         Future.successful(false)
       case _ =>
-        CombinedDAOTestHelper.testProbe.ref ! "MetaDataDAO: unexpected name " + name + " in save"
+        DAOTestsHelper.testProbe.ref ! "MetaDataDAO: unexpected name " + name + " in save"
         Future.successful(false)
     }
   }
@@ -426,38 +430,38 @@ class DummyMetaDataDAO(config: Config) extends MetaDataDAO {
   override def deleteBinary(name: String): Future[Boolean] = {
     name match {
       case message if message.contains("del-info-success") || message == "success" =>
-        CombinedDAOTestHelper.testProbe.ref ! "MetaDataDAO: Delete success"
+        DAOTestsHelper.testProbe.ref ! "MetaDataDAO: Delete success"
         Future.successful(true)
       case message if message.contains("del-info-failed") || message == "failed" =>
-        CombinedDAOTestHelper.testProbe.ref ! "MetaDataDAO: Delete failed"
+        DAOTestsHelper.testProbe.ref ! "MetaDataDAO: Delete failed"
         Future.successful(false)
       case _ =>
-        CombinedDAOTestHelper.testProbe.ref ! "MetaDataDAO: unexpected name " + name + " in delete"
+        DAOTestsHelper.testProbe.ref ! "MetaDataDAO: unexpected name " + name + " in delete"
         Future.successful(false)
     }
   }
 
   override def getBinary(name: String): Future[Option[BinaryInfo]] = {
     name match {
-      case CombinedDAOTestHelper.someBinaryName =>
-        CombinedDAOTestHelper.testProbe.ref ! "MetaDataDAO: getBinary success"
+      case DAOTestsHelper.someBinaryName =>
+        DAOTestsHelper.testProbe.ref ! "MetaDataDAO: getBinary success"
         Future.successful(Some(
-            CombinedDAOTestHelper.someBinaryInfo
+            DAOTestsHelper.someBinaryInfo
           )
         )
-      case CombinedDAOTestHelper.someOtherBinaryName =>
-        CombinedDAOTestHelper.testProbe.ref ! "MetaDataDAO: getBinary success"
+      case DAOTestsHelper.someOtherBinaryName =>
+        DAOTestsHelper.testProbe.ref ! "MetaDataDAO: getBinary success"
         Future.successful(Some(
-            CombinedDAOTestHelper.someOtherBinaryInfo
+            DAOTestsHelper.someOtherBinaryInfo
           )
         )
       case message if message.contains("get-info-success") || message == "success" =>
-        CombinedDAOTestHelper.testProbe.ref ! "MetaDataDAO: getBinary success"
+        DAOTestsHelper.testProbe.ref ! "MetaDataDAO: getBinary success"
         Future.successful(Some(
-          BinaryInfo("success", BinaryType.Jar, DateTime.now(), Some(CombinedDAOTestHelper.binaryDAOSuccessId)))
+          BinaryInfo("success", BinaryType.Jar, DateTime.now(), Some(DAOTestsHelper.binaryDAOSuccessId)))
         )
       case _ =>
-        CombinedDAOTestHelper.testProbe.ref ! "MetaDataDAO: getBinary failed"
+        DAOTestsHelper.testProbe.ref ! "MetaDataDAO: getBinary failed"
         Future.successful(None)
     }
   }
@@ -465,37 +469,37 @@ class DummyMetaDataDAO(config: Config) extends MetaDataDAO {
   override def getBinaries: Future[Seq[BinaryInfo]] = {
     Future.successful(
       Seq(
-        CombinedDAOTestHelper.someBinaryInfo,
-        CombinedDAOTestHelper.someOtherBinaryInfo,
-        BinaryInfo("name3", BinaryType.Jar, CombinedDAOTestHelper.defaultDate),
-        BinaryInfo("name4", BinaryType.Jar, CombinedDAOTestHelper.defaultDate),
-        BinaryInfo("name5", BinaryType.Jar, CombinedDAOTestHelper.defaultDate)
+        DAOTestsHelper.someBinaryInfo,
+        DAOTestsHelper.someOtherBinaryInfo,
+        BinaryInfo("name3", BinaryType.Jar, DAOTestsHelper.defaultDate),
+        BinaryInfo("name4", BinaryType.Jar, DAOTestsHelper.defaultDate),
+        BinaryInfo("name5", BinaryType.Jar, DAOTestsHelper.defaultDate)
       )
     )
   }
 
   override def getBinariesByStorageId(storageId: String): Future[Seq[BinaryInfo]] = {
     storageId match {
-      case CombinedDAOTestHelper.someBinaryId =>
-        CombinedDAOTestHelper.testProbe.ref ! "MetaDataDAO: getBinariesByStorageId success"
+      case DAOTestsHelper.someBinaryId =>
+        DAOTestsHelper.testProbe.ref ! "MetaDataDAO: getBinariesByStorageId success"
         Future.successful(Seq(
-          CombinedDAOTestHelper.someBinaryInfo,
-          BinaryInfo("someName", BinaryType.Jar, CombinedDAOTestHelper.defaultDate,
-              Some(CombinedDAOTestHelper.someBinaryId)))
+          DAOTestsHelper.someBinaryInfo,
+          BinaryInfo("someName", BinaryType.Jar, DAOTestsHelper.defaultDate,
+              Some(DAOTestsHelper.someBinaryId)))
         )
-      case CombinedDAOTestHelper.someOtherBinaryId =>
-        CombinedDAOTestHelper.testProbe.ref ! "MetaDataDAO: getBinariesByStorageId success"
+      case DAOTestsHelper.someOtherBinaryId =>
+        DAOTestsHelper.testProbe.ref ! "MetaDataDAO: getBinariesByStorageId success"
         Future.successful(Seq(
-          CombinedDAOTestHelper.someOtherBinaryInfo
+          DAOTestsHelper.someOtherBinaryInfo
         )
       )
       case message if message.contains("get-info-success") || message == "success" =>
-        CombinedDAOTestHelper.testProbe.ref ! "MetaDataDAO: getBinariesByStorageId success yes"
+        DAOTestsHelper.testProbe.ref ! "MetaDataDAO: getBinariesByStorageId success yes"
         Future.successful(Seq(
-          BinaryInfo("success", BinaryType.Jar, DateTime.now(), Some(CombinedDAOTestHelper.binaryDAOSuccessId)))
+          BinaryInfo("success", BinaryType.Jar, DateTime.now(), Some(DAOTestsHelper.binaryDAOSuccessId)))
         )
       case _ =>
-        CombinedDAOTestHelper.testProbe.ref ! "MetaDataDAO: getBinariesByStorageId success"
+        DAOTestsHelper.testProbe.ref ! "MetaDataDAO: getBinariesByStorageId success"
         Future.successful(Seq())
     }
   }
@@ -527,10 +531,30 @@ class DummyMetaDataDAO(config: Config) extends MetaDataDAO {
     }
   }
 
-  override def getJobs(limit: Int, status: Option[String]): Future[Seq[JobInfo]] = ???
+  override def getJobs(limit: Int, status: Option[String]): Future[Seq[JobInfo]] = Future {
+    limit match {
+      case 1 =>
+        val jobInfo =
+          JobInfo("bar", "cid", "context",
+            "com.abc.meme", JobStatus.Running, DAOTestsHelper.defaultDate, None,
+            None, Seq(BinaryInfo("demo", BinaryType.Egg, DAOTestsHelper.defaultDate)))
+        Seq(jobInfo)
+      case 0 => Seq()
+    }
+  }
 
   override def getJobsByBinaryName(binName: String, statuses: Option[Seq[String]] = None):
-    Future[Seq[JobInfo]] = ???
+    Future[Seq[JobInfo]] = Future {
+      binName match {
+        case "multiple" =>
+          val jobInfo =
+            JobInfo("bar", "cid", "context",
+              "com.abc.meme", JobStatus.Running, DAOTestsHelper.defaultDate, None,
+              None, Seq(BinaryInfo("demo", BinaryType.Egg, DAOTestsHelper.defaultDate)))
+          Seq(jobInfo, jobInfo.copy(jobId = "kaboom"))
+        case _ => Seq()
+      }
+  }
 
   override def getJob(id: String): Future[Option[JobInfo]] = {
     Future.successful(jobInfos.get(id))
@@ -558,13 +582,19 @@ class DummyMetaDataDAO(config: Config) extends MetaDataDAO {
 
   override def saveContext(contextInfo: ContextInfo): Future[Boolean] = {
     contextInfo.id match {
-      case "cid" =>
+      case "success" =>
+        Future {
+          Thread.sleep(100)
+          contextInfos(contextInfo.id) = contextInfo
+          true
+        }
+      case "cid-fail" | "failure" => Future.successful(false)
+      case _ =>
         Future {
           Thread.sleep(1000) // mimic long save operation
           contextInfos(contextInfo.id) = contextInfo
           true
         }
-      case "cid-fail" => Future.successful(false)
     }
   }
 }

@@ -13,6 +13,9 @@ final case class NoStorageIdException(private val appName: String) extends
 final case class SaveBinaryException(private val appName: String) extends
   Exception(s"can't save binary: $appName in database")
 
+final case class SaveContextException(private val contextId: String) extends
+  Exception(s"can't save context: $contextId in database")
+
 final case class NoSuchBinaryException(private val appName: String)
   extends Exception(s"can't find binary: $appName in database")
 

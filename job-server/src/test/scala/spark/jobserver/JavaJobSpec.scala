@@ -5,7 +5,7 @@ import com.typesafe.config.ConfigFactory
 import spark.jobserver.CommonMessages.{JobErroredOut, JobResult}
 import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.context.JavaSparkContextFactory
-import spark.jobserver.io.JobDAOActor
+import spark.jobserver.io.{InMemoryBinaryDAO, InMemoryMetaDAO, JobDAOActor}
 
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
@@ -15,7 +15,7 @@ class JavaJobSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) {
   val JobResultCacheSize = Integer.valueOf(30)
   val NumCpuCores = Integer.valueOf(Runtime.getRuntime.availableProcessors())
   val MemoryPerNode = "512m"
-  val MaxJobsPerContext = Integer.valueOf(2)
+  private val MaxJobsPerContext = Integer.valueOf(2)
 
   lazy val config = {
     val ConfigMap = Map(
@@ -36,8 +36,9 @@ class JavaJobSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) {
   }
 
   before {
-    dao = new InMemoryDAO
-    daoActor = system.actorOf(JobDAOActor.props(dao))
+    inMemoryMetaDAO = new InMemoryMetaDAO
+    inMemoryBinDAO = new InMemoryBinaryDAO
+    daoActor = system.actorOf(JobDAOActor.props(inMemoryMetaDAO, inMemoryBinDAO, daoConfig))
     manager = system.actorOf(JobManagerActor.props(daoActor))
     supervisor = TestProbe().ref
   }

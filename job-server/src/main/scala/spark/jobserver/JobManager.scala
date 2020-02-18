@@ -11,11 +11,13 @@ import akka.util.Timeout
 import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import org.apache.commons.io.FileUtils
 import org.slf4j.LoggerFactory
+import spark.jobserver.JobServer.InvalidConfiguration
 import spark.jobserver.common.akka.actor.ProductionReaper
 import spark.jobserver.common.akka.actor.Reaper.WatchMe
-import spark.jobserver.io.JobDAOActor.{GetContextInfo, GetContextInfoByName}
-import spark.jobserver.util.{HadoopFSFacade, JobServerRoles, JobserverConfig, NetworkAddressFactory, Utils}
-import spark.jobserver.io.{ContextStatus, JobDAO, JobDAOActor}
+import spark.jobserver.io.JobDAOActor.GetContextInfo
+import spark.jobserver.util.{JobServerRoles, JobserverConfig}
+import spark.jobserver.io.{BinaryDAO, ContextStatus, JobDAOActor, MetaDataDAO}
+import spark.jobserver.util.{HadoopFSFacade, NetworkAddressFactory, Utils}
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -81,10 +83,25 @@ object JobManager {
     }
 
     val system = makeSystem(config.resolve())
-    val clazz = Class.forName(config.getString("spark.jobserver.jobdao"))
-    val ctor = clazz.getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
-    val jobDAO = ctor.newInstance(config).asInstanceOf[JobDAO]
-    val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO), "dao-manager-jobmanager")
+
+    val metadataDaoClass = Class.forName(config.getString("spark.jobserver.combineddao.metadatadao.class"))
+    val binaryDaoClass = Class.forName(config.getString("spark.jobserver.combineddao.binarydao.class"))
+    val ctorMeta = metadataDaoClass.getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
+    val ctorBin = binaryDaoClass.getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
+    val metaDataDAO = try {
+      ctorMeta.newInstance(config).asInstanceOf[MetaDataDAO]
+    } catch {
+      case _: ClassNotFoundException =>
+        throw new InvalidConfiguration("Couldn't create Metadata DAO instance: please check configuration")
+    }
+    val binaryDAO = try {
+      ctorBin.newInstance(config).asInstanceOf[BinaryDAO]
+    } catch {
+      case _: ClassNotFoundException =>
+        throw new InvalidConfiguration("Couldn't create Binary DAO instance: please check configuration")
+    }
+    val daoActor = system.actorOf(
+      Props(classOf[JobDAOActor], metaDataDAO, binaryDAO, config), "dao-manager-jobmanager")
 
     logger.info("Starting JobManager named " + managerName + " with config {}",
       config.getConfig("spark").root.render())

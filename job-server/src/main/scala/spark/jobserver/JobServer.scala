@@ -76,7 +76,6 @@ object JobServer {
     val sparkMaster = config.getString("spark.master")
     val driverMode = config.getString("spark.submit.deployMode")
     val contextPerJvm = config.getBoolean("spark.jobserver.context-per-jvm")
-    val jobDaoClass = Class.forName(config.getString("spark.jobserver.jobdao"))
     val superviseModeEnabled = config.getBoolean("spark.driver.supervise")
     val akkaTcpPort = config.getInt("akka.remote.netty.tcp.port")
 
@@ -124,10 +123,26 @@ object JobServer {
 
     val haSeedNodes = getAndValidateHASeedNodes(config)
 
+    // Create DAO objects
+    val metadataDaoClass = Class.forName(config.getString("spark.jobserver.combineddao.metadatadao.class"))
+    val binaryDaoClass = Class.forName(config.getString("spark.jobserver.combineddao.binarydao.class"))
+    val ctorMeta = metadataDaoClass.getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
+    val ctorBin = binaryDaoClass.getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
+    val metaDataDAO = try {
+      ctorMeta.newInstance(config).asInstanceOf[MetaDataDAO]
+    } catch {
+      case _: ClassNotFoundException =>
+        throw new InvalidConfiguration("Couldn't create Metadata DAO instance: please check configuration")
+    }
+    val binaryDAO = try {
+      ctorBin.newInstance(config).asInstanceOf[BinaryDAO]
+    } catch {
+      case _: ClassNotFoundException =>
+        throw new InvalidConfiguration("Couldn't create Binary DAO instance: please check configuration")
+    }
+
     // Start actors and managers
-    val ctor = jobDaoClass.getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
-    val jobDAO = ctor.newInstance(config).asInstanceOf[JobDAO]
-    val daoActor = system.actorOf(Props(classOf[JobDAOActor], jobDAO), "dao-manager")
+    val daoActor = system.actorOf(Props(classOf[JobDAOActor], metaDataDAO, binaryDAO, config), "dao-manager")
     val dataFileDAO = new DataFileDAO(config)
     val dataManager = system.actorOf(Props(classOf[DataManagerActor], dataFileDAO), "data-manager")
     val binManager = system.actorOf(Props(classOf[BinaryManager], daoActor), "binary-manager")

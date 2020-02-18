@@ -878,6 +878,9 @@ class WebApi(system: ActorSystem,
                               case JobConfigStored =>
                                 val jobReport = getJobReport(jobInfo, jobStarted = true)
                                 ctx.complete(StatusCodes.Accepted, jobReport)
+                              case JobConfigStoreFailed =>
+                                completeWithErrorStatus(
+                                  ctx, "Failed to save job config", StatusCodes.InternalServerError)
                             }.recover {
                               case e: Exception => completeWithException(
                                 ctx, "ERROR", StatusCodes.InternalServerError, e)

@@ -3,10 +3,12 @@ package spark.jobserver
 import akka.actor._
 import akka.pattern._
 import akka.testkit._
+import akka.util.Timeout
 import com.typesafe.config.ConfigFactory
 import spark.jobserver.CommonMessages._
 import spark.jobserver.context.JavaStreamingContextFactory
-import spark.jobserver.io.{JobDAOActor, JobInfo, JobStatus}
+import spark.jobserver.io.JobDAOActor.GetJobInfo
+import spark.jobserver.io.{InMemoryBinaryDAO, InMemoryMetaDAO, JobDAOActor, JobInfo, JobStatus}
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -18,6 +20,7 @@ object JavaStreamingSpec extends JobSpecConfig {
 
 class JavaStreamingSpec extends ExtrasJobSpecBase(JavaStreamingSpec.getNewSystem) {
 
+  implicit private val futureTimeout = Timeout(5.seconds)
   private val emptyConfig = ConfigFactory.parseMap(
     Map("streaming.batch_interval" -> 3).asJava).withFallback(
     ConfigFactory.parseString("cp = [\"demo\"]"))
@@ -27,8 +30,9 @@ class JavaStreamingSpec extends ExtrasJobSpecBase(JavaStreamingSpec.getNewSystem
   private def cfg = JavaStreamingSpec.getContextConfig(false, JavaStreamingSpec.contextConfig)
 
   before {
-    dao = new InMemoryDAO
-    daoActor = system.actorOf(JobDAOActor.props(dao))
+    inMemoryMetaDAO = new InMemoryMetaDAO
+    inMemoryBinDAO = new InMemoryBinaryDAO
+    daoActor = system.actorOf(JobDAOActor.props(inMemoryMetaDAO, inMemoryBinDAO, daoConfig))
     manager = system.actorOf(JobManagerActor.props(daoActor))
     supervisor = TestProbe().ref
   }
@@ -50,7 +54,7 @@ class JavaStreamingSpec extends ExtrasJobSpecBase(JavaStreamingSpec.getNewSystem
           jid
       }
       Thread.sleep(1000)
-      val info = Await.result(dao.getJobInfo(id), 60 seconds)
+      val info = Await.result(daoActor ? GetJobInfo(id), 60 seconds).asInstanceOf[Option[JobInfo]]
       info.get match {
         case JobInfo(_, _, _, _, state, _, _, _, _) if state == JobStatus.Running => {}
         case e => fail(s":-( No worky work $e")

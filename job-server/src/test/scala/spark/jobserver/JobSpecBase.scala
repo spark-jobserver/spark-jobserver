@@ -8,10 +8,12 @@ import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.context.DefaultSparkContextFactory
-import spark.jobserver.io.{BinaryInfo, BinaryType, JobDAO}
+import spark.jobserver.io.JobDAOActor.{GetLastBinaryInfo, LastBinaryInfo, SaveBinary, SaveBinaryResult}
+import spark.jobserver.io.{BinaryDAO, BinaryInfo, BinaryType, DAOTestsHelper, JobDAO, MetaDataDAO}
 import spark.jobserver.util.JobserverConfig
 
 import scala.concurrent.duration._
+import scala.util.Success
 
 /**
  * Provides a base Config for tests.  Override the vals to configure.  Mix into an object.
@@ -80,7 +82,8 @@ trait JobSpecConfig {
 
 abstract class JobSpecBaseBase(system: ActorSystem) extends TestKit(system) with ImplicitSender
 with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
-  var dao: JobDAO = _
+  var inMemoryMetaDAO: MetaDataDAO = _
+  var inMemoryBinDAO: BinaryDAO = _
   var daoActor: ActorRef = _
   val emptyActor = system.actorOf(Props.empty)
   var manager: ActorRef = _
@@ -89,26 +92,29 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
   var supervisor: ActorRef = _
   val timeout: Duration = 5.seconds
   def extrasJar: java.io.File
+  lazy val daoConfig: Config = ConfigFactory.load("local.test.combineddao.conf")
 
   override def afterAll() {
     AkkaTestUtils.shutdownAndWait(manager)
     TestKit.shutdownActorSystem(system)
   }
 
-  protected def uploadBinary(dao: JobDAO, jarFilePath: String,
+  protected def uploadBinary(jarFilePath: String,
                              appName: String, binaryType: BinaryType): BinaryInfo = {
     val bytes = scala.io.Source.fromFile(jarFilePath, "ISO-8859-1").map(_.toByte).toArray
-    dao.saveBinary(appName, binaryType, DateTime.now, bytes)
-    dao.getBinaryInfo(appName).get
+    daoActor ! SaveBinary(appName, binaryType, DateTime.now, bytes)
+    expectMsg(SaveBinaryResult(Success({})))
+
+    daoActor ! GetLastBinaryInfo(appName)
+    expectMsgType[LastBinaryInfo].lastBinaryInfo.get
   }
 
   protected def uploadTestJar(appName: String = "demo"): BinaryInfo = {
-    uploadBinary(dao, testJar.getAbsolutePath, appName, BinaryType.Jar)
+    uploadBinary(testJar.getAbsolutePath, appName, BinaryType.Jar)
   }
 
   protected def uploadTestEgg(appName: String = "demo"): BinaryInfo = {
-    uploadBinary(dao, testEgg.getAbsolutePath, appName, BinaryType.Egg)
-    dao.getBinaryInfo(appName).get
+    uploadBinary(testEgg.getAbsolutePath, appName, BinaryType.Egg)
   }
 
   protected def getExtrasJarPath: String = extrasJar.getAbsolutePath

@@ -1,9 +1,9 @@
 package spark.jobserver
 
 import akka.actor.{Actor, ActorSystem, PoisonPill, Props}
-import com.typesafe.config.ConfigFactory
+import com.typesafe.config.{Config, ConfigFactory}
 import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
-import spark.jobserver.io.JobDAOActor
+import spark.jobserver.io.{InMemoryBinaryDAO, InMemoryMetaDAO, JobDAOActor}
 import spark.jobserver.io.JobDAOActor.GetJobInfo
 import spark.jobserver.util.ActorsHealthCheck
 import spray.http.StatusCodes._
@@ -39,7 +39,10 @@ with ScalatestRouteTest with HttpService {
   val dummyPort = 9999
   val aliveActor = system.actorOf(Props(classOf[AliveActor], this))
   val deadActor = system.actorOf(Props(classOf[DeadActor], this))
-  val jobDaoActor = system.actorOf(JobDAOActor.props(new InMemoryDAO))
+  val inMemoryMetaDAO = new InMemoryMetaDAO
+  val inMemoryBinDAO = new InMemoryBinaryDAO
+  val daoConfig: Config = ConfigFactory.load("local.test.combineddao.conf")
+  val jobDaoActor = system.actorOf(JobDAOActor.props(inMemoryMetaDAO, inMemoryBinDAO, daoConfig))
   val statusActor = system.actorOf(JobStatusActor.props(jobDaoActor))
 
   class AliveActor extends Actor {

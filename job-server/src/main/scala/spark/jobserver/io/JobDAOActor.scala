@@ -1,16 +1,20 @@
 package spark.jobserver.io
 
+import java.io.File
 import java.net.URI
 
 import akka.actor.{ActorRef, Props}
-import akka.pattern.ask
 import com.typesafe.config.Config
 import org.joda.time.DateTime
 
-import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 import spark.jobserver.common.akka.InstrumentedActor
-import spark.jobserver.util.{NoMatchingDAOObjectException, NoSuchBinaryException}
+import spark.jobserver.common.akka.metrics.YammerMetrics
+import spark.jobserver.io.CombinedDAO.rootDirConfPath
+import spark.jobserver.util._
+import spark.jobserver.util.DAOMetrics._
+import spark.jobserver.JobManagerActor.ContextTerminatedException
+
 import scala.concurrent.{Await, Future}
 
 object JobDAOActor {
@@ -66,81 +70,142 @@ object JobDAOActor {
   case object InvalidJar extends JobDAOResponse
   case object JarStored extends JobDAOResponse
   case object JobConfigStored
+  case object JobConfigStoreFailed
 
   sealed trait SaveResponse
   case object SavedSuccessfully extends SaveResponse
   case class SaveFailed(error: Throwable) extends SaveResponse
 
-  def props(dao: JobDAO): Props = Props(classOf[JobDAOActor], dao)
+  def props(metadatadao: MetaDataDAO, binarydao: BinaryDAO, config: Config): Props = {
+    Props(classOf[JobDAOActor], metadatadao, binarydao, config)
+  }
 }
 
-class JobDAOActor(dao: JobDAO) extends InstrumentedActor {
+class JobDAOActor(metaDataDAO: MetaDataDAO, binaryDAO: BinaryDAO, config: Config) extends InstrumentedActor
+  with YammerMetrics with FileCacher {
   import JobDAOActor._
   import akka.pattern.pipe
   import context.dispatcher
 
-  implicit val daoTimeout = 60 seconds
+
+  // Required by FileCacher
+  val rootDirPath: String = config.getString(rootDirConfPath)
+  val rootDirFile: File = new File(rootDirPath)
+
+
+  implicit val daoTimeout = JobserverTimeouts.DAO_DEFAULT_TIMEOUT
+  private val defaultAwaitTime = JobserverTimeouts.DAO_DEFAULT_TIMEOUT
+  private val jobDAOHelper = new JobDAOActorHelper(metaDataDAO, binaryDAO, config)
 
   def wrappedReceive: Receive = {
-    case SaveBinary(appName, binaryType, uploadTime, jarBytes) =>
+    case SaveBinary(name, binaryType, uploadTime, binaryBytes) =>
       val recipient = sender()
       Future {
-        dao.saveBinary(appName, binaryType, uploadTime, jarBytes)
+        jobDAOHelper.saveBinary(name, binaryType, uploadTime, binaryBytes)
       }.onComplete(recipient ! SaveBinaryResult(_))
 
-    case DeleteBinary(appName) =>
-      sender ! DeleteBinaryResult(Try(dao.deleteBinary(appName)))
+    case DeleteBinary(name) =>
+      val recipient = sender()
+      val deleteResult = DeleteBinaryResult(Try {
+        jobDAOHelper.deleteBinary(name)
+      })
+      recipient ! deleteResult
 
     case GetApps(typeFilter) =>
-      dao.getApps.map(apps => Apps(typeFilter.map(t => apps.filter(_._2._1 == t)).getOrElse(apps))).
-        pipeTo(sender)
+      val recipient = sender()
+      Utils.timedFuture(binList){
+        metaDataDAO.getBinaries.map(
+          binaryInfos => binaryInfos.map(info => info.appName -> (info.binaryType, info.uploadTime)).toMap
+        )
+      }.map(apps => Apps(typeFilter.map(t => apps.filter(_._2._1 == t)).getOrElse(apps))).pipeTo(recipient)
 
-    case GetBinaryPath(appName, binType, uploadTime) =>
-      sender() ! BinaryPath(dao.getBinaryFilePath(appName, binType, uploadTime))
+    case GetBinaryPath(name, binaryType, uploadTime) =>
+      val recipient = sender()
+      val binPath = BinaryPath(jobDAOHelper.getBinaryPath(name, binaryType, uploadTime))
+      recipient ! binPath
 
     case GetJobsByBinaryName(binName, statuses) =>
-      dao.getJobsByBinaryName(binName, statuses).map(JobInfos).pipeTo(sender)
+      Utils.timedFuture(jobQuery){
+        metaDataDAO.getJobsByBinaryName(binName, statuses)
+      }.map(JobInfos).pipeTo(sender)
 
     case SaveContextInfo(contextInfo) =>
       saveContextAndRespond(sender, contextInfo)
 
     case GetContextInfo(id) =>
-      dao.getContextInfo(id).map(ContextResponse).pipeTo(sender)
+      Utils.timedFuture(contextRead){
+        metaDataDAO.getContext(id)
+      }.map(ContextResponse).pipeTo(sender)
 
     case GetContextInfoByName(name) =>
-      dao.getContextInfoByName(name).map(ContextResponse).pipeTo(sender)
+      Utils.timedFuture(contextQuery){
+        metaDataDAO.getContextByName(name)
+      }.map(ContextResponse).pipeTo(sender)
 
     case GetContextInfos(limit, statuses) =>
-      dao.getContextInfos(limit, statuses).map(ContextInfos).pipeTo(sender)
+      Utils.timedFuture(contextList){
+        metaDataDAO.getContexts(limit, statuses)
+      }.map(ContextInfos).pipeTo(sender)
 
     case SaveJobInfo(jobInfo) =>
-      dao.saveJobInfo(jobInfo)
+      Utils.timedFuture(jobWrite) {
+        metaDataDAO.saveJob(jobInfo)
+      }.pipeTo(sender)
 
     case GetJobInfo(jobId) =>
-      dao.getJobInfo(jobId).pipeTo(sender)
+      Utils.timedFuture(jobRead){
+        metaDataDAO.getJob(jobId)
+      }.pipeTo(sender)
 
     case GetJobInfos(limit, statuses) =>
-      dao.getJobInfos(limit, statuses).map(JobInfos).pipeTo(sender)
+      Utils.timedFuture(jobList){
+        metaDataDAO.getJobs(limit, statuses)
+      }.map(JobInfos).pipeTo(sender)
 
     case SaveJobConfig(jobId, jobConfig) =>
-      dao.saveJobConfig(jobId, jobConfig)
-      sender ! JobConfigStored
+      val recipient = sender()
+      Utils.usingTimer(configWrite){ () =>
+        metaDataDAO.saveJobConfig(jobId, jobConfig)
+      }.onComplete {
+        case Failure(_) | Success(false) => recipient ! JobConfigStoreFailed
+        case Success(true) => recipient ! JobConfigStored
+      }
 
     case GetJobConfig(jobId) =>
-      dao.getJobConfig(jobId).map(JobConfig).pipeTo(sender)
+      Utils.timedFuture(configRead){
+        metaDataDAO.getJobConfig(jobId)
+      }.map(JobConfig).pipeTo(sender)
 
-    case GetLastBinaryInfo(appName) =>
-      sender() ! LastBinaryInfo(dao.getBinaryInfo(appName))
+    case GetLastBinaryInfo(name) =>
+      Utils.usingTimer(binRead){ () =>
+        metaDataDAO.getBinary(name)
+      }.map(LastBinaryInfo(_)).pipeTo(sender)
 
     case CleanContextJobInfos(contextId, endTime) =>
-      dao.cleanRunningJobInfosForContext(contextId, endTime)
+      Utils.timedFuture(jobQuery){
+        metaDataDAO.getJobsByContextId(contextId, Some(JobStatus.getNonFinalStates()))
+      }.map { infos: Seq[JobInfo] =>
+        logger.info("cleaning {} non-final state job(s) {} for context {}",
+          infos.size.toString, infos.map(_.jobId).mkString(", "), contextId)
+        for (info <- infos) {
+          val updatedInfo = info.copy(
+            state = JobStatus.Error,
+            endTime = Some(endTime),
+            error = Some(ErrorData(ContextTerminatedException(contextId))))
+          self ! SaveJobInfo(updatedInfo)
+        }
+      }
 
     case GetJobInfosByContextId(contextId, jobStatuses) =>
-      dao.getJobInfosByContextId(contextId, jobStatuses).map(JobInfos).pipeTo(sender)
+      Utils.timedFuture(jobQuery){
+        metaDataDAO.getJobsByContextId(contextId, jobStatuses)
+      }.map(JobInfos).pipeTo(sender)
 
     case UpdateContextById(contextId: String, attributes: ContextModifiableAttributes) =>
       val recipient = sender()
-      dao.getContextInfo(contextId).map(ContextResponse).onComplete {
+      Utils.timedFuture(contextRead){
+        metaDataDAO.getContext(contextId)
+      }.map(ContextResponse).onComplete {
         case Success(ContextResponse(Some(contextInfo))) =>
           saveContextAndRespond(recipient, copyAttributes(contextInfo, attributes))
         case Success(ContextResponse(None)) =>
@@ -162,7 +227,8 @@ class JobDAOActor(dao: JobDAO) extends InstrumentedActor {
             case "local" =>
               Some(BinaryInfo("file://" + uri.getPath, BinaryType.URI, currentTime, None))
             case null =>
-              val binInfo = dao.getBinaryInfo(name)
+              val binInfo = Await.result(
+                Utils.usingTimer(binRead){ () => metaDataDAO.getBinary(name)}, defaultAwaitTime)
               if (binInfo.isEmpty) {
                 throw NoSuchBinaryException(name)
               }
@@ -177,16 +243,23 @@ class JobDAOActor(dao: JobDAO) extends InstrumentedActor {
           logger.error(exception.getMessage)
           recipient ! GetBinaryInfosForCpFailed(exception)
     }
+
+    case anotherEvent => logger.info(s"Ignoring unknown event type: $anotherEvent")
   }
 
   private def saveContextAndRespond(recipient: ActorRef, contextInfo: ContextInfo) = {
-    Try(dao.saveContextInfo(contextInfo)) match {
-      case Success(_) => recipient ! SavedSuccessfully
-      case Failure(t) =>
-        logger.error(s"Failed to save context (${contextInfo.id}) in DAO", t)
-        recipient ! SaveFailed(t)
+    Utils.usingTimer(contextWrite) {
+      () => metaDataDAO.saveContext(contextInfo)
+    }.onComplete {
+        case Success(true) => recipient ! SavedSuccessfully
+        case Success(false) =>
+          logger.error(s"Failed to save context (${contextInfo.id}). DAO returned false.")
+          recipient ! SaveFailed(SaveContextException(contextInfo.id))
+        case Failure(t) =>
+          logger.error(s"Failed to save context (${contextInfo.id}) in DAO", t)
+          recipient ! SaveFailed(t)
+      }
     }
-  }
 
   private def copyAttributes(contextInfo: ContextInfo,
                  attributes: ContextModifiableAttributes): ContextInfo = {
