@@ -20,7 +20,7 @@ import spark.jobserver.common.akka.metrics.YammerMetrics
 object CombinedDAO {
   val binaryDaoPath = "spark.jobserver.combineddao.binarydao.class"
   val metaDataDaoPath = "spark.jobserver.combineddao.metadatadao.class"
-  val rootDirPath = "spark.jobserver.combineddao.rootdir"
+  val rootDirConfPath = "spark.jobserver.combineddao.rootdir"
 }
 
 /**
@@ -60,7 +60,8 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
    *  Configuration, Validation & Initialization
    */
 
-  if (!(config.hasPath(binaryDaoPath) && config.hasPath(metaDataDaoPath) && config.hasPath(rootDirPath))) {
+  if (!(config.hasPath(binaryDaoPath) && config.hasPath(metaDataDaoPath) &&
+    config.hasPath(rootDirConfPath))) {
     throw new InvalidConfiguration(
       "To use CombinedDAO root directory and BinaryDAO, MetaDataDAO classes should be specified"
     )
@@ -82,8 +83,8 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
       )
   }
 
-  val rootDir: String = config.getString(rootDirPath)
-  val rootDirFile: File = new File(rootDir)
+  val rootDirPath: String = config.getString(rootDirConfPath)
+  val rootDirFile: File = new File(rootDirPath)
 
   private val defaultAwaitTime = 60 seconds
 
@@ -284,7 +285,7 @@ class CombinedDAO(config: Config) extends JobDAO with FileCacher with YammerMetr
     Utils.usingTimer(binRead){ () =>
       Await.result(metaDataDAO.getBinary(name), defaultAwaitTime) match {
         case Some(binaryInfo) =>
-          val binFile = new File(rootDir, createBinaryName(name, binaryType, uploadTime))
+          val binFile = new File(rootDirPath, createBinaryName(name, binaryType, uploadTime))
           binaryInfo.binaryStorageId match {
             case Some(_) =>
               if (!binFile.exists()) {

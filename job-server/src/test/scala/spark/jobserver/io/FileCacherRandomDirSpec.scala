@@ -5,23 +5,11 @@ import java.io.File
 import org.joda.time.DateTime
 import org.scalatest.{FunSpecLike, Matchers}
 
-class FileCacherSpec extends FileCacher with FunSpecLike with Matchers {
-
-  override val rootDirPath: String = "."
+class FileCacherRandomDirSpec extends FileCacher with FunSpecLike with Matchers {
+  override val rootDirPath: String = s"/tmp/spark-jobserver/${util.Random.alphanumeric.take(30).mkString}"
   override val rootDirFile: File = new File(rootDirPath)
 
-  it("produces binary name") {
-    val appName = createBinaryName("job", BinaryType.Jar, DateTime.parse("2016-10-10T13:00:00Z"))
-    appName should be("job-20161010_130000_000.jar")
-  }
-
-  it("clean cache binaries") {
-    val f = File.createTempFile("jobTest-20161010_010000_000.jar", ".jar", new File(rootDirPath))
-    cleanCacheBinaries("jobTest")
-    f.exists() should be(false)
-  }
-
-  it("should cache binary in current directory (default '.')") {
+  it("should create cache directory if it doesn't exist") {
     val bytes = "some test content".toCharArray.map(_.toByte)
     val appName = "test-file-cached"
     val currentTime = DateTime.now
