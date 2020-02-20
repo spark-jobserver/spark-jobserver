@@ -8,7 +8,7 @@ import spark.jobserver.util.Utils
 
 trait FileCacher {
 
-  val rootDir: String
+  val rootDirPath: String
   val rootDirFile: File
 
   private val logger = LoggerFactory.getLogger(getClass)
@@ -25,7 +25,7 @@ trait FileCacher {
   }
 
   protected def getPath(appName: String, binaryType: BinaryType, uploadTime: DateTime): Option[String] = {
-    val binFile = new File(rootDir, createBinaryName(appName, binaryType, uploadTime))
+    val binFile = new File(rootDirPath, createBinaryName(appName, binaryType, uploadTime))
     if(binFile.exists()) {
       Some(binFile.getAbsolutePath)
     } else {
@@ -40,7 +40,9 @@ trait FileCacher {
                             binBytes: Array[Byte]): String = {
     val targetFullBinaryName = createBinaryName(appName, binaryType, uploadTime)
     val tempSuffix = ".tmp"
-    val tempOutFile = File.createTempFile(targetFullBinaryName + "-", tempSuffix, new File(rootDir))
+    val rootDir = new File(rootDirPath)
+    Utils.createDirectory(rootDir)
+    val tempOutFile = File.createTempFile(targetFullBinaryName + "-", tempSuffix, rootDir)
     val tempOutFileName = tempOutFile.getName
     val bos = new BufferedOutputStream(new FileOutputStream(tempOutFile))
 
@@ -55,8 +57,8 @@ trait FileCacher {
     logger.debug("Renaming the temporary file {} to the target full binary name {}",
       tempOutFileName, targetFullBinaryName: Any)
 
-    val tempFile = new File(rootDir, tempOutFileName)
-    val renamedFile = new File(rootDir, targetFullBinaryName)
+    val tempFile = new File(rootDirPath, tempOutFileName)
+    val renamedFile = new File(rootDirPath, targetFullBinaryName)
     renamedFile.deleteOnExit()
     if (!tempFile.renameTo(renamedFile)) {
       logger.debug("Renaming the temporary file {} failed, another process has probably already updated " +
@@ -70,7 +72,7 @@ trait FileCacher {
   }
 
   protected def cleanCacheBinaries(appName: String): Unit = {
-    val dir = new File(rootDir)
+    val dir = new File(rootDirPath)
     val binaries = dir.listFiles(new FilenameFilter {
       override def accept(dir: File, name: String): Boolean = {
         val prefix = appName + "-"
