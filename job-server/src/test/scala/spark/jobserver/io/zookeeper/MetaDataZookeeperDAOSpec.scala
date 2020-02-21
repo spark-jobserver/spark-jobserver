@@ -25,7 +25,7 @@ class MetaDataZookeeperDAOSpec extends FunSpec with TestJarFinder with FunSpecLi
          |spark.jobserver.zookeeperdao.connection-string = "${testServer.getConnectString}"
     """.stripMargin
   ).withFallback(
-    ConfigFactory.load("local.test.combineddao.conf")
+    ConfigFactory.load("local.test.dao.conf")
   )
 
   private var dao = new MetaDataZookeeperDAO(config)

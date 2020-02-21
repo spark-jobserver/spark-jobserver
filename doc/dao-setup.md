@@ -2,7 +2,7 @@
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
-- [CombinedDAO](#combineddao)
+- [Metadata and Binary DAOs](#metadata-and-binary-daos)
   - [Configuration](#configuration)
     - [HDFS + Zookeeper](#hdfs--zookeeper)
       - [Autopurge feature](#autopurge-feature)
@@ -13,9 +13,9 @@
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
-## CombinedDAO
+## Metadata and Binary DAOs
 
-Storing BLOBs in a database is considered bad practice and CombinedDAO therefore
+Storing BLOBs in a database is considered bad practice and Jobserver therefore
 provides an opportunity to use combined backend and store BLOBs (binaries) separately
 in a database, which is designed for it.
 Initial proposal and discussion can be found [here](https://github.com/spark-jobserver/spark-jobserver/issues/1148).
@@ -28,17 +28,17 @@ Current MetaDataDAO implementations:
 BinaryDAO represents a simple interface for CRUD operations related to storing BLOBs.
 Current BinaryDAO implementations:
 - HDFSBinaryDAO
+- SqlBinaryDAO (H2, PostgreSQL, MySQL)
 
-CombinedDAO acts as a glue between MetaDataDAO and BinaryDAO. The foreign key between
+JobDAOActor acts as a glue between MetaDataDAO and BinaryDAO. The foreign key between
 MetaDataDAO and BinaryDAO is the hash of binary.
 
 
 ### Configuration
 
 #### HDFS + Zookeeper
-To set up the CombinedDAO with HDFS and Zookeeper, include the following lines in the configuration file (e.g. `local.conf`):
+To set up HDFS binary and Zookeeper metadata DAO, include the following lines in the configuration file (e.g. `local.conf`):
 ```
-    jobdao = spark.jobserver.io.CombinedDAO
     combineddao {
       rootdir = "/tmp/combineddao"
       binarydao {
@@ -87,12 +87,11 @@ It works by starting an `AutoPurgeActor` on Jobserver startup, which every hour 
 #### HDFS + H2
 Please configure H2 backend as described [here](../README.md#configuring-spark-jobserver-backend)
 
-To set up the CombinedDAO with HDFS and H2, include the following lines in the configuration file (e.g. `local.conf`):
+To set up HDFS binary and H2 metadata DAO, include the following lines in the configuration file (e.g. `local.conf`):
 
 ```
     spark {
         jobserver {
-            jobdao = spark.jobserver.io.CombinedDAO
             combineddao {
               rootdir = "/tmp/combineddao"
               binarydao {
@@ -132,12 +131,11 @@ To set up the CombinedDAO with HDFS and H2, include the following lines in the c
 #### H2
 Please configure H2 backend as described [here](../README.md#configuring-spark-jobserver-backend)
 
-To set up the CombinedDAO only with H2 backend, include the following lines in the configuration file (e.g. `local.conf`):
+To set up the DAO only with H2 backend, include the following lines in the configuration file (e.g. `local.conf`):
 
 ```
     spark {
         jobserver {
-            jobdao = spark.jobserver.io.CombinedDAO
             combineddao {
               rootdir = "/tmp/combineddao"
               binarydao {
@@ -220,12 +218,11 @@ granted to user.
     # you can connect to the database using the psql command line client:
     $ psql -U jobserver spark_jobserver
 
-To set up the CombinedDAO only with PostgreSQL backend, include the following lines in the configuration file (e.g. `local.conf`):
+To set up the DAO only with PostgreSQL backend, include the following lines in the configuration file (e.g. `local.conf`):
 
 ```
     spark {
         jobserver {
-            jobdao = spark.jobserver.io.CombinedDAO
             combineddao {
               rootdir = "/tmp/combineddao"
               binarydao {
@@ -285,7 +282,6 @@ To use MySQL as backend include the following lines in the configuration file (e
 ```
     spark {
       jobserver {
-        jobdao = spark.jobserver.io.CombinedDAO
         combineddao {
           rootdir = "/tmp/combineddao"
           binarydao {

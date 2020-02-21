@@ -10,7 +10,6 @@ import org.joda.time.DateTime
 import scala.util.{Failure, Success, Try}
 import spark.jobserver.common.akka.InstrumentedActor
 import spark.jobserver.common.akka.metrics.YammerMetrics
-import spark.jobserver.io.CombinedDAO.rootDirConfPath
 import spark.jobserver.util._
 import spark.jobserver.util.DAOMetrics._
 import spark.jobserver.JobManagerActor.ContextTerminatedException
@@ -89,7 +88,7 @@ class JobDAOActor(metaDataDAO: MetaDataDAO, binaryDAO: BinaryDAO, config: Config
 
 
   // Required by FileCacher
-  val rootDirPath: String = config.getString(rootDirConfPath)
+  val rootDirPath: String = config.getString(JobserverConfig.DAO_ROOT_DIR_PATH)
   val rootDirFile: File = new File(rootDirPath)
 
 

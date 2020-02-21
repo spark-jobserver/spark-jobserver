@@ -3,13 +3,14 @@ package spark.jobserver.stress
 import akka.actor.{ActorSystem, Props}
 import akka.pattern.ask
 import akka.util.Timeout
-import com.typesafe.config.ConfigFactory
+import com.typesafe.config.{Config, ConfigFactory}
 import org.joda.time.DateTime
 
 import scala.concurrent.Await
 import spark.jobserver._
-import spark.jobserver.io.{BinaryInfo, BinaryType}
-
+import spark.jobserver.io.JobDAOActor.{GetLastBinaryInfo, LastBinaryInfo, SaveBinary}
+import spark.jobserver.io.{BinaryInfo, BinaryType, InMemoryBinaryDAO, InMemoryMetaDAO, JobDAOActor}
+import spark.jobserver.util.JobserverTimeouts
 
 /**
  * A stress test for launching many jobs within a job context
@@ -36,14 +37,19 @@ object SingleContextJobStress extends App with TestJarFinder {
   implicit val ShortTimeout = Timeout(3 seconds)
 
   val jobDaoDir = jobDaoPrefix + DateTime.now.toString()
-  val dao = new InMemoryDAO
+  lazy val daoConfig: Config = ConfigFactory.load("local.test.dao.conf")
+  val inMemoryMetaDAO = new InMemoryMetaDAO
+  val inMemoryBinDAO = new InMemoryBinaryDAO
+  val daoActor = system.actorOf(JobDAOActor.props(inMemoryMetaDAO, inMemoryBinDAO, daoConfig))
 
-  val jobManager = system.actorOf(Props(classOf[JobManagerActor], dao, "c1", "local[4]", config, false))
+  val jobManager = system.actorOf(Props(classOf[JobManagerActor], daoActor, "c1", "local[4]", config, false))
 
   private def uploadJar(jarFilePath: String, appName: String): BinaryInfo = {
     val bytes = scala.io.Source.fromFile(jarFilePath, "ISO-8859-1").map(_.toByte).toArray
-    dao.saveBinary(appName, BinaryType.Jar, DateTime.now, bytes)
-    dao.getBinaryInfo(appName).get
+    Await.result(daoActor ? SaveBinary(appName, BinaryType.Jar, DateTime.now, bytes),
+      JobserverTimeouts.DAO_DEFAULT_TIMEOUT)
+    Await.result(daoActor ? GetLastBinaryInfo(appName), JobserverTimeouts.DAO_DEFAULT_TIMEOUT).
+      asInstanceOf[LastBinaryInfo].lastBinaryInfo.get
   }
 
   private val demoJarPath = testJar.getAbsolutePath

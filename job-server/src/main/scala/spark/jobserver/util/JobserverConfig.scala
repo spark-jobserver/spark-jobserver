@@ -17,7 +17,7 @@ object JobserverConfig {
   val IS_SPARK_SESSION_HIVE_ENABLED = "spark.session.hive.enabled"
 
   /**
-   * Configuration paths to define Binary and Metadata parts of CombinedDAO.
+   * Configuration paths to define Binary and Metadata parts of the DAO.
    */
   val BINARY_DAO_CONFIG_PATH = "spark.jobserver.combineddao.binarydao.class"
   val METADATA_DAO_CONFIG_PATH = "spark.jobserver.combineddao.metadatadao.class"

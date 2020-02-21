@@ -5,7 +5,6 @@ import java.io.File
 import com.typesafe.config.Config
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
-import spark.jobserver.io.CombinedDAO.rootDirConfPath
 import spark.jobserver.util._
 
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -17,7 +16,7 @@ class JobDAOActorHelper(metaDataDAO: MetaDataDAO, binaryDAO: BinaryDAO, config: 
 
 
   // Required by FileCacher
-  val rootDirPath: String = config.getString(rootDirConfPath)
+  val rootDirPath: String = config.getString(JobserverConfig.DAO_ROOT_DIR_PATH)
   val rootDirFile: File = new File(rootDirPath)
 
   implicit val daoTimeout = JobserverTimeouts.DAO_DEFAULT_TIMEOUT

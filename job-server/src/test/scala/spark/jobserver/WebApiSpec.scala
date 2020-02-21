@@ -46,7 +46,7 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
   // See http://doc.akka.io/docs/akka/2.2.4/scala/actors.html#Deprecated_Variants;
   // for actors declared as inner classes we need to pass this as first arg
   val dummyActor = system.actorOf(Props(classOf[DummyActor], this))
-  lazy val daoConfig = ConfigFactory.load("local.test.combineddao.conf")
+  lazy val daoConfig = ConfigFactory.load("local.test.dao.conf")
   val jobDaoActor = system.actorOf(JobDAOActor.props(new InMemoryMetaDAO, new InMemoryBinaryDAO, daoConfig))
   val statusActor = system.actorOf(JobStatusActor.props(jobDaoActor))
 

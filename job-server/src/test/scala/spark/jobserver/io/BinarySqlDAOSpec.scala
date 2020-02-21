@@ -13,7 +13,7 @@ abstract class BinarySqlDAOSpecBase {
 
 class BinarySqlDAOSpec extends  BinarySqlDAOSpecBase with TestJarFinder with FunSpecLike with Matchers
   with BeforeAndAfter {
-  override def config: Config = ConfigFactory.load("local.test.combinedsqldao.conf")
+  override def config: Config = ConfigFactory.load("local.test.binarysqldao.conf")
   private val timeout = 60 seconds
   private var dao: BinarySqlDAO = _
 

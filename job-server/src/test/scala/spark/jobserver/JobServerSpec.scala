@@ -133,7 +133,6 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
     it("does not support context-per-jvm and H2 in-memory DB") {
       val configFileName = writeConfigFile(Map(
         "spark.jobserver.context-per-jvm " -> true,
-        "spark.jobserver.jobdao" -> "spark.jobserver.io.CombinedDAO",
         "spark.jobserver.combineddao.rootdir" -> "/tmp/combineddao",
         JobserverConfig.BINARY_DAO_CONFIG_PATH -> JobserverConfig.BINARY_SQL_DAO_CLASS,
         JobserverConfig.METADATA_DAO_CONFIG_PATH -> JobserverConfig.METADATA_SQL_DAO_CLASS,
@@ -148,7 +147,6 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
       val configFileName = writeConfigFile(Map(
         "spark.submit.deployMode" -> "cluster",
         "spark.jobserver.context-per-jvm " -> true,
-        "spark.jobserver.jobdao" -> "spark.jobserver.io.CombinedDAO",
         "spark.jobserver.combineddao.rootdir" -> "/tmp/combineddao",
         JobserverConfig.BINARY_DAO_CONFIG_PATH -> JobserverConfig.BINARY_SQL_DAO_CLASS,
         JobserverConfig.METADATA_DAO_CONFIG_PATH -> JobserverConfig.METADATA_SQL_DAO_CLASS,
@@ -163,7 +161,6 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
       val configFileName = writeConfigFile(Map(
         "spark.submit.deployMode" -> "cluster",
         "spark.jobserver.context-per-jvm " -> true,
-        "spark.jobserver.jobdao" -> "spark.jobserver.io.CombinedDAO",
         "spark.jobserver.combineddao.rootdir" -> "/tmp/combineddao",
         JobserverConfig.BINARY_DAO_CONFIG_PATH -> JobserverConfig.BINARY_SQL_DAO_CLASS,
         JobserverConfig.METADATA_DAO_CONFIG_PATH -> JobserverConfig.METADATA_SQL_DAO_CLASS,
@@ -297,7 +294,7 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
     }
 
     it("should return empty list if no context is available to reconnect") {
-      lazy val daoConfig: Config = ConfigFactory.load("local.test.combineddao.conf")
+      lazy val daoConfig: Config = ConfigFactory.load("local.test.dao.conf")
       val daoActor = actorSystem.actorOf(JobDAOActor.props(
         new InMemoryMetaDAO, new InMemoryBinaryDAO, daoConfig))
 
