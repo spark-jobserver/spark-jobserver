@@ -92,7 +92,7 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
   var supervisor: ActorRef = _
   val timeout: Duration = 5.seconds
   def extrasJar: java.io.File
-  lazy val daoConfig: Config = ConfigFactory.load("local.test.combineddao.conf")
+  lazy val daoConfig: Config = ConfigFactory.load("local.test.dao.conf")
 
   override def afterAll() {
     AkkaTestUtils.shutdownAndWait(manager)

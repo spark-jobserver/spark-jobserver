@@ -13,9 +13,6 @@ trait FileCacher {
 
   private val logger = LoggerFactory.getLogger(getClass)
 
-  def initFileDirectory(): Unit = {
-    Utils.createDirectory(rootDirFile)
-  }
 
   // date format
   val Pattern = "\\d{8}_\\d{6}_\\d{3}".r

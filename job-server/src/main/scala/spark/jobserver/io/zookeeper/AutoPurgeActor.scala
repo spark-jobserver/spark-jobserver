@@ -4,18 +4,14 @@ import scala.concurrent.Await
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.control.NonFatal
-
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
-
 import com.typesafe.config.Config
-
 import akka.actor.ActorRef
 import akka.actor.Props
 import akka.util.Timeout
 import akka.pattern.ask
 import spark.jobserver.common.akka.InstrumentedActor
-import spark.jobserver.io.CombinedDAO
 import spark.jobserver.io.ContextStatus
 import spark.jobserver.io.JobDAOActor.ContextInfos
 import spark.jobserver.io.JobDAOActor.GetContextInfos
@@ -23,7 +19,7 @@ import spark.jobserver.io.JobDAOActor.GetJobInfos
 import spark.jobserver.io.JobDAOActor.JobInfos
 import spark.jobserver.io.JobStatus
 import spark.jobserver.io.zookeeper.AutoPurgeActor._
-import spark.jobserver.util.Utils
+import spark.jobserver.util.{JobserverConfig, Utils}
 
 object AutoPurgeActor {
   val logger = LoggerFactory.getLogger(getClass)
@@ -36,13 +32,11 @@ object AutoPurgeActor {
     Props(classOf[AutoPurgeActor], config, daoActor, age)
 
   def isEnabled(config : Config) : Boolean = {
-    if (config.getString("spark.jobserver.jobdao") == "spark.jobserver.io.CombinedDAO"){
-      if (config.getString(CombinedDAO.metaDataDaoPath) ==
+    if (config.getString(JobserverConfig.METADATA_DAO_CONFIG_PATH) ==
         "spark.jobserver.io.zookeeper.MetaDataZookeeperDAO"){
-        val enabled = config.getBoolean("spark.jobserver.zookeeperdao.autopurge")
-        logger.info(s"Zookeeper autopurge feature is set to $enabled.")
-        return enabled
-      }
+      val enabled = config.getBoolean("spark.jobserver.zookeeperdao.autopurge")
+      logger.info(s"Zookeeper autopurge feature is set to $enabled.")
+      return enabled
     }
     logger.info(s"Zookeeper autopurge feature is not configured.")
     false

@@ -254,7 +254,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
   private val contextConfig = AkkaClusterSupervisorActorSpec.config.getConfig("spark.context-settings")
   private val unusedDummyInput = 1
   private val visitedContextIsFinalStatePath = new AtomicInteger(0)
-  private lazy val daoConfig: Config = ConfigFactory.load("local.test.combineddao.conf")
+  private lazy val daoConfig: Config = ConfigFactory.load("local.test.dao.conf")
   // This is needed to help tests pass on some MBPs when working from home
   System.setProperty("spark.driver.host", "localhost")
 

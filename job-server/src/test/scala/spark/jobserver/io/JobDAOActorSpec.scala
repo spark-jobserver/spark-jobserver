@@ -1,5 +1,7 @@
 package spark.jobserver.io
 
+import java.io.File
+
 import akka.pattern.ask
 import akka.actor.{ActorRef, ActorSystem}
 import akka.testkit.{ImplicitSender, TestKit, TestProbe}
@@ -7,7 +9,6 @@ import akka.util.Timeout
 import com.typesafe.config.{Config, ConfigFactory}
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
-import spark.jobserver.InMemoryDAO
 import spark.jobserver.JobManagerActor.ContextTerminatedException
 import spark.jobserver.io.JobDAOActor._
 
@@ -15,7 +16,7 @@ import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 import spark.jobserver.common.akka.AkkaTestUtils
-import spark.jobserver.util.{NoMatchingDAOObjectException, Utils}
+import spark.jobserver.util._
 
 object JobDAOActorSpec {
   val system = ActorSystem("dao-test")
@@ -26,7 +27,7 @@ object JobDAOActorSpec {
   val unblockingProbe = TestProbe()(system)
   val spyProbe = TestProbe()(system)
 
-  def config: Config = ConfigFactory.load("local.test.combineddao.conf")
+  def config: Config = ConfigFactory.load("local.test.dao.conf")
 }
 
 class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSender
@@ -34,18 +35,17 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
 
   import JobDAOActorSpec._
   implicit val futureTimeout = Timeout(10.seconds)
-  val defaultTimeout = 10.seconds
+  private val defaultTimeout = 10.seconds
   private val shortTimeout: FiniteDuration = 3 seconds
   val dummyMetaDataDao = new DummyMetaDataDAO(config)
   val dummyBinaryDao = new DummyBinaryDAO(config)
   val daoActor = system.actorOf(JobDAOActor.props(dummyMetaDataDao, dummyBinaryDao, config))
   var inMemoryDaoActor: ActorRef = _
-  var inMemoryDao: JobDAO = _
   var inMemoryMetaDAO: MetaDataDAO = _
   var inMemoryBinDAO: BinaryDAO = _
 
   before {
-    inMemoryDao = new InMemoryDAO
+    DAOTestsHelper.testProbe = TestProbe()(system)
     inMemoryMetaDAO = new InMemoryMetaDAO
     inMemoryBinDAO = new InMemoryBinaryDAO
     inMemoryDaoActor = system.actorOf(JobDAOActor.props(inMemoryMetaDAO, inMemoryBinDAO, config))
@@ -55,18 +55,35 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
     AkkaTestUtils.shutdownAndWait(system)
   }
 
-  describe("JobDAOActor") {
+  describe("JobDAOActor with mocked Meta and Binary DAO") {
 
-    it("should respond when saving Binary completes successfully") {
+    it("should save binary and metadata for binary and respond with success") {
       daoActor ! SaveBinary("success", BinaryType.Jar, DateTime.now, DAOTestsHelper.binaryDAOBytesSuccess)
+      DAOTestsHelper.testProbe.expectMsg("BinaryDAO: Save success")
+      DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: Save success")
       expectMsg(SaveBinaryResult(Success({})))
+      DAOTestsHelper.testProbe.expectNoMsg(shortTimeout)
     }
 
     it("should respond when saving Binary fails") {
       daoActor ! SaveBinary("binarySaveFail", BinaryType.Jar, DateTime.now, DAOTestsHelper.binaryDAOBytesFail)
+      DAOTestsHelper.testProbe.expectMsg("BinaryDAO: Save failed")
       expectMsgPF(3 seconds){
         case SaveBinaryResult(Failure(ex)) if ex.getMessage.startsWith("can't save binary") =>
       }
+      DAOTestsHelper.testProbe.expectNoMsg(shortTimeout)
+    }
+
+    it("should try to delete binary if meta data save failed") {
+      daoActor ! SaveBinary("failed", BinaryType.Jar, DateTime.now, DAOTestsHelper.binaryDAOBytesSuccess)
+      DAOTestsHelper.testProbe.expectMsg("BinaryDAO: Save success")
+      DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: Save failed")
+      DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: getBinariesByStorageId success")
+      DAOTestsHelper.testProbe.expectMsg("BinaryDAO: Delete success")
+      expectMsgPF(3 seconds){
+        case SaveBinaryResult(Failure(ex)) if ex.getMessage.startsWith("can't save binary") =>
+      }
+      DAOTestsHelper.testProbe.expectNoMsg(shortTimeout)
     }
 
     it("should not block other calls to DAO if save binary is taking too long") {
@@ -87,9 +104,54 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       expectMsg(4.seconds, SaveBinaryResult(Success({})))
     }
 
-    it("should respond when deleting Binary completes successfully") {
+    it("should delete binary correctly: delete binary and metadata and respond with success") {
       daoActor ! DeleteBinary("success")
+      DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: getBinary success")
+      DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: Delete success")
+      DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: getBinariesByStorageId success")
+      DAOTestsHelper.testProbe.expectMsg("BinaryDAO: Delete success")
       expectMsg(DeleteBinaryResult(Success({})))
+      DAOTestsHelper.testProbe.expectNoMsg(shortTimeout)
+    }
+
+    it("should not delete binary if meta is not deleted") {
+      daoActor ! DeleteBinary("get-info-success-del-info-failed")
+      DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: getBinary success")
+      DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: Delete failed")
+      expectMsgPF(3 seconds){
+        case DeleteBinaryResult(Failure(ex: DeleteBinaryInfoFailedException)) =>
+          ex.getMessage should startWith("can't delete meta data")
+      }
+      DAOTestsHelper.testProbe.expectNoMsg(shortTimeout)
+    }
+
+    it("should not delete binary from binary storage if it is still used") {
+      daoActor ! DeleteBinary(DAOTestsHelper.someBinaryName)
+      DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: getBinary success")
+      DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: Delete success")
+      DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: getBinariesByStorageId success")
+      expectMsg(DeleteBinaryResult(Success({})))
+      DAOTestsHelper.testProbe.expectNoMsg(shortTimeout)
+    }
+
+    it("should delete binary from binary storage if it is not in use") {
+      daoActor ! DeleteBinary(DAOTestsHelper.someOtherBinaryName)
+      DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: getBinary success")
+      DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: Delete success")
+      DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: getBinariesByStorageId success")
+      DAOTestsHelper.testProbe.expectMsg("BinaryDAO: Delete success")
+      expectMsg(DeleteBinaryResult(Success({})))
+      DAOTestsHelper.testProbe.expectNoMsg(shortTimeout)
+    }
+
+    it("should throw NoSuchBinaryException if metadata info was not found") {
+      daoActor ! DeleteBinary("get-info-failed")
+      DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: getBinary failed")
+      expectMsgPF(3 seconds){
+        case DeleteBinaryResult(Failure(ex: NoSuchBinaryException)) =>
+          ex.getMessage should startWith("can't find binary")
+      }
+      DAOTestsHelper.testProbe.expectNoMsg(shortTimeout)
     }
 
     it("should respond when deleting Binary fails") {
@@ -101,10 +163,9 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
 
     it("should return apps") {
       daoActor ! GetApps(None)
-      // TODO: Appnames come from getBinaries function in DummyMetaDataDAO: CLEANUP!
       expectMsg(Apps(Map(
-        "name-del-info-success" -> (BinaryType.Jar, DAOTestsHelper.defaultDate),
-        "other-name-del-info-success" -> (BinaryType.Jar, DAOTestsHelper.defaultDate),
+        DAOTestsHelper.someBinaryName -> (BinaryType.Jar, DAOTestsHelper.defaultDate),
+        DAOTestsHelper.someOtherBinaryName -> (BinaryType.Jar, DAOTestsHelper.defaultDate),
         "name3" -> (BinaryType.Jar, DAOTestsHelper.defaultDate),
         "name4" -> (BinaryType.Jar, DAOTestsHelper.defaultDate),
         "name5" -> (BinaryType.Jar, DAOTestsHelper.defaultDate)
@@ -237,6 +298,21 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
 
       val response = expectMsgType[GetBinaryInfosForCpFailed]
       response.error.getMessage.startsWith("java.net.URISyntaxException: Expected scheme name at index")
+    }
+
+    it("should reply with JobConfigStoreFailed if saving job config failed") {
+      val jobId = "job-config-fail"
+      val config = ConfigFactory.parseString("{bugatti=justOk}")
+      daoActor ! SaveJobConfig(jobId, config)
+      expectMsg(2.second, JobConfigStoreFailed)
+    }
+
+    it("should return failure if job info save was unsuccessful") {
+      val jobInfo = JobInfo("jid-fail", "", "", "", "", DAOTestsHelper.defaultDate,
+        None, None, Seq(BinaryInfo("", BinaryType.Jar, DAOTestsHelper.defaultDate)))
+
+      daoActor ! SaveJobInfo(jobInfo)
+      expectMsg(false)
     }
   }
 
@@ -394,6 +470,60 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
     it("should return error if job info is requested for jobId that does not exist") {
       inMemoryDaoActor ! GetJobInfo("foo")
       expectMsg(None)
+    }
+  }
+
+  describe("Cache-on-upload tests") {
+
+    def saveBinaryAndCheckResponse(jobDAOActor: ActorRef, binName: String): Unit = {
+      Await.result(jobDAOActor ? SaveBinary(binName,
+        BinaryType.Jar,
+        DAOTestsHelper.defaultDate,
+        DAOTestsHelper.binaryDAOBytesSuccess), defaultTimeout)
+      val binOption = Await.result(jobDAOActor ? GetLastBinaryInfo(binName), defaultTimeout).
+        asInstanceOf[LastBinaryInfo].lastBinaryInfo
+      val bin = binOption.get
+      bin.appName should be(binName)
+      bin.binaryType should be(BinaryType.Jar)
+      bin.uploadTime should be(DAOTestsHelper.defaultDate)
+    }
+
+    def deleteBinaryAndCheckResponse(jobDAOActor: ActorRef, binName: String): Unit = {
+      Await.result(jobDAOActor ? DeleteBinary(binName), defaultTimeout)
+      val binInfo = Await.result(jobDAOActor ? GetLastBinaryInfo(binName), defaultTimeout).
+        asInstanceOf[LastBinaryInfo].lastBinaryInfo
+      binInfo should be(None)
+    }
+
+    it("should create cache on save binary and delete on delete binary if enabled") {
+      val enabledCachingConfig = ConfigFactory.parseString("spark.jobserver.cache-on-upload = true").
+        withFallback(config)
+      val daoActorWithEnabledCaching = system.actorOf(JobDAOActor.props(
+        new InMemoryMetaDAO, new InMemoryBinaryDAO, enabledCachingConfig))
+      val binName = "success"
+      val jarFile = new File(config.getString("spark.jobserver.combineddao.rootdir"),
+        binName + "-" + DAOTestsHelper.defaultDate.toString("yyyyMMdd_HHmmss_SSS") + ".jar")
+
+      jarFile.exists() should be(false)
+
+      saveBinaryAndCheckResponse(daoActorWithEnabledCaching, binName)
+      jarFile.exists() should be(true)
+
+      deleteBinaryAndCheckResponse(daoActorWithEnabledCaching, binName)
+      jarFile.exists() should be(false)
+    }
+
+    it("should not cache any binary if disabled") {
+      val disabledCachingConfig = ConfigFactory.parseString("spark.jobserver.cache-on-upload = false").
+        withFallback(config)
+      val daoActorWithoutCache = system.actorOf(JobDAOActor.props(
+        new InMemoryMetaDAO, new InMemoryBinaryDAO, disabledCachingConfig))
+      val binName = "success"
+      val jarFile = new File(config.getString("spark.jobserver.combineddao.rootdir"),
+        binName + "-" + DAOTestsHelper.defaultDate.toString("yyyyMMdd_HHmmss_SSS") + ".jar")
+
+      saveBinaryAndCheckResponse(daoActorWithoutCache, binName)
+      jarFile.exists() should be(false)
     }
   }
 }

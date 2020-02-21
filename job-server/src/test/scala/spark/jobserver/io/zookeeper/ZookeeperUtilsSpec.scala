@@ -16,7 +16,7 @@ class ZookeeperUtilsSpec extends FunSpec with Matchers with BeforeAndAfter {
        |spark.jobserver.zookeeperdao.connection-string = "${testServer.getConnectString}",
        |""".stripMargin
   ).withFallback(
-    ConfigFactory.load("local.test.combineddao.conf")
+    ConfigFactory.load("local.test.dao.conf")
   )
 
   private val zookeeperUtils = new ZookeeperUtils(config)

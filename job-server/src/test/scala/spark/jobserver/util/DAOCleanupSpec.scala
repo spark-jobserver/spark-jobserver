@@ -26,7 +26,7 @@ class DAOCleanupSpec extends FunSpecLike with Matchers with BeforeAndAfter {
          |spark.jobserver.dao-timeout = 3s
     """.stripMargin
   ).withFallback(
-    ConfigFactory.load("local.test.combineddao.conf")
+    ConfigFactory.load("local.test.dao.conf")
   )
 
   val dao = new MetaDataZookeeperDAO(config)
@@ -172,7 +172,7 @@ class DAOCleanupSpec extends FunSpecLike with Matchers with BeforeAndAfter {
            |spark.jobserver.zookeeperdao.connection-string = "abc"
            |spark.jobserver.dao-timeout = 3s
     """.stripMargin).withFallback(
-        ConfigFactory.load("local.test.combineddao.conf")
+        ConfigFactory.load("local.test.dao.conf")
       )
       new ZKCleanup(wrongConfig).cleanupNonFinalJobsWithFinalContext() should be(false)
     }
@@ -187,7 +187,7 @@ class DAOCleanupSpec extends FunSpecLike with Matchers with BeforeAndAfter {
            |spark.jobserver.zookeeperdao.connection-string = "abc"
            |spark.jobserver.dao-timeout = 3s
     """.stripMargin).withFallback(
-        ConfigFactory.load("local.test.combineddao.conf")
+        ConfigFactory.load("local.test.dao.conf")
       )
 
       Await.result(dao.saveContext(contextWithEndtime), timeout) should equal(true)

@@ -91,7 +91,7 @@ class InMemoryMetaDAO extends MetaDataDAO {
   override def getBinary(name: String): Future[Option[BinaryInfo]] = {
     for {
       binaries <- getBinaries
-    } yield binaries.filter(_.appName == name).headOption
+    } yield binaries.find(_.appName == name)
   }
 
   override def getBinaries: Future[Seq[BinaryInfo]] = Future {

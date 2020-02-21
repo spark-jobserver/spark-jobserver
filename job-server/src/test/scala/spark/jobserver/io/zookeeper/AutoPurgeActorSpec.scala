@@ -65,7 +65,7 @@ class AutoPurgeActorSpec extends TestKit(AutoPurgeActorSpec.system) with FunSpec
          |spark.jobserver.zookeeperdao.autopurge_after_hours = 168
     """.stripMargin
   ).withFallback(
-    ConfigFactory.load("local.test.combineddao.conf")
+    ConfigFactory.load("local.test.dao.conf")
   )
 
   var purgeActor : ActorRef = _
