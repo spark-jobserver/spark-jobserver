@@ -84,8 +84,8 @@ object JobManager {
 
     val system = makeSystem(config.resolve())
 
-    val metadataDaoClass = Class.forName(config.getString("spark.jobserver.combineddao.metadatadao.class"))
-    val binaryDaoClass = Class.forName(config.getString("spark.jobserver.combineddao.binarydao.class"))
+    val metadataDaoClass = Class.forName(config.getString(JobserverConfig.METADATA_DAO_CONFIG_PATH))
+    val binaryDaoClass = Class.forName(config.getString(JobserverConfig.BINARY_DAO_CONFIG_PATH))
     val ctorMeta = metadataDaoClass.getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
     val ctorBin = binaryDaoClass.getDeclaredConstructor(Class.forName("com.typesafe.config.Config"))
     val metaDataDAO = try {

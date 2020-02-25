@@ -20,7 +20,7 @@ class HdfsBinaryDAOSpec extends FunSpec with Matchers with BeforeAndAfterAll wit
     val testClusterUrl = getNameNodeURI()
     testDir = s"$testClusterUrl/binarydao-test"
     def config: Config = ConfigFactory.parseString(
-      s"""spark.jobserver.combineddao.binarydao.dir = "$testDir""""
+      s"""spark.jobserver.binarydao.dir = "$testDir""""
     )
     hdfsDAO = new HdfsBinaryDAO(config)
   }
@@ -68,7 +68,7 @@ class HdfsBinaryDAOSpec extends FunSpec with Matchers with BeforeAndAfterAll wit
   describe("check behavior if HDFS is misconfigured") {
     it("should return false if save is unsuccessful") {
       def config: Config = ConfigFactory.parseString(
-        s"""spark.jobserver.combineddao.binarydao.dir = "hdfs://foo:foo/binarydao-test""""
+        s"""spark.jobserver.binarydao.dir = "hdfs://foo:foo/binarydao-test""""
       )
       hdfsDAO = new HdfsBinaryDAO(config)
       Await.result(hdfsDAO.delete(testFileName), timeout) should equal(false)

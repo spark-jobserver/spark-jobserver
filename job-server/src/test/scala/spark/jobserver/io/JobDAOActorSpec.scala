@@ -501,7 +501,7 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       val daoActorWithEnabledCaching = system.actorOf(JobDAOActor.props(
         new InMemoryMetaDAO, new InMemoryBinaryDAO, enabledCachingConfig))
       val binName = "success"
-      val jarFile = new File(config.getString("spark.jobserver.combineddao.rootdir"),
+      val jarFile = new File(config.getString(JobserverConfig.DAO_ROOT_DIR_PATH),
         binName + "-" + DAOTestsHelper.defaultDate.toString("yyyyMMdd_HHmmss_SSS") + ".jar")
 
       jarFile.exists() should be(false)
@@ -519,7 +519,7 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       val daoActorWithoutCache = system.actorOf(JobDAOActor.props(
         new InMemoryMetaDAO, new InMemoryBinaryDAO, disabledCachingConfig))
       val binName = "success"
-      val jarFile = new File(config.getString("spark.jobserver.combineddao.rootdir"),
+      val jarFile = new File(config.getString(JobserverConfig.DAO_ROOT_DIR_PATH),
         binName + "-" + DAOTestsHelper.defaultDate.toString("yyyyMMdd_HHmmss_SSS") + ".jar")
 
       saveBinaryAndCheckResponse(daoActorWithoutCache, binName)

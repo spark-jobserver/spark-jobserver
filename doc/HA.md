@@ -50,8 +50,8 @@ There needs to be a third-party entity that monitors the JVMs of the running job
 All jobservers in the HA setup need to be configured to use a common HA database.
 By implementing the `BinaryDAO` and `MetaDataDAO` interfaces, you can enable any arbitrary database to store your binary and metadata information. For example you can use the combination of (already existing) HDFS DAO (for binaries) and Zookeeper DAO (for metadata) by including this in the `spark.jobserver` section of your config:
 ```
-combineddao {
-    rootdir = "/tmp/combineddao"
+jobserver {
+    daorootdir = "/tmp/spark-jobserver"
     binarydao {
         class = spark.jobserver.io.HdfsBinaryDAO
         dir = "hdfs://<hadoop-ip>:<hadoop-port>/spark-jobserver/binaries"

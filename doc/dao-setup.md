@@ -39,15 +39,13 @@ MetaDataDAO and BinaryDAO is the hash of binary.
 #### HDFS + Zookeeper
 To set up HDFS binary and Zookeeper metadata DAO, include the following lines in the configuration file (e.g. `local.conf`):
 ```
-    combineddao {
-      rootdir = "/tmp/combineddao"
-      binarydao {
+    daorootdir = "/tmp/spark-jobserver"
+    binarydao {
         class = spark.jobserver.io.HdfsBinaryDAO
         dir = "hdfs://<hadoop-ip>:<hadoop-port>/spark-jobserver/binaries"
-      }
-      metadatadao {
+    }
+    metadatadao {
         class = spark.jobserver.io.zookeeper.MetaDataZookeeperDAO
-      }
     }
 
     zookeeperdao {
@@ -92,14 +90,12 @@ To set up HDFS binary and H2 metadata DAO, include the following lines in the co
 ```
     spark {
         jobserver {
-            combineddao {
-              rootdir = "/tmp/combineddao"
-              binarydao {
+            daorootdir = "/tmp/spark-jobserver"
+            binarydao {
                 class = spark.jobserver.io.HdfsBinaryDAO
-              }
-              metadatadao {
-                    class = spark.jobserver.io.MetaDataSqlDAO
-                  }
+            }
+            metadatadao {
+                class = spark.jobserver.io.MetaDataSqlDAO
             }
             sqldao {
                   # Slick database driver, full classpath
@@ -125,7 +121,7 @@ To set up HDFS binary and H2 metadata DAO, include the following lines in the co
              }
         }
 
-    flyway.locations="db/combineddao/h2/migration"
+    flyway.locations="db/h2/migration"
 ```
 
 #### H2
@@ -136,14 +132,12 @@ To set up the DAO only with H2 backend, include the following lines in the confi
 ```
     spark {
         jobserver {
-            combineddao {
-              rootdir = "/tmp/combineddao"
-              binarydao {
+            daorootdir = "/tmp/spark-jobserver"
+            binarydao {
                 class = spark.jobserver.io.BinarySqlDAO
-              }
-              metadatadao {
-                    class = spark.jobserver.io.MetaDataSqlDAO
-                  }
+            }
+            metadatadao {
+                class = spark.jobserver.io.MetaDataSqlDAO
             }
             sqldao {
                   # Slick database driver, full classpath
@@ -170,7 +164,7 @@ To set up the DAO only with H2 backend, include the following lines in the confi
         }
     }
 
-    flyway.locations="db/combineddao/h2/migration"
+    flyway.locations="db/h2/migration"
 ```
 
 If you are using `context-per-jvm = true`, be sure to add [AUTO_MIXED_MODE](http://h2database.com/html/features.html#auto_mixed_mode) to your
@@ -223,14 +217,12 @@ To set up the DAO only with PostgreSQL backend, include the following lines in t
 ```
     spark {
         jobserver {
-            combineddao {
-              rootdir = "/tmp/combineddao"
-              binarydao {
-                    class = spark.jobserver.io.BinarySqlDAO
-                  }
-              metadatadao {
-                    class = spark.jobserver.io.MetaDataSqlDAO
-                  }
+            daorootdir = "/tmp/spark-jobserver"
+            binarydao {
+                class = spark.jobserver.io.BinarySqlDAO
+            }
+            metadatadao {
+                class = spark.jobserver.io.MetaDataSqlDAO
             }
             sqldao {
                   # Slick database driver, full classpath
@@ -254,7 +246,7 @@ To set up the DAO only with PostgreSQL backend, include the following lines in t
         }
     }
 
-    flyway.locations="db/combineddao/postgresql/migration"
+    flyway.locations="db/postgresql/migration"
 ```
 
 #### MySQL
@@ -282,14 +274,12 @@ To use MySQL as backend include the following lines in the configuration file (e
 ```
     spark {
       jobserver {
-        combineddao {
-          rootdir = "/tmp/combineddao"
-          binarydao {
-                class = spark.jobserver.io.BinarySqlDAO
-              }
-          metadatadao {
-                class = spark.jobserver.io.MetaDataSqlDAO
-              }
+        daorootdir = "/tmp/spark-jobserver"
+        binarydao {
+            class = spark.jobserver.io.BinarySqlDAO
+        }
+        metadatadao {
+            class = spark.jobserver.io.MetaDataSqlDAO
         }
         sqldao {
           # Slick database driver, full classpath
@@ -314,5 +304,5 @@ To use MySQL as backend include the following lines in the configuration file (e
     }
 
     # also add the following line at the root level.
-    flyway.locations="db/combineddao/mysql/migration"
+    flyway.locations="db/mysql/migration"
 ```
