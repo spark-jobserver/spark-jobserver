@@ -1,17 +1,15 @@
 package spark.jobserver
 
-import akka.actor.{ActorContext, ActorNotFound, ActorRef, ActorSystem, Address, AddressFromURIString, Props}
+import akka.actor.{ActorNotFound, ActorRef, ActorSystem, Address, Props}
 import akka.util.Timeout
 import akka.pattern.ask
 import akka.cluster.Cluster
-import akka.cluster.ClusterEvent.{InitialStateAsEvents, MemberEvent}
 import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import java.io.File
 import java.util.concurrent.{TimeUnit, TimeoutException}
 
 import spark.jobserver.io._
-import spark.jobserver.util.{ContextReconnectFailedException, DAOCleanup, HealthCheck, Utils,
-                             WrongFormatException}
+import spark.jobserver.util._
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 
@@ -21,7 +19,6 @@ import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 import scala.collection.mutable.ListBuffer
 import com.google.common.annotations.VisibleForTesting
-import spark.jobserver.util.{JobServerRoles, JobserverConfig}
 import spark.jobserver.io.zookeeper.AutoPurgeActor
 
 import scala.util.control.NonFatal

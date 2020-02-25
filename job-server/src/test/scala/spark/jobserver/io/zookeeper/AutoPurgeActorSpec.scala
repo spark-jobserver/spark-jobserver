@@ -2,15 +2,12 @@ package spark.jobserver.io.zookeeper
 
 import scala.concurrent.Await
 import scala.concurrent.duration.DurationInt
-
 import org.joda.time.DateTime
 import org.scalatest.BeforeAndAfter
 import org.scalatest.FunSpecLike
 import org.scalatest.Matchers
-
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
-
 import akka.actor.ActorRef
 import akka.actor.ActorSystem
 import akka.actor.Props
@@ -21,14 +18,12 @@ import spark.jobserver.io.BinaryDAO
 import spark.jobserver.io.BinaryInfo
 import spark.jobserver.io.BinaryType
 import spark.jobserver.io.ContextInfo
-import spark.jobserver.io.ErrorData
 import spark.jobserver.io.JobDAOActor.ContextInfos
 import spark.jobserver.io.JobDAOActor.GetContextInfos
 import spark.jobserver.io.JobDAOActor.GetJobInfos
 import spark.jobserver.io.JobDAOActor.JobInfos
 import spark.jobserver.io.JobInfo
-import spark.jobserver.util.CuratorTestCluster
-import spark.jobserver.util.Utils
+import spark.jobserver.util.{CuratorTestCluster, ErrorData, Utils}
 
 object AutoPurgeActorSpec {
   val system = ActorSystem("test")

@@ -12,6 +12,7 @@ import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
 import spark.jobserver.JobManagerActor.JobKilledException
 import spark.jobserver.io.JobDAOActor._
 import spark.jobserver.io._
+import spark.jobserver.util.ErrorData
 import spray.httpx.SprayJsonSupport
 import spray.routing.HttpService
 import spray.testkit.ScalatestRouteTest

@@ -9,7 +9,7 @@ import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.context.DefaultSparkContextFactory
 import spark.jobserver.io.JobDAOActor.{GetLastBinaryInfo, LastBinaryInfo, SaveBinary, SaveBinaryResult}
-import spark.jobserver.io.{BinaryDAO, BinaryInfo, BinaryType, DAOTestsHelper, JobDAO, MetaDataDAO}
+import spark.jobserver.io.{BinaryDAO, BinaryInfo, BinaryType, MetaDataDAO}
 import spark.jobserver.util.JobserverConfig
 
 import scala.concurrent.duration._

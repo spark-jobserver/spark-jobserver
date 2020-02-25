@@ -10,6 +10,7 @@ import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, FunSpecLike, Matchers}
 import spark.jobserver.TestJarFinder
+import spark.jobserver.util.ErrorData
 
 abstract class MetaDataSqlDAOSpecBase {
   def config : Config

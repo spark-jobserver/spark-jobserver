@@ -7,7 +7,6 @@ import org.scalatest.Matchers
 
 import spark.jobserver.io.BinaryInfo
 import spark.jobserver.io.BinaryType
-import spark.jobserver.io.ErrorData
 import spark.jobserver.io.JobInfo
 import spark.jobserver.util.JsonProtocols._
 import spray.json.pimpAny

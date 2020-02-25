@@ -1,13 +1,14 @@
 package spark.jobserver
 
-import akka.actor.{ActorRef, ActorSystem, Props, PoisonPill}
-import akka.testkit.{ImplicitSender, TestKit, TestProbe, TestActor}
+import akka.actor.{ActorRef, ActorSystem, PoisonPill, Props}
+import akka.testkit.{ImplicitSender, TestActor, TestKit, TestProbe}
 import spark.jobserver.io._
 import org.joda.time.DateTime
 import org.scalatest.Matchers
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike}
 import spark.jobserver.common.akka
 import spark.jobserver.common.akka.AkkaTestUtils
+import spark.jobserver.util.ErrorData
 
 object JobStatusActorSpec {
   val system = ActorSystem("test")
@@ -36,7 +37,6 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
   var actor: ActorRef = _
   var receiver: ActorRef = _
-  var dao: JobDAO = _
   var daoActor: ActorRef = _
   var daoProbe: TestProbe = _
   var daoMsgReceiverProbe: TestProbe = _

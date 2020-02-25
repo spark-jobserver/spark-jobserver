@@ -4,7 +4,7 @@ import com.typesafe.config.{Config, ConfigFactory}
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, FunSpec, FunSpecLike, Matchers}
 import spark.jobserver.io._
-import spark.jobserver.util.{ContextJVMInitializationTimeout, ContextReconnectFailedException, CuratorTestCluster, ResolutionFailedOnStopContextException, Utils}
+import spark.jobserver.util.{ContextJVMInitializationTimeout, ContextReconnectFailedException, CuratorTestCluster, ErrorData, ResolutionFailedOnStopContextException, Utils}
 import spark.jobserver.TestJarFinder
 
 import scala.concurrent.Await
