@@ -2,8 +2,8 @@ package spark.jobserver.io
 
 import java.io.File
 
-import akka.pattern.ask
 import akka.actor.{ActorRef, ActorSystem}
+import akka.pattern.ask
 import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import akka.util.Timeout
 import com.typesafe.config.{Config, ConfigFactory}
@@ -11,12 +11,12 @@ import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 import spark.jobserver.JobManagerActor.ContextTerminatedException
 import spark.jobserver.io.JobDAOActor._
-
-import scala.concurrent.{Await, Future}
-import scala.concurrent.duration._
-import scala.util.{Failure, Success}
 import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.util._
+
+import scala.concurrent.Await
+import scala.concurrent.duration._
+import scala.util.{Failure, Success}
 
 object JobDAOActorSpec {
   val system = ActorSystem("dao-test")

@@ -13,6 +13,20 @@ import scala.concurrent.ExecutionContext
 import org.slf4j.Logger
 import spark.jobserver.JobServer
 
+case class ErrorData(message: String, errorClass: String, stackTrace: String)
+
+object ErrorData {
+  def apply(ex: Throwable): ErrorData = {
+    ErrorData(ex.getMessage, ex.getClass.getName, getStackTrace(ex))
+  }
+
+  def getStackTrace(ex: Throwable): String = {
+    val stackTrace = new StringWriter()
+    ex.printStackTrace(new PrintWriter(stackTrace))
+    stackTrace.toString
+  }
+}
+
 object Utils {
   def usingResource[A <: Closeable, B](resource: A)(f: A => B): B = {
     try {

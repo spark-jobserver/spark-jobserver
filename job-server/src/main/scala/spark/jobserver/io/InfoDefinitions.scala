@@ -1,6 +1,7 @@
 package spark.jobserver.io
 
 import org.joda.time.{DateTime, Duration}
+import spark.jobserver.util.ErrorData
 import spray.http.{HttpHeaders, MediaType, MediaTypes}
 
 trait BinaryType {

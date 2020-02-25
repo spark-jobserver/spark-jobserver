@@ -8,7 +8,8 @@ import org.joda.time.DateTime
 import spark.jobserver.JobManagerActor.JobKilledException
 import spark.jobserver.common.akka.InstrumentedActor
 import spark.jobserver.common.akka.metrics.YammerMetrics
-import spark.jobserver.io.{ErrorData, JobDAOActor, JobInfo, JobStatus}
+import spark.jobserver.io.{JobDAOActor, JobInfo, JobStatus}
+import spark.jobserver.util.ErrorData
 
 object JobStatusActor {
   val NAME = "status-actor"

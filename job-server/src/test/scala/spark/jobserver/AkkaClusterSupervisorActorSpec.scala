@@ -246,7 +246,6 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
   private val daoTimeout = 5.seconds.dilated
   private val contextInitTimeout = 10.seconds.dilated
   private var supervisor: ActorRef = _
-  private var dao: JobDAO = _
   private var inMemoryMetaDAO: MetaDataDAO = _
   private var inMemoryBinDAO: BinaryDAO = _
   private var daoActor: ActorRef = _

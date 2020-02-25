@@ -2,7 +2,7 @@ package spark.jobserver.util
 
 import org.joda.time.DateTime
 import java.text.SimpleDateFormat
-import spark.jobserver.io.{BinaryInfo, BinaryType, ContextInfo, ErrorData, JobInfo}
+import spark.jobserver.io.{BinaryInfo, BinaryType, ContextInfo, JobInfo}
 import spray.json._
 
 object JsonProtocols extends DefaultJsonProtocol {

@@ -10,7 +10,7 @@ import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
 import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import slick.driver.JdbcProfile
-import spark.jobserver.util.SqlDBUtils
+import spark.jobserver.util.{ErrorData, SqlDBUtils}
 
 class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
   private val logger = LoggerFactory.getLogger(getClass)

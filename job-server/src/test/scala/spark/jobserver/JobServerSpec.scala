@@ -14,7 +14,7 @@ import java.nio.file.{Files, Path}
 import scala.concurrent.duration._
 import spark.jobserver.JobServer.InvalidConfiguration
 import spark.jobserver.common.akka
-import spark.jobserver.io.{BinaryInfo, BinaryType, ContextInfo, ContextStatus, InMemoryBinaryDAO, InMemoryMetaDAO, JobDAO, JobDAOActor, JobInfo, JobStatus}
+import spark.jobserver.io.{BinaryInfo, BinaryType, ContextInfo, ContextStatus, InMemoryBinaryDAO, InMemoryMetaDAO, JobDAOActor, JobInfo, JobStatus}
 import spark.jobserver.util.{ContextReconnectFailedException, DAOCleanup, JobserverConfig}
 
 import scala.concurrent.Await
