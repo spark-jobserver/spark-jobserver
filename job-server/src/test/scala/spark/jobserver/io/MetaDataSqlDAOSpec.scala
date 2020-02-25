@@ -10,7 +10,7 @@ import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, FunSpecLike, Matchers}
 import spark.jobserver.TestJarFinder
-import spark.jobserver.util.ErrorData
+import spark.jobserver.util.{ErrorData, JobserverConfig}
 
 abstract class MetaDataSqlDAOSpecBase {
   def config : Config
@@ -26,17 +26,16 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
   val time: DateTime = new DateTime()
   val throwable: Throwable = new Throwable("test-error")
   // jar test data
-  val rootDirKey = "spark.jobserver.combineddao.rootdir"
   val jarBytes: Array[Byte] = Files.toByteArray(testJar)
   val jarInfo: BinaryInfo = genJarInfo(false, false)
   var jarFile: File = new File(
-      config.getString(rootDirKey),
+      config.getString(JobserverConfig.DAO_ROOT_DIR_PATH),
       jarInfo.appName + "-" + jarInfo.uploadTime.toString("yyyyMMdd_hhmmss_SSS") + ".jar"
   )
 
   val eggBytes: Array[Byte] = Files.toByteArray(emptyEgg)
   val eggInfo: BinaryInfo = BinaryInfo("myEggBinary", BinaryType.Egg, time)
-  val eggFile: File = new File(config.getString(rootDirKey),
+  val eggFile: File = new File(config.getString(JobserverConfig.DAO_ROOT_DIR_PATH),
     eggInfo.appName + "-" + jarInfo.uploadTime.toString("yyyyMMdd_hhmmss_SSS") + ".egg")
 
   // jobInfo test data

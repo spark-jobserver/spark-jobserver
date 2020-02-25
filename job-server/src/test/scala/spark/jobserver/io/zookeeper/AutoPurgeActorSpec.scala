@@ -23,7 +23,7 @@ import spark.jobserver.io.JobDAOActor.GetContextInfos
 import spark.jobserver.io.JobDAOActor.GetJobInfos
 import spark.jobserver.io.JobDAOActor.JobInfos
 import spark.jobserver.io.JobInfo
-import spark.jobserver.util.{CuratorTestCluster, ErrorData, Utils}
+import spark.jobserver.util.{CuratorTestCluster, ErrorData, JobserverConfig, Utils}
 
 object AutoPurgeActorSpec {
   val system = ActorSystem("test")
@@ -54,8 +54,8 @@ class AutoPurgeActorSpec extends TestKit(AutoPurgeActorSpec.system) with FunSpec
   def config: Config = ConfigFactory.parseString(
     s"""
          |spark.jobserver.zookeeperdao.connection-string = "${testServer.getConnectString}"
-         |spark.jobserver.combineddao.binarydao.class = spark.jobserver.io.HdfsBinaryDAO
-         |spark.jobserver.combineddao.metadatadao.class = spark.jobserver.io.zookeeper.MetaDataZookeeperDAO
+         |${JobserverConfig.BINARY_DAO_CONFIG_PATH} = spark.jobserver.io.HdfsBinaryDAO
+         |${JobserverConfig.METADATA_DAO_CONFIG_PATH} = spark.jobserver.io.zookeeper.MetaDataZookeeperDAO
          |spark.jobserver.zookeeperdao.autopurge = true
          |spark.jobserver.zookeeperdao.autopurge_after_hours = 168
     """.stripMargin

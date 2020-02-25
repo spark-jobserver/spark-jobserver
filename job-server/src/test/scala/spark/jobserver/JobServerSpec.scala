@@ -133,7 +133,7 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
     it("does not support context-per-jvm and H2 in-memory DB") {
       val configFileName = writeConfigFile(Map(
         "spark.jobserver.context-per-jvm " -> true,
-        "spark.jobserver.combineddao.rootdir" -> "/tmp/combineddao",
+        JobserverConfig.DAO_ROOT_DIR_PATH -> "/tmp/sjs-dao",
         JobserverConfig.BINARY_DAO_CONFIG_PATH -> JobserverConfig.BINARY_SQL_DAO_CLASS,
         JobserverConfig.METADATA_DAO_CONFIG_PATH -> JobserverConfig.METADATA_SQL_DAO_CLASS,
         "spark.jobserver.sqldao.jdbc.url" -> "jdbc:h2:mem"))
@@ -147,7 +147,7 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
       val configFileName = writeConfigFile(Map(
         "spark.submit.deployMode" -> "cluster",
         "spark.jobserver.context-per-jvm " -> true,
-        "spark.jobserver.combineddao.rootdir" -> "/tmp/combineddao",
+        JobserverConfig.DAO_ROOT_DIR_PATH -> "/tmp/sjs-dao",
         JobserverConfig.BINARY_DAO_CONFIG_PATH -> JobserverConfig.BINARY_SQL_DAO_CLASS,
         JobserverConfig.METADATA_DAO_CONFIG_PATH -> JobserverConfig.METADATA_SQL_DAO_CLASS,
         "spark.jobserver.sqldao.jdbc.url" -> "jdbc:h2:mem"))
@@ -161,7 +161,7 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
       val configFileName = writeConfigFile(Map(
         "spark.submit.deployMode" -> "cluster",
         "spark.jobserver.context-per-jvm " -> true,
-        "spark.jobserver.combineddao.rootdir" -> "/tmp/combineddao",
+        JobserverConfig.DAO_ROOT_DIR_PATH -> "/tmp/sjs-dao",
         JobserverConfig.BINARY_DAO_CONFIG_PATH -> JobserverConfig.BINARY_SQL_DAO_CLASS,
         JobserverConfig.METADATA_DAO_CONFIG_PATH -> JobserverConfig.METADATA_SQL_DAO_CLASS,
         "spark.jobserver.sqldao.jdbc.url" -> "jdbc:h2:file"))

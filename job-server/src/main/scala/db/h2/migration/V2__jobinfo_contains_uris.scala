@@ -1,4 +1,4 @@
-package db.combineddao.h2.migration
+package db.h2.migration
 
 import java.sql.Connection
 

@@ -19,9 +19,9 @@ object JobserverConfig {
   /**
    * Configuration paths to define Binary and Metadata parts of the DAO.
    */
-  val BINARY_DAO_CONFIG_PATH = "spark.jobserver.combineddao.binarydao.class"
-  val METADATA_DAO_CONFIG_PATH = "spark.jobserver.combineddao.metadatadao.class"
-  val DAO_ROOT_DIR_PATH = "spark.jobserver.combineddao.rootdir"
+  val BINARY_DAO_CONFIG_PATH = "spark.jobserver.binarydao.class"
+  val METADATA_DAO_CONFIG_PATH = "spark.jobserver.metadatadao.class"
+  val DAO_ROOT_DIR_PATH = "spark.jobserver.daorootdir"
 
   /**
    * Classes defining SQL DAO. Used in some checks on startup.
