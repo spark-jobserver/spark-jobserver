@@ -3,14 +3,14 @@ package spark.jobserver.python
 import java.io.File
 import java.nio.file.Files
 
-import com.typesafe.config.{ConfigRenderOptions, Config, ConfigFactory}
-import org.apache.spark.SparkContext
+import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
 import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.{SparkConf, SparkContext}
-import org.scalatest.{BeforeAndAfterAll, Matchers, FunSpec}
-import py4j.GatewayServer
+import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
+import org.scalatest._
+import spark.jobserver.util.JobserverPy4jGateway
 
 import scala.collection.JavaConverters._
 import scala.sys.process.Process
@@ -83,7 +83,7 @@ trait IdentifiedContext {
   def contextType: String
 }
 
-class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
+class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
   import SubprocessSpec._
   val pythonPathDelimiter : String = if (System.getProperty("os.name").indexOf("Win") >= 0) ";" else ":"
@@ -103,16 +103,6 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
     warehouseDir.delete()
     warehouseDir
   }
-  def buildGateway(endpoint: TestEndpoint): GatewayServer = {
-    val server = new GatewayServer(endpoint, 0)
-    //Server runs asynchronously on a dedicated thread. See Py4J source for more detail
-    server.start()
-    server
-  }
-
-  def stopGateway(gw: GatewayServer): Unit = {
-    gw.shutdown()
-  }
 
   lazy val conf = new SparkConf().
     setMaster("local[*]").
@@ -128,6 +118,16 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
   }
   lazy val hiveContext = new HiveContext(sc) with IdentifiedContext{
     def contextType = classOf[HiveContext].getCanonicalName
+  }
+
+  private var jobserverPy4jGateway: JobserverPy4jGateway = _
+
+  before {
+     jobserverPy4jGateway = new JobserverPy4jGateway()
+  }
+
+  after {
+    jobserverPy4jGateway.stop()
   }
 
   override def afterAll(): Unit = {
@@ -151,41 +151,38 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
     "org.apache.spark.sql.hive.*"
   )
 
+  private def setupPythonProcess(port: String, token: String): scala.sys.process.ProcessBuilder = {
+    Process(
+      Seq("python", "-m", "sparkjobserver.subprocess", port, token),
+      None,
+      "PYTHONPATH" -> pythonPath)
+  }
+
   describe("The python subprocess") {
 
     it("should successfully run a SparkContext based job") {
       val jobConfig = ConfigFactory.parseString("""input.strings = ["a", "a", "b"]""")
       val endpoint =
         TestEndpoint(jsc, conf, jobConfig, "example_jobs.word_count.WordCountSparkJob", sparkContextImports)
-      val gw = buildGateway(endpoint)
-      val process =
-        Process(
-          Seq("python", "-m", "sparkjobserver.subprocess", gw.getListeningPort.toString),
-          None,
-          "PYTHONPATH" -> pythonPath)
+      val gatewayPort = jobserverPy4jGateway.getGatewayPort(endpoint)
+      val process = setupPythonProcess(gatewayPort, jobserverPy4jGateway.getToken())
       val pythonExitCode = process.!
       pythonExitCode should be (0)
       endpoint.result should matchPattern {
         case m: java.util.HashMap[_, _]
           if m.asInstanceOf[java.util.HashMap[String, Int]].asScala.toSeq.sorted == Seq("a" -> 2, "b" -> 1) =>
       }
-      stopGateway(gw)
     }
 
     it("should capture the validation failures and have a non-zero exit code when input data is invalid") {
       val jobConfig = ConfigFactory.parseString("""""")
       val endpoint =
         TestEndpoint(jsc, conf, jobConfig, "example_jobs.word_count.WordCountSparkJob", sparkContextImports)
-      val gw = buildGateway(endpoint)
-      val process =
-        Process(
-          Seq("python", "-m", "sparkjobserver.subprocess", gw.getListeningPort.toString),
-          None,
-          "PYTHONPATH" -> pythonPath)
+      val gatewayPort = jobserverPy4jGateway.getGatewayPort(endpoint)
+      val process = setupPythonProcess(gatewayPort, jobserverPy4jGateway.getToken())
       val pythonExitCode = process.!
       pythonExitCode should be (1)
       endpoint.validationProblems should be (Some(Seq("config input.strings not found")))
-      stopGateway(gw)
     }
 
     it("should successfully run a SQLContext based job") {
@@ -200,12 +197,8 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
         """.stripMargin)
       val endpoint =
         TestEndpoint(sqlContext, conf, jobConfig, "example_jobs.sql_average.SQLAverageJob", sqlContextImports)
-      val gw = buildGateway(endpoint)
-      val process =
-        Process(
-          Seq("python", "-m", "sparkjobserver.subprocess", gw.getListeningPort.toString),
-          None,
-          "PYTHONPATH" -> pythonPath)
+      val gatewayPort = jobserverPy4jGateway.getGatewayPort(endpoint)
+      val process = setupPythonProcess(gatewayPort, jobserverPy4jGateway.getToken())
       val pythonExitCode = process.!
       pythonExitCode should be (0)
       endpoint.result should matchPattern {
@@ -213,7 +206,6 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
           if a.asScala.asInstanceOf[Seq[java.util.ArrayList[Any]]].map(_.asScala) ==
             Seq(Seq(20, 1250.0), Seq(21, 1500.0)) =>
       }
-      stopGateway(gw)
     }
 
 
@@ -230,12 +222,8 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
       val endpoint =
         TestEndpoint(hiveContext, conf, jobConfig,
           "example_jobs.hive_window.HiveWindowJob", hiveContextImports)
-      val gw = buildGateway(endpoint)
-      val process =
-        Process(
-          Seq("python", "-m", "sparkjobserver.subprocess", gw.getListeningPort.toString),
-          None,
-          "PYTHONPATH" -> pythonPath)
+      val gatewayPort = jobserverPy4jGateway.getGatewayPort(endpoint)
+      val process = setupPythonProcess(gatewayPort, jobserverPy4jGateway.getToken())
       val pythonExitCode = process.!
       pythonExitCode should be (0)
       endpoint.result should matchPattern {
@@ -248,7 +236,6 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
               Seq("sue", 21, 2)
             ) =>
       }
-      stopGateway(gw)
     }
 
     it("should maintain registered temp tables between two SQL jobs on the same context") {
@@ -263,27 +250,20 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
         """.stripMargin)
       val endpoint =
         TestEndpoint(sqlContext, conf, jobConfig, "example_jobs.sql_two_jobs.Job1", sqlContextImports)
-      val gw = buildGateway(endpoint)
-      val process =
-        Process(
-          Seq("python", "-m", "sparkjobserver.subprocess", gw.getListeningPort.toString),
-          None,
-          "PYTHONPATH" -> pythonPath)
+      val gatewayPort = jobserverPy4jGateway.getGatewayPort(endpoint)
+      val process = setupPythonProcess(gatewayPort, jobserverPy4jGateway.getToken())
       val pythonExitCode = process.!
       pythonExitCode should be (0)
       endpoint.result should be ("done")
-      stopGateway(gw)
+      jobserverPy4jGateway.stop()
       Thread.sleep(5000)
 
       val jobConfig2 = ConfigFactory.parseString("")
       val endpoint2 =
         TestEndpoint(sqlContext, conf, jobConfig2, "example_jobs.sql_two_jobs.Job2", sqlContextImports)
-      val gw2 = buildGateway(endpoint2)
-      val process2 =
-        Process(
-          Seq("python", "-m", "sparkjobserver.subprocess", gw2.getListeningPort.toString),
-          None,
-          "PYTHONPATH" -> pythonPath)
+      val jobserverPy4jGateway2 = new JobserverPy4jGateway()
+      val process2 = setupPythonProcess(
+        jobserverPy4jGateway2.getGatewayPort(endpoint2), jobserverPy4jGateway2.getToken())
       val pythonExitCode2 = process2.!
       pythonExitCode2 should be (0)
       endpoint2.result should matchPattern {
@@ -291,7 +271,7 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
           if a.asScala.asInstanceOf[Seq[java.util.ArrayList[Any]]].map(_.asScala) ==
             Seq(Seq(20, 1250.0), Seq(21, 1500.0)) =>
       }
-      stopGateway(gw2)
+      jobserverPy4jGateway2.stop()
     }
     
     it("should have non-zero exit code if passed something as a context which is not a context") {
@@ -303,45 +283,30 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
           conf,
           jobConfig,
           "example_jobs.word_count.WordCountSparkJob", sparkContextImports)
-      val gw = buildGateway(endpoint)
-      val process =
-        Process(
-          Seq("python", "-m", "sparkjobserver.subprocess", gw.getListeningPort.toString),
-          None,
-          "PYTHONPATH" -> pythonPath)
+      val gatewayPort = jobserverPy4jGateway.getGatewayPort(endpoint)
+      val process = setupPythonProcess(gatewayPort, jobserverPy4jGateway.getToken())
       val pythonExitCode = process.!
       pythonExitCode should be (2)
-      stopGateway(gw)
     }
 
     it("should have non-zero exit code if the underlying job fails during run") {
       val jobConfig = ConfigFactory.parseString("""input.strings = ["a", "a", "b"]""")
       val endpoint =
         TestEndpoint(jsc, conf, jobConfig, "example_jobs.failing_job.FailingRunJob", sparkContextImports)
-      val gw = buildGateway(endpoint)
-      val process =
-        Process(
-          Seq("python", "-m", "sparkjobserver.subprocess", gw.getListeningPort.toString),
-          None,
-          "PYTHONPATH" -> pythonPath)
+      val gatewayPort = jobserverPy4jGateway.getGatewayPort(endpoint)
+      val process = setupPythonProcess(gatewayPort, jobserverPy4jGateway.getToken())
       val pythonExitCode = process.!
       pythonExitCode should be (4)
-      stopGateway(gw)
     }
 
     it("should have non-zero exit code if the underlying job fails during validate") {
       val jobConfig = ConfigFactory.parseString("""input.strings = ["a", "a", "b"]""")
       val endpoint =
         TestEndpoint(jsc, conf, jobConfig, "example_jobs.failing_job.FailingValidateJob", sparkContextImports)
-      val gw = buildGateway(endpoint)
-      val process =
-        Process(
-          Seq("python", "-m", "sparkjobserver.subprocess", gw.getListeningPort.toString),
-          None,
-          "PYTHONPATH" -> pythonPath)
+      val gatewayPort = jobserverPy4jGateway.getGatewayPort(endpoint)
+      val process = setupPythonProcess(gatewayPort, jobserverPy4jGateway.getToken())
       val pythonExitCode = process.!
       pythonExitCode should be (3)
-      stopGateway(gw)
     }
 
     it("should handle cases where a custom context is used") {
@@ -351,12 +316,8 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfterAll {
       val endpoint =
         TestEndpoint(customContext, conf, jobConfig,
           "example_jobs.custom_context_job.CustomContextJob", customImports)
-      val gw = buildGateway(endpoint)
-      val process =
-        Process(
-          Seq("python", "-m", "sparkjobserver.subprocess", gw.getListeningPort.toString),
-          None,
-          "PYTHONPATH" -> pythonPath)
+      val gatewayPort = jobserverPy4jGateway.getGatewayPort(endpoint)
+      val process = setupPythonProcess(gatewayPort, jobserverPy4jGateway.getToken())
       val pythonExitCode = process.!
       pythonExitCode should be (0)
       endpoint.result should be ("Hello World 3")
