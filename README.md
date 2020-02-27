@@ -854,6 +854,8 @@ Flow diagrams are checked in in the doc/ subdirectory.  .diagram files are for w
 
 ## API
 
+A comprehensive (manually created) swagger specification of the spark jobserver WebApi can be found [here](doc/WebApi/).
+
 ### Binaries
 
     GET /binaries               - lists all current binaries
