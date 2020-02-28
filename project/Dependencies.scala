@@ -35,7 +35,7 @@ object Dependencies {
   )
 
   lazy val sparkExtraDeps = Seq(
-    "org.apache.hadoop" % "hadoop-client" % hadoop % Provided excludeAll (excludeQQ, excludeJackson),
+    "org.apache.hadoop" % "hadoop-client" % hadoop % "provided,test" excludeAll (excludeQQ, excludeJackson),
     "org.apache.spark" %% "spark-mllib" % spark % Provided excludeAll excludeQQ,
     "org.apache.spark" %% "spark-sql" % spark % Provided excludeAll excludeQQ,
     "org.apache.spark" %% "spark-streaming" % spark % Provided excludeAll excludeQQ,
