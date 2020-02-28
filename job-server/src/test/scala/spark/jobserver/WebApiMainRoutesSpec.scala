@@ -1,11 +1,14 @@
 package spark.jobserver
 
 import com.typesafe.config.ConfigFactory
-import spark.jobserver.io.BinaryType
-import spray.http.{HttpHeaders, MediaTypes}
-import spray.http.StatusCodes._
-import spark.jobserver.io.{ContextStatus, JobStatus}
+import spark.jobserver.JobServerSprayProtocol._
+import spark.jobserver.io.{BinaryType, ContextStatus, JobStatus}
 import spark.jobserver.util.SparkJobUtils
+import spray.client.pipelining._
+import spray.http.StatusCodes._
+import spray.http.{HttpHeaders, MediaTypes}
+
+import scala.concurrent.Future
 
 // Tests web response codes and formatting
 // Does NOT test underlying Supervisor / JarManager functionality
@@ -797,6 +800,18 @@ class WebApiMainRoutesSpec extends WebApiSpec {
         status should be (InternalServerError)
         val result = responseAs[Map[String, Any]]
         result(ResultKey) should equal("UNEXPECTED ERROR OCCURRED")
+      }
+    }
+  }
+
+  describe ("context reset route") {
+    it ("should return valid JSON when resetting a context") {
+      val p = sendReceive ~> unmarshal[JobServerResponse]
+      val valid: Future[JobServerResponse] = p(Put(s"http://127.0.0.1:$dummyPort/contexts?reset=reboot"))
+      whenReady(valid) { r =>
+        r.isSuccess shouldBe true
+        r.status shouldBe "SUCCESS"
+        r.result shouldBe "Context reset"
       }
     }
   }
