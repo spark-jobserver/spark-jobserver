@@ -7,18 +7,14 @@ import akka.testkit.TestKit
 import com.typesafe.config.ConfigFactory
 import org.joda.time.DateTime
 import org.scalatest.concurrent.ScalaFutures
+import org.scalatest.time.{Seconds, Span}
 import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
 import spark.jobserver.JobManagerActor.JobKilledException
+import spark.jobserver.io.JobDAOActor._
 import spark.jobserver.io._
-import spray.client.pipelining._
-import JobServerSprayProtocol._
-import org.scalatest.time.{Seconds, Span}
-import spray.http._
 import spray.httpx.SprayJsonSupport
 import spray.routing.HttpService
 import spray.testkit.ScalatestRouteTest
-import scala.concurrent.Future
-import spark.jobserver.io.JobDAOActor._
 
 // Tests web response codes and formatting
 // Does NOT test underlying Supervisor / JarManager functionality
@@ -278,20 +274,4 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
   override def afterAll(): Unit = {
     TestKit.shutdownActorSystem(system)
   }
-
-  describe ("The WebApi") {
-
-    val jsonContentType = HttpHeaders.`Content-Type`(ContentType(MediaTypes.`application/json`))
-
-    it ("Should return valid JSON when resetting a context") {
-      val p = sendReceive ~> unmarshal[JobServerResponse]
-      val valid: Future[JobServerResponse] = p(Put("http://127.0.0.1:9999/contexts?reset=reboot"))
-      whenReady(valid) { r =>
-        r.isSuccess shouldBe true
-        r.status shouldBe "SUCCESS"
-        r.result shouldBe "Context reset"
-      }
-    }
-  }
-
 }
