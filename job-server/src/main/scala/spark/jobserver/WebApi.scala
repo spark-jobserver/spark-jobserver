@@ -170,6 +170,8 @@ class WebApi(system: ActorSystem,
 
   private val maxSprayLogMessageLength = 400
 
+  // Response code counters
+  private val internalServerErrorCounter = counter("internal-server-error-status-code")
   // Timer metrics
   private val binGet = timer("binary-get-duration", TimeUnit.MILLISECONDS)
   private val binGetSingle = timer("binary-get-single-duration", TimeUnit.MILLISECONDS)
@@ -193,7 +195,11 @@ class WebApi(system: ActorSystem,
         case res: HttpResponse =>
           val resMessage = res.entity.toString.
             replace('\n', ' ').replaceAll(" +", " ")
-          logger.info(s"Response: ${res.status} " +
+          val statusCode = res.status.intValue
+          if (statusCode == StatusCodes.InternalServerError.intValue) {
+            internalServerErrorCounter.inc()
+          }
+          logger.info(s"Response: $statusCode " +
             s"${resMessage.substring(0, Math.min(resMessage.length(), maxSprayLogMessageLength))}(...) " +
             s"to request: ${request.uri}")
         case _ => logger.info("Unknown response")
