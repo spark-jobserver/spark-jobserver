@@ -96,7 +96,7 @@ paths:
         201:
           description: "Binary created"
           schema:
-            $ref: '#/definitions/Empty'
+            $ref: '#/definitions/SuccessMapNoMsg'
         400:
           description: Wrong binary format
           schema:
@@ -129,7 +129,7 @@ paths:
         200:
           description: Successful operation
           schema:
-            $ref: '#/definitions/Empty'
+            $ref: '#/definitions/SuccessMapNoMsg'
         403:
           description: The deletion is forbidden, because the binary is still in use by running jobs
           schema:
@@ -400,7 +400,7 @@ paths:
           schema:
             $ref: '#/definitions/JobInfo'
         400:
-          description: "Bad request: Job validation failed, invalid job type or malformed URI"
+          description: "Bad request: Job loading or validation failed (invalid job type or malformed URI)"
           schema:
             $ref: '#/definitions/ErrorMap'
         404:
@@ -504,16 +504,13 @@ paths:
         200:
           description: "Successful operation"
           schema:
-            $ref: '#/definitions/Empty'
+            $ref: '#/definitions/SuccessMapNoMsg'
 
 #
 # DEFINITIONS
 #
 
 definitions:
-
-  Empty:
-    type: "object"
 
   ErrorMap:
     type: "object"
@@ -524,6 +521,13 @@ definitions:
       result:
         type: "object"
         example: "Error details"
+
+  SuccessMapNoMsg:
+    type: "object"
+    properties:
+      status:
+        type: "string"
+        example: "SUCCESS"
 
   SuccessMap:
     type: "object"
