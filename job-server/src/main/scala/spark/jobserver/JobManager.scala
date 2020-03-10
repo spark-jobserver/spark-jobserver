@@ -183,29 +183,35 @@ object JobManager {
         // itself (in case of a planned shutdown).
         Cluster(system).registerOnMemberRemoved {
           logger.info("JobManagerActor was removed from the Akka cluster.")
-          val futureTimeout = 180.seconds
-          implicit val akkaTimeout = Timeout(futureTimeout)
-          if (Try(Await.ready(system.whenTerminated, futureTimeout)).isFailure) {
-            Try(Await.result(daoActor ? GetContextInfo(contextId), futureTimeout)) match {
-              case Success(response) =>
-                val contextInfo = response.asInstanceOf[JobDAOActor.ContextResponse].contextInfo
-                contextInfo match {
-                  case Some(info) if ContextStatus.getNonFinalStates().contains(info.state) =>
-                    logger.info(s"JobManagerActor has status ${info.state}, but was kicked out of " +
-                      s"the cluster minimum 3 minutes ago. Exiting JVM with -1.")
-                    Runtime.getRuntime.halt(-1)
-                  case Some(info) =>
-                    logger.info(s"Context ${info.name} is in state ${info.state}. Akka hook for removal" +
-                      s" from the cluster won't take any action in this case.")
-                  case None =>
-                    logger.info(s"Akka hook for removal from the cluster couldn't obtain context " +
-                      s"information for context id $contextId")
+          // We must spawn a separate thread to not block current thread,
+          // since that would have blocked the shutdown of the ActorSystem.
+          new Thread {
+            override def run(): Unit = {
+              val futureTimeout = 180.seconds
+              implicit val akkaTimeout = Timeout(futureTimeout)
+              if (Try(Await.ready(system.whenTerminated, futureTimeout)).isFailure) {
+                Try(Await.result(daoActor ? GetContextInfo(contextId), futureTimeout)) match {
+                  case Success(response) =>
+                    val contextInfo = response.asInstanceOf[JobDAOActor.ContextResponse].contextInfo
+                    contextInfo match {
+                      case Some(info) if ContextStatus.getNonFinalStates().contains(info.state) =>
+                        logger.info(s"JobManagerActor has status ${info.state}, but was kicked out of " +
+                          s"the cluster minimum 3 minutes ago. Exiting JVM with -1.")
+                        Runtime.getRuntime.halt(-1)
+                      case Some(info) =>
+                        logger.info(s"Context ${info.name} is in state ${info.state}. Akka hook for removal" +
+                          s" from the cluster won't take any action in this case.")
+                      case None =>
+                        logger.info(s"Akka hook for removal from the cluster couldn't obtain context " +
+                          s"information for context id $contextId")
+                    }
+                  case Failure(_) =>
+                    logger.info(s"Akka hook for removal from the cluster couldn't get information from" +
+                      s" DAO actor. Taking no action.")
                 }
-              case Failure(_) =>
-                logger.info(s"Akka hook for removal from the cluster couldn't get information from" +
-                  s" DAO actor. Taking no action.")
+              }
             }
-          }
+          }.start()
         }
       }
     }
