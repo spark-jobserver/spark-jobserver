@@ -86,6 +86,10 @@ lazy val jobServerPython = Project(id = "job-server-python", base = file("job-se
   .dependsOn(jobServerApi, akkaApp % "test")
   .disablePlugins(SbtScalariform)
 
+lazy val jobserverIntegrationTests = Project(id = "job-server-integration-tests", base = file("job-server-integration-tests"))
+  .settings(commonSettings)
+  .settings(jobserverIntegrationTestsSettings)
+
 lazy val root = Project(id = "root", base = file("."))
   .settings(commonSettings)
   .settings(Release.settings)
@@ -122,6 +126,11 @@ lazy val jobServerPythonSettings = revolverSettings ++ Assembly.settings ++ publ
   buildPython := PythonTasks.buildPythonTask(baseDirectory.value, version.value),
   buildPyExamples := PythonTasks.buildExamplesTask(baseDirectory.value, version.value),
   assembly := assembly.dependsOn(buildPython).value
+)
+
+lazy val jobserverIntegrationTestsSettings = Seq(
+  libraryDependencies ++= integrationTestDeps,
+  mainClass in Compile := Some("spark.jobserver.integrationtests.IntegrationTests"),
 )
 
 lazy val jobServerTestJarSettings = Seq(
