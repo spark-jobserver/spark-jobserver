@@ -9,6 +9,7 @@ import spark.jobserver.util.{JobserverConfig, SparkJobUtils}
 import org.apache.spark.sql.Row
 import spark.jobserver.CommonMessages.JobResult
 import spark.jobserver.io.JobDAOActor
+import spark.jobserver.common.akka.AkkaTestUtils
 
 import scala.concurrent.duration._
 
@@ -51,7 +52,13 @@ class JavaSessionSpec extends ExtrasJobSpecBase(JavaSessionSpec.getNewSystem) {
   before {
     dao = new InMemoryDAO
     daoActor = system.actorOf(JobDAOActor.props(dao))
-    manager = system.actorOf(JobManagerActor.props(daoActor))
+    // JobManagerTestActor is used to take advantage of CleanlyStoppingSparkContextJobManagerActor class
+    manager = system.actorOf(JobManagerTestActor.props(daoActor))
+  }
+
+  after {
+    JobManagerTestActor.stopSparkContextIfAlive(system, manager) should be(true)
+    AkkaTestUtils.shutdownAndWait(manager)
   }
 
   describe("Java Session Jobs") {

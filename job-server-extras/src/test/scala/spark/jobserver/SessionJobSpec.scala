@@ -4,6 +4,7 @@ import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.sql.{Row, SparkSession}
 import spark.jobserver.CommonMessages.JobResult
+import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.context.{SessionContextFactory, SparkSessionContextLikeWrapper}
 import spark.jobserver.io.JobDAOActor
 import spark.jobserver.util.{JobserverConfig, SparkJobUtils}
@@ -50,7 +51,13 @@ class SessionJobSpec extends ExtrasJobSpecBase(SessionJobSpec.getNewSystem) {
   before {
     dao = new InMemoryDAO
     daoActor = system.actorOf(JobDAOActor.props(dao))
-    manager = system.actorOf(JobManagerActor.props(daoActor))
+    // JobManagerTestActor is used to take advantage of CleanlyStoppingSparkContextJobManagerActor class
+    manager = system.actorOf(JobManagerTestActor.props(daoActor))
+  }
+
+  after {
+    JobManagerTestActor.stopSparkContextIfAlive(system, manager) should be(true)
+    AkkaTestUtils.shutdownAndWait(manager)
   }
 
   describe("Spark Session Jobs") {
