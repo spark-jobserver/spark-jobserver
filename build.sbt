@@ -261,6 +261,7 @@ lazy val runScalaStyle = taskKey[Unit]("testScalaStyle")
 lazy val commonSettings = Defaults.coreDefaultSettings ++ dirSettings ++ Seq(
   organization := "spark.jobserver",
   crossPaths   := true,
+  releaseIgnoreUntrackedFiles := true,
   scalaVersion := sys.env.getOrElse("SCALA_VERSION", "2.11.8"),
   dependencyOverrides += "org.scala-lang" % "scala-compiler" % scalaVersion.value,
   // scalastyleFailOnError := true,
