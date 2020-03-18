@@ -63,7 +63,13 @@ object Dependencies {
   )
 
   lazy val cassandraDeps = Seq(
-    "com.datastax.spark" %% "spark-cassandra-connector" % cassandraConnector
+    "com.datastax.spark" %% "spark-cassandra-connector" % cassandraConnector,
+
+    // The following dependency is not required by jobserver. It is required by
+    // C* connector (only if used with Hadoop 3.x). Once C* is compatible with
+    // hadoop, the following dependency should be removed.
+    // https://datastax-oss.atlassian.net/browse/SPARKC-566
+    "commons-configuration" % "commons-configuration" % commonConfigurations
   )
 
   lazy val logbackDeps = Seq(

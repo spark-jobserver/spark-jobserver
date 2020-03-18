@@ -3,7 +3,8 @@ package spark.jobserver
 import java.io.File
 import java.nio.file.{Files, StandardOpenOption}
 
-import akka.actor.{ActorRef, Cancellable, PoisonPill, Props}
+import akka.actor.{ActorRef, ActorSystem, Cancellable, PoisonPill, Props}
+import akka.pattern.ask
 import akka.testkit.TestProbe
 import org.joda.time.DateTime
 import com.typesafe.config.{Config, ConfigFactory}
@@ -186,9 +187,28 @@ class JobManagerActorSpy(daoActor: ActorRef, supervisorActorAddress: String,
 }
 
 object JobManagerTestActor {
+  val logger = LoggerFactory.getLogger(getClass)
+
   def props(daoActor: ActorRef, supervisorActorAddress: String = "", contextId: String = "",
             initializationTimeout: FiniteDuration = 40.seconds): Props =
     Props(classOf[JobManagerTestActor], daoActor, supervisorActorAddress, contextId, initializationTimeout)
+
+  def stopSparkContextIfAlive(system: ActorSystem, manager: ActorRef): Boolean = {
+    val defaultSmallTimeout = 5.seconds
+
+    Try(Some(Await.result(
+      system.actorSelection(manager.path)
+        .resolveOne()(defaultSmallTimeout), defaultSmallTimeout))).getOrElse(None) match {
+      case None =>
+        logger.debug("Manager is not alive")
+        true
+      case _: Some[ActorRef] =>
+        Await.result((manager ? "CleanSparkContext")(defaultSmallTimeout), defaultSmallTimeout) match {
+          case "Cleaned" => true
+          case _ => false
+        }
+    }
+  }
 }
 class JobManagerTestActor(daoActor: ActorRef,
                           supervisorActorAddress: String,
@@ -257,20 +277,10 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
   after {
     logger.debug("After block - started")
-    stopSparkContextIfAlive()
+    JobManagerTestActor.stopSparkContextIfAlive(system, manager) should be(true)
     AkkaTestUtils.shutdownAndWait(manager)
     Option(supervisor).foreach(AkkaTestUtils.shutdownAndWait(_))
     logger.debug("After block - finished")
-  }
-
-  private def stopSparkContextIfAlive(): Unit = {
-    Try(Some(Await.result(
-      system.actorSelection(manager.path).resolveOne()(5.seconds), 5.seconds))).getOrElse(None) match {
-      case None => logger.debug("Manager is not alive")
-      case _: Some[ActorRef] =>
-        manager ! "CleanSparkContext"
-        expectMsg(3.seconds, "Cleaned")
-    }
   }
 
   describe("starting jobs") {

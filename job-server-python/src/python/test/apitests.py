@@ -128,6 +128,9 @@ class TestSJSApi(unittest.TestCase):
         result = job.run_job(sqlContext, None, jobData)
         self.assertEqual([(20, 1250), (21, 1500)], result)
 
+    # Note: The following testcase will fail if Hive/Hadoop versions
+    # are not compatible e.g. Hadoop 3.2.0 is not compatible with
+    # Hive version brought by spark 2.4.4.
     def test_run_hive_job(self):
         job = SQLJob()
         sqlContext = HiveContext(self.sc)

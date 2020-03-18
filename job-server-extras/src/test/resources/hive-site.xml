@@ -6,6 +6,11 @@
         <description>JDBC connect string for a JDBC metastore</description>
     </property>
     <property>
+        <name>hive.metastore.warehouse.dir</name>
+        <value>/tmp/hive_metastore_db</value>
+        <description>Unit test data goes in here on your local filesystem.</description>
+    </property>
+    <property>
         <name>javax.jdo.option.ConnectionDriverName</name>
         <value>org.apache.derby.jdbc.EmbeddedDriver</value>
         <description>Driver class name for a JDBC metastore</description>
