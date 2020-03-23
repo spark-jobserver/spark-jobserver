@@ -866,7 +866,7 @@ YourKit supports open source projects with its full-featured [Java Profiler](htt
 - Pull the latest code from `master` branch.
 - Make sure that for next release `notes/` is already updated. You can use the following command to get a list of all commits since last release.
 ```
-git log <last release commit hash>..master --format="%s / (%an | %h)"
+git log <last release commit hash>..master --format="- %s / (%an | %h)"
 ```
 - Remove untracked files. You can use `git clean -fd`. Be careful, it will remove untracked files and directories.
 - Make sure that `origin` is pointing to opensource github jobserver.
