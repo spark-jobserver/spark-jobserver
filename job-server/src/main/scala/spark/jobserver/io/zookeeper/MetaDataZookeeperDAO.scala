@@ -312,8 +312,6 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
           client =>
             logger.debug(s"Retrieving jobs by binary name $binName (states: $statuses)")
             zookeeperUtils.sync(client, binariesDir)
-            val jobs = zookeeperUtils.list(client, jobsDir)
-              .flatMap(id => readJobInfo(client, id))
             lazy val jobsUsingBinName = zookeeperUtils.list(client, jobsDir)
               .flatMap(id => readJobInfo(client, id))
               .filter(j => j.cp.map(_.appName).contains(binName))
