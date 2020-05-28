@@ -755,10 +755,14 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       supervisor ! AddContext("test-context11", configWithContextInfo)
       expectMsg(contextInitTimeout, ContextInitialized)
 
-      val context = Await.result(dao.getContextInfoByName("test-context11"), 3 seconds).get
+      Utils.retry(3, 1000) {
+        val context = Await.result(dao.getContextInfoByName("test-context11"), 3 seconds).get
+        context.state should equal(ContextStatus.Running)
 
-      supervisor ! GetSparkContexData("test-context11")
-      expectMsg(SparkContexData(context, Some("appId-dummy"), Some("dummy-url")))
+        supervisor ! GetSparkContexData("test-context11")
+        expectMsg(SparkContexData(context,
+          Some("appId-dummy"), Some("dummy-url")))
+      }
     }
 
     it("should return valid contextInfo, appId but no webUiUrl") {
@@ -767,10 +771,13 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       supervisor ! AddContext("test-context12", configWithContextInfo)
       expectMsg(contextInitTimeout, ContextInitialized)
 
-      val context = Await.result(dao.getContextInfoByName("test-context12"), 3 seconds).get
+      Utils.retry(3, 1000) {
+        val context = Await.result(dao.getContextInfoByName("test-context12"), 3 seconds).get
+        context.state should equal(ContextStatus.Running)
 
-      supervisor ! GetSparkContexData("test-context12")
-      expectMsg(SparkContexData(context, Some("appId-dummy"), None))
+        supervisor ! GetSparkContexData("test-context12")
+        expectMsg(SparkContexData(context, Some("appId-dummy"), None))
+      }
     }
 
     it("should return valid contextInfo and no appId or webUiUrl if SparkContextDead is received") {
@@ -779,10 +786,13 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       supervisor ! AddContext("test-context13", configWithContextInfo)
       expectMsg(contextInitTimeout, ContextInitialized)
 
-      val context = Await.result(dao.getContextInfoByName("test-context13"), 3 seconds).get
+      Utils.retry(3, 1000) {
+        val context = Await.result(dao.getContextInfoByName("test-context13"), 3 seconds).get
+        context.state should equal(ContextStatus.Running)
 
-      supervisor ! GetSparkContexData("test-context13")
-      expectMsg(SparkContexData(context, None, None))
+        supervisor ! GetSparkContexData("test-context13")
+        expectMsg(SparkContexData(context, None, None))
+      }
     }
 
     it("should return valid contextInfo and no appId or webUiUrl if Expception occurs") {
@@ -791,10 +801,13 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       supervisor ! AddContext("test-context14", configWithContextInfo)
       expectMsg(contextInitTimeout, ContextInitialized)
 
-      val context = Await.result(dao.getContextInfoByName("test-context14"), 3 seconds).get
+      Utils.retry(3, 1000) {
+        val context = Await.result(dao.getContextInfoByName("test-context14"), 3 seconds).get
+        context.state should equal(ContextStatus.Running)
 
-      supervisor ! GetSparkContexData("test-context14")
-      expectMsg(SparkContexData(context, None, None))
+        supervisor ! GetSparkContexData("test-context14")
+        expectMsg(SparkContexData(context, None, None))
+      }
     }
 
     it("should return UnexpectedError if a problem with db happens") {
@@ -911,18 +924,22 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       supervisor ! AddContext(contextName, contextConfig)
       expectMsg(contextInitTimeout, ContextInitialized)
 
-      val runningContextInfo = Await.result(dao.getContextInfoByName(contextName), daoTimeout)
-      val runningContextActorRef = JobServer.getManagerActorRef(runningContextInfo.get, system).get
-      runningContextActorRef should not be(None)
+      Utils.retry(3, 1000) {
+        val runningContextInfo = Await.result(dao.getContextInfoByName(contextName), daoTimeout).get
+        runningContextInfo.state should equal(ContextStatus.Running)
 
-      val deathWatcher = TestProbe()
-      deathWatcher.watch(runningContextActorRef)
-      runningContextActorRef ! PoisonPill
-      deathWatcher.expectTerminated(runningContextActorRef)
+        val runningContextActorRef = JobServer.getManagerActorRef(runningContextInfo, system).get
+        runningContextActorRef should not be(None)
 
-      Thread.sleep(3000)
-      val updatedContext = Await.result(dao.getContextInfoByName(contextName), daoTimeout)
-      updatedContext.get.state should be(ContextStatus.Killed)
+        val deathWatcher = TestProbe()
+        deathWatcher.watch(runningContextActorRef)
+        runningContextActorRef ! PoisonPill
+        deathWatcher.expectTerminated(runningContextActorRef)
+
+        Thread.sleep(3000)
+        val updatedContext = Await.result(dao.getContextInfoByName(contextName), daoTimeout)
+        updatedContext.get.state should be(ContextStatus.Killed)
+      }
     }
 
     it("should not change final state to non-final within the Terminated event") {
