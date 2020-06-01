@@ -25,35 +25,18 @@ class V0_7_9__jobinfo_contains_uris extends JdbcMigration{
     e: Throwable => logger.error(e.getMessage, e)
   }
 
-  private case class JobBinInfo(jobId: String, binId: String)
-
-  protected def insertBinIDList(db: UnmanagedDatabase,
-                                bins: String, jobId: String): Unit = {
-    val updateBin = sqlu"""UPDATE "JOBS" SET "BIN_IDS"=$bins WHERE "JOB_ID"=$jobId"""
-    Await.ready(db.run(updateBin).recover{logErrors}, timeout)
-  }
-
   override def migrate(c: Connection): Unit = {
-    implicit val getBinaryIdForJobResult = GetResult[JobBinInfo](
-      r => JobBinInfo(r.nextString(), r.nextInt().toString))
-    val getBinaryIdForJob = sql""""SELECT "JOB_ID","BIN_ID" FROM "JOBS"""".as[JobBinInfo]
-    val createNewColumns =
-      sqlu"""ALTER TABLE "JOBS" (
-       ADD COLUMN "BIN_IDS" TEXT,
-       ADD COLUMN "URIS" TEXT
-        );"""
-    val dropColumn = sqlu"""ALTER TABLE "JOBS" DROP COLUMN "BIN_ID";"""
-
-
     val db = new UnmanagedDatabase(c)
     c.setAutoCommit(false)
     try {
       Await.ready(
         for {
-          _ <- db.run(createNewColumns)
-          _ <- db.stream(getBinaryIdForJob).foreach(
-            j => insertBinIDList(db, j.jobId, j.binId))
-          _ <- db.run(dropColumn)
+          _ <- db.run(sqlu"""CREATE TEMP TABLE jobs_copy as SELECT "JOB_ID", "BIN_ID" FROM "JOBS";""")
+          _ <- db.run(sqlu"""ALTER TABLE "JOBS" DROP COLUMN "BIN_ID";""")
+          _ <- db.run(sqlu"""ALTER TABLE "JOBS" ADD COLUMN "BIN_IDS" TEXT, ADD COLUMN "URIS" TEXT;""")
+          _ <- db.run(sqlu"""UPDATE "JOBS" SET "URIS" = '' WHERE "URIS" is null;""")
+          _ <- db.run(sqlu"""UPDATE "JOBS" SET "BIN_IDS" =
+                              (SELECT "BIN_ID" FROM jobs_copy WHERE jobs_copy."JOB_ID" = "JOBS"."JOB_ID");""")
         } yield Unit, timeout
       ).recover{logErrors}
       c.commit()
