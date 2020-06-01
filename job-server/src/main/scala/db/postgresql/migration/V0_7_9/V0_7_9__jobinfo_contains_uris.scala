@@ -31,12 +31,10 @@ class V0_7_9__jobinfo_contains_uris extends JdbcMigration{
     try {
       Await.ready(
         for {
-          _ <- db.run(sqlu"""CREATE TEMP TABLE jobs_copy as SELECT "JOB_ID", "BIN_ID" FROM "JOBS";""")
-          _ <- db.run(sqlu"""ALTER TABLE "JOBS" DROP COLUMN "BIN_ID";""")
           _ <- db.run(sqlu"""ALTER TABLE "JOBS" ADD COLUMN "BIN_IDS" TEXT, ADD COLUMN "URIS" TEXT;""")
           _ <- db.run(sqlu"""UPDATE "JOBS" SET "URIS" = '' WHERE "URIS" is null;""")
-          _ <- db.run(sqlu"""UPDATE "JOBS" SET "BIN_IDS" =
-                              (SELECT "BIN_ID" FROM jobs_copy WHERE jobs_copy."JOB_ID" = "JOBS"."JOB_ID");""")
+          _ <- db.run(sqlu"""UPDATE "JOBS" SET "BIN_IDS" = "BIN_ID";""")
+          _ <- db.run(sqlu"""ALTER TABLE "JOBS" DROP COLUMN "BIN_ID";""")
         } yield Unit, timeout
       ).recover{logErrors}
       c.commit()
