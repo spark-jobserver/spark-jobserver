@@ -180,6 +180,23 @@ class SqlCommonSpec extends SqlCommonSpecBase with TestJarFinder with FunSpecLik
       retrievedError.error.isDefined should equal (true)
     }
 
+    it("should load latest jobs") {
+      val dt1 = DateTime.now()
+      val dt2 = dt1.minus(1000)
+
+      val finishedJob: JobInfo =
+        JobInfo("test-finished", "cid", "test", "test-class",
+          JobStatus.Finished, dt1, Some(dt1), None, Seq(jarInfo))
+      val finishedJob2: JobInfo =
+        JobInfo("old-finished", "old-cid", "old", "old-class",
+          JobStatus.Finished, dt2, Some(dt2), None, Seq(jarInfo))
+      helperJobSqlDao.saveJobInfo(finishedJob)
+      helperJobSqlDao.saveJobInfo(finishedJob2)
+
+      val retrievedFinished = Await.result(dao.getJobs(1, Some(JobStatus.Finished)), timeout).head
+      retrievedFinished.jobId should equal ("test-finished")
+    }
+
     it("should retrieve jobs by context id") {
       val contextId = UUID.randomUUID().toString()
       val runningJob = genJobInfo(jarInfo, true, JobStatus.Running, Some(contextId))
