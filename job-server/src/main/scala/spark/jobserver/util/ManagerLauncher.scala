@@ -30,6 +30,7 @@ class ManagerLauncher(systemConfig: Config, contextConfig: Config, masterAddress
   var loggingOpts = getEnvironmentVariable("MANAGER_LOGGING_OPTS")
   val configOverloads = getEnvironmentVariable("CONFIG_OVERRIDES")
   val extraSparkConfigurations = getEnvironmentVariable("MANAGER_EXTRA_SPARK_CONFS")
+  val executorExtraOpts = getEnvironmentVariable("EXECUTOR_EXTRA_SPARK_CONFS")
   val extraJavaOPTS = getEnvironmentVariable("MANAGER_EXTRA_JAVA_OPTIONS")
   var gcOPTS = baseGCOPTS
   lazy val contextSuperviseModeEnabled: Option[Boolean] = Try(Some(
@@ -52,7 +53,7 @@ class ManagerLauncher(systemConfig: Config, contextConfig: Config, masterAddress
       launcher.setMaster(contextSparkMaster)
       launcher.setMainClass("spark.jobserver.JobManager")
       launcher.addAppArgs(masterAddress, contextActorName, getEnvironmentVariable("MANAGER_CONF_FILE"))
-      launcher.addSparkArg("--conf", s"spark.executor.extraJavaOptions=$loggingOpts")
+      launcher.addSparkArg("--conf", s"spark.executor.extraJavaOptions=$loggingOpts $executorExtraOpts")
       launcher.addSparkArg("--driver-java-options",
           s"$gcOPTS $baseJavaOPTS $loggingOpts $configOverloads $extraJavaOPTS")
 
