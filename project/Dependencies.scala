@@ -107,7 +107,7 @@ object Dependencies {
   lazy val apiDeps = sparkDeps ++ miscDeps :+ typeSafeConfigDeps :+ scalaTestDep
 
   val repos = Seq(
-    "Typesafe Repo" at "http://repo.typesafe.com/typesafe/releases/",
+    "Typesafe Repo" at "https://repo.typesafe.com/typesafe/releases/",
     "sonatype snapshots" at "https://oss.sonatype.org/content/repositories/snapshots/",
     "spray repo" at "http://repo.spray.io"
   )
