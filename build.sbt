@@ -159,11 +159,11 @@ lazy val dockerSettings = Seq(
       expose(9999) // for JMX
       env("JOBSERVER_MEMORY", "1G")
       env("SPARK_HOME", "/spark")
-      env("HADOOP_VERSION", Versions.hadoop)
+      env("HADOOP_VERSION", Versions.hadoop.slice(0,3))
       env("SPARK_VERSION", Versions.spark)
       env("SCALA_VERSION", scalaBinaryVersion.value)
       runRaw(
-        """wget --no-verbose http://apache.mirror.iphh.net/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz && \
+        """wget --no-verbose http://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz && \
         tar -xvzf spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz && \
         mv spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION} ${SPARK_HOME} && \
         rm spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz
@@ -183,7 +183,7 @@ lazy val dockerSettings = Seq(
     }
   },
   imageNames in docker := Seq(
-    sbtdocker.ImageName(namespace = Some("velvia"),
+    sbtdocker.ImageName(namespace = Some("sparkjobserver"),
       repository = "spark-jobserver",
       tag = Some(
         s"${version.value}" +
