@@ -7,6 +7,7 @@
   - [Jars / Passing Arguments to the Start Script](#jars--passing-arguments-to-the-start-script)
   - [Database, Persistence, Logs](#database-persistence-logs)
   - [Marathon](#marathon)
+  - [Building docker image from the master branch](#building-docker-image-from-the-master-branch)
   - [Issues](#issues)
     - [I can't access a textfile](#i-cant-access-a-textfile)
     - [Timeouts](#timeouts)
@@ -96,6 +97,14 @@ Example Marathon config, thanks to @peterklipfel:
   "mem": 100,
   "instances": 1
 }
+```
+
+## Building docker image from the master branch
+
+If you want to build your docker version based on current master branch:
+
+```
+sbt docker
 ```
 
 ## Issues
