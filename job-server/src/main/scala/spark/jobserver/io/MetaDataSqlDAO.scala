@@ -262,7 +262,7 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
     } else {
       jobs
     }
-    val limitQuery = baseQuery.sortBy(_.startTime).take(limit)
+    val limitQuery = baseQuery.sortBy(_.startTime.desc).take(limit)
     // Transform the each row of the table into a map of JobInfo values
     for (r <- dbUtils.db.run(limitQuery.result)) yield {
       r.map(jobInfoFromRow)
