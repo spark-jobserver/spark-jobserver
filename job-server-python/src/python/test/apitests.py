@@ -146,5 +146,6 @@ class TestSJSApi(unittest.TestCase):
         result = job.run_job(sqlContext, None, jobData)
         self.assertEqual([(20, 1250), (21, 1500)], result)
 
+
 if __name__ == "__main__":
     unittest.main()
