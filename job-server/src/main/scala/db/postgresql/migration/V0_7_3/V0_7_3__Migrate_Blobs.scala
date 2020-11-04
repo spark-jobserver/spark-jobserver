@@ -2,21 +2,17 @@ package db.postgresql.migration.V0_7_3
 
 import java.sql.Connection
 
-import scala.concurrent.Await
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.TimeoutException
-import scala.concurrent.duration.DurationInt
-
+import javax.sql.rowset.serial.SerialBlob
 import org.flywaydb.core.api.migration.jdbc.JdbcMigration
 import org.slf4j.LoggerFactory
-
-import javax.sql.rowset.serial.SerialBlob
-import slick.dbio.DBIO
 import slick.driver.PostgresDriver.api.actionBasedSQLInterpolation
-import slick.jdbc.GetResult
-import slick.jdbc.PositionedParameters
-import slick.jdbc.SetParameter
+import slick.jdbc.{GetResult, PositionedParameters, SetParameter}
 import spark.jobserver.slick.unmanaged.UnmanagedDatabase
+
+import scala.concurrent.Await
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration.DurationInt
+import scala.util.{Failure, Success}
 
 class V0_7_3__Migrate_Blobs extends JdbcMigration {
   private val Timeout = 10 minutes
@@ -58,7 +54,11 @@ class V0_7_3__Migrate_Blobs extends JdbcMigration {
           _ <- db.stream(getBinArrays).foreach(b => insertBlob(db, b))
           _ <- db.run(dropBinArray)
         } yield Unit, Timeout
-    ).recover{logErrors}
-    c.commit()
+    ).value.get match {
+      case Success(_) => c.commit()
+      case Failure(e) =>
+        logger.error(e.getMessage, e)
+        throw e
+    }
   }
 }
