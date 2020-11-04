@@ -1,26 +1,19 @@
 package db.postgresql.migration.V0_7_5
 
-import java.sql.Blob
 import java.sql.Connection
+
+import db.migration.V0_7_5.Migration
 import javax.sql.rowset.serial.SerialBlob
+import org.slf4j.LoggerFactory
+import slick.dbio.{Effect, NoStream}
+import slick.driver.PostgresDriver.api.actionBasedSQLInterpolation
+import slick.profile.SqlAction
+import spark.jobserver.slick.unmanaged.UnmanagedDatabase
 
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration.DurationInt
 import scala.util.control.NonFatal
-
-import db.migration.V0_7_5.Migration
-import org.flywaydb.core.api.migration.jdbc.JdbcMigration
-import org.slf4j.LoggerFactory
-import slick.dbio.DBIO
-import slick.dbio.Effect
-import slick.dbio.NoStream
-import slick.driver.PostgresDriver.api.actionBasedSQLInterpolation
-import slick.jdbc.GetResult
-import slick.jdbc.PositionedParameters
-import slick.jdbc.SetParameter
-import slick.profile.SqlAction
-import spark.jobserver.slick.unmanaged.UnmanagedDatabase
+import scala.util.{Failure, Success}
 
 class V0_7_5__Migrate_Blobs extends Migration {
   val logger = LoggerFactory.getLogger(getClass)
@@ -51,8 +44,12 @@ class V0_7_5__Migrate_Blobs extends Migration {
             _ <- db.run(dropColumn)
             _ <- db.run(dropTriggerBinaries)
           } yield Unit, Timeout
-      ).recover{logErrors}
-      c.commit()
+      ).value.get match {
+        case Success(_) => c.commit()
+        case Failure(e) =>
+          logger.error(e.getMessage, e)
+          throw e
+      }
     } catch {
       case NonFatal(e) => { c.rollback() }
     }

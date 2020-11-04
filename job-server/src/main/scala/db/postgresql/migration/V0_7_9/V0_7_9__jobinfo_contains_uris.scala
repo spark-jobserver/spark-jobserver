@@ -5,13 +5,13 @@ import java.sql.Connection
 import org.flywaydb.core.api.migration.jdbc.JdbcMigration
 import org.slf4j.LoggerFactory
 import slick.driver.PostgresDriver.api.actionBasedSQLInterpolation
-import slick.jdbc.GetResult
 import spark.jobserver.slick.unmanaged.UnmanagedDatabase
 
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.DurationInt
 import scala.util.control.NonFatal
+import scala.util.{Failure, Success}
 
 /**
  * Jobs now can be started from multiple binaries and/or multiple uris. This migration therefore
@@ -36,8 +36,12 @@ class V0_7_9__jobinfo_contains_uris extends JdbcMigration{
           _ <- db.run(sqlu"""UPDATE "JOBS" SET "BIN_IDS" = "BIN_ID";""")
           _ <- db.run(sqlu"""ALTER TABLE "JOBS" DROP COLUMN "BIN_ID";""")
         } yield Unit, timeout
-      ).recover{logErrors}
-      c.commit()
+      ).value.get match {
+        case Success(_) => c.commit()
+        case Failure(e) =>
+          logger.error(e.getMessage, e)
+          throw e
+      }
     } catch {
       case NonFatal(e) => {
         logger.error(s"Error during database migration (update JobInfo): ${e.getMessage}")
