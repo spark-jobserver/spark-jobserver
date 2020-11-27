@@ -1,0 +1,8 @@
+#Scala #akka @ApacheSpark
+
+- fix: Fail postgres migration on exception / (Marc Zoeller | c650a53)
+- fix(build): Change typesafe repository to https / (Valentina Glagoleva | ee63e6e)
+- fix: sort jobs by start time in descending order / (Marc Zoeller | cd11406)
+- refactor(migration): remove temp table / (Marc Zoeller | 8c24a0a)
+- fix: flyway postgres migration to V0.7.9 / (Marc Zoeller | b7a5afd)
+- notes(jobserver): Add release notes for 0.10.0 (#1286) / (Behroz Sikander | e3c3d3c)
