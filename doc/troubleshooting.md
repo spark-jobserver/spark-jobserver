@@ -41,7 +41,7 @@ http://devsparkcluster.cloudapp.net/jobs?appName=job-server-tests&classPath=spar
 You may need to adjust Spray's default request timeout and idle timeout, which are by default 40 secs and 60 secs.  To do this, modify the configuration file in your deployed job server, adding a section like the following:
 
 ```
-spray.can.server {
+akka.http.server {
   idle-timeout = 210 s
   request-timeout = 200 s
 }

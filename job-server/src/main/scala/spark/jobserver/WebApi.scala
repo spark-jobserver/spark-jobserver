@@ -4,59 +4,61 @@ import java.net.MalformedURLException
 import java.util.NoSuchElementException
 import java.util.concurrent.TimeUnit
 
-import javax.net.ssl.SSLContext
 import akka.actor.{ActorRef, ActorSystem}
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
+import akka.http.scaladsl.model._
+import akka.http.scaladsl.model.headers.{Location, `Content-Type`}
+import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.server.directives.LoggingMagnet
+import akka.http.scaladsl.server.{Directive0, RequestContext, Route, RouteResult}
 import akka.pattern.ask
 import akka.util.Timeout
+import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
 import com.typesafe.config._
-import spark.jobserver.common.akka.web.JsonUtils.AnyJsonFormat
-import spark.jobserver.common.akka.web.{CommonRoutes, WebService}
+import javax.net.ssl.SSLContext
 import org.apache.shiro.SecurityUtils
 import org.apache.shiro.config.IniSecurityManagerFactory
-import org.apache.http.HttpStatus
 import org.joda.time.DateTime
+import org.slf4j.{Logger, LoggerFactory}
 import spark.jobserver.auth._
+import spark.jobserver.common.akka.web.JsonUtils.AnyJsonFormat
+import spark.jobserver.common.akka.web.{CommonRoutes, WebService}
+import spark.jobserver.io.JobDAOActor._
 import spark.jobserver.io._
 import spark.jobserver.routes.DataRoutes
 import spark.jobserver.util._
-import spray.http.HttpHeaders.{Location, `Content-Type`}
-import spray.http._
-import spray.httpx.SprayJsonSupport.sprayJsonMarshaller
-import spray.io.ServerSSLEngineProvider
-import spray.json.DefaultJsonProtocol._
-import spray.routing.directives.{AuthMagnet, LoggingMagnet}
-import spray.routing.{RequestContext, Route}
 
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.Try
-import org.slf4j.LoggerFactory
-import spark.jobserver.io.JobDAOActor._
 
-object WebApi {
+object WebApi extends SprayJsonSupport {
+  import spray.json.DefaultJsonProtocol._
+
   val StatusKey = "status"
   val ResultKey = "result"
-  val logger = LoggerFactory.getLogger(getClass)
+  val logger: Logger = LoggerFactory.getLogger(getClass)
 
-  def completeWithErrorStatus(ctx: RequestContext, errMsg: String,
-                              stcode: StatusCode, exception: Option[Throwable] = None) {
-    val message = exception match {
+  def completeWithErrorStatus(ctx: RequestContext, errMsg: String, stcode: StatusCode,
+                              exception: Option[Throwable] = None): Future[RouteResult] = {
+    val message: Map[String, Any] = exception match {
       case None =>
         logger.info("StatusCode: " + stcode + ", ErrorMessage: " + errMsg)
         Map(StatusKey -> JobStatus.Error, ResultKey -> errMsg)
       case _ =>
         val ex = exception.get
         logger.info("StatusCode: " + stcode.intValue + ", ErrorMessage: " + errMsg + ", StackTrace: "
-        + ErrorData.getStackTrace(ex))
+          + ErrorData.getStackTrace(ex))
         Map(StatusKey -> errMsg, ResultKey -> formatException(ex))
     }
     ctx.complete(stcode.intValue, message)
   }
 
-  def completeWithException(ctx: RequestContext, errMsg: String, stcode: StatusCode, e: Throwable) {
+  def completeWithException(ctx: RequestContext, errMsg: String, stcode: StatusCode,
+                            e: Throwable): Future[RouteResult] =
     completeWithErrorStatus(ctx, errMsg, stcode, Some(e))
-  }
 
-  def completeWithSuccess(ctx: RequestContext, statusCode: StatusCode, msg: String = ""): Unit = {
+  def completeWithSuccess(ctx: RequestContext, statusCode: StatusCode,
+                          msg: String = ""): Future[RouteResult] = {
     val resultMap = msg match {
       case "" => Map(StatusKey -> "SUCCESS")
       case _ => Map(StatusKey -> "SUCCESS", ResultKey -> msg)
@@ -78,12 +80,13 @@ object WebApi {
     Map(ResultKey -> result)
   }
 
-  def resultToByteIterator(jobReport: Map[String, Any], result: Iterator[_]): Iterator[_] = {
-    "{\n".getBytes.toIterator ++
+  def resultToByteIterator(jobReport: Map[String, Any], result: Iterator[_]): Iterator[Byte] = {
+    val it = "{\n".getBytes.toIterator ++
       (jobReport.map(t => Seq(AnyJsonFormat.write(t._1).toString(),
                 AnyJsonFormat.write(t._2).toString()).mkString(":") ).mkString(",") ++
         (if (jobReport.nonEmpty) "," else "")).getBytes().toIterator ++
       ("\"" + ResultKey + "\":").getBytes.toIterator ++ result ++ "}".getBytes.toIterator
+    it.asInstanceOf[Iterator[Byte]]
   }
 
   def formatException(t: Throwable): Any =
@@ -134,6 +137,12 @@ object WebApi {
     }
     map.toMap
   }
+
+  def respondWithMediaType(mediaType: MediaType.WithFixedCharset): Directive0 = {
+    mapResponse(res =>
+      res.withEntity(res.entity.withContentType(ContentType(mediaType)))
+    )
+  }
 }
 
 class WebApi(system: ActorSystem,
@@ -144,17 +153,15 @@ class WebApi(system: ActorSystem,
              supervisor: ActorRef,
              daoActor: ActorRef,
              healthCheckInst: HealthCheck)
-    extends MeteredHttpService with CommonRoutes with DataRoutes with SJSAuthenticator with CORSSupport
+    extends MeteredHttpService with CommonRoutes with DataRoutes with SJSAuthenticator
                         with ChunkEncodedStreamingSupport {
   import CommonMessages._
   import ContextSupervisor._
-  import scala.concurrent.duration._
   import WebApi._
 
-  // Get spray-json type classes for serializing Map[String, Any]
-  import spark.jobserver.common.akka.web.JsonUtils._
+  import scala.concurrent.duration._
 
-  override def actorRefFactory: ActorSystem = system
+  implicit val actorRefFactory: ActorSystem = system
   implicit val ec: ExecutionContext = system.dispatcher
   implicit val ShortTimeout =
     Timeout(config.getDuration("spark.jobserver.short-timeout", TimeUnit.MILLISECONDS), TimeUnit.MILLISECONDS)
@@ -188,28 +195,27 @@ class WebApi(system: ActorSystem,
   private val jobDelete = timer("job-delete-duration", TimeUnit.MILLISECONDS)
   private val configGet = timer("config-get-duration", TimeUnit.MILLISECONDS)
 
-  val accessLogger: LoggingMagnet[HttpRequest => Any => Unit] = LoggingMagnet {
-    request: HttpRequest =>
-      logger.info(s"[${request.method}] ${request.uri}")
-      _ match {
-        case res: HttpResponse =>
-          val resMessage = res.entity.toString.
-            replace('\n', ' ').replaceAll(" +", " ")
-          val statusCode = res.status.intValue
-          if (statusCode == StatusCodes.InternalServerError.intValue) {
-            internalServerErrorCounter.inc()
-          }
-          logger.info(s"Response: $statusCode " +
-            s"${resMessage.substring(0, Math.min(resMessage.length(), maxSprayLogMessageLength))}(...) " +
-            s"to request: ${request.uri}")
-        case _ => logger.info("Unknown response")
-      }
+  val accessLogger: LoggingMagnet[HttpRequest => RouteResult => Unit] = LoggingMagnet {
+    _ =>
+      request: HttpRequest =>
+        logger.info(s"[${request.method}] ${request.uri}")
+        _ match {
+          case RouteResult.Complete(res) =>
+            val resMessage = res.entity.toString.
+              replace('\n', ' ').replaceAll(" +", " ")
+            val statusCode = res.status.intValue
+            if (statusCode == StatusCodes.InternalServerError.intValue) {
+              internalServerErrorCounter.inc()
+            }
+            logger.info(s"Response: $statusCode " +
+              s"${resMessage.substring(0, Math.min(resMessage.length(), maxSprayLogMessageLength))}(...) " +
+              s"to request: ${request.uri}")
+          case _ => logger.info("Unknown response")
+        }
   }
 
-  val logger = LoggerFactory.getLogger(getClass)
-
-  val myRoutes = logRequestResponse(accessLogger) {
-    cors {
+  val myRoutes = logRequestResult(accessLogger) {
+    cors() {
       overrideMethodWithParameter("_method") {
         binaryRoutes ~ contextRoutes ~ jobRoutes ~
           dataRoutes ~ healthzRoutes ~ otherRoutes
@@ -217,7 +223,7 @@ class WebApi(system: ActorSystem,
     }
   }
 
-  lazy val authenticator: AuthMagnet[AuthInfo] = {
+  lazy val authenticator: Challenge = {
     if (config.getBoolean("shiro.authentication")) {
       import java.util.concurrent.TimeUnit
       logger.info("Using authentication.")
@@ -244,32 +250,15 @@ class WebApi(system: ActorSystem,
      * activates ssl or tsl encryption between client and SJS if so requested
      * in config
      */
+    val sslConfig = config.getConfig("akka.http.server")
+    val sslEnabled = sslConfig.hasPath("ssl-encryption") && sslConfig.getBoolean("ssl-encryption")
     implicit val sslContext: SSLContext = {
-      SSLContextFactory.createContext(config.getConfig("spray.can.server"))
-    }
-
-    implicit def sslEngineProvider: ServerSSLEngineProvider = {
-      ServerSSLEngineProvider { engine =>
-        val protocols = config.getStringList("spray.can.server.enabledProtocols")
-        engine.setEnabledProtocols(protocols.toArray(Array[String]()))
-        val sprayConfig = config.getConfig("spray.can.server")
-        if(sprayConfig.hasPath("truststore")) {
-          engine.setNeedClientAuth(true)
-          logger.info("Client authentication activated.")
-        }
-        engine
-      }
+      SSLContextFactory.createContext(sslConfig)
     }
 
     logger.info("Starting browser web service...")
-    WebService.start(myRoutes ~ commonRoutes, system, bindAddress, port)
+    WebService.start(myRoutes ~ commonRoutes, system, bindAddress, port, sslEnabled)
   }
-
-  val contentType =
-    optionalHeaderValue {
-      case `Content-Type`(ct) => Some(ct)
-      case _ => None
-    }
 
   /**
     * Routes for listing and uploading binaries
@@ -287,13 +276,15 @@ class WebApi(system: ActorSystem,
     */
   def binaryRoutes: Route = pathPrefix("binaries") {
     // user authentication
-    authenticate(authenticator) { authInfo =>
+    Route.seal(customAuthenticateBasicAsync(authenticator) { authInfo =>
       // GET /binaries/<appName>
       (get & path(Segment)) { appName =>
+        import spray.json.DefaultJsonProtocol._
+
         val timer = binGetSingle.time()
         respondWithMediaType(MediaTypes.`application/json`) { ctx =>
           val future = (binaryManager ? GetBinary(appName)).mapTo[LastBinaryInfo]
-          future.map{
+          future.flatMap{
             case LastBinaryInfo(Some(bin)) =>
               val res = Map("app-name" -> bin.appName,
                   "binary-type" -> bin.binaryType.name,
@@ -303,7 +294,7 @@ class WebApi(system: ActorSystem,
               completeWithErrorStatus(ctx, s"Can't find binary with name $appName", StatusCodes.NotFound)
             case _ =>
               completeWithErrorStatus(ctx, "UNEXPECTED ERROR OCCURRED", StatusCodes.InternalServerError)
-          }.recover {
+          }.recoverWith {
             case e: Exception => completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
           }.andThen {
             case _ => timer.stop()
@@ -313,16 +304,18 @@ class WebApi(system: ActorSystem,
       // GET /binaries route returns a JSON map of the app name
       // and the type of and last upload time of a binary.
       get { ctx =>
+        import spray.json.DefaultJsonProtocol._
+
         val timer = binGet.time()
         val future = (binaryManager ? ListBinaries(None)).
           mapTo[collection.Map[String, (BinaryType, DateTime)]]
-        future.map { binTimeMap =>
+        future.flatMap { binTimeMap =>
           val stringTimeMap = binTimeMap.map {
             case (app, (binType, dt)) =>
               (app, Map("binary-type" -> binType.name, "upload-time" -> dt.toString()))
           }.toMap
           ctx.complete(stringTimeMap)
-        }.recover {
+        }.recoverWith {
           case e: Exception => completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
         }.andThen {
           case _ => timer.stop()
@@ -335,14 +328,21 @@ class WebApi(system: ActorSystem,
         path(Segment) { appName =>
           val timer = binPost.time()
           entity(as[Array[Byte]]) { binBytes =>
-            contentType {
-              case Some(x) =>
+            extractRequest { request =>
                 respondWithMediaType(MediaTypes.`application/json`) { ctx =>
+                  // In test cases entity.contentType is 'application/json' even though the content-type
+                  // header is set. For tests header has to be explicitly extracted
+                  val x: ContentType = request.headers.map({
+                    case `Content-Type`(ct) => Some(ct)
+                    case _ => None
+                  }).find(_.isDefined)
+                    .flatten
+                    .getOrElse(request.entity.contentType)
                   BinaryType.fromMediaType(x.mediaType) match {
                     case Some(binaryType) =>
                       val future = binaryManager ? StoreBinary(appName, binaryType, binBytes)
 
-                      future.map {
+                      future.flatMap {
                         case BinaryStored =>
                           completeWithSuccess(ctx, StatusCodes.Created)
                         case InvalidBinary =>
@@ -350,24 +350,20 @@ class WebApi(system: ActorSystem,
                             ctx, "Binary is not of the right format", StatusCodes.BadRequest)
                         case BinaryStorageFailure(ex) => completeWithException(
                           ctx, "Storage Failure", StatusCodes.InternalServerError, ex)
-                      }.recover {
+                        case _ => completeWithErrorStatus(
+                          ctx, "Unhandled state", StatusCodes.InternalServerError)
+                      }.recoverWith {
                         case e: Exception => completeWithException(
                           ctx, "ERROR", StatusCodes.InternalServerError, e)
                       }.andThen {
                         case _ => timer.stop()
                       }
                     case None =>
-                        completeWithErrorStatus(
-                          ctx, s"Unsupported binary type $x", StatusCodes.UnsupportedMediaType)
-                        timer.stop()
+                      timer.stop()
+                      completeWithErrorStatus(
+                        ctx, s"Unsupported binary type $x", StatusCodes.UnsupportedMediaType)
                   }
                 }
-              case None =>
-                timer.stop()
-                complete(
-                  StatusCodes.UnsupportedMediaType,
-                  s"Content-Type header must be set to indicate binary type"
-                )
             }
           }
         }
@@ -378,7 +374,7 @@ class WebApi(system: ActorSystem,
           val timer = binDelete.time()
           val future = (binaryManager ? DeleteBinary(appName))(DefaultBinaryDeletionTimeout)
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-            future.map {
+            future.flatMap {
               case BinaryDeleted =>
                 completeWithSuccess(ctx, StatusCodes.OK)
               case BinaryInUse(jobs) =>
@@ -391,7 +387,7 @@ class WebApi(system: ActorSystem,
                 completeWithErrorStatus(ctx,
                               s"Failed to delete binary due to internal error. Check logs.",
                               StatusCodes.InternalServerError)
-            }.recover {
+            }.recoverWith {
               case e: Exception => completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
             }.andThen {
               case _ => timer.stop()
@@ -399,7 +395,7 @@ class WebApi(system: ActorSystem,
           }
         }
       }
-    }
+    })
   }
 
   /**
@@ -412,9 +408,9 @@ class WebApi(system: ActorSystem,
    */
   def dataRoutes: Route = pathPrefix("data") {
     // user authentication
-    authenticate(authenticator) { authInfo =>
+    Route.seal(customAuthenticateBasicAsync(authenticator) { authInfo =>
       dataRoutes(dataManager)
-    }
+    })
   }
 
   /**
@@ -428,12 +424,13 @@ class WebApi(system: ActorSystem,
     import ContextSupervisor._
 
     // user authentication
-    authenticate(authenticator) { authInfo =>
+    Route.seal(customAuthenticateBasicAsync(authenticator) { authInfo =>
       (get & path(Segment)) { contextName =>
+        import spray.json.DefaultJsonProtocol._
         val timer = contextGetSingle.time()
         respondWithMediaType(MediaTypes.`application/json`) { ctx =>
           val future = (supervisor ? GetSparkContexData(contextName))(15.seconds)
-          future.map {
+          future.flatMap {
             case SparkContexData(context, appId, url) =>
               val contextMap = getContextReport(context, appId, url)
               ctx.complete(StatusCodes.OK, contextMap)
@@ -441,7 +438,9 @@ class WebApi(system: ActorSystem,
               completeWithErrorStatus(ctx, s"can't find context with name $contextName", StatusCodes.NotFound)
             case UnexpectedError => completeWithErrorStatus(
               ctx, "UNEXPECTED ERROR OCCURRED", StatusCodes.InternalServerError)
-          }.recover {
+            case _ => completeWithErrorStatus(
+              ctx, "Unhandled error", StatusCodes.InternalServerError)
+          }.recoverWith {
             case e: Exception =>
               completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
           }.andThen{
@@ -450,9 +449,11 @@ class WebApi(system: ActorSystem,
         }
       } ~
       get { ctx =>
+        import spray.json.DefaultJsonProtocol._
+
         val timer = contextGet.time()
         val future = supervisor ? ListContexts
-        future.map {
+        future.flatMap {
           case UnexpectedError => completeWithErrorStatus(
             ctx, "UNEXPECTED ERROR OCCURRED", StatusCodes.InternalServerError)
           case contexts =>
@@ -460,7 +461,7 @@ class WebApi(system: ActorSystem,
               authInfo.toString, contexts.asInstanceOf[Seq[String]],
               config.getBoolean("shiro.authentication") && config.getBoolean("shiro.use-as-proxy-user"))
             ctx.complete(getContexts)
-        }.recover {
+        }.recoverWith {
           case e: Exception =>
             completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
         }.andThen {
@@ -497,7 +498,7 @@ class WebApi(system: ActorSystem,
                 val (cName, config) = determineProxyUser(contextConfig, authInfo, contextName)
                 val future = (supervisor ? AddContext(cName, config))(contextTimeout.seconds)
                 respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-                  future.map {
+                  future.flatMap {
                     case ContextInitialized =>
                       completeWithSuccess(ctx, StatusCodes.OK, "Context initialized")
                     case ContextAlreadyExists => completeWithErrorStatus(
@@ -510,7 +511,7 @@ class WebApi(system: ActorSystem,
                     }
                     case UnexpectedError => completeWithErrorStatus(
                       ctx, "UNEXPECTED ERROR OCCURRED", StatusCodes.InternalServerError)
-                  }.recover {
+                  }.recoverWith {
                     case e: Exception =>
                       completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
                   }.andThen {
@@ -535,7 +536,7 @@ class WebApi(system: ActorSystem,
               val future = (supervisor ?
                 StopContext(cName, force))(contextDeletionTimeout.seconds + 1.seconds)
               respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-                future.map {
+                future.flatMap {
                   case ContextStopped =>
                     completeWithSuccess(ctx, StatusCodes.OK, "Context stopped")
                   case ContextStopInProgress =>
@@ -548,7 +549,7 @@ class WebApi(system: ActorSystem,
                     ctx, "CONTEXT DELETE ERROR", StatusCodes.InternalServerError, e)
                   case UnexpectedError => completeWithErrorStatus(
                     ctx, "UNEXPECTED ERROR OCCURRED", StatusCodes.InternalServerError)
-                }.recover {
+                }.recoverWith {
                   case e: Exception =>
                     completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
                 }.andThen {
@@ -562,7 +563,7 @@ class WebApi(system: ActorSystem,
           parameters("reset", 'sync.as[Boolean] ?) { (reset, sync) =>
             respondWithMediaType(MediaTypes.`application/json`) { ctx =>
               val timer = contextPut.time()
-              reset match {
+              val ret = reset match {
                 case "reboot" =>
                   import ContextSupervisor._
                   import java.util.concurrent.TimeUnit
@@ -587,15 +588,15 @@ class WebApi(system: ActorSystem,
                     }
                     completeWithSuccess(ctx, StatusCodes.OK, "Context reset")
                   }
-                timer.stop()
                 case _ =>
                   completeWithErrorStatus(ctx, "ERROR", StatusCodes.InternalServerError)
-                  timer.stop()
               }
+              timer.stop()
+              ret
             }
           }
         }
-    }
+    })
   }
 
   /**
@@ -645,7 +646,7 @@ class WebApi(system: ActorSystem,
     import JobManagerActor._
 
     // user authentication
-    authenticate(authenticator) { authInfo =>
+    Route.seal(customAuthenticateBasicAsync(authenticator) { authInfo =>
       /**
        * GET /jobs/<jobId>/config --
        * returns the configuration used to launch this job or an error if not found.
@@ -658,12 +659,12 @@ class WebApi(system: ActorSystem,
 
         val future = (daoActor ? GetJobConfig(jobId)).mapTo[JobConfig]
         respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-          future.map {
+          future.flatMap {
             case JobConfig(None) =>
               completeWithErrorStatus(ctx, "No such job ID " + jobId, StatusCodes.NotFound)
             case JobConfig(Some(cnf)) =>
               ctx.complete(cnf.root().render(renderOptions))
-          }.recover {
+          }.recoverWith {
             case e: Exception =>
               completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
           }.andThen {
@@ -676,10 +677,11 @@ class WebApi(system: ActorSystem,
         // If the job isn't finished yet, then {"status": "RUNNING" | "ERROR"} is returned.
         // Returned JSON contains result attribute if status is "FINISHED"
         (get & path(Segment)) { jobId =>
+          import spray.json.DefaultJsonProtocol._
           val timer = jobGetSingle.time()
           val getJobInfoFuture = (daoActor ? GetJobInfo(jobId)).mapTo[Option[JobInfo]]
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-            getJobInfoFuture.map {
+            getJobInfoFuture.flatMap {
               case None =>
                 completeWithErrorStatus(ctx, "No such job ID " + jobId, StatusCodes.NotFound)
               case Some(info) =>
@@ -693,7 +695,7 @@ class WebApi(system: ActorSystem,
                       ContextSupervisor.GetResultActor(info.contextName)).mapTo[ActorRef]
                     result <- resultActor ? GetJobResult(jobId)
                   } yield result
-                  resultFuture.map {
+                  resultFuture.flatMap {
                     case JobResult(_, result) =>
                       result match {
                         case s: Stream[_] =>
@@ -706,12 +708,12 @@ class WebApi(system: ActorSystem,
                     case _ =>
                       logger.info(jobReport.toString())
                       ctx.complete(jobReport)
-                  }.recover {
+                  }.recoverWith {
                     case e: Exception =>
                       completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
                   }
                 }
-            }.recover {
+            }.recoverWith {
               case e: Exception =>
                 completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
             }.andThen {
@@ -723,18 +725,19 @@ class WebApi(system: ActorSystem,
         //  Stop the current job. All other jobs submitted with this spark context
         //  will continue to run
         (delete & path(Segment)) { jobId =>
+          import spray.json.DefaultJsonProtocol._
           val timer = jobDelete.time()
           val future = daoActor ? GetJobInfo(jobId)
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-            future.map {
+            future.flatMap {
               case None =>
                 completeWithErrorStatus(ctx, "No such job ID " + jobId, StatusCodes.NotFound)
               case Some(JobInfo(_, _, contextName, _, classPath, _, None, _, _)) =>
                 val jobManager = getJobManagerForContext(Some(contextName), config, classPath)
                 val future = jobManager.get ? KillJob(jobId)
-                future.map {
+                future.flatMap {
                   case JobKilled(_, _) => ctx.complete(Map(StatusKey -> JobStatus.Killed))
-                }.recover {
+                }.recoverWith {
                   case e: Exception => completeWithException(
                     ctx, "ERROR", StatusCodes.InternalServerError, e)
                 }
@@ -745,7 +748,7 @@ class WebApi(system: ActorSystem,
                 completeWithErrorStatus(ctx, "No running job with ID " + jobId, StatusCodes.NotFound)
               case _ => completeWithErrorStatus(
                 ctx, "Received an unexpected message", StatusCodes.InternalServerError)
-            }.recover {
+            }.recoverWith {
               case e: Exception =>
                 completeWithException(
                   ctx, "ERROR", StatusCodes.InternalServerError, e)
@@ -769,6 +772,7 @@ class WebApi(system: ActorSystem,
          * @optional @param limit Int - optional limit to number of jobs to display, defaults to 50
          */
         get {
+          import spray.json.DefaultJsonProtocol._
           parameters('limit.as[Int] ?, 'status.as[String] ?) { (limitOpt, statusOpt) =>
             val timer = jobGet.time()
             val limit = limitOpt.getOrElse(DefaultJobLimit)
@@ -778,12 +782,12 @@ class WebApi(system: ActorSystem,
             }
             val future = (daoActor ? GetJobInfos(limit, statusUpperCaseOpt)).mapTo[JobInfos]
             respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-              future.map { infos =>
+              future.flatMap { infos =>
                 val jobReport = infos.jobInfos.map { info =>
                   getJobReport(info)
                 }
                 ctx.complete(jobReport)
-              }.recover {
+              }.recoverWith {
                 case e: Exception => completeWithException(
                   ctx, "ERROR", StatusCodes.InternalServerError, e)
               }.andThen {
@@ -812,6 +816,7 @@ class WebApi(system: ActorSystem,
          *         either the job id, or a result
          */
         post {
+          import spray.json.DefaultJsonProtocol._
           entity(as[String]) { configString =>
             parameters('appName ?, 'classPath ?, 'cp ?, 'mainClass ?,
               'context ?, 'sync.as[Boolean] ?, 'timeout.as[Int] ?, SparkJobUtils.SPARK_PROXY_USER_PARAM ?) {
@@ -827,8 +832,6 @@ class WebApi(system: ActorSystem,
                       .getOrElse(Map.empty))
                   val (cName, cConfig) =
                     determineProxyUser(contextConfig, authInfo, contextOpt.getOrElse(""))
-
-                  import collection.JavaConverters._
                   val providedMainClass = Try(mainClassOpt.getOrElse(jobConfig.getString("mainClass"))).
                     getOrElse("")
                   val providedCp = if (cpOpt.isEmpty) {
@@ -857,7 +860,7 @@ class WebApi(system: ActorSystem,
                   val timeout = timeoutOpt.map(t => Timeout(t.seconds)).getOrElse(DefaultSyncTimeout)
                   val binManagerFuture = binaryManager.ask(GetBinaryInfoListForCp(cp))(timeout)
                   respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-                    binManagerFuture.map {
+                    binManagerFuture.flatMap {
                       case BinaryInfoListForCp(binInfos) =>
                         logger.info(s"BinaryInfos from BinaryManager: $binInfos")
                         val jobManager = getJobManagerForContext(
@@ -866,7 +869,7 @@ class WebApi(system: ActorSystem,
                         val future = jobManager.get.ask(
                           JobManagerActor.StartJob(
                             mainClass, binInfos, jobConfig, events))(timeout)
-                        future.map {
+                        future.flatMap {
                           case JobResult(jobId, res) =>
                             res match {
                               case s: Stream[_] => sendStreamingResponse(ctx, ResultChunkSize,
@@ -880,14 +883,14 @@ class WebApi(system: ActorSystem,
                             )
                           case JobStarted(_, jobInfo) =>
                             val future = daoActor ? SaveJobConfig(jobInfo.jobId, postedJobConfig)
-                            future.map {
+                            future.flatMap {
                               case JobConfigStored =>
                                 val jobReport = getJobReport(jobInfo, jobStarted = true)
                                 ctx.complete(StatusCodes.Accepted, jobReport)
                               case JobConfigStoreFailed =>
                                 completeWithErrorStatus(
                                   ctx, "Failed to save job config", StatusCodes.InternalServerError)
-                            }.recover {
+                            }.recoverWith {
                               case e: Exception => completeWithException(
                                 ctx, "ERROR", StatusCodes.InternalServerError, e)
                             }
@@ -920,7 +923,7 @@ class WebApi(system: ActorSystem,
                             case _ => completeWithException(
                               ctx, "CONTEXT INIT FAILED", StatusCodes.InternalServerError, e)
                           }
-                        }.recover {
+                        }.recoverWith {
                           case e: Exception => completeWithException(
                             ctx, "ERROR", StatusCodes.InternalServerError, e)
                         }.andThen {
@@ -931,7 +934,7 @@ class WebApi(system: ActorSystem,
                       case GetBinaryInfoListForCpFailure(ex) =>
                         completeWithException(
                           ctx, "ERROR", StatusCodes.InternalServerError, ex)
-                    }.recover {
+                    }.recoverWith {
                       case _: NoSuchElementException =>
                         completeWithErrorStatus(
                           ctx, "context " + contextOpt.get + " not found", StatusCodes.NotFound)
@@ -956,10 +959,11 @@ class WebApi(system: ActorSystem,
               }
           }
         }
-    }
+    })
   }
 
-  override def timeoutRoute: Route = {
+  //TODO add withRequestTimeout to myRoutes (line 216)
+  def timeoutRoute: Route = {
     respondWithMediaType(MediaTypes.`application/json`) { ctx =>
       completeWithErrorStatus(ctx, "Request timed out. Try using the /jobs/<jobID>, " +
         "/jobs APIs to get status/results", StatusCodes.InternalServerError)
@@ -995,6 +999,7 @@ class WebApi(system: ActorSystem,
       }
     val future = (supervisor ? msg)(contextTimeout.seconds)
     Await.result(future, contextTimeout.seconds) match {
+      case (manager: ActorRef, global: ActorRef) => Some(manager)
       case (manager: ActorRef) => Some(manager)
       case NoSuchContext => None
       case ContextInitError(err) => throw new RuntimeException(err)

@@ -172,7 +172,7 @@ class StubbedAkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: Ac
       case "akka://test" =>
       // If we use TestProbe and leave the cluster then the master itself leaves the cluster.
       // For such cases, we don't do anything. For other normal cases, we leave the cluster.
-      case _ => cluster.down(actorRef.path.address)
+      case _ => context.stop(actorRef)
     }
   }
 }

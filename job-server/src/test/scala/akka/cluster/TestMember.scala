@@ -10,5 +10,6 @@ object TestMember {
     apply(address, status, Set.empty)
 
   def apply(address: Address, status: MemberStatus, roles: Set[String]): Member =
-    new Member(UniqueAddress(address, 0), Int.MaxValue, status, roles)
+    new Member(UniqueAddress(address, 0), Int.MaxValue, status,
+      roles ++ Set("dc-default"))
 }

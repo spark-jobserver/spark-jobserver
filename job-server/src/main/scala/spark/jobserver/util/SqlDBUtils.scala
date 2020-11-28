@@ -40,7 +40,7 @@ class SqlDBUtils(config: Config) {
       ds.setUrl(jdbcUrl)
       ds
     }
-    Database.forDataSource(dataSource)
+    Database.forDataSource(dataSource, None)
   } else {
     logger.info("DBCP disabled")
     Database.forURL(jdbcUrl, driver = jdbcDriverClass, user = jdbcUser, password = jdbcPassword)
