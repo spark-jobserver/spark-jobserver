@@ -182,7 +182,7 @@ Then go ahead and start the job server using the instructions above.
 
 Let's upload the jar:
 
-    curl -X POST localhost:8090/binaries/test -H "Content-Type: application/java-archive" --data-binary @job-server-tests/target/scala-2.10/job-server-tests-$VER.jar
+    curl -X POST localhost:8090/binaries/test -H "Content-Type: application/java-archive" --data-binary @job-server-tests/target/scala-2.12/job-server-tests_2.12-$VER.jar
     OK⏎
 
 #### Ad-hoc Mode - Single, Unrelated Jobs (Transient Context)
@@ -280,7 +280,7 @@ spark {
     context-init-timeout = 1000000 s
   }
 }
-spray.can.server {
+akka.http.server {
       # Debug timeouts
       idle-timeout = infinite
       request-timeout = infinite
@@ -514,7 +514,7 @@ def validate(sc:SparkContext, config: Config): SparkJobValidation = {
 
 ### HTTPS / SSL Configuration
 #### Server authentication
-To activate server authentication and ssl communication, set these flags in your application.conf file (Section 'spray.can.server'):
+To activate server authentication and ssl communication, set these flags in your application.conf file (Section 'akka.http.server'):
 ```
   ssl-encryption = on
   # absolute path to keystore file

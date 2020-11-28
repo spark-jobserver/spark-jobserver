@@ -1,20 +1,22 @@
 package spark.jobserver
 
 import akka.actor.{Actor, ActorSystem, PoisonPill, Props}
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
+import akka.http.scaladsl.model.StatusCodes._
+import akka.http.scaladsl.server.Route.{seal => sealRoute}
+import akka.http.scaladsl.testkit.ScalatestRouteTest
 import com.typesafe.config.{Config, ConfigFactory}
 import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
-import spark.jobserver.io.{InMemoryBinaryDAO, InMemoryMetaDAO, JobDAOActor}
 import spark.jobserver.io.JobDAOActor.GetJobInfo
+import spark.jobserver.io.{InMemoryBinaryDAO, InMemoryMetaDAO, JobDAOActor}
 import spark.jobserver.util.ActorsHealthCheck
-import spray.http.StatusCodes._
-import spray.routing.HttpService
-import spray.testkit.ScalatestRouteTest
 
 
 class HealthzApiSpec extends FunSpec with Matchers with BeforeAndAfterAll
-with ScalatestRouteTest with HttpService {
-  import spray.httpx.SprayJsonSupport._
-  import spray.json.DefaultJsonProtocol._
+with ScalatestRouteTest with SprayJsonSupport {
+
+  import spray.json._
+  import DefaultJsonProtocol._
   
   def actorRefFactory: ActorSystem = system
   val bindConfKey = "spark.jobserver.bind-address"
@@ -48,8 +50,7 @@ with ScalatestRouteTest with HttpService {
   class AliveActor extends Actor {
     import CommonMessages._
     import ContextSupervisor._
-    import JobDAOActor.JobInfos
-    import JobDAOActor.GetJobInfos
+    import JobDAOActor.{GetJobInfos, JobInfos}
 
     def receive: PartialFunction[Any, Unit] = {
       case GetJobInfo("dummyjobid") =>

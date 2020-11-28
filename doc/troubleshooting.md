@@ -38,10 +38,10 @@ send timeout param along with your request (in secs). eg below.
 http://devsparkcluster.cloudapp.net/jobs?appName=job-server-tests&classPath=spark.jobserver.WordCountExample&sync=true&timeout=20
 ```
 
-You may need to adjust Spray's default request timeout and idle timeout, which are by default 40 secs and 60 secs.  To do this, modify the configuration file in your deployed job server, adding a section like the following:
+You may need to adjust Akka HTTP's default request timeout and idle timeout, which are by default 40 secs and 60 secs.  To do this, modify the configuration file in your deployed job server, adding a section like the following:
 
 ```
-spray.can.server {
+akka.http.server {
   idle-timeout = 210 s
   request-timeout = 200 s
 }
@@ -49,7 +49,7 @@ spray.can.server {
 
 Then simply restart the job server.
 
-Note that the idle-timeout must be higher than request-timeout, or Spray and the job server won't start.
+Note that the idle-timeout must be higher than request-timeout, or Akka HTTP and the job server won't start.
 
 ## Timeout getting large job results
 
