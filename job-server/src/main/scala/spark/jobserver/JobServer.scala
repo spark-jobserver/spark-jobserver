@@ -65,7 +65,7 @@ object JobServer {
       defaultConfig
     }
     logger.info("Starting JobServer with config {}", config.getConfig("spark").root.render())
-    logger.info("Spray config: {}", config.getConfig("spray.can.server").root.render())
+    logger.info("Akka HTTP config: {}", config.getConfig("akka.http.server").root.render())
 
     // TODO: Hardcode for now to get going. Make it configurable later.
     val system = makeSystem(config)

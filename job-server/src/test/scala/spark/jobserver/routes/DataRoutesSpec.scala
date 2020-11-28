@@ -1,14 +1,13 @@
 package spark.jobserver.routes
 
-import spray.http.StatusCodes._
-import com.typesafe.config.ConfigFactory
 import java.net.URLEncoder
+
+import akka.http.scaladsl.model.StatusCodes._
+import akka.http.scaladsl.server.Route.{seal => sealRoute}
 import spark.jobserver.io.JobStatus
 import spark.jobserver.WebApiSpec
 
 class DataRoutesSpec extends WebApiSpec {
-  import scala.collection.JavaConverters._
-  import spray.httpx.SprayJsonSupport._
   import spray.json.DefaultJsonProtocol._
   import spark.jobserver.common.akka.web.JsonUtils._
 

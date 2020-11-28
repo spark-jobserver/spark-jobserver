@@ -1,9 +1,9 @@
 package spark.jobserver.util
 
-import spray.routing.{HttpService, Directive0}
+import akka.http.scaladsl.server.{Directive0, Directives}
 import spark.jobserver.common.akka.metrics.YammerMetrics
 
-trait MeteredHttpService extends HttpService with YammerMetrics {
+trait MeteredHttpService extends YammerMetrics {
 
   private val totalReadRequests = counter("total-read-requests")
   private val totalWriteRequests = counter("total-write-requests")
@@ -12,43 +12,43 @@ trait MeteredHttpService extends HttpService with YammerMetrics {
    * Count read requests
    */
 
-  override def get : Directive0 = {
+  def get : Directive0 = {
     totalReadRequests.inc()
-    super.get
+    Directives.get
   }
 
-  override def head : Directive0 = {
+  def head : Directive0 = {
     totalReadRequests.inc()
-    super.head
+    Directives.head
   }
 
-  override def options : Directive0 = {
+  def options : Directive0 = {
     totalReadRequests.inc()
-    super.options
+    Directives.options
   }
 
   /*
    * Count write requests
    */
 
-  override def post : Directive0 = {
+  def post : Directive0 = {
     totalWriteRequests.inc()
-    super.post
+    Directives.post
   }
 
-  override def delete : Directive0 = {
+  def delete : Directive0 = {
     totalWriteRequests.inc()
-    super.delete
+    Directives.delete
   }
 
-  override def put : Directive0 = {
+  def put : Directive0 = {
     totalWriteRequests.inc()
-    super.put
+    Directives.put
   }
 
-  override def patch : Directive0 = {
+  def patch : Directive0 = {
     totalWriteRequests.inc()
-    super.patch
+    Directives.patch
   }
 
 }

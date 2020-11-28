@@ -2,10 +2,9 @@ package spark.jobserver
 
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.storage.StorageLevel
-import java.util.concurrent.TimeoutException
+import java.util.concurrent.{Semaphore, TimeoutException}
 
 import scala.concurrent.duration._
-
 import org.apache.spark.rdd.RDD
 import com.typesafe.config.Config
 import spark.jobserver.common.akka.AkkaTestUtils
@@ -52,19 +51,23 @@ class JobWithNamedRddsSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem)
     }
 
     it("get() should respect timeout when rdd is known, but not yet available") {
+      val semaphore = new Semaphore(-1)
       var rdd : Option[RDD[Int]] = None
       val thread = new Thread {
         override def run() {
-          namedTestRdds.getOrElseCreate("rdd-sleep", {
-            Thread.sleep(2000)
-            val r = sc.parallelize(Seq(1, 2, 3))
-            rdd = Some(r)
-            r
-          })(1.milliseconds)
+          intercept[TimeoutException] {
+            namedTestRdds.getOrElseCreate("rdd-sleep", {
+              Thread.sleep(2000)
+              val r = sc.parallelize(Seq(1, 2, 3))
+              rdd = Some(r)
+              r
+            })(1.milliseconds)
+          }
+          semaphore.release(2)
         }
       }
       thread.start()
-      Thread.sleep(10) // Wait for the thread to start calculations. 10.millis chosen randomly
+      semaphore.acquire() // Wait for the thread to start calculations.
       // RDD is still computing, check that without waiting (1.millisecond) timeout exception is raised
       val err = intercept[TimeoutException] { namedTestRdds.get[Int]("rdd-sleep")(1.milliseconds) }
       err.getClass should equal(classOf[TimeoutException])

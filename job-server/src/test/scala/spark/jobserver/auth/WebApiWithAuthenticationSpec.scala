@@ -3,6 +3,13 @@ package spark.jobserver.auth
 import java.util.concurrent.TimeoutException
 
 import akka.actor.{Actor, ActorSystem, Props}
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
+import akka.http.scaladsl.model.StatusCodes._
+import akka.http.scaladsl.model.headers.{Authorization, BasicHttpCredentials}
+import akka.http.scaladsl.server.Route
+import akka.http.scaladsl.server.Route.{seal => sealRoute}
+import akka.http.scaladsl.server.directives.Credentials
+import akka.http.scaladsl.testkit.ScalatestRouteTest
 import akka.testkit.TestKit
 import com.typesafe.config.{ConfigFactory, ConfigValueFactory}
 import org.apache.shiro.SecurityUtils
@@ -14,13 +21,6 @@ import spark.jobserver._
 import spark.jobserver.io.JobDAOActor.GetJobInfo
 import spark.jobserver.io.{BinaryInfo, BinaryType, JobInfo, JobStatus}
 import spark.jobserver.util.SparkJobUtils
-import spray.http.BasicHttpCredentials
-import spray.http.HttpHeaders.Authorization
-import spray.http.StatusCodes._
-import spray.routing.authentication.{BasicAuth, UserPass}
-import spray.routing.directives.AuthMagnet
-import spray.routing.{HttpService, Route}
-import spray.testkit.ScalatestRouteTest
 
 import scala.collection.mutable.SynchronizedSet
 import scala.concurrent.duration._
@@ -28,11 +28,11 @@ import scala.concurrent.{Await, ExecutionContext, Future}
 
 // Tests authorization only, actual responses are tested elsewhere
 // Does NOT test underlying Supervisor / JarManager functionality
-// HttpService trait is needed for the sealRoute() which wraps exception handling
+// HttpService trait is needed for the seal() which wraps exception handling
 class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndAfterAll
-    with ScalatestRouteTest with HttpService {
-  import spray.httpx.SprayJsonSupport._
-  import spray.json.DefaultJsonProtocol._
+    with ScalatestRouteTest with SprayJsonSupport{
+  import spray.json._
+  import DefaultJsonProtocol._
 
   def actorRefFactory: ActorSystem = system
 
@@ -65,27 +65,28 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
     val testConfig = config.withValue("shiro.authentication-timeout",
       ConfigValueFactory.fromAnyRef(authTimeout))
       .withValue("shiro.use-as-proxy-user", ConfigValueFactory.fromAnyRef(useAsProxyUser))
-    val api = new WebApi(system, testConfig, dummyPort, dummyActor, dummyActor, dummyActor, dummyActor, null) {
+    val api = new WebApi(system, testConfig, dummyPort, dummyActor,
+      dummyActor, dummyActor, dummyActor, null) {
       private def asShiroAuthenticatorWithWait(authTimeout: Int)
-          (implicit ec: ExecutionContext): AuthMagnet[AuthInfo] = {
+          (implicit ec: ExecutionContext): Challenge = {
         val logger = LoggerFactory.getLogger(getClass)
 
-        def validate(userPass: Option[UserPass]): Future[Option[AuthInfo]] = {
-          //if (!currentUser.isAuthenticated()) {
+        credentials: Option[BasicHttpCredentials] => {
           Future {
-            explicitValidation(userPass getOrElse UserPass("", ""), logger)
+            val userPass: BasicHttpCredentials = credentials match {
+              case Some(p) => p
+              case _ => BasicHttpCredentials("", "")
+            }
+            if (authTimeout > 0) {
+              explicitValidation(userPass, logger) match {
+                case Some(p) => Some(new AuthInfo(User(userPass.username)))
+                case None => None
+              }
+            } else {
+              throw new TimeoutException("forced timeout")
+            }
           }
         }
-
-        def authenticator(userPass: Option[UserPass]): Future[Option[AuthInfo]] = Future {
-          if (authTimeout > 0) {
-            Await.result(validate(userPass), authTimeout.seconds)
-          } else {
-            throw new TimeoutException("forced timeout")
-          }
-        }
-
-        BasicAuth(authenticator _, realm = "Shiro Private")
       }
       
       override def initSecurityManager() {
@@ -100,7 +101,7 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
         SecurityUtils.setSecurityManager(sManager)
       }
 
-      override lazy val authenticator: AuthMagnet[AuthInfo] = {
+      override lazy val authenticator: Challenge = {
         logger.info("Using authentication.")
         initSecurityManager()
         asShiroAuthenticatorWithWait(authTimeout)

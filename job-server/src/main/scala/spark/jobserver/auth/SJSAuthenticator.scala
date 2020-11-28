@@ -1,17 +1,17 @@
 package spark.jobserver.auth
 
-import spray.routing.authentication._
-import spray.routing.directives.AuthMagnet
-
-import scala.concurrent.duration.Duration
-import scala.concurrent.{ Await, ExecutionContext, Future }
-import org.slf4j.LoggerFactory
-import org.slf4j.Logger
+import akka.actor.ActorSystem
+import akka.http.scaladsl.model.headers.{BasicHttpCredentials, HttpChallenges, HttpCredentials}
+import akka.http.scaladsl.server.Directive
+import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.server.directives.AuthenticationResult
+import akka.http.scaladsl.util.FastFuture.EnhancedFuture
 import org.apache.shiro.SecurityUtils
 import org.apache.shiro.authc._
 import org.apache.shiro.authz.AuthorizationException
-import org.apache.shiro.util.Factory
-import org.apache.shiro.subject.Subject
+import org.slf4j.{Logger, LoggerFactory}
+
+import scala.concurrent.{ExecutionContext, Future, TimeoutException}
 
 /**
  * Apache Shiro based authenticator for the Spark JobServer, the authenticator realm must be
@@ -21,30 +21,49 @@ trait SJSAuthenticator {
 
   import scala.concurrent.duration._
 
-  def asShiroAuthenticator(authTimeout : Int)(implicit ec: ExecutionContext): AuthMagnet[AuthInfo] = {
-    val logger = LoggerFactory.getLogger(getClass)
+  def logger: Logger = LoggerFactory.getLogger(getClass)
 
-    def validate(userPass: Option[UserPass]): Future[Option[AuthInfo]] = {
-      //if (!currentUser.isAuthenticated()) {
-      Future {
-        explicitValidation(userPass getOrElse UserPass("", ""), logger)
+  type Challenge = Option[BasicHttpCredentials] => Future[Option[AuthInfo]]
+
+  protected val realm = "Sparkjobserver Private"
+
+  def customAuthenticateBasicAsync(authenticator: Challenge): Directive[Tuple1[AuthInfo]] = {
+     extractExecutionContext.flatMap { implicit ec =>
+        authenticateOrRejectWithChallenge[BasicHttpCredentials, AuthInfo] { cred =>
+          authenticator(cred).fast.map {
+            case Some(t) => AuthenticationResult.success(t)
+            case None => {
+              AuthenticationResult.failWithChallenge(HttpChallenges.basic(realm))
+            }
+          }
+        }
       }
-    }
-
-    def authenticator(userPass: Option[UserPass]): Future[Option[AuthInfo]] = Future {
-      Await.result(validate(userPass), authTimeout.seconds)
-    }
-
-    BasicAuth(authenticator _, realm = "Shiro Private")
   }
 
- /**
+  def asShiroAuthenticator(authTimeout: Int)
+                          (implicit ec: ExecutionContext, s: ActorSystem): Challenge = {
+    credentials: Option[BasicHttpCredentials] => {
+      lazy val f = Future {
+        credentials match {
+          case Some(p) if explicitValidation(p, logger).isDefined =>
+            Some(new AuthInfo(User(p.username)))
+          case _ => None
+        }
+      }
+      import akka.pattern.after
+      lazy val t = after(duration = authTimeout second,
+        using = s.scheduler)(Future.failed(new TimeoutException("Authentication timed out!")))
+
+      Future firstCompletedOf Seq(f, t)
+    }
+  }
+
+  /**
    * do not call directly - only for unit testing!
    */
-  def explicitValidation(userPass: UserPass, logger: Logger): Option[AuthInfo] = {
-    import collection.JavaConverters._
+  def explicitValidation(userPass: HttpCredentials, logger: Logger): Option[AuthInfo] = {
     val currentUser = SecurityUtils.getSubject()
-    val UserPass(user, pass) = userPass
+    val BasicHttpCredentials(user, pass) = userPass
     val token = new UsernamePasswordToken(user, pass)
     try {
       currentUser.login(token)
@@ -77,20 +96,14 @@ trait SJSAuthenticator {
 
   /**
    * default authenticator that accepts all users
-   * based on example provided by Mario Camou
-   * at
-   * http://www.tecnoguru.com/blog/2014/07/07/implementing-http-basic-authentication-with-spray/
    */
-  def asAllUserAuthenticator(implicit ec: ExecutionContext): AuthMagnet[AuthInfo] = {
-    def validateUser(userPass: Option[UserPass]): Option[AuthInfo] = {
-      Some(new AuthInfo(new User("anonymous")))
-    }
-
-    def authenticator(userPass: Option[UserPass]): Future[Option[AuthInfo]] = {
-      Future { validateUser(userPass) }
-    }
-
-    BasicAuth(authenticator _, realm = "Private API")
+  def asAllUserAuthenticator(implicit ec: ExecutionContext): Challenge = {
+    credentials: Option[BasicHttpCredentials] =>
+      Future {
+        credentials match {
+          case _ => Some(new AuthInfo(User("anonymous")))
+        }
+      }
   }
 }
 

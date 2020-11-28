@@ -3,6 +3,8 @@ package spark.jobserver
 import java.net.MalformedURLException
 
 import akka.actor.{Actor, ActorSystem, Props}
+import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
+import akka.http.scaladsl.testkit.ScalatestRouteTest
 import akka.testkit.TestKit
 import com.typesafe.config.ConfigFactory
 import org.joda.time.DateTime
@@ -13,15 +15,11 @@ import spark.jobserver.JobManagerActor.JobKilledException
 import spark.jobserver.io.JobDAOActor._
 import spark.jobserver.io._
 import spark.jobserver.util.ErrorData
-import spray.httpx.SprayJsonSupport
-import spray.routing.HttpService
-import spray.testkit.ScalatestRouteTest
 
 // Tests web response codes and formatting
 // Does NOT test underlying Supervisor / JarManager functionality
-// HttpService trait is needed for the sealRoute() which wraps exception handling
 class WebApiSpec extends FunSpec with Matchers with BeforeAndAfterAll
-with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport {
+with ScalatestRouteTest with ScalaFutures with SprayJsonSupport {
   import scala.collection.JavaConverters._
 
   def actorRefFactory: ActorSystem = system
@@ -36,7 +34,7 @@ with ScalatestRouteTest with HttpService with ScalaFutures with SprayJsonSupport
       jobserver.bind-address = "$bindConfVal"
       jobserver.short-timeout = 3 s
     }
-    spray.can.server {}
+    akka.http.server {}
     shiro {
       authentication = off
     }
