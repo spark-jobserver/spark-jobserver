@@ -9,8 +9,8 @@ import spark.jobserver.io.BinaryInfo
 import spark.jobserver.io.BinaryType
 import spark.jobserver.io.JobInfo
 import spark.jobserver.util.JsonProtocols._
-import spray.json.pimpAny
-import spray.json.pimpString
+import spray.json._
+import DefaultJsonProtocol._
 import spark.jobserver.io.ContextInfo
 import java.text.SimpleDateFormat
 
@@ -29,11 +29,11 @@ class JsonProtocolsSpec extends FunSpec with Matchers with BeforeAndAfter {
 
   // BinaryInfo
   val testBinaryInfo = BinaryInfo("SomeName", BinaryType.Jar, earlyDate, Some("SomeStorId"))
-  val testBinaryInfoJson = "{\"appName\":\"SomeName\",\"binaryType\":\"Jar\",\"uploadTime\":\"" + earlyDateStr + "\",\"binaryStorageId\":\"SomeStorId\"}"
+  val testBinaryInfoJson = f"""{"appName":"SomeName","binaryStorageId":"SomeStorId","binaryType":"Jar","uploadTime":"${earlyDateStr}"}"""
   val testBinaryInfo2 = BinaryInfo("SomeName", BinaryType.Egg, earlyDate, None)
-  val testBinaryInfo2Json = "{\"appName\":\"SomeName\",\"binaryType\":\"Egg\",\"uploadTime\":\"" + earlyDateStr + "\",\"binaryStorageId\":null}"
+  val testBinaryInfo2Json = f"""{"appName":"SomeName","binaryStorageId":null,"binaryType":"Egg","uploadTime":"${earlyDateStr}"}"""
   val testBinaryInfo3 = BinaryInfo("file://some/path/to/file", BinaryType.URI, earlyDate, None)
-  val testBinaryInfo3Json = "{\"appName\":\"file://some/path/to/file\",\"binaryType\":\"Uri\",\"uploadTime\":\"" + earlyDateStr + "\",\"binaryStorageId\":null}"
+  val testBinaryInfo3Json = f"""{"appName":"file://some/path/to/file","binaryStorageId":null,"binaryType":"Uri","uploadTime":"${earlyDateStr}"}"""
 
   // JobInfo
   val testJobInfo = JobInfo("SomeJobId", "SomeContextId", "SomeContextName",
@@ -44,18 +44,18 @@ class JsonProtocolsSpec extends FunSpec with Matchers with BeforeAndAfter {
   val testJobInfoWithCp = JobInfo("SomeJobId", "SomeContextId", "SomeContextName",
     "SomeClassPath", "SomeState", earlyDate, Some(date), Some(ErrorData("SomeMessage",
       "SomeClass", "SomeTrace")), Seq(testBinaryInfo, testBinaryInfo2))
-  val testJobInfoJson = "{\"classPath\":\"SomeClassPath\",\"startTime\":\"" + earlyDateStr + "\",\"state\":\"SomeState\",\"contextName\":\"SomeContextName\",\"endTime\":\"" + dateStr + "\",\"error\":{\"message\":\"SomeMessage\",\"errorClass\":\"SomeClass\",\"stackTrace\":\"SomeTrace\"},\"jobId\":\"SomeJobId\",\"cp\":[],\"contextId\":\"SomeContextId\"}"
-  val testJobInfoNoCpJson = "{\"classPath\":\"SomeClassPath\",\"startTime\":\"" + earlyDateStr + "\",\"state\":\"SomeState\",\"contextName\":\"SomeContextName\",\"endTime\":\"" + dateStr + "\",\"error\":{\"message\":\"SomeMessage\",\"errorClass\":\"SomeClass\",\"stackTrace\":\"SomeTrace\"},\"jobId\":\"SomeJobId\",\"contextId\":\"SomeContextId\"}"
-  val testJobInfo2Json = "{\"classPath\":\"SomeClassPath\",\"startTime\":\"" + earlyDateStr + "\",\"state\":\"SomeState\",\"contextName\":\"SomeContextName\",\"endTime\":null,\"error\":null,\"jobId\":\"SomeJobId\",\"cp\":[],\"contextId\":\"SomeContextId\"}"
-  val testJobInfoWithNonEmptyCpJson = "{\"classPath\":\"SomeClassPath\",\"startTime\":\"" + earlyDateStr + "\",\"state\":\"SomeState\",\"contextName\":\"SomeContextName\",\"endTime\":\"" + dateStr + "\",\"error\":{\"message\":\"SomeMessage\",\"errorClass\":\"SomeClass\",\"stackTrace\":\"SomeTrace\"},\"jobId\":\"SomeJobId\",\"cp\":[{\"appName\":\"SomeName\",\"binaryType\":\"Jar\",\"uploadTime\":\"" + earlyDateStr + "\",\"binaryStorageId\":\"SomeStorId\"},{\"appName\":\"SomeName\",\"binaryType\":\"Egg\",\"uploadTime\":\"" + earlyDateStr + "\",\"binaryStorageId\":null}],\"contextId\":\"SomeContextId\"}"
-  val testJobInfoWithBinInfoJson = "{\"binaryInfo\":{\"appName\":\"SomeName\",\"binaryType\":\"Jar\",\"uploadTime\":\"" + earlyDateStr + "\",\"binaryStorageId\":\"SomeStorId\"},\"classPath\":\"SomeClassPath\",\"startTime\":\"" + earlyDateStr + "\",\"state\":\"SomeState\",\"contextName\":\"SomeContextName\",\"endTime\":\"" + dateStr + "\",\"error\":{\"message\":\"SomeMessage\",\"errorClass\":\"SomeClass\",\"stackTrace\":\"SomeTrace\"},\"jobId\":\"SomeJobId\",\"cp\":[],\"contextId\":\"SomeContextId\"}"
+  val testJobInfoJson = f"""{"classPath":"SomeClassPath","contextId":"SomeContextId","contextName":"SomeContextName","cp":[],"endTime":"${dateStr}","error":{"errorClass":"SomeClass","message":"SomeMessage","stackTrace":"SomeTrace"},"jobId":"SomeJobId","startTime":"${earlyDateStr}","state":"SomeState"}"""
+  val testJobInfoNoCpJson = f"""{"classPath":"SomeClassPath","contextId":"SomeContextId","contextName":"SomeContextName","endTime":"${dateStr}","error":{"errorClass":"SomeClass","message":"SomeMessage","stackTrace":"SomeTrace"},"jobId":"SomeJobId","startTime":"${earlyDateStr}","state":"SomeState"}"""
+  val testJobInfo2Json = f"""{"classPath":"SomeClassPath","contextId":"SomeContextId","contextName":"SomeContextName","cp":[],"endTime":null,"error":null,"jobId":"SomeJobId","startTime":"${earlyDateStr}","state":"SomeState"}"""
+  val testJobInfoWithNonEmptyCpJson = f"""{"classPath":"SomeClassPath","contextId":"SomeContextId","contextName":"SomeContextName","cp":[{"appName":"SomeName","binaryStorageId":"SomeStorId","binaryType":"Jar","uploadTime":"${earlyDateStr}"},{"appName":"SomeName","binaryStorageId":null,"binaryType":"Egg","uploadTime":"${earlyDateStr}"}],"endTime":"${dateStr}","error":{"errorClass":"SomeClass","message":"SomeMessage","stackTrace":"SomeTrace"},"jobId":"SomeJobId","startTime":"${earlyDateStr}","state":"SomeState"}"""
+  val testJobInfoWithBinInfoJson = f"""{"binaryInfo":{"appName":"SomeName","binaryType":"Jar","uploadTime":"${earlyDateStr}","binaryStorageId":"SomeStorId"},"classPath":"SomeClassPath","contextId":"SomeContextId","contextName":"SomeContextName","cp":[],"endTime":"${dateStr}","error":{"message":"SomeMessage","errorClass":"SomeClass","stackTrace":"SomeTrace"},"jobId":"SomeJobId","startTime":"${earlyDateStr}","state":"SomeState"}"""
   // ContextInfo
   val testContextInfo = ContextInfo("someId", "someName", "someConfig", Some("ActorAddress"),
       earlyDate, Some(date), "someState", Some(new Throwable("message")))
   val testContextInfo2 = ContextInfo("someId", "someName", "someConfig", None, earlyDate, None,
       "someState", None)
-  val testContextInfoJson = "{\"name\":\"someName\",\"actorAddress\":\"ActorAddress\",\"startTime\":\"" + earlyDateStr + "\",\"state\":\"someState\",\"config\":\"someConfig\",\"endTime\":\"" + dateStr + "\",\"id\":\"someId\",\"error\":\"message\"}"
-  val testContextInfo2Json = "{\"name\":\"someName\",\"actorAddress\":null,\"startTime\":\"" + earlyDateStr + "\",\"state\":\"someState\",\"config\":\"someConfig\",\"endTime\":null,\"id\":\"someId\",\"error\":null}"
+  val testContextInfoJson = f"""{"actorAddress":"ActorAddress","config":"someConfig","endTime":"${dateStr}","error":"message","id":"someId","name":"someName","startTime":"${earlyDateStr}","state":"someState"}"""
+  val testContextInfo2Json = f"""{"actorAddress":null,"config":"someConfig","endTime":null,"error":null,"id":"someId","name":"someName","startTime":"${earlyDateStr}","state":"someState"}"""
 
   /*
    * Test: BinaryInfo

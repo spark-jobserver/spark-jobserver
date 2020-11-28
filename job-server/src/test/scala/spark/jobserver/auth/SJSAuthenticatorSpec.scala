@@ -1,25 +1,15 @@
 package spark.jobserver.auth
 
-import akka.actor.ActorSystem
 import akka.testkit.TestKit
-import org.scalatest.{ FunSpecLike, FunSpec, BeforeAndAfter, BeforeAndAfterAll, Matchers }
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 import org.apache.shiro.config.IniSecurityManagerFactory
-import org.apache.shiro.mgt.DefaultSecurityManager
-import org.apache.shiro.mgt.SecurityManager
-import org.apache.shiro.realm.Realm
 import org.apache.shiro.SecurityUtils
 import org.apache.shiro.config.Ini
-import spark.jobserver.auth._
-import spray.routing.authentication.UserPass
 
-import spray.routing.directives.AuthMagnet
-import spray.routing.{ HttpService, Route, RequestContext }
-import spray.http.StatusCodes
-import spray.testkit.ScalatestRouteTest
-import scala.concurrent.duration.Duration
-import scala.concurrent.{ Await, ExecutionContext, Future }
 import org.slf4j.LoggerFactory
-import java.util.concurrent.TimeoutException
+
+import akka.http.scaladsl.model.headers.BasicHttpCredentials
+import akka.http.scaladsl.testkit.ScalatestRouteTest
 
 object SJSAuthenticatorSpec {
     //edit this with your real LDAP server information, just remember not to 
@@ -71,7 +61,7 @@ goodguy = winnebago:drive:eagle5
 
 }
 
-class SJSAuthenticatorSpec extends HttpService with SJSAuthenticator with FunSpecLike
+class SJSAuthenticatorSpec extends SJSAuthenticator with FunSpecLike
     with ScalatestRouteTest with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
   def actorRefFactory = system
@@ -93,7 +83,7 @@ class SJSAuthenticatorSpec extends HttpService with SJSAuthenticator with FunSpe
   val sManager = factory.getInstance()
   SecurityUtils.setSecurityManager(sManager)
 
-  val logger = LoggerFactory.getLogger(getClass)
+  override val logger = LoggerFactory.getLogger(getClass)
 
   val testUserWithValidGroup = if (isGroupChecking) {
     "user"
@@ -127,7 +117,7 @@ class SJSAuthenticatorSpec extends HttpService with SJSAuthenticator with FunSpe
 
   describe("SJSAuthenticator") {
     it("should allow user with valid role/group") {
-      explicitValidation(new UserPass(testUserWithValidGroup, testUserWithValidGroupPassword), logger) should equal(Some(new AuthInfo(User(testUserWithValidGroup))))
+      explicitValidation(new BasicHttpCredentials(testUserWithValidGroup, testUserWithValidGroupPassword), logger) should equal(Some(new AuthInfo(User(testUserWithValidGroup))))
     }
 
     it("should check role/group when checking is activated") {
@@ -136,11 +126,11 @@ class SJSAuthenticatorSpec extends HttpService with SJSAuthenticator with FunSpe
       } else {
         Some(new AuthInfo(User(testUserWithoutValidGroup)))
       }
-      explicitValidation(new UserPass(testUserWithoutValidGroup, testUserWithoutValidGroupPassword), logger) should equal(expected)
+      explicitValidation(new BasicHttpCredentials(testUserWithoutValidGroup, testUserWithoutValidGroupPassword), logger) should equal(expected)
     }
 
     it("should not allow invalid user") {
-      explicitValidation(new UserPass(testUserInvalid, testUserInvalidPassword), logger) should equal(None)
+      explicitValidation(new BasicHttpCredentials(testUserInvalid, testUserInvalidPassword), logger) should equal(None)
     }
   }
 

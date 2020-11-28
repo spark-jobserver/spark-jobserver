@@ -21,11 +21,14 @@ object Dependencies {
     "com.typesafe.akka" %% "akka-slf4j" % akka,
     "com.typesafe.akka" %% "akka-cluster" % akka exclude("com.typesafe.akka", "akka-remote"),
     "com.typesafe.akka" %% "akka-cluster-tools" % akka,
-    "io.spray" %% "spray-json" % sprayJson,
-    "io.spray" %% "spray-can" % spray,
-    "io.spray" %% "spray-caching" % spray,
-    "io.spray" %% "spray-routing-shapeless23" % "1.3.4",
-    "io.spray" %% "spray-client" % spray,
+    "com.typesafe.akka" %% "akka-actor" % akka,
+
+    "com.typesafe.akka" %% "akka-http" % akkaHttp,
+    "com.typesafe.akka" %% "akka-http-core" % akkaHttp,
+    "com.typesafe.akka" %% "akka-http-caching" % akkaHttp,
+    "com.typesafe.akka" %% "akka-http-spray-json" % akkaHttp,
+    "ch.megard" %% "akka-http-cors" % akkaHttpCors,
+    "org.slf4j" % "slf4j-log4j12" % slf4j,
     yammerDeps
   )
 
@@ -45,8 +48,7 @@ object Dependencies {
   )
 
   lazy val sparkPythonDeps = Seq(
-    "net.sf.py4j" % "py4j" % py4j,
-    "io.spray" %% "spray-json" % sprayJson % Test
+    "net.sf.py4j" % "py4j" % py4j
   ) ++ sparkExtraDeps
 
   lazy val slickDeps = Seq(
@@ -82,7 +84,8 @@ object Dependencies {
     scalaTestDep,
     "com.typesafe.akka" %% "akka-testkit" % akka % Test,
     "com.typesafe.akka" %% "akka-multi-node-testkit" % akka % Test,
-    "io.spray" %% "spray-testkit" % spray % Test
+    "com.typesafe.akka" %% "akka-stream-testkit" % akka,
+    "com.typesafe.akka" %% "akka-http-testkit" % akkaHttp
   )
 
   lazy val miscTestDeps = Seq(
@@ -109,6 +112,5 @@ object Dependencies {
   val repos = Seq(
     "Typesafe Repo" at "https://repo.typesafe.com/typesafe/releases/",
     "sonatype snapshots" at "https://oss.sonatype.org/content/repositories/snapshots/",
-    "spray repo" at "http://repo.spray.io"
   )
 }

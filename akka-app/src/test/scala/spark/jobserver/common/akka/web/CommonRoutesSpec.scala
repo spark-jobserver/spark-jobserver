@@ -3,13 +3,12 @@ package spark.jobserver.common.akka.web
 import java.util.concurrent.TimeUnit
 
 import akka.testkit.TestKit
-import org.scalatest.{Matchers, FunSpec}
-import spray.testkit.ScalatestRouteTest
-
-import spray.http.StatusCodes._
+import org.scalatest.{FunSpec, Matchers}
+import akka.http.scaladsl.testkit.ScalatestRouteTest
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Gauge
 import akka.actor.ActorSystem
+import akka.http.scaladsl.model.StatusCodes.OK
 
 class CommonRoutesSpec extends FunSpec with Matchers with ScalatestRouteTest with CommonRoutes {
   def actorRefFactory: ActorSystem = system
@@ -32,7 +31,7 @@ class CommonRoutesSpec extends FunSpec with Matchers with ScalatestRouteTest wit
   val timerMap = Map("type" -> "timer", "rate" -> (meterMap - "type"),
     "duration" -> (histMap ++ Map("units" -> "milliseconds") ++ Map("mean" -> 0.0) - "type"))
 
-  override def afterAll():Unit = {
+  override def afterAll(): Unit = {
     TestKit.shutdownActorSystem(system)
   }
 

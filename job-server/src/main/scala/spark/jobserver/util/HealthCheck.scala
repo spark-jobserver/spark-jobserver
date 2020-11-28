@@ -1,21 +1,14 @@
 package spark.jobserver.util
 
-import akka.actor.{ActorIdentity, ActorRef, ActorSystem, Identify}
+import akka.actor.ActorRef
 import akka.pattern.ask
 import akka.util.Timeout
 import org.slf4j.LoggerFactory
-import spark.jobserver.ContextSupervisor
+import spark.jobserver.io.JobDAOActor
 
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.util.{Failure, Success}
-import spray.httpx.SprayJsonSupport.sprayJsonMarshaller
-import spray.json.DefaultJsonProtocol._
-import spray.http.StatusCodes
-import spray.routing.{HttpService, RequestContext}
-import spark.jobserver.io.JobInfo
-import spark.jobserver.io.JobDAOActor
 
 trait HealthCheck {
 

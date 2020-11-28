@@ -1,19 +1,21 @@
 package spark.jobserver
 
+import akka.http.scaladsl.model.MediaTypes
+import akka.http.scaladsl.model.StatusCodes._
+import akka.http.scaladsl.model.headers.`Content-Type`
+import akka.http.scaladsl.server.Route.{seal => sealRoute}
+import akka.http.scaladsl.testkit.ScalatestRouteTest
+import akka.http.scaladsl.unmarshalling.Unmarshal
 import com.typesafe.config.ConfigFactory
-import spark.jobserver.JobServerSprayProtocol._
 import spark.jobserver.io.{BinaryType, ContextStatus, JobStatus}
 import spark.jobserver.util.SparkJobUtils
-import spray.client.pipelining._
-import spray.http.StatusCodes._
-import spray.http.{HttpHeaders, MediaTypes}
 
-import scala.concurrent.Future
+import scala.concurrent.duration._
+import scala.concurrent.Await
 
 // Tests web response codes and formatting
 // Does NOT test underlying Supervisor / JarManager functionality
-// HttpService trait is needed for the sealRoute() which wraps exception handling
-class WebApiMainRoutesSpec extends WebApiSpec {
+class WebApiMainRoutesSpec extends WebApiSpec with ScalatestRouteTest {
   import spark.jobserver.common.akka.web.JsonUtils._
   import spray.json.DefaultJsonProtocol._
 
@@ -81,7 +83,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
 
     it("should respond with Unsupported Media Type if upload attempted with invalid content type header") {
       Post("/binaries/foobar", Array[Byte](0, 1, 2)).
-        withHeaders(HttpHeaders.`Content-Type`(MediaTypes.`application/json`)) ~> sealRoute(routes) ~> check {
+        withHeaders(`Content-Type`(MediaTypes.`application/json`)) ~> sealRoute(routes) ~> check {
         status should be (UnsupportedMediaType)
       }
     }
@@ -741,7 +743,7 @@ class WebApiMainRoutesSpec extends WebApiSpec {
       Delete("/contexts/ctx-stop-in-progress", "") ~> sealRoute(routes) ~> check {
         status should be (Accepted)
         header("Location").get.value should be("http://example.com/contexts/ctx-stop-in-progress")
-        response.entity.asString should be("")
+        Await.result(Unmarshal(response.entity).to[String], 60 seconds) should be("")
       }
     }
 
@@ -804,14 +806,19 @@ class WebApiMainRoutesSpec extends WebApiSpec {
     }
   }
 
-  describe ("context reset route") {
-    it ("should return valid JSON when resetting a context") {
-      val p = sendReceive ~> unmarshal[JobServerResponse]
-      val valid: Future[JobServerResponse] = p(Put(s"http://127.0.0.1:$dummyPort/contexts?reset=reboot"))
-      whenReady(valid) { r =>
-        r.isSuccess shouldBe true
-        r.status shouldBe "SUCCESS"
-        r.result shouldBe "Context reset"
+  describe("context reset route") {
+    import scala.concurrent.duration._
+    import akka.http.scaladsl.testkit.RouteTestTimeout
+    import akka.testkit.TestDuration
+
+    implicit val timeout = RouteTestTimeout(2.seconds.dilated)
+
+
+    it("should return valid JSON when resetting a context") {
+      Put("/contexts?reset=reboot", "") ~> sealRoute(routes) ~> check {
+        status shouldBe OK
+        val result = responseAs[Map[String, Any]]
+        result(ResultKey) should equal("Context reset")
       }
     }
   }

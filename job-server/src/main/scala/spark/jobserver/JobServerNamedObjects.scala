@@ -1,13 +1,13 @@
 package spark.jobserver
 
 import akka.actor.ActorSystem
-import scala.concurrent.Future
-import scala.concurrent.ExecutionContext
+import akka.http.caching.LfuCache
+import akka.http.caching.scaladsl.{Cache, CachingSettings}
+
+import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
-import scala.util.{Try, Success, Failure}
+import scala.util.{Failure, Success}
 import org.slf4j.LoggerFactory
-import spray.caching.{ LruCache, Cache }
-import spray.util._
 
 /**
  * An implementation of [[NamedObjects]] API for the Job Server.
@@ -31,12 +31,13 @@ class JobServerNamedObjects(system: ActorSystem) extends NamedObjects {
   // we must store a reference to each NamedObject even though only its ID is used here
   // this reference prevents the object from being GCed and cleaned by sparks ContextCleaner
   // or some other GC for other types of objects
-  private val namesToObjects: Cache[NamedObject] = LruCache()
+  val defaultCachingSettings = CachingSettings(system)
+  private val namesToObjects: Cache[String, NamedObject] = LfuCache(defaultCachingSettings)
 
   override def getOrElseCreate[O <: NamedObject](name: String, objGen: => O)
                                  (implicit timeout: FiniteDuration = defaultTimeout,
                                            persister: NamedObjectPersister[O]): O = {
-    val obj = cachedOp(name, createObject(objGen, name)).await(timeout).asInstanceOf[O]
+    val obj = Await.result(cachedOp(name, createObject(objGen, name)), timeout).asInstanceOf[O]
     logger.info(s"Named object [$name] of type [${obj.getClass.toString}] created")
     obj
   }
@@ -44,10 +45,18 @@ class JobServerNamedObjects(system: ActorSystem) extends NamedObjects {
   // wrap the operation with caching support
   // (providing a caching key)
   private def cachedOp[O <: NamedObject](name: String, f: () => O): Future[NamedObject] =
-    namesToObjects(name) {
-       logger.info("Named object [{}] not found, starting creation", name)
-       f()
-  }
+    namesToObjects.getOrLoad(name, _ => {
+      logger.info("Named object [{}] not found, starting creation", name)
+      val future = Future { f() }
+      future.onComplete{
+        case Success(_) =>
+          logger.debug("Named object [{}] created", name)
+        case Failure(exception) =>
+          logger.error("Named object [{}] creation failed with error: {}",
+            name, exception.toString, exception)
+      }
+      future
+    })
 
   private def createObject[O <: NamedObject](objGen: => O, name: String)
                   (implicit persister: NamedObjectPersister[O]): () => O = {
@@ -61,7 +70,7 @@ class JobServerNamedObjects(system: ActorSystem) extends NamedObjects {
 
   override def get[O <: NamedObject](name: String)
                 (implicit timeout : FiniteDuration = defaultTimeout): Option[O] = {
-    namesToObjects.get(name).map(_.await(timeout).asInstanceOf[O])
+    namesToObjects.get(name).map(f => Await.result(f, timeout).asInstanceOf[O])
   }
 
   override def update[O <: NamedObject](name: String, objGen: => O)
@@ -78,7 +87,10 @@ class JobServerNamedObjects(system: ActorSystem) extends NamedObjects {
 
   def destroy[O <: NamedObject](objOfType: O, name: String)
                       (implicit persister: NamedObjectPersister[O]) {
-    namesToObjects remove(name) foreach(f => f onComplete {
+    namesToObjects get (name) map (f => {
+      namesToObjects remove (name)
+      f
+    }) foreach (f => f onComplete {
       case Success(obj) =>
           persister.unpersist(obj.asInstanceOf[O])
       case Failure(t) =>
