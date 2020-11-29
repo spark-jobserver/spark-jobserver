@@ -3,13 +3,13 @@ package spark.jobserver.util
 import java.nio.charset.Charset
 
 import akka.actor.ActorSystem
-import akka.http.scaladsl.model
 import akka.http.scaladsl.model.{HttpEntity, HttpMethods, HttpRequest, HttpResponse, StatusCodes}
+import akka.testkit.TestKit
 import com.typesafe.config.{Config, ConfigFactory}
 
 import collection.JavaConverters._
 import org.joda.time.DateTime
-import org.scalatest.{FunSpec, Matchers}
+import org.scalatest.{BeforeAndAfterAll, FunSpecLike, Matchers}
 import spark.jobserver.io.ContextInfo
 
 object ForcefulKillSpec {
@@ -17,7 +17,12 @@ object ForcefulKillSpec {
   val SECONDARY_MASTER = 1
 }
 
-class ForcefulKillSpec extends FunSpec with Matchers {
+class ForcefulKillSpec extends TestKit(ActorSystem("test")) with FunSpecLike
+  with Matchers with BeforeAndAfterAll {
+
+  override def afterAll(): Unit = {
+    TestKit.shutdownActorSystem(system)
+  }
 
   def sparkUIJson(status: String = "ALIVE"): String =
     s"""
