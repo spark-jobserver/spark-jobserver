@@ -893,7 +893,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
 
   @VisibleForTesting
   protected def forcefulKillCaller(forcefulKill: StandaloneForcefulKill) = {
-    forcefulKill.kill()
+    forcefulKill.kill()(context.system)
   }
 
   private def cleanupAndRespond(): Unit = {
