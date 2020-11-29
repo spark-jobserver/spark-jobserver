@@ -3,9 +3,7 @@ package spark.jobserver.util
 import akka.actor._
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.client.RequestBuilding.{Get, Post}
-import akka.http.scaladsl.model.{FormData, HttpRequest, HttpResponse}
-import akka.http.scaladsl.unmarshalling.Unmarshal
-import akka.stream.{ActorMaterializer, ActorMaterializerSettings}
+import akka.http.scaladsl.model.{FormData, HttpEntity, HttpRequest, HttpResponse}
 import com.typesafe.config.Config
 import org.slf4j.LoggerFactory
 import spray.json._
@@ -14,22 +12,21 @@ import scala.concurrent.{Await, Future}
 import scala.util.{Failure, Success, Try}
 
 trait ForcefulKill {
-  def kill(): Unit
+  def kill()(implicit system: ActorSystem): Unit
 }
 
 class StandaloneForcefulKill(config: Config, appId: String) extends ForcefulKill {
   private val logger = LoggerFactory.getLogger(getClass)
 
-  override def kill(): Unit = {
-    implicit val system = ActorSystem()
-    implicit val ec = system.dispatcher
-    implicit val materializer: ActorMaterializer = ActorMaterializer(ActorMaterializerSettings(system))
+  override def kill()(implicit system: ActorSystem): Unit = {
     val sparkMasterString = config.getString("spark.master")
     val mode = sparkMasterString.split("//")
     if (!mode.head.containsSlice("spark")) throw new NotStandaloneModeException()
 
     val mastersIPsWithPort = mode.drop(1).head.split(",")
     val masterIPs = mastersIPsWithPort.map(_.split(":").filterNot(_.trim().equals("")).head)
+
+    implicit val ec = system.dispatcher
 
     masterIPs.foreach {
       masterIP =>
@@ -38,7 +35,7 @@ class StandaloneForcefulKill(config: Config, appId: String) extends ForcefulKill
 
         getHTTPResponse(getJsonRequest).map {
           getJsonResponse =>
-            Unmarshal(getJsonResponse.entity).to[String].map(ent => {
+            val ent = getJsonResponse.entity.asInstanceOf[HttpEntity.Strict].data.utf8String
               val status = ent.parseJson.asJsObject.getFields("status").mkString
               status.contains("ALIVE") match {
                 case true =>
@@ -49,13 +46,11 @@ class StandaloneForcefulKill(config: Config, appId: String) extends ForcefulKill
                   getHTTPResponse(killAppRequest).map {
                     _ =>
                       logger.info(s"Successfully killed the app $appId through spark master $masterIP")
-                      system.terminate()
                       return
                   }
                 case false =>
                   logger.warn(s"The status of spark master at $masterIP is $status. Skipping kill on it.")
               }
-            })
         }
     }
     logger.error("No master found in ACTIVE or alive state. Throwing exception.")
