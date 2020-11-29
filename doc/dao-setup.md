@@ -99,7 +99,7 @@ To set up HDFS binary and H2 metadata DAO, include the following lines in the co
             }
             sqldao {
                   # Slick database driver, full classpath
-                  slick-driver = slick.driver.H2Driver
+                  slick-driver = slick.jdbc.H2Profile
 
                   # JDBC driver, full classpath
                   jdbc-driver = org.h2.Driver
@@ -141,7 +141,7 @@ To set up the DAO only with H2 backend, include the following lines in the confi
             }
             sqldao {
                   # Slick database driver, full classpath
-                  slick-driver = slick.driver.H2Driver
+                  slick-driver = slick.jdbc.H2Profile
 
                   # JDBC driver, full classpath
                   jdbc-driver = org.h2.Driver
@@ -226,7 +226,7 @@ To set up the DAO only with PostgreSQL backend, include the following lines in t
             }
             sqldao {
                   # Slick database driver, full classpath
-                  slick-driver = slick.driver.PostgresDriver
+                  slick-driver = slick.jdbc.PostgresProfile
 
                   # JDBC driver, full classpath
                   jdbc-driver = org.postgresql.Driver
@@ -283,7 +283,7 @@ To use MySQL as backend include the following lines in the configuration file (e
         }
         sqldao {
           # Slick database driver, full classpath
-          slick-driver = slick.driver.MySQLDriver
+          slick-driver = slick.jdbc.MySQLProfile
 
           # JDBC driver, full classpath
           jdbc-driver = com.mysql.jdbc.Driver
