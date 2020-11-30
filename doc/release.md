@@ -3,6 +3,10 @@
 **Table of Contents**  *generated with [DocToc](https://github.com/thlorenz/doctoc)*
 
 - [Publishing packages](#publishing-packages)
+- [Releasing from a hotfix branch](#releasing-from-a-hotfix-branch)
+- [Known issues](#known-issues)
+  - [Failed migration or FlywayException in DAO tests](#failed-migration-or-flywayexception-in-dao-tests)
+  - [Python tests errors](#python-tests-errors)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -47,3 +51,44 @@ To announce the release on [ls.implicit.ly](http://ls.implicit.ly/), use
 [Herald](https://github.com/n8han/herald#install) after adding release notes in
 the `notes/` dir.  Also regenerate the catalog with `lsWriteVersion` SBT task
 and `lsync`, in project job-server.
+
+### Releasing from a hotfix branch
+
+Prerequisites:
+- There is a hotfix branch (e.g. `jobserver-0.10.x`) with some fixes for the last release
+- `origin` remote is pointing to Open Source github.com Jobserver
+
+Execute
+```
+git push --set-upstream origin <<hotfix-branch-name>>
+```
+before starting the release process. The rest of the steps are identical to the release from the `master` branch.
+
+### Known issues
+
+Test issues are most likely connected to local setup as there is a Jenkins job running tests before
+and after each PR is getting merged.
+Usually problems arise due to misconfiguration of Spark paths or Python libraries.
+It is a good practice to start debugging by running only problematic tests in an SBT console,
+use `testOnly $specName` to run only specific test suite.
+
+#### Failed migration or FlywayException in DAO tests
+
+Make sure, that all old metadata files are deleted. Check for the current H2 DB files in the project
+```
+find . -name *h2.db
+```
+and delete them.
+Also, clean up `/tmp` directory:
+```
+rm -r /tmp/spark-jobserver
+```
+
+#### Python tests errors
+
+Our tests use both python2 and python3.
+**Python 3 version should be below 3.8**
+
+For Spark dependencies there are 2 ways:
+- Set up `PYTHONPATH`: `export PYTHONPATH=$SPARK_HOME/python/lib/pyspark.zip:$SPARK_HOME/python/lib/py4j-0.10.7-src.zip`
+- Install dependencies with `pip`, e.g. `python -m pip install pyhocon pyspark==${SPARK_VERSION}`
