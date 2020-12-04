@@ -242,7 +242,6 @@ lazy val rootSettings = Seq(
 lazy val revolverSettings = Seq(
   javaOptions in reStart += jobServerLogging,
   // Give job server a bit more PermGen since it does classloading
-  javaOptions in reStart += "-XX:MaxPermSize=256m",
   javaOptions in reStart += "-Djava.security.krb5.realm= -Djava.security.krb5.kdc=",
   // This lets us add Spark back to the classpath without assembly barfing
   fullClasspath in reStart := (fullClasspath in Compile).value,
