@@ -59,7 +59,7 @@ class AccessCacheJob extends SparkTestJob {
 class CacheRddByNameJob extends SparkTestJob with NamedRddSupport {
   def runJob(sc: SparkContext, config: Config): Any = {
     import scala.concurrent.duration._
-    implicit val timeout = 100 millis
+    implicit val timeout = 2000 millis
 
     val rdd = namedRdds.getOrElseCreate(getClass.getSimpleName, {
       // anonymous generator function
