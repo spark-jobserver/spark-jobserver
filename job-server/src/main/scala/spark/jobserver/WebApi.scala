@@ -9,6 +9,7 @@ import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import akka.http.scaladsl.model._
 import akka.http.scaladsl.model.headers.{Location, `Content-Type`}
 import akka.http.scaladsl.server.Directives._
+import akka.http.scaladsl.server.RouteResult.Complete
 import akka.http.scaladsl.server.directives.LoggingMagnet
 import akka.http.scaladsl.server.{Directive0, RequestContext, Route, RouteResult}
 import akka.pattern.ask
@@ -216,9 +217,13 @@ class WebApi(system: ActorSystem,
 
   val myRoutes = logRequestResult(accessLogger) {
     cors() {
-      overrideMethodWithParameter("_method") {
-        binaryRoutes ~ contextRoutes ~ jobRoutes ~
-          dataRoutes ~ healthzRoutes ~ otherRoutes
+      extractRequestContext { ctx =>
+        withRequestTimeoutResponse(_ => timeoutRoute(ctx)) {
+          overrideMethodWithParameter("_method") {
+            binaryRoutes ~ contextRoutes ~ jobRoutes ~
+              dataRoutes ~ healthzRoutes ~ otherRoutes
+          }
+        }
       }
     }
   }
@@ -964,11 +969,14 @@ class WebApi(system: ActorSystem,
     })
   }
 
-  //TODO add withRequestTimeout to myRoutes (line 216)
-  def timeoutRoute: Route = {
-    respondWithMediaType(MediaTypes.`application/json`) { ctx =>
+  def timeoutRoute(ctx: RequestContext): HttpResponse = {
+    val route: Route = respondWithMediaType(MediaTypes.`application/json`) { ctx =>
       completeWithErrorStatus(ctx, "Request timed out. Try using the /jobs/<jobID>, " +
         "/jobs APIs to get status/results", StatusCodes.InternalServerError)
+    }
+    Await.result(route(ctx), 5.seconds) match {
+      case Complete(response) => response
+      case _ => HttpResponse(StatusCodes.InternalServerError, entity = "Unable to produce timeout error")
     }
   }
 
