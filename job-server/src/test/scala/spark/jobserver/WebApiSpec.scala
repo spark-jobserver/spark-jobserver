@@ -35,9 +35,6 @@ with ScalatestRouteTest with ScalaFutures with SprayJsonSupport {
       jobserver.short-timeout = 3 s
     }
     akka.http.server {}
-    shiro {
-      authentication = off
-    }
                                  """)
 
   val dummyPort = 9999

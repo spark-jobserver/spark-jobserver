@@ -256,7 +256,6 @@ class WebApiMainRoutesSpec extends WebApiSpec with ScalatestRouteTest {
             masterConfKey->"overriden",
             bindConfKey -> bindConfVal,
             "foo.baz" -> "booboo",
-            "shiro.authentication" -> "off",
             "spark.jobserver.short-timeout" -> "3 s"
           )
         ))
@@ -274,7 +273,6 @@ class WebApiMainRoutesSpec extends WebApiSpec with ScalatestRouteTest {
           ResultKey -> Map(
             masterConfKey-> masterConfVal,
             bindConfKey -> bindConfVal,
-            "shiro.authentication" -> "off",
             "spark.jobserver.short-timeout" -> "3 s",
             "dependent-jar-uris" -> List("foo")
           )
@@ -293,7 +291,6 @@ class WebApiMainRoutesSpec extends WebApiSpec with ScalatestRouteTest {
           ResultKey -> Map(
             masterConfKey-> masterConfVal,
             bindConfKey -> bindConfVal,
-            "shiro.authentication" -> "off",
             "spark.jobserver.short-timeout" -> "3 s"
           )
         ))
@@ -378,7 +375,6 @@ class WebApiMainRoutesSpec extends WebApiSpec with ScalatestRouteTest {
             masterConfKey -> masterConfVal,
             bindConfKey -> bindConfVal,
             "foo.baz" -> "booboo",
-            "shiro.authentication" -> "off",
             "spark.jobserver.short-timeout" -> "3 s"
           )
         ))
@@ -407,7 +403,6 @@ class WebApiMainRoutesSpec extends WebApiSpec with ScalatestRouteTest {
             masterConfKey -> masterConfVal,
             bindConfKey -> bindConfVal,
             "foo.baz" -> "booboo",
-            "shiro.authentication" -> "off",
             "spark.jobserver.short-timeout" -> "3 s"
           )
         ))
