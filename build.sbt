@@ -262,6 +262,7 @@ lazy val commonSettings = Defaults.coreDefaultSettings ++ dirSettings ++ Seq(
   crossPaths   := true,
   crossScalaVersions := Seq("2.11.12", "2.12.12"),
   releaseIgnoreUntrackedFiles := true,
+  scalaVersion := sys.env.getOrElse("SCALA_VERSION", "2.12.12"),
   dependencyOverrides += "org.scala-lang" % "scala-compiler" % scalaVersion.value,
   // scalastyleFailOnError := true,
   runScalaStyle := {
