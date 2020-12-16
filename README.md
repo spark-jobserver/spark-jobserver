@@ -544,12 +544,16 @@ The minimum set of parameters to enable client authentication consists of:
 Note, client authentication implies server authentication, therefore client authentication will only be enabled once server authentication is activated.
 
 ### Basic authentication
-Basic authentication (username and password) in Job Server relies on the [Apache Shiro](http://shiro.apache.org/index.html) framework. 
-Basic authentication is activated by setting this flag (Section 'shiro'):
+By default, access to the Job Server is not limited. Basic authentication (username and password) support is provided via
+the [Apache Shiro](http://shiro.apache.org/index.html) framework.  It can be activated in the configuration file by
+changing the authentication provider and providing a shiro configuration file.
 ```
-authentication = on
-# absolute path to shiro config file, including file name
-config.path = "/some/path/shiro.ini"
+authentication {
+  provider = spark.jobserver.auth.ShiroAuthenticator
+
+  # absolute path to shiro config file, including file name
+  shiro.config.path = "/some/path/shiro.ini"
+}
 ```
 Shiro-specific configuration options should be placed into a file named 'shiro.ini' in the directory as specified by the config option 'config.path'.
 Here is an example that configures LDAP with user group verification:
