@@ -27,7 +27,7 @@ object Dependencies {
     "com.typesafe.akka" %% "akka-http-core" % akkaHttp,
     "com.typesafe.akka" %% "akka-http-caching" % akkaHttp,
     "com.typesafe.akka" %% "akka-http-spray-json" % akkaHttp,
-    "ch.megard" %% "akka-http-cors" % "1.1.0",
+    "ch.megard" %% "akka-http-cors" % "0.4.2",
     "org.slf4j" % "slf4j-log4j12" % "1.7.25",
     yammerDeps
   )

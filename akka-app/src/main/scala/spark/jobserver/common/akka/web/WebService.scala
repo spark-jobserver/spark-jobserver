@@ -2,7 +2,7 @@ package spark.jobserver.common.akka.web
 
 import akka.actor.ActorSystem
 import akka.http.scaladsl.server.Route
-import akka.http.scaladsl.{ConnectionContext, Http, HttpsConnectionContext}
+import akka.http.scaladsl.{ConnectionContext, Http}
 import javax.net.ssl.SSLContext
 
 import scala.concurrent.ExecutionContextExecutor
@@ -21,20 +21,12 @@ object WebService {
    * @param port The port number to bind to
    */
   def start(route: Route, system: ActorSystem, host: String = "0.0.0.0",
-            port: Int = 8080, https: Boolean = false)(implicit sslContext: SSLContext) {
+            port: Int = 8080, sslContext: Option[SSLContext]) {
     implicit val actorSystem: ActorSystem = system
     implicit val executionContext: ExecutionContextExecutor = system.dispatcher
 
-    if (https) {
-      Http()(system)
-        .newServerAt(host, port)
-        .enableHttps(ConnectionContext.httpsServer(sslContext))
-        .bind(route)
-    }
-    else {
-      Http()(system)
-        .newServerAt(host, port)
-        .bind(route)
-    }
+    val http = Http()(system)
+    http.bindAndHandle(route, host, port, connectionContext = sslContext.map(ConnectionContext.https(_))
+          .getOrElse(http.defaultServerHttpContext))
   }
 }

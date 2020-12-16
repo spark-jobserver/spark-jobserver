@@ -251,13 +251,15 @@ class WebApi(system: ActorSystem,
      * in config
      */
     val sslConfig = config.getConfig("akka.http.server")
-    val sslEnabled = sslConfig.hasPath("ssl-encryption") && sslConfig.getBoolean("ssl-encryption")
-    implicit val sslContext: SSLContext = {
-      SSLContextFactory.createContext(sslConfig)
-    }
+    val sslContext: Option[SSLContext] =
+      if (sslConfig.hasPath("ssl-encryption") && sslConfig.getBoolean("ssl-encryption")) {
+        Some(SSLContextFactory.createContext(sslConfig))
+      } else {
+        None
+      }
 
     logger.info("Starting browser web service...")
-    WebService.start(myRoutes ~ commonRoutes, system, bindAddress, port, sslEnabled)
+    WebService.start(myRoutes ~ commonRoutes, system, bindAddress, port, sslContext)
   }
 
   /**
