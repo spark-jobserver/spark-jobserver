@@ -31,9 +31,6 @@ with ScalatestRouteTest with SprayJsonSupport {
       jobserver.short-timeout = 3 s
       jobserver.healthcheck = "$healthConfVal"
     }
-    shiro {
-      authentication = off
-    }
                                  """)
   val StatusKey = "status"
   val ResultKey = "result"

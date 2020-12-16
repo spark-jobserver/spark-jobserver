@@ -17,10 +17,9 @@ import akka.util.Timeout
 import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
 import com.typesafe.config._
 import javax.net.ssl.SSLContext
-import org.apache.shiro.SecurityUtils
-import org.apache.shiro.config.IniSecurityManagerFactory
 import org.joda.time.DateTime
 import org.slf4j.{Logger, LoggerFactory}
+import spark.jobserver.auth.SJSAuthenticator._
 import spark.jobserver.auth._
 import spark.jobserver.common.akka.web.JsonUtils.AnyJsonFormat
 import spark.jobserver.common.akka.web.{CommonRoutes, WebService}
@@ -154,7 +153,7 @@ class WebApi(system: ActorSystem,
              supervisor: ActorRef,
              daoActor: ActorRef,
              healthCheckInst: HealthCheck)
-    extends MeteredHttpService with CommonRoutes with DataRoutes with SJSAuthenticator
+    extends MeteredHttpService with CommonRoutes with DataRoutes
                         with ChunkEncodedStreamingSupport {
   import CommonMessages._
   import ContextSupervisor._
@@ -229,25 +228,17 @@ class WebApi(system: ActorSystem,
   }
 
   lazy val authenticator: Challenge = {
-    if (config.getBoolean("shiro.authentication")) {
-      import java.util.concurrent.TimeUnit
-      logger.info("Using authentication.")
-      initSecurityManager()
-      val authTimeout = Try(config.getDuration("shiro.authentication-timeout",
-              TimeUnit.MILLISECONDS).toInt / 1000).getOrElse(10)
-      asShiroAuthenticator(authTimeout)
-    } else {
-      logger.info("No authentication.")
-      asAllUserAuthenticator
-    }
-  }
+    val authConfig = Try(config.getConfig("authentication"))
+      .toOption.getOrElse(ConfigFactory.empty())
+    val providerClass = Try(authConfig.getString("provider"))
+      .toOption.getOrElse("spark.jobserver.auth.AllowAllAuthenticator")
+    logger.info(f"Using $providerClass authentication provider.")
 
-  /**
-   * possibly overwritten by test
-   */
-  def initSecurityManager() {
-    val sManager = new IniSecurityManagerFactory(config.getString("shiro.config.path")).getInstance()
-    SecurityUtils.setSecurityManager(sManager)
+    val providerInst = Class.forName(providerClass)
+      .getConstructors()(0)
+      .newInstance(authConfig, ec, system)
+      .asInstanceOf[SJSAuthenticator]
+    providerInst.challenge()
   }
 
   def start() {
@@ -466,7 +457,8 @@ class WebApi(system: ActorSystem,
           case contexts =>
             val getContexts = SparkJobUtils.removeProxyUserPrefix(
               authInfo.toString, contexts.asInstanceOf[Seq[String]],
-              config.getBoolean("shiro.authentication") && config.getBoolean("shiro.use-as-proxy-user"))
+              config.hasPath("authentication.shiro") &&
+                config.getBoolean("authentication.shiro.use-as-proxy-user"))
             ctx.complete(getContexts)
         }.recoverWith {
           case e: Exception =>
@@ -988,7 +980,8 @@ class WebApi(system: ActorSystem,
   def determineProxyUser(aConfig: Config,
                          authInfo: AuthInfo,
                          contextName: String): (String, Config) = {
-    if (config.getBoolean("shiro.authentication") && config.getBoolean("shiro.use-as-proxy-user")) {
+    if (config.hasPath("authentication.shiro") &&
+      config.getBoolean("authentication.shiro.use-as-proxy-user")) {
       //proxy-user-param is ignored and the authenticated user name is used
       val config = aConfig.withValue(SparkJobUtils.SPARK_PROXY_USER_PARAM,
         ConfigValueFactory.fromAnyRef(authInfo.toString))

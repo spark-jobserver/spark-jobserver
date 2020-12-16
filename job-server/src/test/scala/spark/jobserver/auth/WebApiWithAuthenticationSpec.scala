@@ -1,30 +1,26 @@
 package spark.jobserver.auth
 
 import java.util.concurrent.TimeoutException
-
 import akka.actor.{Actor, ActorSystem, Props}
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.model.headers.{Authorization, BasicHttpCredentials}
 import akka.http.scaladsl.server.Route
 import akka.http.scaladsl.server.Route.{seal => sealRoute}
-import akka.http.scaladsl.server.directives.Credentials
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import akka.testkit.TestKit
-import com.typesafe.config.{ConfigFactory, ConfigValueFactory}
-import org.apache.shiro.SecurityUtils
-import org.apache.shiro.config.{Ini, IniSecurityManagerFactory}
+import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
-import org.slf4j.LoggerFactory
 import spark.jobserver._
+import spark.jobserver.auth.SJSAuthenticator.Challenge
 import spark.jobserver.io.JobDAOActor.GetJobInfo
 import spark.jobserver.io.{BinaryInfo, BinaryType, JobInfo, JobStatus}
 import spark.jobserver.util.SparkJobUtils
 
 import scala.collection.mutable.SynchronizedSet
 import scala.concurrent.duration._
-import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.{ExecutionContext, Future}
 
 // Tests authorization only, actual responses are tested elsewhere
 // Does NOT test underlying Supervisor / JarManager functionality
@@ -46,8 +42,9 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
       jobserver.bind-address = "${bindConfVal}"
       jobserver.short-timeout = 3 s
     }
-    shiro {
-      authentication = on
+    authentication {
+      authentication-timeout = 10 s
+      shiro.config.path = "classpath:auth/dummy.ini"
     }
                                  """)
 
@@ -62,49 +59,38 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
   private val dummyActor = system.actorOf(Props(classOf[DummyActor], this))
 
   private def routesWithTimeout(useAsProxyUser: Boolean, authTimeout: Int): Route = {
-    val testConfig = config.withValue("shiro.authentication-timeout",
+    val testConfig = config.withValue("authentication.authentication-timeout",
       ConfigValueFactory.fromAnyRef(authTimeout))
-      .withValue("shiro.use-as-proxy-user", ConfigValueFactory.fromAnyRef(useAsProxyUser))
+      .withValue("authentication.shiro.use-as-proxy-user", ConfigValueFactory.fromAnyRef(useAsProxyUser))
     val api = new WebApi(system, testConfig, dummyPort, dummyActor,
       dummyActor, dummyActor, dummyActor, null) {
-      private def asShiroAuthenticatorWithWait(authTimeout: Int)
-          (implicit ec: ExecutionContext): Challenge = {
-        val logger = LoggerFactory.getLogger(getClass)
 
-        credentials: Option[BasicHttpCredentials] => {
-          Future {
-            val userPass: BasicHttpCredentials = credentials match {
-              case Some(p) => p
-              case _ => BasicHttpCredentials("", "")
-            }
-            if (authTimeout > 0) {
-              explicitValidation(userPass, logger) match {
-                case Some(p) => Some(new AuthInfo(User(userPass.username)))
-                case None => None
+      class MockedShiroAuthenticator(override protected val authConfig: Config)
+                                    (implicit ec: ExecutionContext, s: ActorSystem)
+        extends ShiroAuthenticator(authConfig)(ec, s){
+
+        override def challenge(): Challenge = {
+          credentials: Option[BasicHttpCredentials] => {
+            Future {
+              val userPass: BasicHttpCredentials = credentials match {
+                case Some(p) => p
+                case _ => BasicHttpCredentials("", "")
               }
-            } else {
-              throw new TimeoutException("forced timeout")
+              if (authTimeout > 0) {
+                authenticate(userPass) match {
+                  case Some(p) => Some(new AuthInfo(User(userPass.username)))
+                  case None => None
+                }
+              } else {
+                throw new TimeoutException("forced timeout")
+              }
             }
           }
         }
       }
-      
-      override def initSecurityManager() {
-        val ini = {
-          val tmp = new Ini()
-          tmp.load(SJSAuthenticatorSpec.DummyIniConfig)
-          tmp
-        }
-        val factory = new IniSecurityManagerFactory(ini)
-
-        val sManager = factory.getInstance()
-        SecurityUtils.setSecurityManager(sManager)
-      }
 
       override lazy val authenticator: Challenge = {
-        logger.info("Using authentication.")
-        initSecurityManager()
-        asShiroAuthenticatorWithWait(authTimeout)
+        new MockedShiroAuthenticator(testConfig.getConfig("authentication"))(ec, system).challenge()
       }
     }
     api.myRoutes

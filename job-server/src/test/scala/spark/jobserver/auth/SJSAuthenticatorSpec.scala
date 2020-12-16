@@ -2,88 +2,23 @@ package spark.jobserver.auth
 
 import akka.testkit.TestKit
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
-import org.apache.shiro.config.IniSecurityManagerFactory
-import org.apache.shiro.SecurityUtils
-import org.apache.shiro.config.Ini
-
-import org.slf4j.LoggerFactory
-
 import akka.http.scaladsl.model.headers.BasicHttpCredentials
 import akka.http.scaladsl.testkit.ScalatestRouteTest
+import com.typesafe.config.ConfigFactory
+import scala.concurrent.duration._
 
-object SJSAuthenticatorSpec {
-    //edit this with your real LDAP server information, just remember not to 
-  // check it in....
-  val LdapIniConfig = """
-# use this for basic ldap authorization, without group checking
-# activeDirectoryRealm = org.apache.shiro.realm.ldap.JndiLdapRealm
-# use this for checking group membership of users based on the 'member' attribute of the groups:
-activeDirectoryRealm = spark.jobserver.auth.LdapGroupRealm
-# search base for ldap groups:
-activeDirectoryRealm.contextFactory.environment[ldap.searchBase] = dc=xxx,dc=org
-activeDirectoryRealm.contextFactory.environment[ldap.allowedGroups] = "cn=xx,ou=groups", "cn=spark,ou=groups",,,,,
-activeDirectoryRealm.contextFactory.environment[java.naming.security.credentials] = password
-activeDirectoryRealm.contextFactory.url = ldap://localhost:389
-activeDirectoryRealm.userDnTemplate = cn={0},ou=people,dc=xxx,dc=org
+import scala.concurrent.Await
 
-cacheManager = org.apache.shiro.cache.MemoryConstrainedCacheManager
-
-securityManager.cacheManager = $cacheManager
-"""
-
-  val DummyIniConfig = """
-# =============================================================================
-# Tutorial INI configuration
-#
-# Usernames/passwords are based on the classic Mel Brooks' film "Spaceballs" :)
-# =============================================================================
-
-# -----------------------------------------------------------------------------
-# Users and their (optional) assigned roles
-# username = password, role1, role2, ..., roleN
-# -----------------------------------------------------------------------------
-[users]
-root = secret, admin
-guest = guest, guest
-presidentskroob = 12345, president
-presidentskroob~2 = ludicrousspeed, darklord, schwartz
-lonestarr = vespa, goodguy, schwartz
-
-# -----------------------------------------------------------------------------
-# Roles with assigned permissions
-# roleName = perm1, perm2, ..., permN
-# -----------------------------------------------------------------------------
-[roles]
-admin = *
-schwartz = lightsaber:*
-goodguy = winnebago:drive:eagle5
-"""
-
-}
-
-class SJSAuthenticatorSpec extends SJSAuthenticator with FunSpecLike
+class SJSAuthenticatorSpec extends FunSpecLike
     with ScalatestRouteTest with Matchers with BeforeAndAfter with BeforeAndAfterAll {
-
-  def actorRefFactory = system
-
 
   //set this to true to check your real ldap server
   val isGroupChecking = false
-  val ini = {
-    val tmp = new Ini()
-    if (isGroupChecking) {
-      tmp.load(SJSAuthenticatorSpec.LdapIniConfig)
-    } else {
-      tmp.load(SJSAuthenticatorSpec.DummyIniConfig)
-    }
-    tmp
-  }
-  val factory = new IniSecurityManagerFactory(ini)
 
-  val sManager = factory.getInstance()
-  SecurityUtils.setSecurityManager(sManager)
-
-  override val logger = LoggerFactory.getLogger(getClass)
+  val config = ConfigFactory.parseString(s"""
+    authentication-timeout = 10 s
+    shiro.config.path = "${if (isGroupChecking) "classpath:auth/shiro.ini" else "classpath:auth/dummy.ini"}"
+    """)
 
   val testUserWithValidGroup = if (isGroupChecking) {
     "user"
@@ -108,16 +43,42 @@ class SJSAuthenticatorSpec extends SJSAuthenticator with FunSpecLike
     "12345"
   }
 
+  val anonymousUser = "anonymous"
   val testUserInvalid = "no-user"
   val testUserInvalidPassword = "pw"
 
-  override def afterAll():Unit = {
+  override def afterAll(): Unit = {
     TestKit.shutdownActorSystem(system)
   }
 
-  describe("SJSAuthenticator") {
+  describe("AllowAllAuthenticator") {
+    val instance = new AllowAllAuthenticator(config)
+
     it("should allow user with valid role/group") {
-      explicitValidation(new BasicHttpCredentials(testUserWithValidGroup, testUserWithValidGroupPassword), logger) should equal(Some(new AuthInfo(User(testUserWithValidGroup))))
+      val cred = new BasicHttpCredentials(testUserWithValidGroup, testUserWithValidGroupPassword)
+      Await.result(instance.challenge()(Some(cred)), 10.seconds) should
+        equal(Some(new AuthInfo(User(anonymousUser))))
+    }
+
+    it("should allow user without valid role/group") {
+      val cred = new BasicHttpCredentials(testUserWithoutValidGroup, testUserWithoutValidGroupPassword)
+      Await.result(instance.challenge()(Some(cred)), 10.seconds) should
+        equal(Some(new AuthInfo(User(anonymousUser))))
+    }
+
+    it("should allow user without credentials") {
+      Await.result(instance.challenge()(None), 10.seconds) should
+        equal(Some(new AuthInfo(User(anonymousUser))))
+    }
+  }
+
+  describe("ShiroAuthenticator") {
+    val instance = new ShiroAuthenticator(config)
+
+    it("should allow user with valid role/group") {
+      val cred = new BasicHttpCredentials(testUserWithValidGroup, testUserWithValidGroupPassword)
+      Await.result(instance.challenge()(Some(cred)), 10.seconds) should
+        equal(Some(new AuthInfo(User(testUserWithValidGroup))))
     }
 
     it("should check role/group when checking is activated") {
@@ -126,11 +87,21 @@ class SJSAuthenticatorSpec extends SJSAuthenticator with FunSpecLike
       } else {
         Some(new AuthInfo(User(testUserWithoutValidGroup)))
       }
-      explicitValidation(new BasicHttpCredentials(testUserWithoutValidGroup, testUserWithoutValidGroupPassword), logger) should equal(expected)
+      val cred = new BasicHttpCredentials(testUserWithoutValidGroup, testUserWithoutValidGroupPassword)
+      Await.result(instance.challenge()(Some(cred)), 10.seconds) should
+        equal(expected)
     }
 
     it("should not allow invalid user") {
-      explicitValidation(new BasicHttpCredentials(testUserInvalid, testUserInvalidPassword), logger) should equal(None)
+      val cred = new BasicHttpCredentials(testUserInvalid, testUserInvalidPassword)
+      Await.result(instance.challenge()(Some(cred)), 10.seconds) should
+        equal(None)
+    }
+
+    it("should not allow user without credentials") {
+      val cred = new BasicHttpCredentials(testUserInvalid, testUserInvalidPassword)
+      Await.result(instance.challenge()(None), 10.seconds) should
+        equal(None)
     }
   }
 
