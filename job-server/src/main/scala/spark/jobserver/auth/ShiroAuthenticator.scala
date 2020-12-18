@@ -4,14 +4,12 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.model.headers.BasicHttpCredentials
 import com.typesafe.config.Config
 import org.apache.shiro.SecurityUtils
-import org.apache.shiro.authc.{
-  AuthenticationException, IncorrectCredentialsException,
-  LockedAccountException, UnknownAccountException, UsernamePasswordToken
-}
+import org.apache.shiro.authc._
 import org.apache.shiro.authz.AuthorizationException
 import org.apache.shiro.config.IniSecurityManagerFactory
 
-import scala.concurrent.ExecutionContext
+import scala.concurrent.duration.DurationInt
+import scala.concurrent.{Await, ExecutionContext, Future}
 
 /**
   * Apache Shiro based authenticator for the Spark JobServer, the authenticator realm must be
@@ -25,35 +23,49 @@ class ShiroAuthenticator(override protected val authConfig: Config)
   SecurityUtils.setSecurityManager(sManager)
 
   override def authenticate(credentials: BasicHttpCredentials): Option[AuthInfo] = {
-    val currentUser = SecurityUtils.getSubject()
     val BasicHttpCredentials(user, pass) = credentials
-    val token = new UsernamePasswordToken(user, pass)
-    try {
+    val f = cache.getOrLoad(user, _ => {
+      doAuthenticate(user, pass)
+    })
+      .map(Some(_))
+      .recover {
+        case uae: UnknownAccountException =>
+          logger.info("ACCESS DENIED (Unknown), user [" + user + "]")
+          cache.remove(user)
+          None
+        case ice: IncorrectCredentialsException =>
+          logger.info("ACCESS DENIED (Incorrect credentials), user [" + user + "]")
+          cache.remove(user)
+          None
+        case lae: LockedAccountException =>
+          logger.info("ACCESS DENIED (Account is locked), user [" + user + "]")
+          cache.remove(user)
+          None
+        case ae: AuthorizationException =>
+          logger.info("ACCESS DENIED (" + ae.getMessage() + "), user [" + user + "]")
+          cache.remove(user)
+          None
+        case ae: AuthenticationException =>
+          logger.info("ACCESS DENIED (Authentication Exception), user [" + user + "]")
+          cache.remove(user)
+          None
+      }
+    Await.result(f, authTimeout.seconds)
+  }
+
+  private def doAuthenticate(user: String, pass: String): Future[AuthInfo] = {
+    Future {
+      val currentUser = SecurityUtils.getSubject()
+      val token = new UsernamePasswordToken(user, pass)
+
       currentUser.login(token)
       val fullName = currentUser.getPrincipal().toString
       //is this user allowed to do anything -
       //  realm implementation may for example throw an exception
       //  if user is not a member of a valid group
       currentUser.isPermitted("*")
-      logger.trace("ACCESS GRANTED, user [%s]", fullName)
       currentUser.logout()
       Option(new AuthInfo(new User(fullName)))
-    } catch {
-      case uae: UnknownAccountException =>
-        logger.info("ACCESS DENIED (Unknown), user [" + user + "]")
-        None
-      case ice: IncorrectCredentialsException =>
-        logger.info("ACCESS DENIED (Incorrect credentials), user [" + user + "]")
-        None
-      case lae: LockedAccountException =>
-        logger.info("ACCESS DENIED (Account is locked), user [" + user + "]")
-        None
-      case ae: AuthorizationException =>
-        logger.info("ACCESS DENIED (" + ae.getMessage() + "), user [" + user + "]")
-        None
-      case ae: AuthenticationException =>
-        logger.info("ACCESS DENIED (Authentication Exception), user [" + user + "]")
-        None
     }
   }
 

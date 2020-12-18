@@ -37,6 +37,9 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
     - [Server authentication](#server-authentication)
     - [Client authentication](#client-authentication)
   - [Basic authentication](#basic-authentication)
+    - [Shiro](#shiro-authentication)
+    - [Keycloak](#keycloak-authentication)
+  - [Permissions](#permissions)
 - [Deployment](#deployment)
   - [Manual steps](#manual-steps)
   - [Context per JVM](#context-per-jvm)
@@ -544,9 +547,20 @@ The minimum set of parameters to enable client authentication consists of:
 Note, client authentication implies server authentication, therefore client authentication will only be enabled once server authentication is activated.
 
 ### Basic authentication
-By default, access to the Job Server is not limited. Basic authentication (username and password) support is provided via
-the [Apache Shiro](http://shiro.apache.org/index.html) framework.  It can be activated in the configuration file by
-changing the authentication provider and providing a shiro configuration file.
+By default, access to the Job Server is not limited. Basic authentication (username and password) support is provided
+via the [Apache Shiro](http://shiro.apache.org/index.html) framework or [Keycloak](https://www.keycloak.org/). Both
+authentication frameworks have to be explicitly activated in the configuration file. 
+
+After the configuration, you can provide credentials via basic auth. Here is an example of a simple curl command that
+authenticates a user and uses ssl (you may want to use -H to hide the credentials, this is just a simple example to get
+you started):
+```
+curl -k --basic --user 'user:pw' https://localhost:8090/contexts
+```
+
+#### Shiro Authentication
+The Shiro Authenticator can be activated in the configuration file by changing the authentication provider and
+providing a shiro configuration file.
 ```
 authentication {
   provider = spark.jobserver.auth.ShiroAuthenticator
@@ -577,11 +591,29 @@ securityManager.cacheManager = $cacheManager
 
 Make sure to edit the url, credentials, userDnTemplate, ldap.allowedGroups and ldap.searchBase settings in accordance with your local setup.
 
-Here is an example of a simple curl command that authenticates a user and uses ssl (you may want to use -H to hide the
-credentials, this is just a simple example to get you started):
+#### Keycloak Authentication
+The Keycloak Authenticator can be activated in the configuration file by changing the authentication provider and
+providing a keycloak configuration.
 ```
-curl -k --basic --user 'user:pw' https://localhost:8090/contexts
+authentication {
+  provider = spark.jobserver.auth.KeycloakAuthenticator
+
+  keycloak {
+    authServerUrl = "https://example.com"
+    realmName = "master"
+    client = "client"
+    clientSecret = "secret"
+  }
+}
 ```
+| Name          | Description                                | Mandatory |
+|---------------|--------------------------------------------|-----------|
+| authServerUrl | The URL to reach the keycloak instance.    | yes       |
+| realmName     | The realm to authenticate against.         | yes       |
+| client        | The client to authenticate against.        | yes       |
+| clientSecret  | An according client secret, if it exists.  | no        |
+
+For better performance, authentication requests against Keycloak can be cached locally.
 
 ## Deployment
 
