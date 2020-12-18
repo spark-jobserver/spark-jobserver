@@ -77,10 +77,12 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
                 case _ => BasicHttpCredentials("", "")
               }
               if (authTimeout > 0) {
-                authenticate(userPass) match {
+                val authInfo = authenticate(userPass) match {
                   case Some(p) => Some(new AuthInfo(User(userPass.username)))
                   case None => None
                 }
+                cache.remove(userPass.username)
+                authInfo
               } else {
                 throw new TimeoutException("forced timeout")
               }
