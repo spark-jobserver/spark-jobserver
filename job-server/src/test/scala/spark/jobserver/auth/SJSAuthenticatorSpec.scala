@@ -1,13 +1,18 @@
 package spark.jobserver.auth
 
-import akka.testkit.TestKit
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 import akka.http.scaladsl.model.headers.BasicHttpCredentials
 import akka.http.scaladsl.testkit.ScalatestRouteTest
-import com.typesafe.config.ConfigFactory
-import scala.concurrent.duration._
+import akka.testkit.TestKit
+import com.typesafe.config.{Config, ConfigFactory}
+import io.jsonwebtoken._
+import org.apache.shiro.authc.IncorrectCredentialsException
+import org.apache.shiro.codec.Base64
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 
-import scala.concurrent.Await
+import java.security.spec.X509EncodedKeySpec
+import java.security.{Key, KeyFactory}
+import scala.concurrent.duration._
+import scala.concurrent.{Await, Future}
 
 class SJSAuthenticatorSpec extends FunSpecLike
     with ScalatestRouteTest with Matchers with BeforeAndAfter with BeforeAndAfterAll {
@@ -15,9 +20,15 @@ class SJSAuthenticatorSpec extends FunSpecLike
   //set this to true to check your real ldap server
   val isGroupChecking = false
 
-  val config = ConfigFactory.parseString(s"""
+  val config = ConfigFactory.parseString(
+    s"""
     authentication-timeout = 10 s
     shiro.config.path = "${if (isGroupChecking) "classpath:auth/shiro.ini" else "classpath:auth/dummy.ini"}"
+    keycloak {
+      authServerUrl = "https://example.com/"
+      realmName = master
+      client = job-server
+    }
     """)
 
   val testUserWithValidGroup = if (isGroupChecking) {
@@ -52,36 +63,38 @@ class SJSAuthenticatorSpec extends FunSpecLike
   }
 
   describe("AllowAllAuthenticator") {
-    val instance = new AllowAllAuthenticator(config)
 
     it("should allow user with valid role/group") {
+      val instance = new AllowAllAuthenticator(config)
       val cred = new BasicHttpCredentials(testUserWithValidGroup, testUserWithValidGroupPassword)
       Await.result(instance.challenge()(Some(cred)), 10.seconds) should
         equal(Some(new AuthInfo(User(anonymousUser))))
     }
 
     it("should allow user without valid role/group") {
+      val instance = new AllowAllAuthenticator(config)
       val cred = new BasicHttpCredentials(testUserWithoutValidGroup, testUserWithoutValidGroupPassword)
       Await.result(instance.challenge()(Some(cred)), 10.seconds) should
         equal(Some(new AuthInfo(User(anonymousUser))))
     }
 
     it("should allow user without credentials") {
+      val instance = new AllowAllAuthenticator(config)
       Await.result(instance.challenge()(None), 10.seconds) should
         equal(Some(new AuthInfo(User(anonymousUser))))
     }
   }
 
   describe("ShiroAuthenticator") {
-    val instance = new ShiroAuthenticator(config)
-
     it("should allow user with valid role/group") {
+      val instance = new ShiroAuthenticator(config)
       val cred = new BasicHttpCredentials(testUserWithValidGroup, testUserWithValidGroupPassword)
       Await.result(instance.challenge()(Some(cred)), 10.seconds) should
         equal(Some(new AuthInfo(User(testUserWithValidGroup))))
     }
 
     it("should check role/group when checking is activated") {
+      val instance = new ShiroAuthenticator(config)
       val expected = if (isGroupChecking) {
         None
       } else {
@@ -93,15 +106,147 @@ class SJSAuthenticatorSpec extends FunSpecLike
     }
 
     it("should not allow invalid user") {
+      val instance = new ShiroAuthenticator(config)
       val cred = new BasicHttpCredentials(testUserInvalid, testUserInvalidPassword)
       Await.result(instance.challenge()(Some(cred)), 10.seconds) should
         equal(None)
     }
 
     it("should not allow user without credentials") {
-      val cred = new BasicHttpCredentials(testUserInvalid, testUserInvalidPassword)
+      val instance = new ShiroAuthenticator(config)
       Await.result(instance.challenge()(None), 10.seconds) should
         equal(None)
+    }
+  }
+
+  describe("KeycloakAuthenticator") {
+    class MockedKeycloakAuthenticator(override protected val config: Config)
+      extends KeycloakAuthenticator(config) {
+
+      var loginCount = 0
+
+      override protected def getJwtToken(username: String, password: String): Future[Jws[Claims]] = {
+        Future {
+          if (username == testUserWithValidGroup && password == testUserWithoutValidGroupPassword) {
+            loginCount += 1
+            Jwts.parser()
+              .setSigningKeyResolver(new SigningKeyResolver {
+                override def resolveSigningKey(header: JwsHeader[T] forSome {type T <: JwsHeader[T]},
+                                               claims: Claims): Key =
+                  resolveSigningKey(header, "")
+
+                override def resolveSigningKey(header: JwsHeader[T] forSome {type T <: JwsHeader[T]},
+                                               plaintext: String): Key = {
+                  // Private RSA key only added for convenience if regeneration of JWT is necessary
+                  val privateKey = {
+//                    "-----BEGIN RSA PRIVATE KEY-----\n" +
+                    "MIIEogIBAAKCAQEAwfU419m/GwODKNSgLeRF1peh6S/AlfrdW3RMzvM+OjqegE2o\n" +
+                    "kDYBRmDq/6Tu3mgTwTdGMcJ+tJdYA3JRDmFiFPDKaLraAX9G9OlnZvCwfNInov+Q\n" +
+                    "7hPChv4NgRTw+OdNMA2xQvpJSlYmlXqXVNDOX1rdiQD/jou6DCY5de95JhJxZgZ2\n" +
+                    "ZlIl+rJHgkcQrV4LpylMWSBxEkNFmbgJ30lfU8PHJz2Eb6jpuu9LYWO4eUUZjd7C\n" +
+                    "FjAwgQIXLD/eOLvRaT9IKVkxVfAlacikESbQGXttlHxWS+ZSjtMk54OU2AOOO3nj\n" +
+                    "aWrkHVf1jBROKCo03+wq1Dl0t8gnpLeoIF/VIQIDAQABAoIBADNoJUrAgbBNPAQk\n" +
+                    "ZtgC+qenxNgjOe4GcYj9yCXJvqJ8SupCqvyd87SNl3tuYYk9GI9LcSVbIW4H9uHi\n" +
+                    "+KzRDsfyEhO0AngHHe1nt2pHPN+4a5z+E5GmVxakWzvtKvkthP3Jg0P3RlmXf956\n" +
+                    "gYWPWkNXuAPJ6fIEAqmZr/0cHYYDQz+A3vUa4SevPLibI69zodKEB006ld+Wo0Oq\n" +
+                    "mIKfJIwXBz3xdW2ZJ50YCTOPJkIXU7C5IjbZI+ZWlJvUbP84Vxe2Q2kv66/Uo1Yb\n" +
+                    "sszT3uAgpluOK6QMsZusO6DOdFlTWuyYDsR95foRikX1IS3o1ahN1zWoCmaoSwiK\n" +
+                    "Dh+LD+kCgYEA4G0lvonLMgdypOJ7TvFP6KkyenoL96qF7+gWYHUanlrIJHRGUsgE\n" +
+                    "DL8+kUnBLNYxQACKxQ8GhZG7AknQPscC49v+bdeutQpF8kT9pR/kEIOJu934XCW9\n" +
+                    "Uk/QudX/HYnrqm6yeW7GwdfWQraCU7mjyOhWXNLxCKVQGtWR0VgiR68CgYEA3T68\n" +
+                    "A39bB5o5ljAGSsKjcaHS8zhGvoYuTdlHZ0CgXfG1Z2D7cqJUZ7GuVcL5cZdhsw43\n" +
+                    "B27tnSXFm8pl0xdyYxJ+rVi4eUrsU7Qt0N0PSZfHVHKQuQDtSZPI+sdTKjpv5t2+\n" +
+                    "I29Eru6WtcKCC1182TBVhkR/3amr0Iw4k3b1FC8CgYAXW6TTCPpqEZZgDOZyl/EO\n" +
+                    "MRX841j9hPT9vDUgAvArTR2JlcR/9ytcvEbhzkBZz00+8Q+AZQjzu/Av08jlz8bA\n" +
+                    "OnRnsEwRsakIByAzIHeXNGmQcRDZXmAvAfmibeBojaNGkNDojJwJLtKxDNfRqP+f\n" +
+                    "+HaMoLPPh40nzdSoajjfJwKBgE1A7p26Bqss6xbKRigstq2i9+n9qJY2fEyqpggj\n" +
+                    "xNuI3vLuJl7s19QtctZ3cmp7lZ3URNrPnSDWY532mn+PHF4Dwz/8Ts3rn4HK1ISt\n" +
+                    "6/yihvOx3V78N98NP4xxtVR1e0V+ADqXS8BZhz6IYKhfSIz+F57+pDdeW6RCki7L\n" +
+                    "xt/5AoGAblHDYcsO9GVAW8b0KWhczTgZaIEh8h7lJqFmvKIMLgQXOM0NFMwBqqQc\n" +
+                    "KnzLZkJAPS9aTX4umjLXHjjEtmdt/iMmvViNPmkxU6QONT+xscO55glLETxDbaus\n" +
+                    "PF3I7HF9JjevlRPFzGM4lhbVbw+GwsZNrcu4lu277qvlRLkjyls="
+//                    "-----END RSA PRIVATE KEY-----"
+                  }
+
+                  val publicKey =
+//                    "-----BEGIN PUBLIC KEY-----\n" +
+                    "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwfU419m/GwODKNSgLeRF\n" +
+                      "1peh6S/AlfrdW3RMzvM+OjqegE2okDYBRmDq/6Tu3mgTwTdGMcJ+tJdYA3JRDmFi\n" +
+                      "FPDKaLraAX9G9OlnZvCwfNInov+Q7hPChv4NgRTw+OdNMA2xQvpJSlYmlXqXVNDO\n" +
+                      "X1rdiQD/jou6DCY5de95JhJxZgZ2ZlIl+rJHgkcQrV4LpylMWSBxEkNFmbgJ30lf\n" +
+                      "U8PHJz2Eb6jpuu9LYWO4eUUZjd7CFjAwgQIXLD/eOLvRaT9IKVkxVfAlacikESbQ\n" +
+                      "GXttlHxWS+ZSjtMk54OU2AOOO3njaWrkHVf1jBROKCo03+wq1Dl0t8gnpLeoIF/V\n" +
+                      "IQIDAQAB"
+//                      "-----END PUBLIC KEY-----"
+
+                  val X509publicKey = new X509EncodedKeySpec(Base64.decode(publicKey))
+                  val kf = KeyFactory.getInstance("RSA")
+                  kf.generatePublic(X509publicKey)
+                }
+              })
+              // JWT generated using https://jwt.io/ and private key provided above
+              .parseClaimsJws("eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjBkYkNLbk9PT3FoekRtSXJP" +
+                "c2lEeS02em5rQWVDamhCYkVfUVVjam5nd1EifQ.eyJleHAiOjMwMDAwMDAwMDAsImlhdCI6MTYwODI5NDk" +
+                "yMCwianRpIjoiMDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAiLCJpc3MiOiJodHRwczovL" +
+                "2V4YW1wbGUuY29tL2F1dGgvcmVhbG1zL3Rlc3QiLCJhdWQiOlsic3Bhcmstam9ic2VydmVyLWF1dGgiLCJ" +
+                "hY2NvdW50Il0sInN1YiI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwIiwidHlwIjoiQ" +
+                "mVhcmVyIiwiYXpwIjoidGVzdCIsInNlc3Npb25fc3RhdGUiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0" +
+                "wMDAwMDAwMDAwMCIsImFjciI6IjEiLCJhbGxvd2VkLW9yaWdpbnMiOlsiaHR0cHM6Ly9leGFtcGxlLmNvb" +
+                "SIsImh0dHA6Ly9leGFtcGxlLmNvbSJdLCJyZWFsbV9hY2Nlc3MiOnt9LCJyZXNvdXJjZV9hY2Nlc3MiOns" +
+                "iam9iLXNlcnZlciI6eyJyb2xlcyI6WyIqIiwiY29udGV4dHM6cmVhZCJdfSwiYWNjb3VudCI6eyJyb2xlc" +
+                "yI6WyJtYW5hZ2UtYWNjb3VudCIsIm1hbmFnZS1hY2NvdW50LWxpbmtzIiwidmlldy1wcm9maWxlIl19fSw" +
+                "ic2NvcGUiOiJlbWFpbCBwcm9maWxlIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsIm5hbWUiOiJ1c2VyIG5hb" +
+                "WUiLCJwcmVmZXJyZWRfdXNlcm5hbWUiOiJsb25lc3RhcnIiLCJnaXZlbl9uYW1lIjoidXNlciIsImZhbWl" +
+                "seV9uYW1lIjoibmFtZSIsImVtYWlsIjoidXNlci5uYW1lQGV4YW1wbGUuY29tIn0.WBl0UV3IWHfrPOVtX" +
+                "nQ3--paFN1NCER5VyEPaxkqkXFBAT9C3yzCth0xvCljqw1NB8MUfkaGir_clSBYGnRVL-VtzZK4mMCoIei" +
+                "gC1DJXAbPE2EjpWHBimoFnilkl1PTp-FV3Cg82bTdY4fGi-VdK9phghIcb64QMdI42rzvGFq9vHgtzNnyo" +
+                "Hj6u6RNotHJjCrijxNoPHk0V-SxZVmDjMFfmgJ4OKd4eIsLLUEHBUKK-WMp6R-Preu4bPjyCkFhugMdVcj" +
+                "MIdqyiniF08mOrTfCp4MPxmJD6_ty8y9SFs6dZCk7VvjgpIQO2ysrPk6Aqhd_xorr0ySfPEc0-Gy5fg")
+          }
+          else {
+            throw new IncorrectCredentialsException
+          }
+        }
+      }
+    }
+
+    val validAuthInfo = Some(new AuthInfo(User(testUserWithValidGroup)))
+
+    it("should allow user with valid credentials") {
+      val instance = new MockedKeycloakAuthenticator(config)
+      val cred = new BasicHttpCredentials(testUserWithValidGroup, testUserWithoutValidGroupPassword)
+      Await.result(instance.challenge()(Some(cred)), 10.seconds) should equal(validAuthInfo)
+    }
+
+    it("should cache user with valid credentials") {
+      val instance = new MockedKeycloakAuthenticator(config)
+      val cred = new BasicHttpCredentials(testUserWithValidGroup, testUserWithoutValidGroupPassword)
+      Await.result(instance.challenge()(Some(cred)), 10.seconds) should equal(validAuthInfo)
+      Await.result(instance.challenge()(Some(cred)), 10.seconds) should equal(validAuthInfo)
+      Await.result(instance.challenge()(Some(cred)), 10.seconds) should equal(validAuthInfo)
+      Await.result(instance.challenge()(Some(cred)), 10.seconds) should equal(validAuthInfo)
+
+      assert(instance.loginCount == 1)
+    }
+
+    it("should allow user with valid credentials after first rejection") {
+      val instance = new MockedKeycloakAuthenticator(config)
+      val cred = new BasicHttpCredentials(testUserWithValidGroup, testUserInvalidPassword)
+      Await.result(instance.challenge()(Some(cred)), 10.seconds) should equal(None)
+
+      val cred2 = new BasicHttpCredentials(testUserWithValidGroup, testUserWithoutValidGroupPassword)
+      Await.result(instance.challenge()(Some(cred2)), 10.seconds) should equal(validAuthInfo)
+    }
+
+    it("should not allow invalid user") {
+      val instance = new MockedKeycloakAuthenticator(config)
+      val cred = new BasicHttpCredentials(testUserInvalid, testUserInvalidPassword)
+      Await.result(instance.challenge()(Some(cred)), 10.seconds) should equal(None)
+    }
+
+    it("should not allow user without credentials") {
+      val instance = new MockedKeycloakAuthenticator(config)
+      Await.result(instance.challenge()(None), 10.seconds) should equal(None)
     }
   }
 

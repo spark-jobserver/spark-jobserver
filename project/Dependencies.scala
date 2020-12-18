@@ -78,6 +78,11 @@ object Dependencies {
     "ch.qos.logback" % "logback-classic" % logback
   )
 
+  lazy val keycloakDeps = Seq(
+    "io.jsonwebtoken" % "jjwt" % jjwt excludeAll(excludeJackson),
+    "com.auth0" % "jwks-rsa" % jwksRsa excludeAll(excludeGuava, excludeJackson)
+  )
+
   lazy val scalaTestDep = "org.scalatest" %% "scalatest" % scalaTest % Test
 
   lazy val coreTestDeps = Seq(
