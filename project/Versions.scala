@@ -13,6 +13,8 @@ object Versions {
   lazy val hadoop = "2.7.3"
   lazy val h2 = "1.3.176"
   lazy val java = sys.env.getOrElse("JAVA_VERSION", "8-jdk")
+  lazy val jjwt = "0.9.1"
+  lazy val jwksRsa = "0.15.0"
   lazy val jodaConvert = "1.8.1"
   lazy val jodaTime = "2.9.3"
   lazy val logback = "1.0.7"
