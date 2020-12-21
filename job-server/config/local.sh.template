@@ -36,7 +36,7 @@ SPARK_EXECUTOR_URI=/home/spark/spark-1.6.0.tar.gz
 #
 # Also optional: extra JVM args for spark-submit
 # export SPARK_SUBMIT_OPTS+="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5433"
-SCALA_VERSION=2.10.4 # or 2.11.6
+SCALA_VERSION=2.12.12 # or 2.11.12
 
 # optional:
 #REMOTE_JOBSERVER_DIR=file://... or hdfs://...
