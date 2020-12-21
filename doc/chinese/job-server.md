@@ -26,7 +26,7 @@ Spark-jobserver 提供了一个 RESTful 接口来提交和管理 spark 的 jobs�
 - 支持 Standalone Spark 和 Mesos、yarn
 - Job 和 jar 信息通过一个可插拔的 DAO 接口来持久化
 - 对RDD或DataFrame对象命名并缓存，通过该名称获取RDD或DataFrame。这样可以提高对象在作业间的共享和重用
-- 支持 Scala 2.10 版本和 2.11 版本
+- 支持 Scala 2.11 版本和 2.12 版本
 
 ## 版本信息
 
