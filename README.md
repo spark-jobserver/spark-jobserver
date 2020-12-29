@@ -37,6 +37,7 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
     - [Server authentication](#server-authentication)
     - [Client authentication](#client-authentication)
   - [Basic authentication](#basic-authentication)
+  - [Permissions](#permissions)
 - [Deployment](#deployment)
   - [Manual steps](#manual-steps)
   - [Context per JVM](#context-per-jvm)
@@ -611,6 +612,18 @@ authentication {
 | clientSecret  | An according client secret, if it exists.  | no        |
 
 For better performance, authentication requests against Keycloak are cached locally.
+
+The Keycloak authenticator is able to perform fine-grained [permission control](#permissions). Permissions are extracted
+from the provided client's roles. Each client role that matches a known permission is added to the authenticated user.
+Unknown client roles are ignored. For a list of available permissions see [Permissions](doc/permissions.md).
+
+*Important:* If no client role matches a permission, the user is assigned the `ALLOW_ALL` role.
+
+### Permissions
+Spark job server implements a basic permission management system to control access to single resources. By default,
+users always have access to all resources (`ALLOW_ALL`). Currently, a fine-grained permission control is only possible
+with the [Keycloak Authenticator](#keycloak-authentication). For a detailed list of all available permissions see
+[Permissions](doc/permissions.md).
 
 ## Deployment
 

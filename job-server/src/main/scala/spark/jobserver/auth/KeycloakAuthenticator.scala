@@ -99,14 +99,22 @@ class KeycloakAuthenticator(override protected val config: Config)
     val body = claims.getBody
     val name = body.get("preferred_username").asInstanceOf[String]
     val clients = body.get("resource_access").asInstanceOf[java.util.Map[String, java.util.Map[String, Any]]]
-    val roles = Try(clients.get(clientId))
+    val permissions = Try(clients.get(clientId))
       .toOption
       .flatMap(m => {
         Try(m.get("roles")).toOption.map(_.asInstanceOf[java.util.List[String]].asScala)
       })
-      .getOrElse(Nil)
-    logger.debug(f"Authenticated $name with roles $roles")
-    new AuthInfo(User(name), roles)
+      .map(mapRoles)
+      .getOrElse(Set.empty)
+    logger.debug(f"Authenticated $name with roles $permissions")
+
+    new AuthInfo(User(name), Option(permissions)
+      .filter(_.nonEmpty)
+      .getOrElse(Set(Permissions.ALLOW_ALL)))
+  }
+
+  protected def mapRoles(roles: Seq[String]): Set[Permission] = {
+    roles.map(Permissions(_)).filter(_.isDefined).flatten.toSet
   }
 
 }

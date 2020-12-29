@@ -3,7 +3,6 @@ package spark.jobserver
 import java.net.MalformedURLException
 import java.util.NoSuchElementException
 import java.util.concurrent.TimeUnit
-
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import akka.http.scaladsl.model._
@@ -16,9 +15,11 @@ import akka.pattern.ask
 import akka.util.Timeout
 import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
 import com.typesafe.config._
+
 import javax.net.ssl.SSLContext
 import org.joda.time.DateTime
 import org.slf4j.{Logger, LoggerFactory}
+import spark.jobserver.auth.Permissions._
 import spark.jobserver.auth.SJSAuthenticator._
 import spark.jobserver.auth._
 import spark.jobserver.common.akka.web.JsonUtils.AnyJsonFormat
@@ -276,7 +277,7 @@ class WebApi(system: ActorSystem,
     // user authentication
     Route.seal(customAuthenticateBasicAsync(authenticator) { authInfo =>
       // GET /binaries/<appName>
-      (get & path(Segment)) { appName =>
+      (get & path(Segment) & authorize(authInfo.hasPermission(BINARIES_READ))) { appName =>
         import spray.json.DefaultJsonProtocol._
 
         val timer = binGetSingle.time()
@@ -301,7 +302,7 @@ class WebApi(system: ActorSystem,
       } ~
       // GET /binaries route returns a JSON map of the app name
       // and the type of and last upload time of a binary.
-      get { ctx =>
+      (get & authorize(authInfo.hasPermission(BINARIES_READ))) { ctx =>
         import spray.json.DefaultJsonProtocol._
 
         val timer = binGet.time()
@@ -322,7 +323,7 @@ class WebApi(system: ActorSystem,
       // POST /binaries/<appName>
       // The <appName> needs to be unique; uploading a jar with the same appName will replace it.
       // requires a recognised content-type header
-      post {
+      (post & authorize(authInfo.hasPermission(BINARIES_UPLOAD))) {
         path(Segment) { appName =>
           val timer = binPost.time()
           entity(as[Array[Byte]]) { binBytes =>
@@ -367,7 +368,7 @@ class WebApi(system: ActorSystem,
         }
       } ~
       // DELETE /binaries/<appName>
-      delete {
+      (delete & authorize(authInfo.hasPermission(BINARIES_DELETE))) {
         path(Segment) { appName =>
           val timer = binDelete.time()
           val future = (binaryManager ? DeleteBinary(appName))(DefaultBinaryDeletionTimeout)
@@ -407,7 +408,7 @@ class WebApi(system: ActorSystem,
   def dataRoutes: Route = pathPrefix("data") {
     // user authentication
     Route.seal(customAuthenticateBasicAsync(authenticator) { authInfo =>
-      dataRoutes(dataManager)
+      dataRoutes(dataManager, authInfo)
     })
   }
 
@@ -423,7 +424,7 @@ class WebApi(system: ActorSystem,
 
     // user authentication
     Route.seal(customAuthenticateBasicAsync(authenticator) { authInfo =>
-      (get & path(Segment)) { contextName =>
+      (get & path(Segment) & authorize(authInfo.hasPermission(CONTEXTS_READ))) { contextName =>
         import spray.json.DefaultJsonProtocol._
         val timer = contextGetSingle.time()
         respondWithMediaType(MediaTypes.`application/json`) { ctx =>
@@ -446,7 +447,7 @@ class WebApi(system: ActorSystem,
           }
         }
       } ~
-      get { ctx =>
+      (get & authorize(authInfo.hasPermission(CONTEXTS_READ))) { ctx =>
         import spray.json.DefaultJsonProtocol._
 
         val timer = contextGet.time()
@@ -467,7 +468,7 @@ class WebApi(system: ActorSystem,
           case _ => timer.stop()
         }
       } ~
-      post {
+      (post & authorize(authInfo.hasPermission(CONTEXTS_START))) {
         /**
          *  POST /contexts/<contextName>?<optional params> -
          *    Creates a long-running context with contextName and options for context creation
@@ -522,7 +523,7 @@ class WebApi(system: ActorSystem,
           }
         }
       } ~
-        (delete & path(Segment)) { contextName =>
+        (delete & path(Segment) & authorize(authInfo.hasPermission(CONTEXTS_DELETE))) { contextName =>
           //  DELETE /contexts/<contextName>
           //  Stop the context with the given name.  Executors will be shut down and all cached RDDs
           //  and currently running jobs will be lost.  Use with care!
@@ -560,38 +561,40 @@ class WebApi(system: ActorSystem,
         } ~
         put {
           parameters("reset", 'sync.as[Boolean] ?) { (reset, sync) =>
-            respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-              val timer = contextPut.time()
-              val ret = reset match {
-                case "reboot" =>
-                  import ContextSupervisor._
-                  import java.util.concurrent.TimeUnit
+            authorize(authInfo.hasPermission(CONTEXTS_RESET)) {
+              respondWithMediaType(MediaTypes.`application/json`) { ctx =>
+                val timer = contextPut.time()
+                val ret = reset match {
+                  case "reboot" =>
+                    import ContextSupervisor._
+                    import java.util.concurrent.TimeUnit
 
-                  val future = (supervisor ? ListContexts).mapTo[Seq[String]]
-                  val lookupTimeout = Try(config.getDuration("spark.jobserver.context-lookup-timeout",
-                    TimeUnit.MILLISECONDS).toInt / 1000).getOrElse(1)
-                  val contexts = Await.result(future, lookupTimeout.seconds)
+                    val future = (supervisor ? ListContexts).mapTo[Seq[String]]
+                    val lookupTimeout = Try(config.getDuration("spark.jobserver.context-lookup-timeout",
+                      TimeUnit.MILLISECONDS).toInt / 1000).getOrElse(1)
+                    val contexts = Await.result(future, lookupTimeout.seconds)
 
-                  if (sync.isDefined && !sync.get) {
-                    contexts.map(c => supervisor ! StopContext(c))
-                    completeWithSuccess(ctx, StatusCodes.OK, "Context reset requested")
-                  } else {
-                    val stopFutures = contexts.map(c => supervisor ? StopContext(c))
-                    Await.ready(Future.sequence(stopFutures), contextTimeout.seconds)
+                    if (sync.isDefined && !sync.get) {
+                      contexts.map(c => supervisor ! StopContext(c))
+                      completeWithSuccess(ctx, StatusCodes.OK, "Context reset requested")
+                    } else {
+                      val stopFutures = contexts.map(c => supervisor ? StopContext(c))
+                      Await.ready(Future.sequence(stopFutures), contextTimeout.seconds)
 
-                    Thread.sleep(1000) // we apparently need some sleeping in here, so spark can catch up
+                      Thread.sleep(1000) // we apparently need some sleeping in here, so spark can catch up
 
-                    (supervisor ? AddContextsFromConfig).onFailure {
-                      case _ =>
-                        completeWithErrorStatus(ctx, "ERROR", StatusCodes.InternalServerError)
+                      (supervisor ? AddContextsFromConfig).onFailure {
+                        case _ =>
+                          completeWithErrorStatus(ctx, "ERROR", StatusCodes.InternalServerError)
+                      }
+                      completeWithSuccess(ctx, StatusCodes.OK, "Context reset")
                     }
-                    completeWithSuccess(ctx, StatusCodes.OK, "Context reset")
-                  }
-                case _ =>
-                  completeWithErrorStatus(ctx, "ERROR", StatusCodes.InternalServerError)
+                  case _ =>
+                    completeWithErrorStatus(ctx, "ERROR", StatusCodes.InternalServerError)
+                }
+                timer.stop()
+                ret
               }
-              timer.stop()
-              ret
             }
           }
         }
@@ -652,7 +655,7 @@ class WebApi(system: ActorSystem,
        *
        * @required @param jobId
        */
-      (get & path(Segment / "config")) { jobId =>
+      (get & path(Segment / "config") & authorize(authInfo.hasPermission(JOBS_READ))) { jobId =>
         val timer = configGet.time()
         val renderOptions = ConfigRenderOptions.defaults().setComments(false).setOriginComments(false)
 
@@ -675,7 +678,7 @@ class WebApi(system: ActorSystem,
         // Returns job information in JSON.
         // If the job isn't finished yet, then {"status": "RUNNING" | "ERROR"} is returned.
         // Returned JSON contains result attribute if status is "FINISHED"
-        (get & path(Segment)) { jobId =>
+        (get & path(Segment) & authorize(authInfo.hasPermission(JOBS_READ))) { jobId =>
           import spray.json.DefaultJsonProtocol._
           val timer = jobGetSingle.time()
           val getJobInfoFuture = (daoActor ? GetJobInfo(jobId)).mapTo[Option[JobInfo]]
@@ -723,7 +726,7 @@ class WebApi(system: ActorSystem,
         //  DELETE /jobs/<jobId>
         //  Stop the current job. All other jobs submitted with this spark context
         //  will continue to run
-        (delete & path(Segment)) { jobId =>
+        (delete & path(Segment) & authorize(authInfo.hasPermission(JOBS_DELETE))) { jobId =>
           import spray.json.DefaultJsonProtocol._
           val timer = jobDelete.time()
           val future = daoActor ? GetJobInfo(jobId)
@@ -770,7 +773,7 @@ class WebApi(system: ActorSystem,
          * ]
          * @optional @param limit Int - optional limit to number of jobs to display, defaults to 50
          */
-        get {
+        (get & authorize(authInfo.hasPermission(JOBS_READ))) {
           import spray.json.DefaultJsonProtocol._
           parameters('limit.as[Int] ?, 'status.as[String] ?) { (limitOpt, statusOpt) =>
             val timer = jobGet.time()
@@ -814,7 +817,7 @@ class WebApi(system: ActorSystem,
          * @return JSON result of { StatusKey -> "OK" | "ERROR", ResultKey -> "result"}, where "result" is
          *         either the job id, or a result
          */
-        post {
+        (post & authorize(authInfo.hasPermission(JOBS_START))) {
           import spray.json.DefaultJsonProtocol._
           entity(as[String]) { configString =>
             parameters('appName ?, 'classPath ?, 'cp ?, 'mainClass ?,
