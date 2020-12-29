@@ -78,7 +78,13 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
               }
               if (authTimeout > 0) {
                 authenticate(userPass) match {
-                  case Some(p) => Some(new AuthInfo(User(userPass.username)))
+                  case Some(p) =>
+                    if (p.user.login == RESTRICTED_USER) {
+                      Some(new AuthInfo(User(RESTRICTED_USER), Set(Permissions.CONTEXTS)))
+                    }
+                    else {
+                      Some(p)
+                    }
                   case None => None
                 }
               } else {
@@ -101,11 +107,14 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
 
   private val USER_NAME = "presidentskroob"
   private val USER_NAME_2 = USER_NAME + SparkJobUtils.NameContextDelimiter + "2"
+  private val RESTRICTED_USER = "barf"
 
   // set to some valid user
   private val authorization = new Authorization(new BasicHttpCredentials(USER_NAME, "12345"))
   private val authorizationInvalidPassword = new Authorization(new BasicHttpCredentials(USER_NAME, "xxx"))
   private val authorizationUnknownUser = new Authorization(new BasicHttpCredentials("whoami", "xxx"))
+  private val authorizationRestrictedUser = new Authorization(
+    new BasicHttpCredentials(RESTRICTED_USER, "12345"))
   private val dt = DateTime.parse("2013-05-29T00Z")
   private val jobInfo = JobInfo("foo-1", "cid", "context", "com.abc.meme",
       JobStatus.Running, dt, None, None, Seq(BinaryInfo("demo", BinaryType.Jar, dt)))
@@ -163,6 +172,14 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
         status should be (Unauthorized)
       }
     }
+
+    it("should not allow user with missing permissions") {
+      Post("/binaries/pyfoo", Array[Byte](0, 1, 2)).
+        withHeaders(authorizationRestrictedUser, BinaryType.Egg.contentType) ~>
+        sealRoute(routesWithProxyUser) ~> check {
+        status should be (Forbidden)
+      }
+    }
   }
 
   describe("/jobs routes") {
@@ -186,6 +203,13 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
       Delete("/jobs/job_to_kill").withHeaders(authorizationUnknownUser) ~>
         sealRoute(routesWithProxyUser) ~> check {
         status should be(Unauthorized)
+      }
+    }
+
+    it("should not allow user with missing permissions") {
+      Delete("/jobs/job_to_kill").withHeaders(authorizationRestrictedUser) ~>
+        sealRoute(routesWithProxyUser) ~> check {
+        status should be(Forbidden)
       }
     }
   }
@@ -402,6 +426,13 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
       Delete("/contexts/xxx").withHeaders(authorizationUnknownUser) ~>
         sealRoute(routesWithProxyUser) ~> check {
           status should be(Unauthorized)
+      }
+    }
+
+    it("should allow user with specific permissions") {
+      Delete("/contexts/xxx").withHeaders(authorizationRestrictedUser) ~>
+        sealRoute(routesWithProxyUser) ~> check {
+        status should be(OK)
       }
     }
 
