@@ -1,19 +1,20 @@
 package spark.jobserver.auth
 
+import Permissions._
+
 /**
  * based on example provided by Mario Camou
  * at
  * http://www.tecnoguru.com/blog/2014/07/07/implementing-http-basic-authentication-with-spray/
  */
-class AuthInfo(val user: User, val abilities: Seq[String] = Seq(Permissions.ALLOW_ALL)) {
-  def hasPermission(permission: String): Boolean = {
-    //no further checks, all authenticated users can perform all
-    // all operations
-    true
-    // someone could add code here to check whether user has the given permission
+class AuthInfo(val user: User, val abilities: Set[Permission] = Set(ALLOW_ALL)) {
+  def hasPermission(permission: Permission): Boolean = {
+    abilities.contains(ALLOW_ALL) || // User can to everything
+      abilities.contains(permission) || // User has required permission
+      permission.parent.exists(abilities.contains) // User has parent of required permission
   }
 
-  override def toString : String = user.login.toString
+  override def toString: String = user.login.toString
 
   override def equals(other: Any): Boolean =
     other match {

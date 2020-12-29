@@ -13,6 +13,8 @@ import java.security.{Key, KeyFactory}
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
 
+import Permissions._
+
 class SJSAuthenticatorSpec extends FunSpecLike
     with ScalatestRouteTest with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
@@ -96,8 +98,9 @@ class SJSAuthenticatorSpec extends FunSpecLike
     it("should allow user with valid role/group") {
       val instance = new ShiroAccessControl(config())
       val cred = new BasicHttpCredentials(testUserWithValidGroup, testUserWithValidGroupPassword)
-      Await.result(instance.challenge()(Some(cred)), 10.seconds) should
-        equal(Some(new AuthInfo(User(testUserWithValidGroup))))
+      val authInfo = Await.result(instance.challenge()(Some(cred)), 10.seconds)
+      authInfo should equal(Some(new AuthInfo(User(testUserWithValidGroup))))
+      authInfo.get.abilities should equal(Set(Permissions.ALLOW_ALL, Permissions.JOBS))
     }
 
     it("should check role/group when checking is activated") {
@@ -299,6 +302,56 @@ class SJSAuthenticatorSpec extends FunSpecLike
       val instance = new MockedKeycloakAuthenticator(config())
       Await.result(instance.challenge()(None), 10.seconds) should equal(None)
     }
+  }
+
+  describe("AuthInfo") {
+
+    it("should allow user with ALLOW_ALL") {
+      val authInfo = new AuthInfo(User(testUserWithValidGroup), Set(Permissions.ALLOW_ALL))
+
+      assert(authInfo.hasPermission(ALLOW_ALL))
+      assert(authInfo.hasPermission(BINARIES))
+      assert(authInfo.hasPermission(CONTEXTS_READ))
+      assert(authInfo.hasPermission(DATA_RESET))
+    }
+
+    it("should allow user with group permission") {
+      val authInfo = new AuthInfo(User(testUserWithValidGroup), Set(Permissions.BINARIES))
+
+      assert(authInfo.hasPermission(BINARIES))
+      assert(authInfo.hasPermission(BINARIES_DELETE))
+      assert(authInfo.hasPermission(BINARIES_UPLOAD))
+      assert(authInfo.hasPermission(BINARIES_READ))
+
+      assert(!authInfo.hasPermission(ALLOW_ALL))
+      assert(!authInfo.hasPermission(DATA))
+      assert(!authInfo.hasPermission(JOBS_DELETE))
+    }
+
+    it("should allow user with single permission") {
+      val authInfo = new AuthInfo(User(testUserWithValidGroup),
+        Set(Permissions.BINARIES_READ, Permissions.CONTEXTS_READ))
+
+      assert(authInfo.hasPermission(BINARIES_READ))
+      assert(authInfo.hasPermission(CONTEXTS_READ))
+
+      assert(!authInfo.hasPermission(ALLOW_ALL))
+      assert(!authInfo.hasPermission(BINARIES))
+      assert(!authInfo.hasPermission(BINARIES_DELETE))
+      assert(!authInfo.hasPermission(DATA))
+      assert(!authInfo.hasPermission(JOBS_DELETE))
+    }
+
+    it("should not allow user without permissions") {
+      val authInfo = new AuthInfo(User(testUserWithValidGroup), Set.empty)
+
+      assert(!authInfo.hasPermission(ALLOW_ALL))
+      assert(!authInfo.hasPermission(BINARIES))
+      assert(!authInfo.hasPermission(BINARIES_DELETE))
+      assert(!authInfo.hasPermission(DATA))
+      assert(!authInfo.hasPermission(JOBS_DELETE))
+    }
+
   }
 
 }
