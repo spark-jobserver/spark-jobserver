@@ -39,7 +39,7 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
   - [Basic authentication](#basic-authentication)
     - [Shiro](#shiro-authentication)
     - [Keycloak](#keycloak-authentication)
-  - [Permissions](#permissions)
+  - [User authorization](#user-authorization)
 - [Deployment](#deployment)
   - [Manual steps](#manual-steps)
   - [Context per JVM](#context-per-jvm)
@@ -591,6 +591,10 @@ securityManager.cacheManager = $cacheManager
 
 Make sure to edit the url, credentials, userDnTemplate, ldap.allowedGroups and ldap.searchBase settings in accordance with your local setup.
 
+The Shiro authenticator is able to perform fine-grained [user authorization](#user-authorization). Permissions are
+extracted from the provided user roles. Each role that matches a known permission is added to the authenticated user.
+Unknown roles are ignored. For a list of available permissions see [Permissions](doc/permissions.md).
+
 #### Keycloak Authentication
 The Keycloak Authenticator can be activated in the configuration file by changing the authentication provider and
 providing a keycloak configuration.
@@ -614,6 +618,19 @@ authentication {
 | clientSecret  | An according client secret, if it exists.  | no        |
 
 For better performance, authentication requests against Keycloak can be cached locally.
+
+The Keycloak authenticator is able to perform fine-grained [user authorization](#user-authorization). Permissions are
+extracted from the provided client's roles. Each client role that matches a known permission is added to the
+authenticated user. Unknown client roles are ignored. For a list of available permissions see
+[Permissions](doc/permissions.md).
+
+*Important:* If no client role matches a permission, the user is assigned the `ALLOW_ALL` role.
+
+### User Authorization
+Spark job server implements a basic authorization management system to control access to single resources. By default,
+users always have access to all resources (`ALLOW_ALL`). Authorization is implemented by checking the *permissions* of a
+user with the required permissions of an endpoint. For a detailed list of all available permissions see
+[Permissions](doc/permissions.md).
 
 ## Deployment
 

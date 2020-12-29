@@ -3,10 +3,14 @@
 # =============================================================================
 
 # -----------------------------------------------------------------------------
-# Format: Users and their passwords
-# username = password
+# Format: Users and their passwords with optional roles
+# username = password [, role1, role2, ...]
 # -----------------------------------------------------------------------------
 [users]
-user1 = password1
-user2 = password2
-user3 = password3
+user1 = password1, admin
+user2 = password2, contextsAdmin
+user3 = password3, jobs:read
+
+[roles]
+admin = *
+contextsAdmin = contexts

@@ -60,12 +60,11 @@ class ShiroAuthenticator(override protected val authConfig: Config)
 
       currentUser.login(token)
       val fullName = currentUser.getPrincipal().toString
-      //is this user allowed to do anything -
-      //  realm implementation may for example throw an exception
-      //  if user is not a member of a valid group
-      currentUser.isPermitted("*")
+      val permissions = Permissions.permissions
+        .filter(p => currentUser.isPermitted(p.name) || currentUser.hasRole(p.name))
+        .toSet
       currentUser.logout()
-      Option(new AuthInfo(new User(fullName)))
+      createAuthInfo(fullName, permissions)
     }
   }
 

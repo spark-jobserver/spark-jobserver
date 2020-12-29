@@ -8,6 +8,8 @@ import akka.http.scaladsl.server.Route
 import akka.pattern.ask
 import akka.util.Timeout
 import spark.jobserver.DataManagerActor.{Error, StoreData, Stored, _}
+import spark.jobserver.auth.AuthInfo
+import spark.jobserver.auth.Permissions._
 
 import scala.concurrent.ExecutionContext
 
@@ -22,11 +24,12 @@ import scala.concurrent.ExecutionContext
 trait DataRoutes extends SprayJsonSupport {
   import spark.jobserver.WebApi._
 
-  def dataRoutes(dataManager: ActorRef)(implicit ec: ExecutionContext, ShortTimeout: Timeout): Route = {
+  def dataRoutes(dataManager: ActorRef, authInfo: AuthInfo)
+                (implicit ec: ExecutionContext, ShortTimeout: Timeout): Route = {
     // Get spray-json type classes for serializing Map[String, Any]
 
     // GET /data route returns a JSON map of the stored files and their upload time
-    get { ctx =>
+    (get & authorize(authInfo.hasPermission(DATA_READ))) { ctx =>
       import spray.json.DefaultJsonProtocol._
 
       val future = (dataManager ? ListData).mapTo[collection.Set[String]]
@@ -37,7 +40,7 @@ trait DataRoutes extends SprayJsonSupport {
       }
     } ~
       // DELETE /data/filename delete the given file
-      delete {
+      (delete & authorize(authInfo.hasPermission(DATA_DELETE))) {
         path(Segment) { filename =>
           val future = dataManager ? DeleteData(filename)
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
@@ -54,32 +57,34 @@ trait DataRoutes extends SprayJsonSupport {
       } ~
       put {
         parameters("reset", 'sync.as[Boolean] ?) { (reset, sync) =>
-          respondWithMediaType(MediaTypes.`application/json`) { ctx =>
-            reset match {
-              case "reboot" => {
-                if (sync.isDefined && !sync.get) {
-                  dataManager ! DeleteAllData
-                  completeWithSuccess(ctx, StatusCodes.OK, "Data reset requested")
-                }
-                else {
-                  val future = dataManager ? DeleteAllData
-                  future.flatMap {
-                    case Deleted => completeWithSuccess(ctx, StatusCodes.OK, "Data reset")
-                    case Error =>
-                      completeWithErrorStatus(ctx, "Unable to delete data folder", StatusCodes.BadRequest)
-                  }.recoverWith {
-                    case e: Exception =>
-                      completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
+          authorize(authInfo.hasPermission(DATA_RESET)) {
+            respondWithMediaType(MediaTypes.`application/json`) { ctx =>
+              reset match {
+                case "reboot" => {
+                  if (sync.isDefined && !sync.get) {
+                    dataManager ! DeleteAllData
+                    completeWithSuccess(ctx, StatusCodes.OK, "Data reset requested")
+                  }
+                  else {
+                    val future = dataManager ? DeleteAllData
+                    future.flatMap {
+                      case Deleted => completeWithSuccess(ctx, StatusCodes.OK, "Data reset")
+                      case Error =>
+                        completeWithErrorStatus(ctx, "Unable to delete data folder", StatusCodes.BadRequest)
+                    }.recoverWith {
+                      case e: Exception =>
+                        completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
+                    }
                   }
                 }
+                case _ => ctx.complete("ERROR")
               }
-              case _ => ctx.complete("ERROR")
             }
           }
         }
       } ~
       // POST /data/<filename>
-      post {
+      (post & authorize(authInfo.hasPermission(DATA_UPLOAD))) {
         path(Segment) { filename =>
           entity(as[Array[Byte]]) { bytes =>
             val future = dataManager ? StoreData(filename, bytes)

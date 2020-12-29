@@ -67,7 +67,12 @@ function deleteJob(jobID) {
         window.location.reload(true);
     })
     .fail(function( jqXHR ) {
-        alert( "Failed killing job: " + jobID + "\n" + JSON.stringify(jqXHR.responseJSON) );
+        if (jqXHR.status == 401 || jqXHR.status == 403) {
+            alert( "Failed killing job: " + jobID + "\nPermissions missing");
+        }
+        else {
+            alert("Failed killing job: " + jobID + "\n" + JSON.stringify(jqXHR.responseJSON));
+        }
     });
 }
 
