@@ -72,7 +72,7 @@ class SessionJobSpec extends ExtrasJobSpecBase(SessionJobSpec.getNewSystem) {
       expectMsgPF(120 seconds, "Did not get JobResult") {
         case JobResult(_, result: Long) => result should equal (3L)
       }
-      expectNoMsg(1.seconds)
+      expectNoMessage(1.seconds)
 
       manager ! JobManagerActor.StartJob(
         hiveQueryClass, Seq(testBinInfo), queryConfig, syncEvents ++ errorEvents)
@@ -81,7 +81,7 @@ class SessionJobSpec extends ExtrasJobSpecBase(SessionJobSpec.getNewSystem) {
           result should have length 2
           result(0)(0) should equal ("Bob")
       }
-      expectNoMsg(1.seconds)
+      expectNoMessage(1.seconds)
     }
 
     /**

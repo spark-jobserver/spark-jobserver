@@ -171,7 +171,7 @@ abstract class SBRMultiJvmSpec extends MultiNodeSpec(SBRMultiJvmSpecConfig)
           expectMsg(timeout, ShutDownAnotherNode(addressesCache(oldestMember)))
         } else {
           // all other nodes should do nothing
-          expectNoMsg(timeout)
+          expectNoMessage(timeout)
         }
       }
       enterBarrier("Oldest node shut down itself and secondary oldest downed oldest on the other side.")
@@ -228,7 +228,7 @@ abstract class SBRMultiJvmSpec extends MultiNodeSpec(SBRMultiJvmSpecConfig)
           expectMsg(timeout, ShutDownAnotherNode(addressesCache(isolatedNode)))
         } else {
           // all other nodes should do nothing
-          expectNoMsg(timeout)
+          expectNoMessage(timeout)
         }
       }
       enterBarrier("Network split resolved.")
@@ -294,7 +294,7 @@ abstract class SBRMultiJvmSpec extends MultiNodeSpec(SBRMultiJvmSpecConfig)
         }
       } else {
         // all other nodes do nothing
-        expectNoMsg()
+        expectNoMessage()
       }
     }
     enterBarrier("Network split resolved.")
