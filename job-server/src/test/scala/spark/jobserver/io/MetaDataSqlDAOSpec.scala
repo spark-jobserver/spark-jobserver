@@ -1,10 +1,11 @@
 package spark.jobserver.io
 
+import akka.http.scaladsl.model.Uri
+
 import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 import java.io.File
-
 import com.google.common.io.Files
 import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import org.joda.time.DateTime
@@ -43,6 +44,8 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
   val expectedJobInfo: JobInfo = jobInfoNoEndNoErr
   val jobInfoSomeEndNoErr: JobInfo = genJobInfo(jarInfo, false, JobStatus.Finished)
   val jobInfoSomeEndSomeErr: JobInfo = genJobInfo(jarInfo, false, ContextStatus.Error)
+  val jobInfoSomeCallback: JobInfo = genJobInfo(jarInfo, false, JobStatus.Finished,
+    None, Some(Uri("http://example.com")))
 
   // job config test data
   val jobId: String = jobInfoNoEndNoErr.jobId
@@ -69,7 +72,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
     var count: Int = 0
 
     def apply(jarInfo: BinaryInfo, isNew: Boolean, state: String,
-        contextId: Option[String] = None): JobInfo = {
+        contextId: Option[String] = None, callbackUrl: Option[Uri] = None): JobInfo = {
       count = count + (if (isNew) 1 else 0)
       val id: String = "test-id" + count
 
@@ -93,7 +96,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
       }
 
       JobInfo(id, ctxId, contextName, classPath, state, startTime,
-          endTimeAndError._1, endTimeAndError._2, Seq(jarInfo))
+          endTimeAndError._1, endTimeAndError._2, Seq(jarInfo), callbackUrl)
     }
   }
 
@@ -369,6 +372,18 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
       // assert-2
       getRunningAndFinishedJobsResult.length should be(2)
       getRunningAndFinishedJobsResult should contain allOf(runningJob, finishedJob)
+    }
+
+    it("should store callbackUrl") {
+      var save = Await.result(dao.saveBinary(jarInfo.appName, BinaryType.Jar,
+        jarInfo.uploadTime, BinaryDAO.calculateBinaryHashString(jarBytes)), timeout)
+      save should equal (true)
+      val id = jobInfoSomeCallback.jobId
+      save = Await.result(dao.saveJob(jobInfoSomeCallback), timeout)
+      save should equal (true)
+      val job = Await.result(dao.getJob(id), timeout).get
+
+      job should equal (jobInfoSomeCallback)
     }
   }
 }

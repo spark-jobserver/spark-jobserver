@@ -2,8 +2,8 @@ package spark.jobserver
 
 import java.io.File
 import java.nio.file.{Files, StandardOpenOption}
-
 import akka.actor.{ActorRef, ActorSystem, Cancellable, PoisonPill, Props}
+import akka.http.scaladsl.model.Uri
 import akka.pattern.ask
 import akka.testkit.TestProbe
 import akka.util.Timeout
@@ -191,8 +191,10 @@ object JobManagerTestActor {
   val logger = LoggerFactory.getLogger(getClass)
 
   def props(daoActor: ActorRef, supervisorActorAddress: String = "", contextId: String = "",
-            initializationTimeout: FiniteDuration = 40.seconds): Props =
-    Props(classOf[JobManagerTestActor], daoActor, supervisorActorAddress, contextId, initializationTimeout)
+            initializationTimeout: FiniteDuration = 40.seconds,
+            callbackHandler: CallbackHandler = new CallbackTestsHelper): Props =
+    Props(classOf[JobManagerTestActor], daoActor, supervisorActorAddress, contextId, initializationTimeout,
+      callbackHandler)
 
   def stopSparkContextIfAlive(system: ActorSystem, manager: ActorRef): Boolean = {
     val defaultSmallTimeout = 5.seconds
@@ -214,11 +216,14 @@ object JobManagerTestActor {
 class JobManagerTestActor(daoActor: ActorRef,
                           supervisorActorAddress: String,
                           contextId: String,
-                          initializationTimeout: FiniteDuration) extends
+                          initializationTimeout: FiniteDuration,
+                          _callbackHandler: CallbackHandler) extends
   CleanlyStoppingSparkContextJobManagerActor(daoActor: ActorRef,
       supervisorActorAddress: String,
       contextId: String,
       initializationTimeout: FiniteDuration) {
+
+  callbackHandler = _callbackHandler
 
   override def wrappedReceive: Receive = {
     this.initializeReceive.orElse(super.wrappedReceive)
@@ -242,6 +247,7 @@ class JobManagerTestActor(daoActor: ActorRef,
   }
 }
 
+// TODO test callback
 class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) {
   import akka.testkit._
   import CommonMessages._
@@ -268,6 +274,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
   val defaultSmallTimeout = 5.seconds
 
   var contextConfig: Config = _
+  var callbackHandler: CallbackTestsHelper = new CallbackTestsHelper()
 
   before {
     logger.debug("Before block - started")
@@ -275,7 +282,9 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
     inMemoryBinDAO = new InMemoryBinaryDAO
     daoActor = system.actorOf(JobDAOActor.props(inMemoryMetaDAO, inMemoryBinDAO, daoConfig))
     contextConfig = JobManagerActorSpec.getContextConfig(adhoc = false)
-    manager = system.actorOf(JobManagerTestActor.props(daoActor, "", contextId, 40.seconds))
+    callbackHandler = new CallbackTestsHelper()
+    manager = system.actorOf(JobManagerTestActor.props(daoActor, "", contextId,
+      40.seconds, callbackHandler))
     logger.debug("Before block - finished")
   }
 
@@ -339,6 +348,8 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
         case JobResult(_, result) => result should equal (counts)
       }
       expectNoMessage()
+      assert(callbackHandler.failureCount == 0)
+      assert(callbackHandler.successCount == 0)
     }
 
     it("should start job and return results (sync route) and the context should not terminate") {
@@ -445,12 +456,41 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
         wordCountClass, List(testJar), stringConfig, errorEvents ++ asyncEvents)
 
       expectMsgClass(startJobWait, classOf[JobStarted])
+      assert(callbackHandler.failureCount == 0)
+      assert(callbackHandler.successCount == 0)
       val jobInfo = Await.result(inMemoryMetaDAO.getJobsByContextId(contextId), defaultSmallTimeout)
       jobInfo should not be (None)
       jobInfo.length should be (1)
       jobInfo.head.contextId should be (contextId)
       jobInfo.head.state should be (JobStatus.Running)
       expectNoMessage()
+      assert(callbackHandler.failureCount == 0)
+      assert(callbackHandler.successCount == 0)
+    }
+
+    it("should start job, return JobStarted (async) and invoke callback") {
+      import scala.concurrent.Await
+      import spark.jobserver.io.JobStatus
+
+      val configWithCtxId = ConfigFactory.parseString(s"context.id=$contextId").withFallback(contextConfig)
+      manager ! JobManagerActor.Initialize(configWithCtxId, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+      val testJar = uploadTestJar()
+
+      manager ! JobManagerActor.StartJob(wordCountClass, List(testJar), stringConfig,
+        errorEvents ++ asyncEvents, None, Some(Uri("http://example.com/")))
+
+      expectMsgClass(startJobWait, classOf[JobStarted])
+      assert(callbackHandler.failureCount == 0)
+      assert(callbackHandler.successCount == 0)
+      val jobInfo = Await.result(inMemoryMetaDAO.getJobsByContextId(contextId), defaultSmallTimeout)
+      jobInfo should not be (None)
+      jobInfo.length should be (1)
+      jobInfo.head.contextId should be (contextId)
+      jobInfo.head.state should be (JobStatus.Running)
+      expectNoMessage()
+      assert(callbackHandler.failureCount == 0)
+      assert(callbackHandler.successCount == 1)
     }
 
     it("should return error if job throws an error") {
@@ -467,6 +507,27 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       errorMsg.err.getClass should equal (classOf[IllegalArgumentException])
 
       deathWatch.expectNoMessage(1.seconds)
+    }
+
+    it("should invoke callback if async job throws an error") {
+      val deathWatch = TestProbe()
+      deathWatch.watch(manager)
+
+      manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
+      expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
+
+      val testJar = uploadTestJar()
+      manager ! JobManagerActor.StartJob(classPrefix + "MyErrorJob", List(testJar), baseJobConfig,
+        errorEvents, None, Some(Uri("http://example.com/")))
+      assert(callbackHandler.failureCount == 0)
+      assert(callbackHandler.successCount == 0)
+
+      val errorMsg = expectMsgClass(startJobWait, classOf[JobErroredOut])
+      errorMsg.err.getClass should equal (classOf[IllegalArgumentException])
+
+      deathWatch.expectNoMessage(1.seconds)
+      assert(callbackHandler.failureCount == 1)
+      assert(callbackHandler.successCount == 0)
     }
 
     it("should return error if job throws an error and " +
@@ -807,7 +868,8 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
   describe("kill-context-on-supervisor-down feature tests") {
     it("should not kill itself if kill-context-on-supervisor-down is disabled") {
-      manager = system.actorOf(JobManagerTestActor.props(daoActor, "", contextId, 1.seconds.dilated))
+      manager = system.actorOf(JobManagerTestActor.props(daoActor, "", contextId,
+        1.seconds.dilated, callbackHandler))
       val managerProbe = TestProbe()
       managerProbe.watch(manager)
 
@@ -816,7 +878,8 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
     it("should kill itself if response to Identify message is not" +
       " received when kill-context-on-supervisor-down is enabled") {
-      manager = system.actorOf(JobManagerTestActor.props(daoActor, "fake-path", contextId, 1.seconds.dilated))
+      manager = system.actorOf(JobManagerTestActor.props(daoActor, "fake-path", contextId,
+        1.seconds.dilated, callbackHandler))
       val managerProbe = TestProbe()
       managerProbe.watch(manager)
 
@@ -833,7 +896,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager = system.actorOf(
         JobManagerTestActor.props(daoActor,
           s"${supervisor.path.address.toString}${supervisor.path.toStringWithoutAddress}",
-          contextId, 3.seconds.dilated)
+          contextId, 3.seconds.dilated, callbackHandler)
       )
 
       val supervisorProbe = TestProbe()
@@ -857,7 +920,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
         "context-supervisor")
       manager = system.actorOf(JobManagerTestActor.props(daoActor,
           s"${supervisor.path.address.toString}${supervisor.path.toStringWithoutAddress}",
-        contextId, 2.seconds.dilated))
+        contextId, 2.seconds.dilated, callbackHandler))
 
       val managerProbe = TestProbe()
       managerProbe.watch(manager)
@@ -875,7 +938,8 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       supervisor = system.actorOf(
           Props(classOf[LocalContextSupervisorActor], TestProbe().ref, dataManagerActor), "context-supervisor")
       manager = system.actorOf(JobManagerTestActor.props(daoActor,
-          s"${supervisor.path.address.toString}${supervisor.path.toStringWithoutAddress}", contextId, 3.seconds.dilated))
+          s"${supervisor.path.address.toString}${supervisor.path.toStringWithoutAddress}", contextId,
+        3.seconds.dilated, callbackHandler))
       // Wait for Identify/ActorIdentify message exchange
       Thread.sleep(2000)
       val managerProbe = TestProbe()

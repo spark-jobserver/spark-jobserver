@@ -8,6 +8,7 @@ import akka.http.scaladsl.server.Route
 import akka.pattern.ask
 import akka.util.Timeout
 import spark.jobserver.DataManagerActor.{Error, StoreData, Stored, _}
+import spark.jobserver.util.ResultMarshalling.ResultKey
 
 import scala.concurrent.ExecutionContext
 

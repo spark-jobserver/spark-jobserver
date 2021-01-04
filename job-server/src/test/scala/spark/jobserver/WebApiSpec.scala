@@ -198,8 +198,8 @@ with ScalatestRouteTest with ScalaFutures with SprayJsonSupport {
       case StartAdHocContext(_, _) => sender ! (self)
 
       // These routes are part of JobManagerActor
-      case StartJob("no-class", _, _, _, _) => sender ! NoSuchClass
-      case StartJob(_, cp, config, events, _) =>
+      case StartJob("no-class", _, _, _, _, _) => sender ! NoSuchClass
+      case StartJob(_, cp, config, events, _, _) =>
         cp.map(_.appName).head match {
           case "no-app" => sender ! NoSuchFile ("no-app")
           case "wrong-type" => sender ! WrongJobType

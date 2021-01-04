@@ -56,7 +56,7 @@ class JavaStreamingSpec extends ExtrasJobSpecBase(JavaStreamingSpec.getNewSystem
       Thread.sleep(1000)
       val info = Await.result(daoActor ? GetJobInfo(id), 60 seconds).asInstanceOf[Option[JobInfo]]
       info.get match {
-        case JobInfo(_, _, _, _, state, _, _, _, _) if state == JobStatus.Running => {}
+        case JobInfo(_, _, _, _, state, _, _, _, _, _) if state == JobStatus.Running => {}
         case e => fail(s":-( No worky work $e")
       }
     }

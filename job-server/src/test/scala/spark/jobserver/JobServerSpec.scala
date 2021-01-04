@@ -219,7 +219,7 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
     def genJob(jobId: String, ctx: ContextInfo, status: String): JobInfo = {
       val dt = DateTime.parse("2013-05-29T00Z")
       JobInfo(jobId, ctx.id, ctx.name, "com.abc.meme",
-          status, dt, None, None, Seq(BinaryInfo("demo", BinaryType.Jar, dt)))
+          status, dt, None, None, Seq(BinaryInfo("demo", BinaryType.Jar, dt)), None)
     }
 
     it("should write error state for contexts and jobs if reconnect failed") {

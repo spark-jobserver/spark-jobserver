@@ -1,9 +1,8 @@
 package spark.jobserver
 
-import java.net.MalformedURLException
+import java.net.{MalformedURLException, URI, URLDecoder}
 import java.util.NoSuchElementException
 import java.util.concurrent.TimeUnit
-
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import akka.http.scaladsl.model._
@@ -16,6 +15,7 @@ import akka.pattern.ask
 import akka.util.Timeout
 import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
 import com.typesafe.config._
+
 import javax.net.ssl.SSLContext
 import org.apache.shiro.SecurityUtils
 import org.apache.shiro.config.IniSecurityManagerFactory
@@ -27,6 +27,7 @@ import spark.jobserver.common.akka.web.{CommonRoutes, WebService}
 import spark.jobserver.io.JobDAOActor._
 import spark.jobserver.io._
 import spark.jobserver.routes.DataRoutes
+import spark.jobserver.util.ResultMarshalling._
 import spark.jobserver.util._
 
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -35,8 +36,6 @@ import scala.util.Try
 object WebApi extends SprayJsonSupport {
   import spray.json.DefaultJsonProtocol._
 
-  val StatusKey = "status"
-  val ResultKey = "result"
   val logger: Logger = LoggerFactory.getLogger(getClass)
 
   def completeWithErrorStatus(ctx: RequestContext, errMsg: String, stcode: StatusCode,
@@ -65,53 +64,6 @@ object WebApi extends SprayJsonSupport {
       case _ => Map(StatusKey -> "SUCCESS", ResultKey -> msg)
     }
     ctx.complete(statusCode, resultMap)
-  }
-
-  def getJobDurationString(info: JobInfo): String =
-    info.jobLengthMillis.map { ms => ms / 1000.0 + " secs" }.getOrElse("Job not done yet")
-
-  def resultToMap(result: Any): Map[String, Any] = result match {
-    case m: Map[_, _] => m.map { case (k, v) => (k.toString, v) }.toMap
-    case s: Seq[_] => s.zipWithIndex.map { case (item, idx) => (idx.toString, item) }.toMap
-    case a: Array[_] => a.toSeq.zipWithIndex.map { case (item, idx) => (idx.toString, item) }.toMap
-    case item => Map(ResultKey -> item)
-  }
-
-  def resultToTable(result: Any): Map[String, Any] = {
-    Map(ResultKey -> result)
-  }
-
-  def resultToByteIterator(jobReport: Map[String, Any], result: Iterator[_]): Iterator[Byte] = {
-    val it = "{\n".getBytes.toIterator ++
-      (jobReport.map(t => Seq(AnyJsonFormat.write(t._1).toString(),
-                AnyJsonFormat.write(t._2).toString()).mkString(":") ).mkString(",") ++
-        (if (jobReport.nonEmpty) "," else "")).getBytes().toIterator ++
-      ("\"" + ResultKey + "\":").getBytes.toIterator ++ result ++ "}".getBytes.toIterator
-    it.asInstanceOf[Iterator[Byte]]
-  }
-
-  def formatException(t: Throwable): Any =
-    Map("message" -> t.getMessage, "errorClass" -> t.getClass.getName, "stack" -> ErrorData.getStackTrace(t))
-
-  def formatException(t: ErrorData): Any = {
-    Map("message" -> t.message, "errorClass" -> t.errorClass, "stack" -> t.stackTrace
-    )
-  }
-
-  def getJobReport(jobInfo: JobInfo, jobStarted: Boolean = false): Map[String, Any] = {
-
-    val statusMap = jobInfo match {
-      case JobInfo(_, _, _, _, state, _, _, Some(err), _) =>
-        Map(StatusKey -> state, ResultKey -> formatException(err))
-      case JobInfo(_, _, _, _, _, _, _, None, _) if jobStarted => Map(StatusKey -> JobStatus.Started)
-      case JobInfo(_, _, _, _, state, _, _, None, _) => Map(StatusKey -> state)
-    }
-    Map("jobId" -> jobInfo.jobId,
-      "startTime" -> jobInfo.startTime.toString(),
-      "classPath" -> jobInfo.mainClass,
-      "context" -> (if (jobInfo.contextName.isEmpty) "<<ad-hoc>>" else jobInfo.contextName),
-      "contextId" -> jobInfo.contextId,
-      "duration" -> getJobDurationString(jobInfo)) ++ statusMap
   }
 
   def getContextReport(context: Any, appId: Option[String], url: Option[String]): Map[String, String] = {
@@ -739,7 +691,7 @@ class WebApi(system: ActorSystem,
             future.flatMap {
               case None =>
                 completeWithErrorStatus(ctx, "No such job ID " + jobId, StatusCodes.NotFound)
-              case Some(JobInfo(_, _, contextName, _, classPath, _, None, _, _)) =>
+              case Some(JobInfo(_, _, contextName, _, classPath, _, None, _, _, _)) =>
                 val jobManager = getJobManagerForContext(Some(contextName), config, classPath)
                 val future = jobManager.get ? KillJob(jobId)
                 future.flatMap {
@@ -748,9 +700,9 @@ class WebApi(system: ActorSystem,
                   case e: Exception => completeWithException(
                     ctx, "ERROR", StatusCodes.InternalServerError, e)
                 }
-              case Some(JobInfo(_, _, _, _, state, _, _, Some(ex), _)) if state.equals(JobStatus.Error) =>
-                ctx.complete(Map(StatusKey -> JobStatus.Error, "ERROR" -> formatException(ex)))
-              case Some(JobInfo(_, _, _, _, state, _, _, _, _))
+              case Some(JobInfo(_, _, _, _, state, _, _, Some(ex), _, _)) if state.equals(JobStatus.Error) =>
+                ctx.complete(Map[String, Any](StatusKey -> JobStatus.Error, "ERROR" -> formatException(ex)))
+              case Some(JobInfo(_, _, _, _, state, _, _, _, _, _))
                 if (state.equals(JobStatus.Finished) || state.equals(JobStatus.Killed)) =>
                 completeWithErrorStatus(ctx, "No running job with ID " + jobId, StatusCodes.NotFound)
               case _ => completeWithErrorStatus(
@@ -819,6 +771,7 @@ class WebApi(system: ActorSystem,
          *           then a temporary context is allocated for the job
          * @optional @param sync Boolean if "true", then wait for and return results, otherwise return job Id
          * @optional @param timeout Int - the number of seconds to wait for sync results to come back
+         * @optional @param callbackUrl - a URL to call with results once the job has finished
          * @return JSON result of { StatusKey -> "OK" | "ERROR", ResultKey -> "result"}, where "result" is
          *         either the job id, or a result
          */
@@ -826,9 +779,10 @@ class WebApi(system: ActorSystem,
           import spray.json.DefaultJsonProtocol._
           entity(as[String]) { configString =>
             parameters('appName ?, 'classPath ?, 'cp ?, 'mainClass ?,
-              'context ?, 'sync.as[Boolean] ?, 'timeout.as[Int] ?, SparkJobUtils.SPARK_PROXY_USER_PARAM ?) {
+              'context ?, 'sync.as[Boolean] ?, 'timeout.as[Int] ?, SparkJobUtils.SPARK_PROXY_USER_PARAM ?,
+              'callbackUrl ?) {
               (appNameOpt, classPathOpt, cpOpt, mainClassOpt,
-               contextOpt, syncOpt, timeoutOpt, sparkProxyUser) =>
+               contextOpt, syncOpt, timeoutOpt, sparkProxyUser, callbackUrlOpt) =>
                 val timer = jobPost.time()
                 try {
                   val async = !syncOpt.getOrElse(false)
@@ -846,6 +800,13 @@ class WebApi(system: ActorSystem,
                   } else {
                     cpOpt.get.split(",").toSeq
                   }
+                  val callbackOpt: Option[Uri] = callbackUrlOpt
+                    .map(URLDecoder.decode(_, "UTF-8"))
+                    .map(Uri(_))
+                    .map(uri => uri.scheme match {
+                      case "http" | "https" => uri
+                      case _ => throw new IllegalArgumentException("Callback Url has to be 'http'/'https'")
+                    })
 
                   val (mainClass, cp) = if (appNameOpt.isDefined) {
                     if (classPathOpt.isDefined) {
@@ -875,19 +836,17 @@ class WebApi(system: ActorSystem,
                         val events = if (async) asyncEvents else syncEvents
                         val future = jobManager.get.ask(
                           JobManagerActor.StartJob(
-                            mainClass, binInfos, jobConfig, events))(timeout)
+                            mainClass, binInfos, jobConfig, events, callbackUrl = callbackOpt))(timeout)
                         future.flatMap {
                           case JobResult(jobId, res) =>
                             res match {
                               case s: Stream[_] => sendStreamingResponse(ctx, ResultChunkSize,
                                 resultToByteIterator(Map.empty, s.toIterator))
                               case _ =>
-                                ctx.complete(Map[String, Any]("jobId" -> jobId) ++ resultToTable(res))
+                                ctx.complete(resultToTable(res, Some(jobId)))
                             }
                           case JobErroredOut(jobId, _, ex) =>
-                            ctx.complete(Map[String, String]("jobId" -> jobId) ++
-                              Map(StatusKey -> JobStatus.Error, ResultKey -> formatException(ex))
-                            )
+                            ctx.complete(exceptionToMap(jobId, ex))
                           case JobStarted(_, jobInfo) =>
                             val future = daoActor ? SaveJobConfig(jobInfo.jobId, postedJobConfig)
                             future.flatMap {
