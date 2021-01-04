@@ -1,7 +1,8 @@
 package spark.jobserver.io
 
-import java.sql.Timestamp
+import akka.http.scaladsl.model.Uri
 
+import java.sql.Timestamp
 import scala.concurrent.{Await, Future}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.DurationInt
@@ -26,7 +27,7 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
   // Explicitly avoiding to label 'jarId' as a foreign key to avoid dealing with
   // referential integrity constraint violations.
   class Jobs(tag: Tag) extends Table[(String, String, String, String, String, String, String, Timestamp,
-    Option[Timestamp], Option[String], Option[String], Option[String])](tag, "JOBS") {
+    Option[Timestamp], Option[String], Option[String], Option[String], Option[String])](tag, "JOBS") {
     def jobId = column[String]("JOB_ID", O.PrimaryKey)
     def contextId = column[String]("CONTEXT_ID")
     def contextName = column[String]("CONTEXT_NAME")
@@ -39,8 +40,9 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
     def error = column[Option[String]]("ERROR")
     def errorClass = column[Option[String]]("ERROR_CLASS")
     def errorStackTrace = column[Option[String]]("ERROR_STACK_TRACE")
+    def callbackUrl = column[Option[String]]("CALLBACK_URL")
     def * = (jobId, contextId, contextName, binIds, URIs, classPath, state, startTime, endTime,
-      error, errorClass, errorStackTrace)
+      error, errorClass, errorStackTrace, callbackUrl)
   }
 
   val jobs = TableQuery[Jobs]
@@ -109,9 +111,9 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
   }
 
   def jobInfoFromRow(row: (String, String, String, String, String, String, String,
-    Timestamp, Option[Timestamp], Option[String], Option[String], Option[String])): JobInfo = row match {
+    Timestamp, Option[Timestamp], Option[String], Option[String], Option[String], Option[String])): JobInfo = row match {
     case (id, contextId, contextName, bins, uris, classpath,
-    state, start, end, err, errCls, errStTr) =>
+    state, start, end, err, errCls, errStTr, callbackUrl) =>
       val errorInfo = err.map(ErrorData(_
         , errCls.getOrElse(""), errStTr.getOrElse("")))
 
@@ -133,7 +135,8 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
         convertDateSqlToJoda(start),
         end.map(convertDateSqlToJoda),
         errorInfo,
-        binInfos ++ uriInfos
+        binInfos ++ uriInfos,
+        callbackUrl.map(Uri(_))
       )
   }
 
@@ -224,8 +227,9 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
     val error = jobInfo.error.map(e => e.message)
     val errorClass = jobInfo.error.map(e => e.errorClass)
     val errorStackTrace = jobInfo.error.map(e => e.stackTrace)
+    val callbackUrl = jobInfo.callbackUrl.map(_.toString())
     val row = (jobInfo.jobId, jobInfo.contextId, jobInfo.contextName, jarIds, uris, jobInfo.mainClass,
-      jobInfo.state, startTime, endTime, error, errorClass, errorStackTrace)
+      jobInfo.state, startTime, endTime, error, errorClass, errorStackTrace, callbackUrl)
     val result = for {
       result <- dbUtils.db.run(jobs.insertOrUpdate(row))
     } yield {
@@ -398,7 +402,7 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
     // .result should be called on jobs before uris/binaries string can be parsed
     // before it's only Rep[String], not real String
     val jobsQuery = jobs.result.map(_.filter {
-      case (_, _, _, cp, _, _, status, _, _, _, _, _) =>
+      case (_, _, _, cp, _, _, status, _, _, _, _, _, _) =>
         cp.split(",").map(_.toInt).contains(binId) &&
           statuses.getOrElse(Seq(status)).contains(status)
     })

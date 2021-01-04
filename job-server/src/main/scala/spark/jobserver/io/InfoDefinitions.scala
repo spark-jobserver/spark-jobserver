@@ -2,7 +2,7 @@ package spark.jobserver.io
 
 import akka.http.scaladsl.model.MediaType.NotCompressible
 import akka.http.scaladsl.model.headers._
-import akka.http.scaladsl.model.{MediaType, MediaTypes}
+import akka.http.scaladsl.model.{MediaType, MediaTypes, Uri}
 import org.joda.time.{DateTime, Duration}
 import spark.jobserver.util.ErrorData
 
@@ -69,7 +69,8 @@ object BinaryType {
 // NOTE: if endTime is not None, then the job has finished.
 case class JobInfo(jobId: String, contextId: String, contextName: String, mainClass: String, state: String,
                    startTime: DateTime, endTime: Option[DateTime],
-                   error: Option[ErrorData], cp: Seq[BinaryInfo]) {
+                   error: Option[ErrorData], cp: Seq[BinaryInfo],
+                   callbackUrl: Option[Uri] = None) {
 
   def jobLengthMillis: Option[Long] = endTime.map { end => new Duration(startTime, end).getMillis }
 }

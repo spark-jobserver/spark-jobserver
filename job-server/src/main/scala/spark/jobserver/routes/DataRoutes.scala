@@ -10,6 +10,7 @@ import akka.util.Timeout
 import spark.jobserver.DataManagerActor.{Error, StoreData, Stored, _}
 import spark.jobserver.auth.AuthInfo
 import spark.jobserver.auth.Permissions._
+import spark.jobserver.util.ResultMarshalling.ResultKey
 
 import scala.concurrent.ExecutionContext
 
