@@ -76,7 +76,7 @@ class StreamingJobSpec extends JobSpecBase(StreamingJobSpec.getNewSystem) {
           jobid
         }
       }
-      expectNoMsg(2.seconds)
+      expectNoMessage(2.seconds)
 
       Thread sleep 1000
       val jobInfo = Await.result(daoActor ? GetJobInfo(jobId), 60 seconds).asInstanceOf[Option[JobInfo]]
@@ -150,7 +150,7 @@ class StreamingJobSpec extends JobSpecBase(StreamingJobSpec.getNewSystem) {
         ConfigFactory.parseString(s"${JobserverConfig.STOP_CONTEXT_ON_JOB_ERROR}=false"))
       triggerFailingStreamingJob(ctxConfig)
 
-      deathWatch.expectNoMsg(1.seconds)
+      deathWatch.expectNoMessage(1.seconds)
     }
 
     it("should automatically stop a streaming context if" +

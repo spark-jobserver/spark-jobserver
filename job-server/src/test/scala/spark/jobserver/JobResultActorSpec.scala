@@ -50,20 +50,20 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
       expectMsg(JobResult("jobId", 10))
 
       actor ! JobResult("jobId", 20)
-      expectNoMsg()   // shouldn't get it again
+      expectNoMessage()   // shouldn't get it again
     }
 
     it("should not be informed unsubscribed result") {
       actor ! Subscribe("jobId", self, Set(classOf[JobResult]))
       actor ! Unsubscribe("jobId", self)
       actor ! JobResult("jobId", 10)
-      expectNoMsg()
+      expectNoMessage()
     }
 
     it("should not publish if do not subscribe to JobResult events") {
       actor ! Subscribe("jobId", self, Set(classOf[JobValidationFailed], classOf[JobErroredOut]))
       actor ! JobResult("jobId", 10)
-      expectNoMsg()
+      expectNoMessage()
     }
 
     it("should return error if non-existing subscription is unsubscribed") {

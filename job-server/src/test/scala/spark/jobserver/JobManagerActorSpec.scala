@@ -296,7 +296,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobManagerActor.StartJob(wordCountClass, List(testJar), stringConfig, allEvents)
       expectMsgClass(startJobWait, classOf[JobStarted])
       expectMsgAllClassOf(classOf[JobFinished], classOf[JobResult])
-      expectNoMsg()
+      expectNoMessage()
     }
 
     it("should start job and return result before job finish event") {
@@ -308,7 +308,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       expectMsgClass(startJobWait, classOf[JobStarted])
       expectMsgClass(classOf[JobResult])
       expectMsgClass(classOf[JobFinished])
-      expectNoMsg()
+      expectNoMessage()
     }
 
     it("should start job more than one time and return result successfully (all events)") {
@@ -319,13 +319,13 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobManagerActor.StartJob(wordCountClass, List(testJar), stringConfig, allEvents)
       expectMsgClass(startJobWait, classOf[JobStarted])
       expectMsgAllClassOf(classOf[JobFinished], classOf[JobResult])
-      expectNoMsg()
+      expectNoMessage()
 
       // should be ok to run the same more again
       manager ! JobManagerActor.StartJob(wordCountClass, List(testJar), stringConfig, allEvents)
       expectMsgClass(startJobWait, classOf[JobStarted])
       expectMsgAllClassOf(classOf[JobFinished], classOf[JobResult])
-      expectNoMsg()
+      expectNoMessage()
     }
 
     it("should start job and return results (sync route)") {
@@ -338,7 +338,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       expectMsgPF(startJobWait, "Did not get JobResult") {
         case JobResult(_, result) => result should equal (counts)
       }
-      expectNoMsg()
+      expectNoMessage()
     }
 
     it("should start job and return results (sync route) and the context should not terminate") {
@@ -353,7 +353,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       expectMsgPF(startJobWait, "Did not get JobResult") {
         case JobResult(_, result) => result should equal (counts)
       }
-      deathWatch.expectNoMsg(1.seconds)
+      deathWatch.expectNoMessage(1.seconds)
     }
 
     it("should start job and return results and the context should not terminate " +
@@ -373,7 +373,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       expectMsgPF(startJobWait, "Did not get JobResult") {
         case JobResult(_, result) => result should equal (counts)
       }
-      deathWatch.expectNoMsg(1.seconds)
+      deathWatch.expectNoMessage(1.seconds)
     }
 
     it("should start multiple jobs and only terminate if an error " +
@@ -393,14 +393,14 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       expectMsgPF(startJobWait, "Did not get JobResult") {
         case JobResult(_, result) => result should equal (counts)
       }
-      deathWatch.expectNoMsg(1.seconds)
+      deathWatch.expectNoMessage(1.seconds)
 
       manager ! JobManagerActor.StartJob(
         wordCountClass, List(testJar), stringConfig, syncEvents ++ errorEvents)
       expectMsgPF(startJobWait, "Did not get JobResult") {
         case JobResult(_, result) => result should equal (counts)
       }
-      deathWatch.expectNoMsg(1.seconds)
+      deathWatch.expectNoMessage(1.seconds)
 
       manager ! JobManagerActor.StartJob(classPrefix + "MyErrorJob", List(testJar), emptyConfig, errorEvents)
       val errorMsg = expectMsgClass(startJobWait, classOf[JobErroredOut])
@@ -418,7 +418,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       expectMsgPF(startJobWait, "Did not get JobResult") {
         case JobResult(_, result) => result should equal (counts)
       }
-      expectNoMsg()
+      expectNoMessage()
     }
 
     it("should start job and return JobStarted (async)") {
@@ -429,7 +429,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobManagerActor.StartJob(
         wordCountClass, List(testJar), stringConfig, errorEvents ++ asyncEvents)
       expectMsgClass(startJobWait, classOf[JobStarted])
-      expectNoMsg()
+      expectNoMessage()
     }
 
     it("should start job, return JobStarted (async) and write context id and status to DAO") {
@@ -450,7 +450,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       jobInfo.length should be (1)
       jobInfo.head.contextId should be (contextId)
       jobInfo.head.state should be (JobStatus.Running)
-      expectNoMsg()
+      expectNoMessage()
     }
 
     it("should return error if job throws an error") {
@@ -466,7 +466,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val errorMsg = expectMsgClass(startJobWait, classOf[JobErroredOut])
       errorMsg.err.getClass should equal (classOf[IllegalArgumentException])
 
-      deathWatch.expectNoMsg(1.seconds)
+      deathWatch.expectNoMessage(1.seconds)
     }
 
     it("should return error if job throws an error and " +
@@ -525,7 +525,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
           result.length should equal (1)
           result(0).getClass.getName should include ("Animal")
       }
-      expectNoMsg()
+      expectNoMessage()
     }
 
     it ("should refuse to start a job when too many jobs in the context are running") {
@@ -791,7 +791,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val testJar = uploadTestJar()
       manager ! JobManagerActor.StartJob(wordCountClass, List(testJar), baseJobConfig, allEvents)
       expectMsgClass(startJobWait, classOf[CommonMessages.JobValidationFailed])
-      expectNoMsg()
+      expectNoMessage()
     }
 
     it("should error out if new API job validation fails") {
@@ -801,7 +801,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val testJar = uploadTestJar()
       manager ! JobManagerActor.StartJob(newWordCountClass, List(testJar), baseJobConfig, allEvents)
       expectMsgClass(startJobWait, classOf[CommonMessages.JobValidationFailed])
-      expectNoMsg()
+      expectNoMessage()
     }
   }
 
@@ -811,7 +811,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val managerProbe = TestProbe()
       managerProbe.watch(manager)
 
-      managerProbe.expectNoMsg(2.seconds.dilated)
+      managerProbe.expectNoMessage(2.seconds.dilated)
     }
 
     it("should kill itself if response to Identify message is not" +
@@ -884,7 +884,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobManagerActor.Initialize(contextConfig, None, TestProbe().ref)
 
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
-      managerProbe.expectNoMsg(4.seconds.dilated)
+      managerProbe.expectNoMessage(4.seconds.dilated)
     }
   }
 
@@ -903,7 +903,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobManagerActor.StartJob(classPrefix + "RemoteDataFileJob", List(testJar),
         ConfigFactory.parseString(s"testFile = ${existingFile.getAbsolutePath}").withFallback(baseJobConfig),
         errorEvents ++ syncEvents)
-      dataFileActor.expectNoMsg()
+      dataFileActor.expectNoMessage()
       val existingFileResult = expectMsgPF() {
         case JobResult(_, fileName: String) => fileName
         case JobErroredOut(_, _, error: Throwable) => throw error
@@ -932,7 +932,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       // uses cached version in second run
       manager ! JobManagerActor.StartJob(classPrefix + "RemoteDataFileJob", List(testJar), jobConfig,
         errorEvents ++ syncEvents)
-      dataFileActor.expectNoMsg() // already cached
+      dataFileActor.expectNoMessage() // already cached
       val secondResult = expectMsgPF() {
         case JobResult(_, fileName: String) => fileName
         case JobErroredOut(_, _, error: Throwable) => throw error
@@ -978,10 +978,10 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       deathWatcher.watch(manager)
 
       manager ! JobRestartFailed("dummy-id", new Exception(""))
-      deathWatcher.expectNoMsg(2.seconds)
+      deathWatcher.expectNoMessage(2.seconds)
 
       manager ! JobValidationFailed("dummy-id1", DateTime.now(), new Exception(""))
-      deathWatcher.expectNoMsg(2.seconds)
+      deathWatcher.expectNoMessage(2.seconds)
 
       manager ! JobRestartFailed("dummy-id2", new Exception(""))
       deathWatcher.expectTerminated(manager)
@@ -996,13 +996,13 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
         DateTime.now(), None, None, Seq(BinaryInfo("dummy", BinaryType.Jar, DateTime.now())))
 
       manager ! JobRestartFailed("dummy-id", new Exception(""))
-      deathWatcher.expectNoMsg(2.seconds)
+      deathWatcher.expectNoMessage(2.seconds)
 
       manager ! JobStarted("dummy-id2", dummyJob)
-      deathWatcher.expectNoMsg(2.seconds)
+      deathWatcher.expectNoMessage(2.seconds)
 
       manager ! JobValidationFailed("dummy-id2", DateTime.now(), new Exception(""))
-      deathWatcher.expectNoMsg(2.seconds)
+      deathWatcher.expectNoMessage(2.seconds)
     }
 
     it("should not do anything if no context was found with specified name") {
@@ -1011,7 +1011,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", defaultSmallTimeout, contextId, spyProbe))
       manager ! JobManagerActor.RestartExistingJobs
 
-      spyProbe.expectNoMsg()
+      spyProbe.expectNoMessage()
     }
 
     it("should kill itself if an exception occurred by accessing DAO") {
@@ -1059,7 +1059,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
       daoProbe.expectMsgClass(classOf[JobDAOActor.GetJobInfosByContextId])
       daoProbe.reply(JobDAOActor.JobInfos(Seq()))
-      spyProbe.expectNoMsg()
+      spyProbe.expectNoMessage()
     }
 
     it("should not restart a job if job config is not found in DAO") {
@@ -1140,7 +1140,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
       spyProbe.expectMsg("StartJob Received")
       spyProbe.expectMsgClass(classOf[JobStarted])
-      spyProbe.expectNoMsg()
+      spyProbe.expectNoMessage()
     }
 
 
@@ -1163,7 +1163,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
       spyProbe.expectMsg("StartJob Received")
       spyProbe.expectMsgClass(classOf[JobStarted])
-      spyProbe.expectNoMsg()
+      spyProbe.expectNoMessage()
     }
 
     it("should restart if a job was found with valid config and state Restarting") {
@@ -1184,7 +1184,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
       spyProbe.expectMsg("StartJob Received")
       spyProbe.expectMsgClass(classOf[JobStarted])
-      spyProbe.expectNoMsg()
+      spyProbe.expectNoMessage()
     }
 
     it("should restart multiple jobs if available for a specific context") {
@@ -1211,7 +1211,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
       spyProbe.expectMsgClass(classOf[JobStarted])
       spyProbe.expectMsgClass(classOf[JobStarted])
-      spyProbe.expectNoMsg()
+      spyProbe.expectNoMessage()
     }
 
     it("should restart jobs only if they have status Running or Restarting") {
@@ -1252,7 +1252,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
         case JobStarted(jobId, _) => Seq(jobInfo.jobId, jobInfo3.jobId) should contain (jobId)
       }
 
-      spyProbe.expectNoMsg()
+      spyProbe.expectNoMessage()
     }
 
     it("should keep the context JVM running if restart of atleast 1 job is successful") {
@@ -1278,8 +1278,8 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
         classOf[String], classOf[JobStarted], classOf[JobRestartFailed])
       messages.filter(_.isInstanceOf[String]).head should be("StartJob Received")
 
-      spyProbe.expectNoMsg()
-      deathWatcher.expectNoMsg()
+      spyProbe.expectNoMessage()
+      deathWatcher.expectNoMessage()
     }
 
     it("should send JobRestartFailed message if failed to find any binary info for restart of the job") {
@@ -1410,7 +1410,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
           contextInfo.endTime should be(None)
         case unexpectedMsg @ _ => fail(s"State is not stopping. Message received $unexpectedMsg")
       }
-      expectNoMsg(500.milliseconds)
+      expectNoMessage(500.milliseconds)
     }
   }
 

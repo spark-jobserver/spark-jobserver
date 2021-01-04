@@ -62,7 +62,7 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       DAOTestsHelper.testProbe.expectMsg("BinaryDAO: Save success")
       DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: Save success")
       expectMsg(SaveBinaryResult(Success({})))
-      DAOTestsHelper.testProbe.expectNoMsg(shortTimeout)
+      DAOTestsHelper.testProbe.expectNoMessage(shortTimeout)
     }
 
     it("should respond when saving Binary fails") {
@@ -71,7 +71,7 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       expectMsgPF(3 seconds){
         case SaveBinaryResult(Failure(ex)) if ex.getMessage.startsWith("can't save binary") =>
       }
-      DAOTestsHelper.testProbe.expectNoMsg(shortTimeout)
+      DAOTestsHelper.testProbe.expectNoMessage(shortTimeout)
     }
 
     it("should try to delete binary if meta data save failed") {
@@ -83,7 +83,7 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       expectMsgPF(3 seconds){
         case SaveBinaryResult(Failure(ex)) if ex.getMessage.startsWith("can't save binary") =>
       }
-      DAOTestsHelper.testProbe.expectNoMsg(shortTimeout)
+      DAOTestsHelper.testProbe.expectNoMessage(shortTimeout)
     }
 
     it("should not block other calls to DAO if save binary is taking too long") {
@@ -111,7 +111,7 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: getBinariesByStorageId success")
       DAOTestsHelper.testProbe.expectMsg("BinaryDAO: Delete success")
       expectMsg(DeleteBinaryResult(Success({})))
-      DAOTestsHelper.testProbe.expectNoMsg(shortTimeout)
+      DAOTestsHelper.testProbe.expectNoMessage(shortTimeout)
     }
 
     it("should not delete binary if meta is not deleted") {
@@ -122,7 +122,7 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
         case DeleteBinaryResult(Failure(ex: DeleteBinaryInfoFailedException)) =>
           ex.getMessage should startWith("can't delete meta data")
       }
-      DAOTestsHelper.testProbe.expectNoMsg(shortTimeout)
+      DAOTestsHelper.testProbe.expectNoMessage(shortTimeout)
     }
 
     it("should not delete binary from binary storage if it is still used") {
@@ -131,7 +131,7 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: Delete success")
       DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: getBinariesByStorageId success")
       expectMsg(DeleteBinaryResult(Success({})))
-      DAOTestsHelper.testProbe.expectNoMsg(shortTimeout)
+      DAOTestsHelper.testProbe.expectNoMessage(shortTimeout)
     }
 
     it("should delete binary from binary storage if it is not in use") {
@@ -141,7 +141,7 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: getBinariesByStorageId success")
       DAOTestsHelper.testProbe.expectMsg("BinaryDAO: Delete success")
       expectMsg(DeleteBinaryResult(Success({})))
-      DAOTestsHelper.testProbe.expectNoMsg(shortTimeout)
+      DAOTestsHelper.testProbe.expectNoMessage(shortTimeout)
     }
 
     it("should throw NoSuchBinaryException if metadata info was not found") {
@@ -151,7 +151,7 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
         case DeleteBinaryResult(Failure(ex: NoSuchBinaryException)) =>
           ex.getMessage should startWith("can't find binary")
       }
-      DAOTestsHelper.testProbe.expectNoMsg(shortTimeout)
+      DAOTestsHelper.testProbe.expectNoMessage(shortTimeout)
     }
 
     it("should respond when deleting Binary fails") {

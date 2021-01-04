@@ -49,7 +49,7 @@ class PythonJobManagerSpec extends ExtrasJobSpecBase(PythonJobManagerSpec.getNew
         }
         case JobErroredOut(_, _, error: Throwable) => throw error
       }
-      expectNoMsg()
+      expectNoMessage()
     }
 
     it("should throw an error if job started from multiple binaries") {
@@ -76,7 +76,7 @@ class PythonJobManagerSpec extends ExtrasJobSpecBase(PythonJobManagerSpec.getNew
         case JobLoadingError(error: Throwable) =>
           error.getMessage should be ("Python should have exactly one egg file! Found: 2")
       }
-      expectNoMsg()
+      expectNoMessage()
     }
   }
 }
