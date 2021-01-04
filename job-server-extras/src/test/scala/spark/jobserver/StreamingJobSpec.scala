@@ -81,7 +81,7 @@ class StreamingJobSpec extends JobSpecBase(StreamingJobSpec.getNewSystem) {
       Thread sleep 1000
       val jobInfo = Await.result(daoActor ? GetJobInfo(jobId), 60 seconds).asInstanceOf[Option[JobInfo]]
       jobInfo.get match {
-        case JobInfo(_, _, _, _, state, _, _, _, _) if state == JobStatus.Running => {  }
+        case JobInfo(_, _, _, _, state, _, _, _, _, _) if state == JobStatus.Running => {  }
         case e => fail("Unexpected JobInfo" + e)
       }
 

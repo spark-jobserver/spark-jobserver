@@ -1,13 +1,14 @@
 package spark.jobserver.util
 
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream,
-  ObjectInputStream, ObjectOutputStream, ObjectStreamClass}
+import akka.http.scaladsl.model.Uri
 
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream, ObjectInputStream,
+  ObjectOutputStream, ObjectStreamClass}
 import akka.serialization.JSerializer
 import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
 import spark.jobserver.JobManagerActor.StartJob
 import org.slf4j.LoggerFactory
-import spark.jobserver.io.BinaryInfo
+import spark.jobserver.io.{BinaryInfo, JobInfo}
 
 /**
   * Akka Serialization extension for StartJob message to accommodate large config values (>64KB)
@@ -15,9 +16,9 @@ import spark.jobserver.io.BinaryInfo
 class StartJobSerializer extends JSerializer {
   val logger = LoggerFactory.getLogger(getClass)
 
-  override def includeManifest() : Boolean = false
+  override def includeManifest(): Boolean = false
 
-  override def identifier() : Int = 12376
+  override def identifier(): Int = 12376
 
   override def toBinary(obj: AnyRef): Array[Byte] = {
     logger.debug(s"Serializing StartJob object -- ${obj}")
@@ -29,10 +30,12 @@ class StartJobSerializer extends JSerializer {
       out.writeObject(startJob.cp)
       out.writeObject(startJob.config.root().render(ConfigRenderOptions.concise()))
       out.writeObject(startJob.subscribedEvents)
+      out.writeObject(startJob.existingJobInfo)
+      out.writeObject(startJob.callbackUrl)
       out.flush()
       byteArray.toByteArray
     } catch {
-      case ex : Exception =>
+      case ex: Exception =>
         throw new IllegalArgumentException(s"Object of unknown class cannot be serialized " +
           s"${ex.getMessage}")
     }
@@ -55,11 +58,17 @@ class StartJobSerializer extends JSerializer {
       val cp = inputStream.readObject().asInstanceOf[Seq[BinaryInfo]]
       val configString = inputStream.readObject().asInstanceOf[String]
       val subscribedEvents = inputStream.readObject().asInstanceOf[Set[Class[_]]]
+      val existingJobInfo = inputStream.readObject().asInstanceOf[Option[JobInfo]]
+      val callbackUrl = inputStream.readObject().asInstanceOf[Option[Uri]]
       logger.debug(s"mainClass: ${mainClass}")
       logger.debug(s"cp: ${cp}")
       logger.debug(s"configString: ${configString}")
       logger.debug(s"subscribedEvents: ${subscribedEvents}")
-      StartJob(mainClass, cp, ConfigFactory.parseString(configString), subscribedEvents)
+      logger.debug(s"existingJobInfo: ${existingJobInfo}")
+      logger.debug(s"callbackUrl: ${callbackUrl}")
+
+      StartJob(mainClass, cp, ConfigFactory.parseString(configString), subscribedEvents, existingJobInfo,
+        callbackUrl)
     } catch {
       case ex: Exception =>
         throw new IllegalArgumentException(s"Object of unknown class cannot be deserialized " +

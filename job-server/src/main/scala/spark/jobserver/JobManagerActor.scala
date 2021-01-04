@@ -5,8 +5,8 @@ import java.net.{MalformedURLException, URI, URL}
 import java.util.concurrent.Executors._
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.TimeUnit
-
 import akka.actor._
+import akka.http.scaladsl.model.Uri
 import akka.pattern.ask
 import akka.util.Timeout
 import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
@@ -36,7 +36,8 @@ object JobManagerActor {
   case class Initialize(contextConfig: Config, resultActorOpt: Option[ActorRef],
                         dataFileActor: ActorRef)
   case class StartJob(mainClass: String, cp: Seq[BinaryInfo], config: Config,
-                      subscribedEvents: Set[Class[_]], existingJobInfo: Option[JobInfo] = None)
+                      subscribedEvents: Set[Class[_]], existingJobInfo: Option[JobInfo] = None,
+                      callbackUrl: Option[Uri] = None)
   case class KillJob(jobId: String)
   case class JobKilledException(jobId: String) extends Exception(s"Job $jobId killed")
   case class ContextTerminatedException(contextId: String)
@@ -148,6 +149,8 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
 
   private val jobServerNamedObjects = new JobServerNamedObjects(context.system)
 
+  protected var callbackHandler: CallbackHandler = StandaloneCallbackHandler
+
   if (isKillingContextOnUnresponsiveSupervisorEnabled()) {
     logger.info(s"Sending identify message to supervisor at ${supervisorActorAddress}")
     context.setReceiveTimeout(initializationTimeout)
@@ -255,7 +258,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
       logger.info("Context stop already in progress")
       sender ! ContextStopInProgress
 
-    case StartJob(_, _, _, _, _) =>
+    case StartJob(_, _, _, _, _, _) =>
       logger.warn("Tried to start job in stopping state. Not doing anything.")
       sender ! ContextStopInProgress
 
@@ -387,7 +390,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
           self ! PoisonPill
       }
 
-    case StartJob(mainClass, cp, jobConfig, events, existingJobInfo) => {
+    case StartJob(mainClass, cp, jobConfig, events, existingJobInfo, callbackUrl) => {
       val loadedJars = jarLoader.getURLs
       var classPathURIs: Seq[String] = null
       Try {
@@ -417,8 +420,8 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
           sender ! JobLoadingError(ex)
           postEachJob()
         case Success(_) =>
-          startJobInternal(mainClass, classPathURIs, cp, jobConfig, events,
-            jobContext, sparkEnv, existingJobInfo, sender)
+          startJobInternal(mainClass, classPathURIs, cp, jobConfig, callbackUrl,
+            events, jobContext, sparkEnv, existingJobInfo, sender)
       }
     }
 
@@ -546,6 +549,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
                        cp: Seq[String],
                        cpBin: Seq[BinaryInfo],
                        jobConfig: Config,
+                       callbackUrl: Option[Uri],
                        events: Set[Class[_]],
                        jobContext: ContextLike,
                        sparkEnv: SparkEnv,
@@ -579,7 +583,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
     statusActor ! Subscribe(jobId, subscriber, events)
 
     val jobInfo = JobInfo(jobId, contextId, contextName, mainClass,
-      JobStatus.Running, startDateTime, None, None, cpBin)
+      JobStatus.Running, startDateTime, None, None, cpBin, callbackUrl)
     getJobFuture(jobContainer, jobInfo, jobConfig, subscriber, jobContext, sparkEnv)
   }
 
@@ -601,6 +605,8 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
       subscriber ! NoJobSlotsAvailable(maxRunningJobs)
       return Future.successful(None)
     }
+
+    implicit val ec = context.system
 
     Future {
       org.slf4j.MDC.put("jobId", jobId)
@@ -657,6 +663,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
         // with context-per-jvm=true configuration
         resultActor ! JobResult(jobId, result)
         statusActor ! JobFinished(jobId, DateTime.now())
+        callbackHandler.success(jobInfo, result)
       case Failure(wrapped: Throwable) =>
         // actual error was wrapped so we could process fatal errors, see #1161
         val error = wrapped.getCause
@@ -664,6 +671,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
         statusActor ! JobErroredOut(jobId, DateTime.now(), error)
         logger.error("Exception from job " + jobId + ": ", error)
         postJobError()
+        callbackHandler.failure(jobInfo, error)
     }(executionContext).andThen {
       case _ =>
         // Make sure to decrement the count of running jobs when a job finishes, in both success and failure
@@ -807,7 +815,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
   private def restartJob(existingJobInfo: JobInfo, existingJobConfig: Config) {
     def sendStartJobAndLog(jobInfo: JobInfo, cp: Seq[BinaryInfo], events: Set[Class[_]]): Unit = {
       sendStartJobMessage(self, StartJob(jobInfo.mainClass, cp,
-        existingJobConfig, events, Some(jobInfo)))
+        existingJobConfig, events, Some(jobInfo), jobInfo.callbackUrl))
       logger.info(s"Job restart message has been sent for old job (${jobInfo.jobId})" +
         s" and context ${jobInfo.contextName}.")
     }

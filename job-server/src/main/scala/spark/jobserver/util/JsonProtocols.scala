@@ -1,8 +1,11 @@
 package spark.jobserver.util
 
+import akka.http.scaladsl.model.Uri
 import org.joda.time.DateTime
+import spark.jobserver.common.akka.web.JsonUtils.AnyJsonFormat
+
 import java.text.SimpleDateFormat
-import spark.jobserver.io.{BinaryInfo, BinaryType, ContextInfo, JobInfo}
+import spark.jobserver.io.{BinaryInfo, BinaryType, ContextInfo, JobInfo, JobStatus}
 import spray.json._
 
 object JsonProtocols extends DefaultJsonProtocol {
@@ -56,8 +59,19 @@ object JsonProtocols extends DefaultJsonProtocol {
 
     def read(value: JsValue): JobInfo = {
       value.asJsObject.getFields("jobId", "contextId", "contextName", "classPath",
-        "state", "startTime", "endTime", "error", "cp") match {
+        "state", "startTime", "endTime", "error", "cp", "callbackUrl") match {
           // Correct json format
+          case Seq(JsString(jobId), JsString(contextId), JsString(contextName),
+          JsString(classPath), JsString(state), JsString(startTime), endTime, error, JsArray(cpJson),
+          JsString(callbackUrl)) =>
+            val endTimeOpt = readOpt(endTime, et => toJoda(et.convertTo[String]))
+            val errorOpt = error.convertTo[Option[ErrorData]]
+            val startTimeObj = toJoda(startTime)
+            val cp = cpJson.map(_.convertTo[BinaryInfo])
+            JobInfo(jobId, contextId, contextName, classPath,
+              state, startTimeObj, endTimeOpt, errorOpt, cp,
+              Option(callbackUrl).filter(_.trim.nonEmpty).map(Uri(_)))
+          // Legacy json format (for backwards compatibility)
           case Seq(JsString(jobId), JsString(contextId), JsString(contextName),
           JsString(classPath), JsString(state), JsString(startTime), endTime, error, JsArray(cpJson)) =>
             val endTimeOpt = readOpt(endTime, et => toJoda(et.convertTo[String]))
@@ -65,7 +79,7 @@ object JsonProtocols extends DefaultJsonProtocol {
             val startTimeObj = toJoda(startTime)
             val cp = cpJson.map(_.convertTo[BinaryInfo])
             JobInfo(jobId, contextId, contextName, classPath,
-              state, startTimeObj, endTimeOpt, errorOpt, cp)
+              state, startTimeObj, endTimeOpt, errorOpt, cp, None)
           // Legacy json format (for backwards compatibility)
           case Seq(JsString(jobId), JsString(contextId), JsString(contextName),
           JsString(classPath), JsString(state), JsString(startTime), endTime, error) =>
@@ -73,7 +87,7 @@ object JsonProtocols extends DefaultJsonProtocol {
               val errorOpt = error.convertTo[Option[ErrorData]]
               val startTimeObj = toJoda(startTime)
               JobInfo(jobId, contextId, contextName, classPath,
-                state, startTimeObj, endTimeOpt, errorOpt, Seq.empty)
+                state, startTimeObj, endTimeOpt, errorOpt, Seq.empty, None)
           // Incorrect json format
           case _ => deserializationError("Fail to parse json content:" +
             "The following Json structure does not match JobInfo structure:\n" + value.prettyPrint)
@@ -128,4 +142,54 @@ object JsonProtocols extends DefaultJsonProtocol {
     if (j == JsNull) None else Some(f(j))
   }
 
+}
+
+object ResultMarshalling {
+  val ResultKey = "result"
+  val StatusKey = "status"
+
+  def formatException(t: Throwable): Map[String, String] =
+    Map("message" -> t.getMessage, "errorClass" -> t.getClass.getName, "stack" -> ErrorData.getStackTrace(t))
+
+  def formatException(t: ErrorData): Map[String, String] = {
+    Map("message" -> t.message, "errorClass" -> t.errorClass, "stack" -> t.stackTrace
+    )
+  }
+
+  def exceptionToMap(jobId: String, t: Throwable): Map[String, Any] = {
+    Map[String, String]("jobId" -> jobId) ++
+      Map(StatusKey -> JobStatus.Error, ResultKey -> formatException(t))
+  }
+
+  def resultToTable(result: Any, jobId: Option[String] = None): Map[String, Any] = {
+    jobId.map(id => Map[String, Any]("jobId" -> id)).getOrElse(Map.empty) ++
+      Map(ResultKey -> result)
+  }
+
+  def resultToByteIterator(jobReport: Map[String, Any], result: Iterator[_]): Iterator[Byte] = {
+    val it = "{\n".getBytes.toIterator ++
+      (jobReport.map(t => Seq(AnyJsonFormat.write(t._1).toString(),
+        AnyJsonFormat.write(t._2).toString()).mkString(":")).mkString(",") ++
+        (if (jobReport.nonEmpty) "," else "")).getBytes().toIterator ++
+      ("\"" + ResultKey + "\":").getBytes.toIterator ++ result ++ "}".getBytes.toIterator
+    it.asInstanceOf[Iterator[Byte]]
+  }
+
+  def getJobReport(info: JobInfo, jobStarted: Boolean = false): Map[String, Any] = {
+    def getJobDurationString =
+      info.jobLengthMillis.map { ms => ms / 1000.0 + " secs" }.getOrElse("Job not done yet")
+
+    val statusMap = info match {
+      case JobInfo(_, _, _, _, state, _, _, Some(err), _, _) =>
+        Map(StatusKey -> state, ResultKey -> formatException(err))
+      case JobInfo(_, _, _, _, _, _, _, None, _, _) if jobStarted => Map(StatusKey -> JobStatus.Started)
+      case JobInfo(_, _, _, _, state, _, _, None, _, _) => Map(StatusKey -> state)
+    }
+    Map("jobId" -> info.jobId,
+      "startTime" -> info.startTime.toString(),
+      "classPath" -> info.mainClass,
+      "context" -> (if (info.contextName.isEmpty) "<<ad-hoc>>" else info.contextName),
+      "contextId" -> info.contextId,
+      "duration" -> getJobDurationString) ++ statusMap
+  }
 }

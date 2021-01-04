@@ -5,6 +5,7 @@
 - [Submitting new jobs](#submitting-new-jobs)
   - [Uploading binaries for the job](#uploading-binaries-for-the-job)
   - [Posting jobs](#posting-jobs)
+  - [Callback handling](#callbackUrl)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -37,6 +38,7 @@ Parameters:
 |----------------|---------|------------------------------------------------------------------------------|
 |    appName     | String  | the name under which the application binary was uploaded to jobserver        |
 |   classPath    | String  | the fully qualified class path for the job                                   |
+|  callbackUrl   |   Url   | an optional callback url that is invoked once the job has finished           |
 |     sync       | Boolean | if "true", then wait for and return results, otherwise return job            |
 |    timeout     |   Int   | the number of seconds to wait for sync results to come back                  |
 
@@ -89,3 +91,39 @@ Sample `POST` request using new parameters:
       "jobId": "898742a-a005-56hc-1245-b39sfd3dfdgs"
     }
 ```
+
+## CallbackUrl
+If a `callbackUrl` is provided for a (async/sync) job, the result of the job is uploaded to the url via an HTTP Post
+request. The uploaded result is similar to the output produced by a synchronous job, namely
+```
+{
+  jobId -> "the unique job id",
+  ResultKey -> "either the result, or an exception"
+}
+```
+
+Sample `POST` request using a callback url:
+```
+    curl -d "input.string = a b c a b see" "localhost:8090/jobs?appName=test&classPath=spark.jobserver.WordCountExample&callbackUrl=http%3A%2F%2Flocalhost%3A6666"
+    {
+      "duration": "Job not done yet",
+      "classPath": "spark.jobserver.WordCountExample",
+      "startTime": "2016-06-19T16:27:12.196+05:30",
+      "context": "b7ea0eb5-spark.jobserver.WordCountExample",
+      "status": "STARTED",
+      "jobId": "5453779a-f004-45fc-a11d-a39dae0f9bf4"
+    }
+```
+Sample output received at the callback url:
+```
+{
+  "jobId": "5453779a-f004-45fc-a11d-a39dae0f9bf4",
+  "result": { "a": 2, "b": 2, "see":1, "c": 1 }
+}
+```
+
+In case of a streaming result, the actual result is substituted by `<Stream result>` and the actual result has to be
+manually fetched via `GET /jobs/<jobId>`. If the job is manually cancelled via `DELETE /jobs/<jobId>` or
+`DELETE /contexts/<contextName>` the callback is *not* invoked. The callback handler uses a simple retry mechanism with
+a few seconds delay to ensuring that the callback is completed successfully. However, if all retries are exhausted,
+the callback will be abandoned and never be invoked.

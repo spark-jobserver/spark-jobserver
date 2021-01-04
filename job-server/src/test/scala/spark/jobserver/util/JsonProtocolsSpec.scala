@@ -38,12 +38,12 @@ class JsonProtocolsSpec extends FunSpec with Matchers with BeforeAndAfter {
   // JobInfo
   val testJobInfo = JobInfo("SomeJobId", "SomeContextId", "SomeContextName",
       "SomeClassPath", "SomeState", earlyDate, Some(date), Some(ErrorData("SomeMessage",
-      "SomeClass", "SomeTrace")), Seq.empty)
+      "SomeClass", "SomeTrace")), Seq.empty, None)
   val testJobInfo2 = JobInfo("SomeJobId", "SomeContextId", "SomeContextName",
-      "SomeClassPath", "SomeState", earlyDate, None, None, Seq.empty)
+      "SomeClassPath", "SomeState", earlyDate, None, None, Seq.empty, None)
   val testJobInfoWithCp = JobInfo("SomeJobId", "SomeContextId", "SomeContextName",
     "SomeClassPath", "SomeState", earlyDate, Some(date), Some(ErrorData("SomeMessage",
-      "SomeClass", "SomeTrace")), Seq(testBinaryInfo, testBinaryInfo2))
+      "SomeClass", "SomeTrace")), Seq(testBinaryInfo, testBinaryInfo2), None)
   val testJobInfoJson = f"""{"classPath":"SomeClassPath","contextId":"SomeContextId","contextName":"SomeContextName","cp":[],"endTime":"${dateStr}","error":{"errorClass":"SomeClass","message":"SomeMessage","stackTrace":"SomeTrace"},"jobId":"SomeJobId","startTime":"${earlyDateStr}","state":"SomeState"}"""
   val testJobInfoNoCpJson = f"""{"classPath":"SomeClassPath","contextId":"SomeContextId","contextName":"SomeContextName","endTime":"${dateStr}","error":{"errorClass":"SomeClass","message":"SomeMessage","stackTrace":"SomeTrace"},"jobId":"SomeJobId","startTime":"${earlyDateStr}","state":"SomeState"}"""
   val testJobInfo2Json = f"""{"classPath":"SomeClassPath","contextId":"SomeContextId","contextName":"SomeContextName","cp":[],"endTime":null,"error":null,"jobId":"SomeJobId","startTime":"${earlyDateStr}","state":"SomeState"}"""
