@@ -99,7 +99,7 @@ class OldestAutoDowningSpec extends TestKit(ActorSystem("OldestAutoDowningSpec")
         )))
       othersNodeDowningProvider ! CurrentClusterState(members = initialMembersByAge)
       othersNodeDowningProvider ! UnreachableMember(membersWithOtherRolesByAge.head)
-      expectNoMsg(3.seconds)
+      expectNoMessage(3.seconds)
     }
 
     it("should not down unreachable if not the oldest node (with some other role)") {
@@ -109,7 +109,7 @@ class OldestAutoDowningSpec extends TestKit(ActorSystem("OldestAutoDowningSpec")
         )))
       othersNodeDowningProvider ! CurrentClusterState(members = initialMembersByAge)
       othersNodeDowningProvider ! UnreachableMember(membersWithOtherRolesByAge.tail.head)
-      expectNoMsg(3.seconds)
+      expectNoMessage(3.seconds)
     }
 
     it("if oldest is removed, second oldest should become oldest and remove nodes") {
@@ -136,7 +136,7 @@ class OldestAutoDowningSpec extends TestKit(ActorSystem("OldestAutoDowningSpec")
         )))
       oldestDowningProviderWithTimeout ! CurrentClusterState(members = initialMembersByAge)
       oldestDowningProviderWithTimeout ! UnreachableMember(membersWithOtherRolesByAge.head)
-      expectNoMsg(3.seconds)
+      expectNoMessage(3.seconds)
       expectMsg(DownCalled(membersWithOtherRolesByAge.head.address))
     }
 
@@ -172,7 +172,7 @@ class OldestAutoDowningSpec extends TestKit(ActorSystem("OldestAutoDowningSpec")
         )))
       someOtherNode ! CurrentClusterState(members = initialMembersByAge)
       someOtherNode ! UnreachableMember(membersWithDowningRoleByAge.head)
-      expectNoMsg(3.seconds)
+      expectNoMessage(3.seconds)
     }
   }
 
@@ -190,7 +190,7 @@ class OldestAutoDowningSpec extends TestKit(ActorSystem("OldestAutoDowningSpec")
         )))
       othersNodeDowningProvider ! CurrentClusterState(members = initialMembersByAge)
       othersNodeDowningProvider ! UnreachableMember(secondOldestMember)
-      expectNoMsg(3.seconds)
+      expectNoMessage(3.seconds)
     }
 
     it("if oldest is removed, second oldest should become oldest and remove nodes") {
@@ -211,7 +211,7 @@ class OldestAutoDowningSpec extends TestKit(ActorSystem("OldestAutoDowningSpec")
         )))
       oldestDowningProviderWithTimeout ! CurrentClusterState(members = initialMembersByAge)
       oldestDowningProviderWithTimeout ! UnreachableMember(secondOldestMember)
-      expectNoMsg(3.seconds)
+      expectNoMessage(3.seconds)
       expectMsg(DownCalled(secondOldestMember.address))
     }
 
@@ -225,7 +225,7 @@ class OldestAutoDowningSpec extends TestKit(ActorSystem("OldestAutoDowningSpec")
     it("should not down unreachable node if it's already in a state Down (not yet removed)") {
       oldestDowningProvider ! CurrentClusterState(members = initialMembersByAge)
       oldestDowningProvider ! UnreachableMember(someMember.copy(Down))
-      expectNoMsg(3.seconds)
+      expectNoMessage(3.seconds)
     }
 
     it("should not down another node even if previous was not yet removed from cluster") {
@@ -312,9 +312,9 @@ class OldestAutoDowningSpec extends TestKit(ActorSystem("OldestAutoDowningSpec")
         )))
       oldestDowningProviderWithLongerTimeout ! CurrentClusterState(members = initialMembersByAge)
       oldestDowningProviderWithLongerTimeout ! UnreachableMember(secondOldestMember)
-      expectNoMsg(2.seconds)
+      expectNoMessage(2.seconds)
       oldestDowningProviderWithLongerTimeout ! ReachableMember(secondOldestMember)
-      expectNoMsg(3.seconds)
+      expectNoMessage(3.seconds)
     }
 
     it("should not do anything if unreacheable member was removed during waiting for timeout") {
@@ -325,7 +325,7 @@ class OldestAutoDowningSpec extends TestKit(ActorSystem("OldestAutoDowningSpec")
       oldestDowningProviderWithTimeout ! CurrentClusterState(members = initialMembersByAge)
       oldestDowningProviderWithTimeout ! UnreachableMember(secondOldestMember)
       oldestDowningProviderWithTimeout ! MemberRemoved(secondOldestMember.copy(Removed), Down)
-      expectNoMsg(3.seconds)
+      expectNoMessage(3.seconds)
     }
 
     it("should not down the node if not the oldest and oldest is alone unreachable") {
@@ -335,7 +335,7 @@ class OldestAutoDowningSpec extends TestKit(ActorSystem("OldestAutoDowningSpec")
         )))
       othersNodeDowningProvider ! CurrentClusterState(members = initialMembersByAge)
       othersNodeDowningProvider ! UnreachableMember(initialMembersByAge.head)
-      expectNoMsg(3.seconds)
+      expectNoMessage(3.seconds)
     }
 
     it("should not down the node if not the oldest and oldest is alone unreachable even though there are" +
@@ -348,7 +348,7 @@ class OldestAutoDowningSpec extends TestKit(ActorSystem("OldestAutoDowningSpec")
       othersNodeDowningProvider ! CurrentClusterState(members = initialMembersByAge)
       othersNodeDowningProvider ! ReachableMember(joiningMember)
       othersNodeDowningProvider ! UnreachableMember(initialMembersByAge.head)
-      expectNoMsg(3.seconds)
+      expectNoMessage(3.seconds)
     }
 
     it("should down joining node if it becomes unreachable after a while") {

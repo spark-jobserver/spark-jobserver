@@ -596,7 +596,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
 
       supervisor ! ActorIdentity(unusedDummyInput, Some(managerProbe.ref))
       deathWatch.expectTerminated(managerProbe.ref)
-      expectNoMsg((SparkJobUtils.getForkedJVMInitTimeout(system.settings.config) + 1).second)
+      expectNoMessage((SparkJobUtils.getForkedJVMInitTimeout(system.settings.config) + 1).second)
 
       supervisor ! StubbedAkkaClusterSupervisorActor.EnableDAOCommunication
     }
@@ -700,7 +700,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
     it("should not receive JVM creation timed out error if context was intialized properly") {
       supervisor ! AddContext("test-context-proper-init", contextConfig)
       expectMsg(contextInitTimeout, ContextInitialized)
-      expectNoMsg((SparkJobUtils.getForkedJVMInitTimeout(system.settings.config) + 1).second)
+      expectNoMessage((SparkJobUtils.getForkedJVMInitTimeout(system.settings.config) + 1).second)
     }
   }
 

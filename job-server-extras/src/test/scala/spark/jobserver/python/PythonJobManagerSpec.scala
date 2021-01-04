@@ -46,7 +46,7 @@ class PythonJobManagerSpec extends ExtrasJobSpecBase(PythonJobManagerSpec.getNew
         }
         case JobErroredOut(_, _, error: Throwable) => throw error
       }
-      expectNoMsg()
+      expectNoMessage()
     }
 
     it("should execute eggs") {
@@ -83,7 +83,7 @@ class PythonJobManagerSpec extends ExtrasJobSpecBase(PythonJobManagerSpec.getNew
         case JobLoadingError(error: Throwable) =>
           error.getMessage should be ("Python should have exactly one package file! Found: 2")
       }
-      expectNoMsg()
+      expectNoMessage()
     }
   }
 }
