@@ -91,8 +91,9 @@ class SJSAuthenticatorSpec extends FunSpecLike
     it("should allow user with valid role/group") {
       val instance = new ShiroAuthenticator(config)
       val cred = new BasicHttpCredentials(testUserWithValidGroup, testUserWithValidGroupPassword)
-      Await.result(instance.challenge()(Some(cred)), 10.seconds) should
-        equal(Some(new AuthInfo(User(testUserWithValidGroup))))
+      val authInfo = Await.result(instance.challenge()(Some(cred)), 10.seconds)
+      authInfo should equal(Some(new AuthInfo(User(testUserWithValidGroup))))
+      authInfo.get.abilities should equal(Set(Permissions.ALLOW_ALL, Permissions.JOBS))
     }
 
     it("should check role/group when checking is activated") {

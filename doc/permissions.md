@@ -1,8 +1,7 @@
 # Permissions
 Spark job server implements a basic authorization management system to control access to single resources. By default,
 users always have access to all resources (`ALLOW_ALL`). Authorization is implemented by checking the *permissions* of a
-user with the required permissions of an endpoint. Currently, a fine-grained authorization control is only possible with
-the [Keycloak Authenticator](../README.md#keycloak-authentication).
+user with the required permissions of an endpoint.
 
 | Name            | Identifier      | Routes                                                                                                                                                                 |
 |-----------------|-----------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------

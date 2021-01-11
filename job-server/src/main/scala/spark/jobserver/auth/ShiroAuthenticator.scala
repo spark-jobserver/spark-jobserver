@@ -31,13 +31,16 @@ class ShiroAuthenticator(override protected val authConfig: Config)
     try {
       currentUser.login(token)
       val fullName = currentUser.getPrincipal().toString
-      //is this user allowed to do anything -
-      //  realm implementation may for example throw an exception
-      //  if user is not a member of a valid group
-      currentUser.isPermitted("*")
+      val permissions = Permissions.permissions
+        .filter(p => currentUser.hasRole(p.name))
+        .toSet
       logger.trace("ACCESS GRANTED, user [%s]", fullName)
       currentUser.logout()
-      Option(new AuthInfo(new User(fullName)))
+      Option(new AuthInfo(User(fullName),
+        Option(permissions)
+          .filter(_.nonEmpty)
+          .getOrElse(Set(Permissions.ALLOW_ALL)))
+      )
     } catch {
       case uae: UnknownAccountException =>
         logger.info("ACCESS DENIED (Unknown), user [" + user + "]")
