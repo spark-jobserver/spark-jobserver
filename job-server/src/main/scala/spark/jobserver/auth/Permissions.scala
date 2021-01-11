@@ -31,12 +31,13 @@ object Permissions {
   val JOBS_START: Permission = Permission("jobs:start", JOBS)
   val JOBS_DELETE: Permission = Permission("jobs:delete", JOBS)
 
+  private val permissions = Seq(ALLOW_ALL,
+    BINARIES, BINARIES_READ, BINARIES_UPLOAD, BINARIES_DELETE,
+    CONTEXTS, CONTEXTS_READ, CONTEXTS_START, CONTEXTS_DELETE, CONTEXTS_RESET,
+    DATA, DATA_READ, DATA_UPLOAD, DATA_DELETE, DATA_RESET,
+    JOBS, JOBS_READ, JOBS_START, JOBS_DELETE)
+
   def apply(name: String): Option[Permission] = {
-    val permissions = Seq(ALLOW_ALL,
-      BINARIES, BINARIES_READ, BINARIES_UPLOAD, BINARIES_DELETE,
-      CONTEXTS, CONTEXTS_READ, CONTEXTS_START, CONTEXTS_DELETE, CONTEXTS_RESET,
-      DATA, DATA_READ, DATA_UPLOAD, DATA_DELETE, DATA_RESET,
-      JOBS, JOBS_READ, JOBS_START, JOBS_DELETE)
     permissions.find(_.name == name)
   }
 }

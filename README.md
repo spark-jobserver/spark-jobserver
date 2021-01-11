@@ -39,7 +39,7 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
   - [Basic authentication](#basic-authentication)
     - [Shiro](#shiro-authentication)
     - [Keycloak](#keycloak-authentication)
-  - [Permissions](#permissions)
+  - [User authorization](#user-authorization)
 - [Deployment](#deployment)
   - [Manual steps](#manual-steps)
   - [Context per JVM](#context-per-jvm)
@@ -621,11 +621,12 @@ Unknown client roles are ignored. For a list of available permissions see [Permi
 
 *Important:* If no client role matches a permission, the user is assigned the `ALLOW_ALL` role.
 
-### Permissions
-Spark job server implements a basic permission management system to control access to single resources. By default,
-users always have access to all resources (`ALLOW_ALL`). Currently, a fine-grained permission control is only possible
-with the [Keycloak Authenticator](#keycloak-authentication). For a detailed list of all available permissions see
-[Permissions](doc/permissions.md).
+### User Authorization
+Spark job server implements a basic authorization management system to control access to single resources. By default,
+users always have access to all resources (`ALLOW_ALL`). Currently, a fine-grained authorization control is only
+possible with the [Keycloak Authenticator](#keycloak-authentication). Authorization is implemented by
+checking the *permissions* of a user with the required permissions of an endpoint. For a detailed list of all available
+permissions see [Permissions](doc/permissions.md).
 
 ## Deployment
 
