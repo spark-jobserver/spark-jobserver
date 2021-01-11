@@ -36,7 +36,7 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
   - [HTTPS / SSL Configuration](#https--ssl-configuration)
     - [Server authentication](#server-authentication)
     - [Client authentication](#client-authentication)
-  - [Basic authentication](#basic-authentication)
+  - [Access control](#access-control)
     - [Shiro](#shiro-authentication)
     - [Keycloak](#keycloak-authentication)
   - [User authorization](#user-authorization)
@@ -546,7 +546,7 @@ The minimum set of parameters to enable client authentication consists of:
 ```
 Note, client authentication implies server authentication, therefore client authentication will only be enabled once server authentication is activated.
 
-### Basic authentication
+### Access Control
 By default, access to the Job Server is not limited. Basic authentication (username and password) support is provided
 via the [Apache Shiro](http://shiro.apache.org/index.html) framework or [Keycloak](https://www.keycloak.org/). Both
 authentication frameworks have to be explicitly activated in the configuration file. 
@@ -563,7 +563,7 @@ The Shiro Authenticator can be activated in the configuration file by changing t
 providing a shiro configuration file.
 ```
 authentication {
-  provider = spark.jobserver.auth.ShiroAuthenticator
+  provider = spark.jobserver.auth.ShiroAccessControl
 
   # absolute path to shiro config file, including file name
   shiro.config.path = "/some/path/shiro.ini"
@@ -600,7 +600,7 @@ The Keycloak Authenticator can be activated in the configuration file by changin
 providing a keycloak configuration.
 ```
 authentication {
-  provider = spark.jobserver.auth.KeycloakAuthenticator
+  provider = spark.jobserver.auth.KeycloakAccessControl
 
   keycloak {
     authServerUrl = "https://example.com"

@@ -7,13 +7,13 @@ import com.typesafe.config.Config
 import scala.concurrent.{ExecutionContext, Future}
 
 /**
-  * Default authenticator that accepts all users
+  * Default access control that accepts all users
   */
-class AllowAllAuthenticator(override protected val authConfig: Config)
+class AllowAllAccessControl(override protected val authConfig: Config)
                            (implicit ec: ExecutionContext, s: ActorSystem)
-  extends SJSAuthenticator(authConfig) {
+  extends SJSAccessControl(authConfig) {
 
-  override def challenge(): SJSAuthenticator.Challenge = {
+  override def challenge(): SJSAccessControl.Challenge = {
     _ => Future.successful(authenticate(BasicHttpCredentials.apply("", "")))
   }
 

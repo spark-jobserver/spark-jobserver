@@ -16,9 +16,12 @@ import scala.concurrent.duration.DurationInt
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.Try
 
-class KeycloakAuthenticator(override protected val authConfig: Config)
+/**
+  * Keycloak based access control for the Spark JobServer.
+  */
+class KeycloakAccessControl(override protected val authConfig: Config)
                            (implicit ec: ExecutionContext, s: ActorSystem)
-  extends SJSAuthenticator(authConfig) {
+  extends SJSAccessControl(authConfig) {
 
   private val baseUrl = f"${authConfig.getString("keycloak.authServerUrl").stripSuffix("/")}/realms/" +
     f"${authConfig.getString("keycloak.realmName")}/protocol/openid-connect"
