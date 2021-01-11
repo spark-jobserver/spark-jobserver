@@ -4,8 +4,10 @@ import akka.actor.ActorSystem
 import akka.http.scaladsl.model.headers.BasicHttpCredentials
 import com.typesafe.config.Config
 import org.apache.shiro.SecurityUtils
-import org.apache.shiro.authc.{AuthenticationException, IncorrectCredentialsException,
-  LockedAccountException, UnknownAccountException, UsernamePasswordToken}
+import org.apache.shiro.authc.{
+  AuthenticationException, IncorrectCredentialsException,
+  LockedAccountException, UnknownAccountException, UsernamePasswordToken
+}
 import org.apache.shiro.authz.AuthorizationException
 import org.apache.shiro.config.IniSecurityManagerFactory
 
@@ -15,10 +17,11 @@ import scala.concurrent.ExecutionContext
   * Apache Shiro based authenticator for the Spark JobServer, the authenticator realm must be
   * specified in the ini file for Shiro
   */
-class ShiroAuthenticator(override protected val config: Config)
-                        (implicit ec: ExecutionContext, s: ActorSystem) extends SJSAuthenticator(config) {
+class ShiroAuthenticator(override protected val authConfig: Config)
+                        (implicit ec: ExecutionContext, s: ActorSystem)
+  extends SJSAuthenticator(authConfig) {
 
-  val sManager = new IniSecurityManagerFactory(config.getString("shiro.config.path")).getInstance()
+  val sManager = new IniSecurityManagerFactory(authConfig.getString("shiro.config.path")).getInstance()
   SecurityUtils.setSecurityManager(sManager)
 
   override def authenticate(credentials: BasicHttpCredentials): Option[AuthInfo] = {

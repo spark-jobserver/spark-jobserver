@@ -65,9 +65,9 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
     val api = new WebApi(system, testConfig, dummyPort, dummyActor,
       dummyActor, dummyActor, dummyActor, null) {
 
-      class MockedShiroAuthenticator(override protected val config: Config)
+      class MockedShiroAuthenticator(override protected val authConfig: Config)
                                     (implicit ec: ExecutionContext, s: ActorSystem)
-        extends ShiroAuthenticator(config)(ec, s){
+        extends ShiroAuthenticator(authConfig)(ec, s){
 
         override def challenge(): Challenge = {
           credentials: Option[BasicHttpCredentials] => {

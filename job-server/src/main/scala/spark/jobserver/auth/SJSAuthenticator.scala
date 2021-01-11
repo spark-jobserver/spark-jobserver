@@ -31,12 +31,12 @@ object SJSAuthenticator {
   }
 }
 
-abstract class SJSAuthenticator(protected val config: Config)
+abstract class SJSAuthenticator(protected val authConfig: Config)
                       (implicit ec: ExecutionContext, s: ActorSystem) {
   import scala.concurrent.duration._
 
   protected val logger: Logger = LoggerFactory.getLogger(getClass)
-  protected val authTimeout: Int = Try(config.getDuration("authentication-timeout",
+  protected val authTimeout: Int = Try(authConfig.getDuration("authentication-timeout",
     TimeUnit.MILLISECONDS).toInt / 1000).getOrElse(10)
 
   def challenge(): SJSAuthenticator.Challenge = {
@@ -58,7 +58,7 @@ abstract class SJSAuthenticator(protected val config: Config)
         }
       }
       import akka.pattern.after
-      lazy val t = after(duration = authTimeout seconds,
+      lazy val t = after(duration = authTimeout.seconds,
         using = s.scheduler)(Future.failed(new TimeoutException("Authentication timed out!")))
 
       Future firstCompletedOf Seq(f, t)
