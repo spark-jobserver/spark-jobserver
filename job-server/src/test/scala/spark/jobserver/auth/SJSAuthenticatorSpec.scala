@@ -122,14 +122,14 @@ class SJSAuthenticatorSpec extends FunSpecLike
   }
 
   describe("KeycloakAuthenticator") {
-    class MockedKeycloakAuthenticator(override protected val config: Config)
-      extends KeycloakAuthenticator(config) {
+    class MockedKeycloakAuthenticator(override protected val authConfig: Config)
+      extends KeycloakAuthenticator(authConfig) {
 
       var loginCount = 0
 
       override protected def getJwtToken(username: String, password: String): Future[Jws[Claims]] = {
         Future {
-          if (username == testUserWithValidGroup && password == testUserWithoutValidGroupPassword) {
+          if (username == testUserWithValidGroup && password == testUserWithValidGroupPassword) {
             loginCount += 1
             Jwts.parser()
               .setSigningKeyResolver(new SigningKeyResolver {
@@ -216,13 +216,13 @@ class SJSAuthenticatorSpec extends FunSpecLike
 
     it("should allow user with valid credentials") {
       val instance = new MockedKeycloakAuthenticator(config)
-      val cred = new BasicHttpCredentials(testUserWithValidGroup, testUserWithoutValidGroupPassword)
+      val cred = new BasicHttpCredentials(testUserWithValidGroup, testUserWithValidGroupPassword)
       Await.result(instance.challenge()(Some(cred)), 10.seconds) should equal(validAuthInfo)
     }
 
     it("should cache user with valid credentials") {
       val instance = new MockedKeycloakAuthenticator(config)
-      val cred = new BasicHttpCredentials(testUserWithValidGroup, testUserWithoutValidGroupPassword)
+      val cred = new BasicHttpCredentials(testUserWithValidGroup, testUserWithValidGroupPassword)
       Await.result(instance.challenge()(Some(cred)), 10.seconds) should equal(validAuthInfo)
       Await.result(instance.challenge()(Some(cred)), 10.seconds) should equal(validAuthInfo)
       Await.result(instance.challenge()(Some(cred)), 10.seconds) should equal(validAuthInfo)
@@ -236,7 +236,7 @@ class SJSAuthenticatorSpec extends FunSpecLike
       val cred = new BasicHttpCredentials(testUserWithValidGroup, testUserInvalidPassword)
       Await.result(instance.challenge()(Some(cred)), 10.seconds) should equal(None)
 
-      val cred2 = new BasicHttpCredentials(testUserWithValidGroup, testUserWithoutValidGroupPassword)
+      val cred2 = new BasicHttpCredentials(testUserWithValidGroup, testUserWithValidGroupPassword)
       Await.result(instance.challenge()(Some(cred2)), 10.seconds) should equal(validAuthInfo)
     }
 

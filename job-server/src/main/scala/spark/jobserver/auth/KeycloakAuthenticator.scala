@@ -19,17 +19,17 @@ import scala.concurrent.duration.DurationInt
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.Try
 
-class KeycloakAuthenticator(override protected val config: Config)
+class KeycloakAuthenticator(override protected val authConfig: Config)
                            (implicit ec: ExecutionContext, s: ActorSystem)
-  extends SJSAuthenticator(config) {
+  extends SJSAuthenticator(authConfig) {
 
-  private val baseUrl = f"${config.getString("keycloak.authServerUrl").stripSuffix("/")}/realms/" +
-    f"${config.getString("keycloak.realmName")}/protocol/openid-connect"
-  private val clientId = config.getString("keycloak.client")
-  private val clientSecret = Try(config.getString("keycloak.clientSecret")).toOption
+  private val baseUrl = f"${authConfig.getString("keycloak.authServerUrl").stripSuffix("/")}/realms/" +
+    f"${authConfig.getString("keycloak.realmName")}/protocol/openid-connect"
+  private val clientId = authConfig.getString("keycloak.client")
+  private val clientSecret = Try(authConfig.getString("keycloak.clientSecret")).toOption
 
   protected val keyStore: JwkProvider = new UrlJwkProvider(new URL(f"$baseUrl/certs"))
-  protected val jwtParser = Jwts.parser()
+  protected val jwtParser: JwtParser = Jwts.parser()
     .setSigningKeyResolver(new SigningKeyResolver {
       override def resolveSigningKey(header: JwsHeader[T] forSome {type T <: JwsHeader[T]},
                                      claims: Claims): Key =
@@ -39,7 +39,7 @@ class KeycloakAuthenticator(override protected val config: Config)
                                      plaintext: String): Key = {
         Try(keyStore.get(header.getKeyId).getPublicKey).recoverWith {
           case ex: JwkException =>
-            logger.warn(s"Failed to fetch JWK: ${ex.getMessage}")
+            logger.error(s"Failed to fetch JWK: ${ex.getMessage}")
             null
         }.get
       }
@@ -69,7 +69,7 @@ class KeycloakAuthenticator(override protected val config: Config)
           cache.remove(user)
           None
       }
-    Await.result(f, authTimeout seconds)
+    Await.result(f, authTimeout.seconds)
   }
 
   protected def getJwtToken(username: String, password: String): Future[Jws[Claims]] = {

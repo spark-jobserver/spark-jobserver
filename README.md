@@ -37,6 +37,8 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
     - [Server authentication](#server-authentication)
     - [Client authentication](#client-authentication)
   - [Basic authentication](#basic-authentication)
+    - [Shiro](#shiro-authentication)
+    - [Keycloak](#keycloak-authentication)
   - [Permissions](#permissions)
 - [Deployment](#deployment)
   - [Manual steps](#manual-steps)
