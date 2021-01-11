@@ -13,7 +13,7 @@ import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
 import spark.jobserver._
-import spark.jobserver.auth.SJSAuthenticator.Challenge
+import spark.jobserver.auth.SJSAccessControl.Challenge
 import spark.jobserver.io.JobDAOActor.GetJobInfo
 import spark.jobserver.io.{BinaryInfo, BinaryType, JobInfo, JobStatus}
 import spark.jobserver.util.SparkJobUtils
@@ -42,8 +42,8 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
       jobserver.bind-address = "${bindConfVal}"
       jobserver.short-timeout = 3 s
     }
-    authentication {
-      authentication-timeout = 10 s
+    access-control {
+      auth-timeout = 10 s
       shiro.config.path = "classpath:auth/dummy.ini"
     }
                                  """)
@@ -59,15 +59,15 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
   private val dummyActor = system.actorOf(Props(classOf[DummyActor], this))
 
   private def routesWithTimeout(useAsProxyUser: Boolean, authTimeout: Int): Route = {
-    val testConfig = config.withValue("authentication.authentication-timeout",
+    val testConfig = config.withValue("access-control.auth-timeout",
       ConfigValueFactory.fromAnyRef(authTimeout))
-      .withValue("authentication.shiro.use-as-proxy-user", ConfigValueFactory.fromAnyRef(useAsProxyUser))
+      .withValue("access-control.shiro.use-as-proxy-user", ConfigValueFactory.fromAnyRef(useAsProxyUser))
     val api = new WebApi(system, testConfig, dummyPort, dummyActor,
       dummyActor, dummyActor, dummyActor, null) {
 
-      class MockedShiroAuthenticator(override protected val authConfig: Config)
+      class MockedShiroAccessControl(override protected val authConfig: Config)
                                     (implicit ec: ExecutionContext, s: ActorSystem)
-        extends ShiroAuthenticator(authConfig)(ec, s){
+        extends ShiroAccessControl(authConfig)(ec, s){
 
         override def challenge(): Challenge = {
           credentials: Option[BasicHttpCredentials] => {
@@ -98,7 +98,7 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
       }
 
       override lazy val authenticator: Challenge = {
-        new MockedShiroAuthenticator(testConfig.getConfig("authentication"))(ec, system).challenge()
+        new MockedShiroAccessControl(testConfig.getConfig("access-control"))(ec, system).challenge()
       }
     }
     api.myRoutes
