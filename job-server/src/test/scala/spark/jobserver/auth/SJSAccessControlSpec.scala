@@ -15,7 +15,7 @@ import scala.concurrent.{Await, Future}
 
 import Permissions._
 
-class SJSAuthenticatorSpec extends FunSpecLike
+class SJSAccessControlSpec extends FunSpecLike
     with ScalatestRouteTest with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
   //set this to true to check your real ldap server
@@ -23,7 +23,7 @@ class SJSAuthenticatorSpec extends FunSpecLike
 
   private def config(cache: Boolean = true) = ConfigFactory.parseString(
     s"""
-    authentication-timeout = 10 s
+    auth-timeout = 10 s
     shiro.config.path = "${if (isGroupChecking) "classpath:auth/shiro.ini" else "classpath:auth/dummy.ini"}"
     keycloak {
       authServerUrl = "https://example.com/"
@@ -71,17 +71,17 @@ class SJSAuthenticatorSpec extends FunSpecLike
     TestKit.shutdownActorSystem(system)
   }
 
-  describe("AllowAllAuthenticator") {
+  describe("AllowAllAccessControl") {
 
     it("should allow user with valid role/group") {
-      val instance = new AllowAllAuthenticator(config())
+      val instance = new AllowAllAccessControl(config())
       val cred = new BasicHttpCredentials(testUserWithValidGroup, testUserWithValidGroupPassword)
       Await.result(instance.challenge()(Some(cred)), 10.seconds) should
         equal(Some(new AuthInfo(User(anonymousUser))))
     }
 
     it("should allow user without valid role/group") {
-      val instance = new AllowAllAuthenticator(config())
+      val instance = new AllowAllAccessControl(config())
       val cred = new BasicHttpCredentials(testUserWithoutValidGroup, testUserWithoutValidGroupPassword)
       Await.result(instance.challenge()(Some(cred)), 10.seconds) should
         equal(Some(new AuthInfo(User(anonymousUser))))
@@ -94,7 +94,7 @@ class SJSAuthenticatorSpec extends FunSpecLike
     }
   }
 
-  describe("ShiroAuthenticator") {
+  describe("ShiroAccessControl") {
     it("should allow user with valid role/group") {
       val instance = new ShiroAccessControl(config())
       val cred = new BasicHttpCredentials(testUserWithValidGroup, testUserWithValidGroupPassword)
@@ -104,7 +104,7 @@ class SJSAuthenticatorSpec extends FunSpecLike
     }
 
     it("should check role/group when checking is activated") {
-      val instance = new ShiroAuthenticator(config())
+      val instance = new ShiroAccessControl(config())
       val expected = if (isGroupChecking) {
         None
       } else {
@@ -116,14 +116,14 @@ class SJSAuthenticatorSpec extends FunSpecLike
     }
 
     it("should not allow invalid user") {
-      val instance = new ShiroAuthenticator(config())
+      val instance = new ShiroAccessControl(config())
       val cred = new BasicHttpCredentials(testUserInvalid, testUserInvalidPassword)
       Await.result(instance.challenge()(Some(cred)), 10.seconds) should
         equal(None)
     }
 
     it("should allow user with valid credentials after first rejection") {
-      val instance = new ShiroAuthenticator(config())
+      val instance = new ShiroAccessControl(config())
       val expected = if (isGroupChecking) {
         None
       } else {
@@ -137,7 +137,7 @@ class SJSAuthenticatorSpec extends FunSpecLike
     }
 
     it("should allow cached user with invalid credentials") {
-      val instance = new ShiroAuthenticator(config())
+      val instance = new ShiroAccessControl(config())
       val expected = if (isGroupChecking) {
         None
       } else {
@@ -152,7 +152,7 @@ class SJSAuthenticatorSpec extends FunSpecLike
     }
 
     it("should not allow cached user with invalid credentials if caching is disabled") {
-      val instance = new ShiroAuthenticator(config(false))
+      val instance = new ShiroAccessControl(config(false))
       val expected = if (isGroupChecking) {
         None
       } else {
@@ -167,15 +167,15 @@ class SJSAuthenticatorSpec extends FunSpecLike
     }
 
     it("should not allow user without credentials") {
-      val instance = new ShiroAuthenticator(config())
+      val instance = new ShiroAccessControl(config())
       Await.result(instance.challenge()(None), 10.seconds) should
         equal(None)
     }
   }
 
-  describe("KeycloakAuthenticator") {
-    class MockedKeycloakAuthenticator(override protected val authConfig: Config)
-      extends KeycloakAuthenticator(authConfig) {
+  describe("KeycloakAccessControl") {
+    class MockedKeycloakAccessControl(override protected val authConfig: Config)
+      extends KeycloakAccessControl(authConfig) {
 
       var loginCount = 0
 
@@ -267,13 +267,13 @@ class SJSAuthenticatorSpec extends FunSpecLike
     val validAuthInfo = Some(new AuthInfo(User(testUserWithValidGroup)))
 
     it("should allow user with valid credentials") {
-      val instance = new MockedKeycloakAuthenticator(config())
+      val instance = new MockedKeycloakAccessControl(config())
       val cred = new BasicHttpCredentials(testUserWithValidGroup, testUserWithValidGroupPassword)
       Await.result(instance.challenge()(Some(cred)), 10.seconds) should equal(validAuthInfo)
     }
 
     it("should cache user with valid credentials") {
-      val instance = new MockedKeycloakAuthenticator(config())
+      val instance = new MockedKeycloakAccessControl(config())
       val cred = new BasicHttpCredentials(testUserWithValidGroup, testUserWithValidGroupPassword)
       Await.result(instance.challenge()(Some(cred)), 10.seconds) should equal(validAuthInfo)
       Await.result(instance.challenge()(Some(cred)), 10.seconds) should equal(validAuthInfo)
@@ -284,7 +284,7 @@ class SJSAuthenticatorSpec extends FunSpecLike
     }
 
     it("should allow user with valid credentials after first rejection") {
-      val instance = new MockedKeycloakAuthenticator(config())
+      val instance = new MockedKeycloakAccessControl(config())
       val cred = new BasicHttpCredentials(testUserWithValidGroup, testUserInvalidPassword)
       Await.result(instance.challenge()(Some(cred)), 10.seconds) should equal(None)
 
@@ -293,13 +293,13 @@ class SJSAuthenticatorSpec extends FunSpecLike
     }
 
     it("should not allow invalid user") {
-      val instance = new MockedKeycloakAuthenticator(config())
+      val instance = new MockedKeycloakAccessControl(config())
       val cred = new BasicHttpCredentials(testUserInvalid, testUserInvalidPassword)
       Await.result(instance.challenge()(Some(cred)), 10.seconds) should equal(None)
     }
 
     it("should not allow user without credentials") {
-      val instance = new MockedKeycloakAuthenticator(config())
+      val instance = new MockedKeycloakAccessControl(config())
       Await.result(instance.challenge()(None), 10.seconds) should equal(None)
     }
   }

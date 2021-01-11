@@ -20,7 +20,7 @@ import javax.net.ssl.SSLContext
 import org.joda.time.DateTime
 import org.slf4j.{Logger, LoggerFactory}
 import spark.jobserver.auth.Permissions._
-import spark.jobserver.auth.SJSAuthenticator._
+import spark.jobserver.auth.SJSAccessControl._
 import spark.jobserver.auth._
 import spark.jobserver.common.akka.web.JsonUtils.AnyJsonFormat
 import spark.jobserver.common.akka.web.{CommonRoutes, WebService}
@@ -229,16 +229,16 @@ class WebApi(system: ActorSystem,
   }
 
   lazy val authenticator: Challenge = {
-    val authConfig = Try(config.getConfig("authentication"))
+    val authConfig = Try(config.getConfig("access-control"))
       .toOption.getOrElse(ConfigFactory.empty())
     val providerClass = Try(authConfig.getString("provider"))
-      .toOption.getOrElse("spark.jobserver.auth.AllowAllAuthenticator")
+      .toOption.getOrElse("spark.jobserver.auth.AllowAllAccessControl")
     logger.info(f"Using $providerClass authentication provider.")
 
     val providerInst = Class.forName(providerClass)
       .getConstructors()(0)
       .newInstance(authConfig, ec, system)
-      .asInstanceOf[SJSAuthenticator]
+      .asInstanceOf[SJSAccessControl]
     providerInst.challenge()
   }
 
@@ -458,8 +458,8 @@ class WebApi(system: ActorSystem,
           case contexts =>
             val getContexts = SparkJobUtils.removeProxyUserPrefix(
               authInfo.toString, contexts.asInstanceOf[Seq[String]],
-              config.hasPath("authentication.shiro") &&
-                config.getBoolean("authentication.shiro.use-as-proxy-user"))
+              config.hasPath("access-control.shiro") &&
+                config.getBoolean("access-control.shiro.use-as-proxy-user"))
             ctx.complete(getContexts)
         }.recoverWith {
           case e: Exception =>
@@ -983,8 +983,8 @@ class WebApi(system: ActorSystem,
   def determineProxyUser(aConfig: Config,
                          authInfo: AuthInfo,
                          contextName: String): (String, Config) = {
-    if (config.hasPath("authentication.shiro") &&
-      config.getBoolean("authentication.shiro.use-as-proxy-user")) {
+    if (config.hasPath("access-control.shiro") &&
+      config.getBoolean("access-control.shiro.use-as-proxy-user")) {
       //proxy-user-param is ignored and the authenticated user name is used
       val config = aConfig.withValue(SparkJobUtils.SPARK_PROXY_USER_PARAM,
         ConfigValueFactory.fromAnyRef(authInfo.toString))

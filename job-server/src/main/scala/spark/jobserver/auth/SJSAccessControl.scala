@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit
 import scala.concurrent.{ExecutionContext, Future, TimeoutException}
 import scala.util.Try
 
-object SJSAuthenticator {
+object SJSAccessControl {
   type Challenge = Option[BasicHttpCredentials] => Future[Option[AuthInfo]]
 
   protected val realm = "Sparkjobserver Private"
@@ -52,13 +52,13 @@ class NoCaching[K, V] extends Cache[K, V] {
 }
 
 
-abstract class SJSAuthenticator(protected val authConfig: Config)
+abstract class SJSAccessControl(protected val authConfig: Config)
                                (implicit ec: ExecutionContext, s: ActorSystem) {
 
   import scala.concurrent.duration._
 
   protected val logger: Logger = LoggerFactory.getLogger(getClass)
-  protected val authTimeout: Int = Try(authConfig.getDuration("authentication-timeout",
+  protected val authTimeout: Int = Try(authConfig.getDuration("auth-timeout",
     TimeUnit.MILLISECONDS).toInt / 1000).getOrElse(10)
   protected val useCaching: Boolean = authConfig.hasPath("use-cache") && authConfig.getBoolean("use-cache")
 
@@ -77,7 +77,7 @@ abstract class SJSAuthenticator(protected val authConfig: Config)
     new NoCaching()
   }
 
-  def challenge(): SJSAuthenticator.Challenge = {
+  def challenge(): SJSAccessControl.Challenge = {
     credentials: Option[BasicHttpCredentials] => {
       lazy val f = Future {
         credentials match {

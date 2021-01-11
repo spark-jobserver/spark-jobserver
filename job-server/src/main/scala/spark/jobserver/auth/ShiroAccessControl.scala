@@ -12,12 +12,12 @@ import scala.concurrent.duration.DurationInt
 import scala.concurrent.{Await, ExecutionContext, Future}
 
 /**
-  * Apache Shiro based authenticator for the Spark JobServer, the authenticator realm must be
+  * Apache Shiro based access control for the Spark JobServer, the authenticator realm must be
   * specified in the ini file for Shiro
   */
-class ShiroAuthenticator(override protected val authConfig: Config)
+class ShiroAccessControl(override protected val authConfig: Config)
                         (implicit ec: ExecutionContext, s: ActorSystem)
-  extends SJSAuthenticator(authConfig) {
+  extends SJSAccessControl(authConfig) {
 
   val sManager = new IniSecurityManagerFactory(authConfig.getString("shiro.config.path")).getInstance()
   SecurityUtils.setSecurityManager(sManager)
