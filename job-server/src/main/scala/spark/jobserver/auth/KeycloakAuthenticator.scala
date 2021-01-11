@@ -1,15 +1,12 @@
 package spark.jobserver.auth
 
 import akka.actor.ActorSystem
-import akka.http.caching.LfuCache
-import akka.http.caching.scaladsl.Cache
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.headers.BasicHttpCredentials
 import akka.http.scaladsl.model.{FormData, HttpEntity, HttpMethods, HttpRequest}
 import com.auth0.jwk.{JwkException, JwkProvider, UrlJwkProvider}
 import com.typesafe.config.Config
 import io.jsonwebtoken._
-import org.apache.shiro.authc.IncorrectCredentialsException
 import spark.jobserver.common.akka.web.JsonUtils
 
 import scala.collection.JavaConverters._
@@ -28,6 +25,8 @@ class KeycloakAuthenticator(override protected val authConfig: Config)
   private val clientId = authConfig.getString("keycloak.client")
   private val clientSecret = Try(authConfig.getString("keycloak.clientSecret")).toOption
 
+  class IncorrectCredentialsException extends RuntimeException
+
   protected val keyStore: JwkProvider = new UrlJwkProvider(new URL(f"$baseUrl/certs"))
   protected val jwtParser: JwtParser = Jwts.parser()
     .setSigningKeyResolver(new SigningKeyResolver {
@@ -44,8 +43,6 @@ class KeycloakAuthenticator(override protected val authConfig: Config)
         }.get
       }
     })
-
-  private val cache: Cache[String, AuthInfo] = LfuCache.apply
 
   override protected def authenticate(credentials: BasicHttpCredentials): Option[AuthInfo] = {
     val BasicHttpCredentials(user, pass) = credentials
@@ -106,11 +103,7 @@ class KeycloakAuthenticator(override protected val authConfig: Config)
       })
       .map(mapRoles)
       .getOrElse(Set.empty)
-    logger.debug(f"Authenticated $name with roles $permissions")
-
-    new AuthInfo(User(name), Option(permissions)
-      .filter(_.nonEmpty)
-      .getOrElse(Set(Permissions.ALLOW_ALL)))
+    createAuthInfo(name, permissions)
   }
 
   protected def mapRoles(roles: Seq[String]): Set[Permission] = {

@@ -1,12 +1,14 @@
 package spark.jobserver.auth
 
 import akka.actor.ActorSystem
+import akka.http.caching.LfuCache
+import akka.http.caching.scaladsl.{Cache, CachingSettings}
 import akka.http.scaladsl.model.headers.{BasicHttpCredentials, HttpChallenges}
 import akka.http.scaladsl.server.Directive
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.directives.AuthenticationResult
 import akka.http.scaladsl.util.FastFuture.EnhancedFuture
-import com.typesafe.config.Config
+import com.typesafe.config.{Config, ConfigException}
 import org.slf4j.{Logger, LoggerFactory}
 
 import java.util.concurrent.TimeUnit
@@ -32,12 +34,22 @@ object SJSAuthenticator {
 }
 
 abstract class SJSAuthenticator(protected val authConfig: Config)
-                      (implicit ec: ExecutionContext, s: ActorSystem) {
+                               (implicit ec: ExecutionContext, s: ActorSystem) {
+
   import scala.concurrent.duration._
 
   protected val logger: Logger = LoggerFactory.getLogger(getClass)
   protected val authTimeout: Int = Try(authConfig.getDuration("authentication-timeout",
     TimeUnit.MILLISECONDS).toInt / 1000).getOrElse(10)
+
+  protected val cache: Cache[String, AuthInfo] = Try(CachingSettings.apply(authConfig))
+    .map(LfuCache.apply[String, AuthInfo])
+    .recover {
+      case _: ConfigException.Missing =>
+        logger.warn("Failed to load access-control cache settings. Falling back to default cache settings.")
+        LfuCache.apply[String, AuthInfo]
+    }
+    .get
 
   def challenge(): SJSAuthenticator.Challenge = {
     credentials: Option[BasicHttpCredentials] => {
@@ -66,6 +78,13 @@ abstract class SJSAuthenticator(protected val authConfig: Config)
   }
 
   protected def authenticate(credentials: BasicHttpCredentials): Option[AuthInfo]
+
+  protected def createAuthInfo(name: String, permissions: Set[Permission]) = {
+    logger.debug(f"Authenticated $name with roles $permissions")
+    new AuthInfo(User(name), Option(permissions)
+      .filter(_.nonEmpty)
+      .getOrElse(Set(Permissions.ALLOW_ALL)))
+  }
 
 }
 

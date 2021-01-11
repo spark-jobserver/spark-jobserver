@@ -5,7 +5,6 @@ import akka.http.scaladsl.testkit.ScalatestRouteTest
 import akka.testkit.TestKit
 import com.typesafe.config.{Config, ConfigFactory}
 import io.jsonwebtoken._
-import org.apache.shiro.authc.IncorrectCredentialsException
 import org.apache.shiro.codec.Base64
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 
@@ -30,6 +29,13 @@ class SJSAuthenticatorSpec extends FunSpecLike
       authServerUrl = "https://example.com/"
       realmName = master
       client = job-server
+    }
+
+    akka.http.caching.lfu-cache {
+      max-capacity = 512
+      initial-capacity = 16
+      time-to-live = 1 hour
+      time-to-idle = 10 minutes
     }
     """)
 
@@ -113,6 +119,20 @@ class SJSAuthenticatorSpec extends FunSpecLike
       val cred = new BasicHttpCredentials(testUserInvalid, testUserInvalidPassword)
       Await.result(instance.challenge()(Some(cred)), 10.seconds) should
         equal(None)
+    }
+
+    it("should allow user with valid credentials after first rejection") {
+      val instance = new ShiroAuthenticator(config)
+      val expected = if (isGroupChecking) {
+        None
+      } else {
+        Some(new AuthInfo(User(testUserWithValidGroup)))
+      }
+      val cred = new BasicHttpCredentials(testUserWithValidGroup, testUserInvalidPassword)
+      Await.result(instance.challenge()(Some(cred)), 10.seconds) should equal(None)
+
+      val cred2 = new BasicHttpCredentials(testUserWithValidGroup, testUserWithValidGroupPassword)
+      Await.result(instance.challenge()(Some(cred2)), 10.seconds) should equal(expected)
     }
 
     it("should not allow user without credentials") {
