@@ -562,7 +562,7 @@ curl -k --basic --user 'user:pw' https://localhost:8090/contexts
 The Shiro Authenticator can be activated in the configuration file by changing the authentication provider and
 providing a shiro configuration file.
 ```
-authentication {
+access-control {
   provider = spark.jobserver.auth.ShiroAccessControl
 
   # absolute path to shiro config file, including file name
@@ -599,7 +599,7 @@ Unknown roles are ignored. For a list of available permissions see [Permissions]
 The Keycloak Authenticator can be activated in the configuration file by changing the authentication provider and
 providing a keycloak configuration.
 ```
-authentication {
+access-control {
   provider = spark.jobserver.auth.KeycloakAccessControl
 
   keycloak {
@@ -639,7 +639,7 @@ See also running on [cluster](doc/cluster.md), [YARN client](doc/yarn.md), on [E
 ### Manual steps
 
 1. Copy `config/local.sh.template` to `<environment>.sh` and edit as appropriate.  NOTE: be sure to set SPARK_VERSION if you need to compile against a different version.
-2. Copy `config/shiro.ini.template` to `shiro.ini` and edit as appropriate. NOTE: only required when `authentication = on`
+2. Copy `config/shiro.ini.template` to `shiro.ini` and edit as appropriate. NOTE: only required when `access-control.provider = spark.jobserver.auth.ShiroAccessControl`
 3. Copy `config/local.conf.template` to `<environment>.conf` and edit as appropriate.
 4. `bin/server_deploy.sh <environment>` -- this packages the job server along with config files and pushes
    it to the remotes you have configured in `<environment>.sh`
@@ -813,7 +813,7 @@ User impersonation for an already Kerberos authenticated user is supported via `
 
   POST /contexts/my-new-context?spark.proxy.user=<user-to-impersonate>
 
-However, whenever the flag `shiro.use-as-proxy-user` is set to `on` (and authentication is `on`) then this parameter
+However, whenever the flag `access-control.shiro.use-as-proxy-user` is set to `on` (and Shiro is used as provider) then this parameter
 is ignored and the name of the authenticated user is *always* used as the value of the `spark.proxy.user`
 parameter when creating contexts.
 
