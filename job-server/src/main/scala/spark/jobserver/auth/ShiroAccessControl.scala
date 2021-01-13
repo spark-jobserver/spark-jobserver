@@ -61,7 +61,7 @@ class ShiroAccessControl(override protected val authConfig: Config)
       currentUser.login(token)
       val fullName = currentUser.getPrincipal().toString
       val permissions = Permissions.permissions
-        .filter(p => currentUser.hasRole(p.name))
+        .filter(p => currentUser.isPermitted(p.name) || currentUser.hasRole(p.name))
         .toSet
       currentUser.logout()
       createAuthInfo(fullName, permissions)

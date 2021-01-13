@@ -33,6 +33,25 @@ object SJSAccessControl {
   }
 }
 
+class NoCaching[K, V] extends Cache[K, V] {
+  override def apply(key: K, genValue: () => Future[V]): Future[V] = genValue()
+
+  override def getOrLoad(key: K, loadValue: K => Future[V]): Future[V] = loadValue(key)
+
+  override def get(key: K): Option[Future[V]] = None
+
+  override def put(key: K, mayBeValue: Future[V])(implicit ex: ExecutionContext): Future[V] = mayBeValue
+
+  override def remove(key: K): Unit = {}
+
+  override def clear(): Unit = {}
+
+  override def keys: Set[K] = Set.empty[K]
+
+  override def size(): Int = 0
+}
+
+
 abstract class SJSAccessControl(protected val authConfig: Config)
                                (implicit ec: ExecutionContext, s: ActorSystem) {
 
@@ -41,8 +60,10 @@ abstract class SJSAccessControl(protected val authConfig: Config)
   protected val logger: Logger = LoggerFactory.getLogger(getClass)
   protected val authTimeout: Int = Try(authConfig.getDuration("auth-timeout",
     TimeUnit.MILLISECONDS).toInt / 1000).getOrElse(10)
+  protected val useCaching: Boolean = authConfig.hasPath("use-cache") && authConfig.getBoolean("use-cache")
 
-  protected val cache: Cache[String, AuthInfo] = Try(CachingSettings.apply(authConfig))
+  protected val cache: Cache[String, AuthInfo] = if (useCaching) {
+    Try(CachingSettings.apply(authConfig))
     .map(LfuCache.apply[String, AuthInfo])
     .recover {
       case _: ConfigException.Missing =>
@@ -50,6 +71,11 @@ abstract class SJSAccessControl(protected val authConfig: Config)
         LfuCache.apply[String, AuthInfo]
     }
     .get
+  }
+  else {
+    logger.info("Disabled access control caching")
+    new NoCaching()
+  }
 
   def challenge(): SJSAccessControl.Challenge = {
     credentials: Option[BasicHttpCredentials] => {

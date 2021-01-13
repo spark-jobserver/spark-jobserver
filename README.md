@@ -617,7 +617,7 @@ access-control {
 | client        | The client to authenticate against.        | yes       |
 | clientSecret  | An according client secret, if it exists.  | no        |
 
-For better performance, authentication requests against Keycloak are cached locally.
+For better performance, authentication requests against Keycloak can be cached locally.
 
 The Keycloak authenticator is able to perform fine-grained [user authorization](#user-authorization). Permissions are
 extracted from the provided client's roles. Each client role that matches a known permission is added to the

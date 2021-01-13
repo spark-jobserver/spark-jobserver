@@ -21,7 +21,7 @@ class SJSAccessControlSpec extends FunSpecLike
   //set this to true to check your real ldap server
   val isGroupChecking = false
 
-  val config = ConfigFactory.parseString(
+  private def config(cache: Boolean = true) = ConfigFactory.parseString(
     s"""
     auth-timeout = 10 s
     shiro.config.path = "${if (isGroupChecking) "classpath:auth/shiro.ini" else "classpath:auth/dummy.ini"}"
@@ -31,6 +31,7 @@ class SJSAccessControlSpec extends FunSpecLike
       client = job-server
     }
 
+    use-cache = ${cache}
     akka.http.caching.lfu-cache {
       max-capacity = 512
       initial-capacity = 16
@@ -73,21 +74,21 @@ class SJSAccessControlSpec extends FunSpecLike
   describe("AllowAllAccessControl") {
 
     it("should allow user with valid role/group") {
-      val instance = new AllowAllAccessControl(config)
+      val instance = new AllowAllAccessControl(config())
       val cred = new BasicHttpCredentials(testUserWithValidGroup, testUserWithValidGroupPassword)
       Await.result(instance.challenge()(Some(cred)), 10.seconds) should
         equal(Some(new AuthInfo(User(anonymousUser))))
     }
 
     it("should allow user without valid role/group") {
-      val instance = new AllowAllAccessControl(config)
+      val instance = new AllowAllAccessControl(config())
       val cred = new BasicHttpCredentials(testUserWithoutValidGroup, testUserWithoutValidGroupPassword)
       Await.result(instance.challenge()(Some(cred)), 10.seconds) should
         equal(Some(new AuthInfo(User(anonymousUser))))
     }
 
     it("should allow user without credentials") {
-      val instance = new AllowAllAccessControl(config)
+      val instance = new AllowAllAccessControl(config())
       Await.result(instance.challenge()(None), 10.seconds) should
         equal(Some(new AuthInfo(User(anonymousUser))))
     }
@@ -95,7 +96,7 @@ class SJSAccessControlSpec extends FunSpecLike
 
   describe("ShiroAccessControl") {
     it("should allow user with valid role/group") {
-      val instance = new ShiroAccessControl(config)
+      val instance = new ShiroAccessControl(config())
       val cred = new BasicHttpCredentials(testUserWithValidGroup, testUserWithValidGroupPassword)
       val authInfo = Await.result(instance.challenge()(Some(cred)), 10.seconds)
       authInfo should equal(Some(new AuthInfo(User(testUserWithValidGroup))))
@@ -103,7 +104,7 @@ class SJSAccessControlSpec extends FunSpecLike
     }
 
     it("should check role/group when checking is activated") {
-      val instance = new ShiroAccessControl(config)
+      val instance = new ShiroAccessControl(config())
       val expected = if (isGroupChecking) {
         None
       } else {
@@ -115,14 +116,14 @@ class SJSAccessControlSpec extends FunSpecLike
     }
 
     it("should not allow invalid user") {
-      val instance = new ShiroAccessControl(config)
+      val instance = new ShiroAccessControl(config())
       val cred = new BasicHttpCredentials(testUserInvalid, testUserInvalidPassword)
       Await.result(instance.challenge()(Some(cred)), 10.seconds) should
         equal(None)
     }
 
     it("should allow user with valid credentials after first rejection") {
-      val instance = new ShiroAccessControl(config)
+      val instance = new ShiroAccessControl(config())
       val expected = if (isGroupChecking) {
         None
       } else {
@@ -135,8 +136,38 @@ class SJSAccessControlSpec extends FunSpecLike
       Await.result(instance.challenge()(Some(cred2)), 10.seconds) should equal(expected)
     }
 
+    it("should allow cached user with invalid credentials") {
+      val instance = new ShiroAccessControl(config())
+      val expected = if (isGroupChecking) {
+        None
+      } else {
+        Some(new AuthInfo(User(testUserWithValidGroup)))
+      }
+
+      val cred2 = new BasicHttpCredentials(testUserWithValidGroup, testUserWithValidGroupPassword)
+      Await.result(instance.challenge()(Some(cred2)), 10.seconds) should equal(expected)
+
+      val cred = new BasicHttpCredentials(testUserWithValidGroup, testUserInvalidPassword)
+      Await.result(instance.challenge()(Some(cred)), 10.seconds) should equal(expected)
+    }
+
+    it("should not allow cached user with invalid credentials if caching is disabled") {
+      val instance = new ShiroAccessControl(config(false))
+      val expected = if (isGroupChecking) {
+        None
+      } else {
+        Some(new AuthInfo(User(testUserWithValidGroup)))
+      }
+
+      val cred2 = new BasicHttpCredentials(testUserWithValidGroup, testUserWithValidGroupPassword)
+      Await.result(instance.challenge()(Some(cred2)), 10.seconds) should equal(expected)
+
+      val cred = new BasicHttpCredentials(testUserWithValidGroup, testUserInvalidPassword)
+      Await.result(instance.challenge()(Some(cred)), 10.seconds) should equal(None)
+    }
+
     it("should not allow user without credentials") {
-      val instance = new ShiroAccessControl(config)
+      val instance = new ShiroAccessControl(config())
       Await.result(instance.challenge()(None), 10.seconds) should
         equal(None)
     }
@@ -236,13 +267,13 @@ class SJSAccessControlSpec extends FunSpecLike
     val validAuthInfo = Some(new AuthInfo(User(testUserWithValidGroup)))
 
     it("should allow user with valid credentials") {
-      val instance = new MockedKeycloakAccessControl(config)
+      val instance = new MockedKeycloakAccessControl(config())
       val cred = new BasicHttpCredentials(testUserWithValidGroup, testUserWithValidGroupPassword)
       Await.result(instance.challenge()(Some(cred)), 10.seconds) should equal(validAuthInfo)
     }
 
     it("should cache user with valid credentials") {
-      val instance = new MockedKeycloakAccessControl(config)
+      val instance = new MockedKeycloakAccessControl(config())
       val cred = new BasicHttpCredentials(testUserWithValidGroup, testUserWithValidGroupPassword)
       Await.result(instance.challenge()(Some(cred)), 10.seconds) should equal(validAuthInfo)
       Await.result(instance.challenge()(Some(cred)), 10.seconds) should equal(validAuthInfo)
@@ -253,7 +284,7 @@ class SJSAccessControlSpec extends FunSpecLike
     }
 
     it("should allow user with valid credentials after first rejection") {
-      val instance = new MockedKeycloakAccessControl(config)
+      val instance = new MockedKeycloakAccessControl(config())
       val cred = new BasicHttpCredentials(testUserWithValidGroup, testUserInvalidPassword)
       Await.result(instance.challenge()(Some(cred)), 10.seconds) should equal(None)
 
@@ -262,13 +293,13 @@ class SJSAccessControlSpec extends FunSpecLike
     }
 
     it("should not allow invalid user") {
-      val instance = new MockedKeycloakAccessControl(config)
+      val instance = new MockedKeycloakAccessControl(config())
       val cred = new BasicHttpCredentials(testUserInvalid, testUserInvalidPassword)
       Await.result(instance.challenge()(Some(cred)), 10.seconds) should equal(None)
     }
 
     it("should not allow user without credentials") {
-      val instance = new MockedKeycloakAccessControl(config)
+      val instance = new MockedKeycloakAccessControl(config())
       Await.result(instance.challenge()(None), 10.seconds) should equal(None)
     }
   }
