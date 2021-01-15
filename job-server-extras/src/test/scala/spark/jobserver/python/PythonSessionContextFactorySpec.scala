@@ -165,8 +165,8 @@ with BeforeAndAfterAll {
     it("should successfully run jobs using python3", WindowsIgnore) {
       val factory = new TestPythonSessionContextFactory()
       val p3Config = ConfigFactory.parseString(
-        """
-          |python.executable = "python3"
+        s"""
+          |python.executable = "${sys.env.getOrElse("PYTHON_EXECUTABLE", "python3")}"
         """.stripMargin).withFallback(config)
       context = factory.makeContext(sparkConf, p3Config, "test-create")
       runSessionTest(factory, context, p3Config)
