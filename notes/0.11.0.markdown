@@ -1,7 +1,11 @@
-#Scala #akka @ApacheSpark
+# Scala #akka @ApacheSpark
 
 ## Breaking Changes:
-The authentication management has been refactored. As a consequence, existing `shiro` configuration sections have to be
-adapted. Previously, `shiro` configuration had to be provided at root level without a prefix. Now, `shiro` configuration
-has to be embedded in an additional `access-control` block. An example configuration is available in the
-[sources](../job-server/src/main/resources/application.conf#L322).
+
+- The authentication management has been refactored. As a consequence, existing `shiro` configuration sections have to
+  be adapted. Previously, `shiro` configuration had to be provided at root level without a prefix. Now, `shiro`
+  configuration has to be embedded in an additional `access-control` block. An example configuration is available in the
+  [sources](../job-server/src/main/resources/application.conf#L322).
+- The default Python version is switched from Python 2 to Python 3 (namely, from `python` to `python3`). If you would
+  still like to use Python 2, adapt the Python executable in
+  the [application.conf](../job-server/src/main/resources/application.conf#L210).

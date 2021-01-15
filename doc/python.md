@@ -10,6 +10,8 @@
   - [Running a job](#running-a-job)
   - [PythonSessionContext](#pythonsessioncontext)
   - [CustomContexts](#customcontexts)
+  - [Python 2](#python-2) 
+  - [Troubleshooting](#troubleshooting)
 
 <!-- END doctoc generated TOC please keep comment here to allow auto update -->
 
@@ -45,10 +47,10 @@ A basic config supporting Python might look like:
         python {
           paths = [
             ${SPARK_HOME}/python,
-            "/home/user/spark-jobserver/job-server-extras/job-server-python/target/python/spark_jobserver_python-0.8.0-py2.7.egg"
+            "/home/user/spark-jobserver/job-server-extras/job-server-python/target/python/spark_jobserver_python-0.10.1-py3-none-any.whl"
           ]
 
-          # The default value in application.conf is "python"
+          # The default value in application.conf is "python3"
           executable = "python3"
         }
       }
@@ -266,3 +268,19 @@ The Python support can support arbitrary context types as long as they are based
 contexts of your custom type, your Python jobs which use this context must implement an additional method,
 `build_context(self, gateway, jvmContext, sparkConf)`, which returns the Python equivalent of the JVM Context object.
 For a simple example, see `CustomContextJob` in the `job-server-python` sub-module.
+
+
+## Python 2
+By default, spark jobserver builds all python dependencies, namely `sparkjobserver` and `sjs_python_examples` for
+python 3. The packed binaries are also compatible with python 2. If you would like to, you can explicitly build all
+libraries for python 2 by setting the environment variable `PYTHON_EXECUTABLE` to a python 2 executable before packaging
+spark jobserver.
+
+
+## Troubleshooting
+
+### TypeError: an integer is required (got type bytes)
+
+Spark-2.4 does not support python >= 3.8 (see [here](https://github.com/apache/spark/pull/26194) for more information).
+If you encounter this issue, please verify that you provide a python executable < 3.8 in your
+[configuration file](../job-server/src/main/resources/application.conf#L210).
