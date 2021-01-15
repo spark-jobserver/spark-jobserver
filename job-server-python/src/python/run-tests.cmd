@@ -15,7 +15,8 @@ setlocal
 cd %~dp0
 
 set PYTHONPATH=%~dp0;%SPARK_HOME%\python\lib\pyspark.zip;%SPARK_HOME%\python\lib\py4j-0.9-src.zip;%PYTHONPATH%
-python test\apitests.py
+set PYSPARK_PYTHON=%1
+%1 test\apitests.py
 set exitCode=%ERRORLEVEL%
 REM This sleep is here so that all of Spark's shutdown stdout if written before we exit,
 REM so that we return cleanly to the command prompt.
