@@ -45,10 +45,10 @@ A basic config supporting Python might look like:
         python {
           paths = [
             ${SPARK_HOME}/python,
-            "/home/user/spark-jobserver/job-server-extras/job-server-python/target/python/spark_jobserver_python-0.8.0-py2.7.egg"
+            "/home/user/spark-jobserver/job-server-extras/job-server-python/target/python/spark_jobserver_python-0.10.1-py3-none-any.whl"
           ]
 
-          # The default value in application.conf is "python"
+          # The default value in application.conf is "python3"
           executable = "python3"
         }
       }

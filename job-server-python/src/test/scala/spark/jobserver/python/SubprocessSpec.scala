@@ -152,10 +152,17 @@ class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfter with Befo
   )
 
   private def setupPythonProcess(port: String, token: String): scala.sys.process.ProcessBuilder = {
+    // Spark-2.4 does not support python >= 3.8 (see https://github.com/apache/spark/pull/26194) leading to
+    // failed test cases (TypeError: an integer is required (got type bytes)). If you encounter these issues
+    // try to state a python executable < 3.8 explicitly.
+    // TODO: remove comment after migration to Spark-3.0
+    val pythonExecutable = sys.env.getOrElse("PYTHON_EXECUTABLE", "python3")
     Process(
-      Seq("python", "-m", "sparkjobserver.subprocess", port, token),
+      Seq(pythonExecutable, "-m", "sparkjobserver.subprocess", port, token),
       None,
-      "PYTHONPATH" -> pythonPath)
+      "PYTHONPATH" -> pythonPath,
+      "PYSPARK_PYTHON" -> pythonExecutable
+    )
   }
 
   describe("The python subprocess") {
