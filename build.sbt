@@ -115,8 +115,8 @@ lazy val jobServerExtrasSettings = revolverSettings ++ Assembly.settings ++ publ
 lazy val jobServerApiSettings = Seq(libraryDependencies ++= sparkDeps ++ sparkExtraDeps)
 
 lazy val testPython = taskKey[Unit]("Launch a sub process to run the Python tests")
-lazy val buildPython = taskKey[Unit]("Build the python side of python support into an egg")
-lazy val buildPyExamples = taskKey[Unit]("Build the examples of python jobs into an egg")
+lazy val buildPython = taskKey[Unit]("Build the python side of python support into a wheel and egg")
+lazy val buildPyExamples = taskKey[Unit]("Build the examples of python jobs into a wheel and egg")
 
 lazy val jobServerPythonSettings = revolverSettings ++ Assembly.settings ++ publishSettings ++ Seq(
   libraryDependencies ++= sparkPythonDeps,

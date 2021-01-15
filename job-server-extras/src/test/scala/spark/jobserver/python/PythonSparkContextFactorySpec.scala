@@ -104,7 +104,7 @@ object PythonSparkContextFactorySpec {
        |  "${originalPythonPath.getOrElse("")}"
        |]
        |
-      |python.executable = "python"
+      |python.executable = "${sys.env.getOrElse("PYTHON_EXECUTABLE", "python3")}"
       |${JobserverConfig.IS_SPARK_SESSION_HIVE_ENABLED} = true
     """.replace("\\", "\\\\") // Windows-compatibility
       .stripMargin)
