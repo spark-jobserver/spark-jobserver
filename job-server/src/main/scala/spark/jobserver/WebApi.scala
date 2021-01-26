@@ -268,9 +268,9 @@ class WebApi(system: ActorSystem,
     *
     * NB when POSTing new binaries, the content-type header must
     * be set to one of the types supported by the subclasses of the
-    * `BinaryType` trait. e.g. "application/java-archive" or
-    * application/python-archive" (may be expanded to support other types
-    * in future.
+    * `BinaryType` trait. e.g. "application/java-archive", "application/python-egg" or
+    * "application/python-wheel" (may be expanded to support other types
+    * in future).
     *
     */
   def binaryRoutes: Route = pathPrefix("binaries") {

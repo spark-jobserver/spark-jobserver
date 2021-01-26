@@ -706,7 +706,7 @@ A comprehensive (manually created) swagger specification of the spark jobserver 
     POST /binaries/<appName>    - upload a new binary file
     DELETE /binaries/<appName>  - delete defined binary
 
-When POSTing new binaries, the content-type header must be set to one of the types supported by the subclasses of the `BinaryType` trait. e.g. "application/java-archive" or application/python-archive". If you are using curl command, then you must pass "-H 'Content-Type: application/python-archive'" or "-H 'Content-Type: application/java-archive'".
+When POSTing new binaries, the content-type header must be set to one of the types supported by the subclasses of the `BinaryType` trait. e.g. "application/java-archive",  "application/python-egg" or "application/python-wheel". If you are using curl command, then you must pass for example "-H 'Content-Type: application/python-wheel'".
 
 ### Contexts
 

@@ -38,6 +38,11 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
   val eggFile: File = new File(config.getString(JobserverConfig.DAO_ROOT_DIR_PATH),
     eggInfo.appName + "-" + jarInfo.uploadTime.toString("yyyyMMdd_hhmmss_SSS") + ".egg")
 
+  val wheelBytes: Array[Byte] = Files.toByteArray(emptyWheel)
+  val wheelInfo: BinaryInfo = BinaryInfo("myWheelBinary", BinaryType.Wheel, time)
+  val wheelFile: File = new File(config.getString(JobserverConfig.DAO_ROOT_DIR_PATH),
+    wheelInfo.appName + "-" + jarInfo.uploadTime.toString("yyyyMMdd_hhmmss_SSS") + ".whl")
+
   // jobInfo test data
   val jobInfoNoEndNoErr: JobInfo = genJobInfo(jarInfo, false, JobStatus.Running)
   val expectedJobInfo: JobInfo = jobInfoNoEndNoErr
@@ -139,6 +144,16 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
 
       binary.get.uploadTime should equal (eggInfo.uploadTime)
       binary.get.binaryType should equal (BinaryType.Egg)
+    }
+
+    it("should be able to save one wheel and get it back") {
+      val save = Await.result(dao.saveBinary(wheelInfo.appName, BinaryType.Wheel, wheelInfo.uploadTime,
+        BinaryDAO.calculateBinaryHashString(wheelBytes)), timeout)
+      save should equal (true)
+      val binary = Await.result(dao.getBinary(wheelInfo.appName), timeout)
+
+      binary.get.uploadTime should equal (wheelInfo.uploadTime)
+      binary.get.binaryType should equal (BinaryType.Wheel)
     }
 
     it("should be able to get binaries with the same hash") {

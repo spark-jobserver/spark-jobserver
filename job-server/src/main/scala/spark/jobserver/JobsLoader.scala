@@ -43,7 +43,7 @@ class JobsLoader(maxEntries: Int,
   }
 
   /**
-    * Retrieves a Python job egg.
+    * Retrieves a Python job.
     * @param classPath the sequence of binary paths/names
     * @param mainClass the fully qualified name of the class/object to load
     * @return The case class containing the location of the binary file for the specified job.
@@ -53,7 +53,7 @@ class JobsLoader(maxEntries: Int,
       PythonJobInfo(classPath.head)
     } else {
       throw new IllegalArgumentException(
-        s"Python should have exactly one egg file! Found: ${classPath.length}")
+        s"Python should have exactly one package file! Found: ${classPath.length}")
     }
   }
 }

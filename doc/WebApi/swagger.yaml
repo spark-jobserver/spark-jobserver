@@ -77,6 +77,8 @@ paths:
       consumes:
       - "application/java-archive"
       - "application/python-archive"
+      - "application/python-egg"
+      - "application/python-wheel"
       produces:
       - "application/json"
       parameters:
@@ -86,7 +88,7 @@ paths:
         type: "string"
       - in: body
         name: "binary"
-        description: "Raw .jar or .egg binary file"
+        description: "Raw .jar, .egg or .whl binary file"
         required: true
         schema:
           type: string

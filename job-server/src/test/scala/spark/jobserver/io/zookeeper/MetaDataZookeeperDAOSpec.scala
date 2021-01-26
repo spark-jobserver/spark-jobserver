@@ -47,6 +47,8 @@ class MetaDataZookeeperDAOSpec extends FunSpec with TestJarFinder with FunSpecLi
       Some(BinaryDAO.calculateBinaryHashString("1".getBytes)))
   val binEgg = BinaryInfo("binaryWithEgg", BinaryType.Egg, new DateTime(),
       Some(BinaryDAO.calculateBinaryHashString("2".getBytes)))
+  val binWheel = BinaryInfo("binaryWithWheel", BinaryType.Wheel, new DateTime(),
+      Some(BinaryDAO.calculateBinaryHashString("3".getBytes)))
   val binURI = BinaryInfo("http://foo/bar", BinaryType.URI, new DateTime(),
       Some(BinaryDAO.calculateBinaryHashString("42".getBytes)))
   val binJarV2 = BinaryInfo("binaryWithJar", BinaryType.Jar, new DateTime().plusHours(1),
@@ -78,7 +80,7 @@ class MetaDataZookeeperDAOSpec extends FunSpec with TestJarFinder with FunSpecLi
       "someClassPath", "anotherState", new DateTime().minusHours(1), None, None, Seq(binJar))
   val multiJarJob = JobInfo("multiJarJobId", "someOtherContextId", "thirdContextName",
     "someClassPath", "anotherState", new DateTime().minusHours(1), None, None,
-    Seq(binJar, binEgg, binURI))
+    Seq(binJar, binEgg, binWheel, binURI))
 
   // JobConfigs
   val config1 = ConfigFactory.parseString("{key : value}")
@@ -103,6 +105,12 @@ class MetaDataZookeeperDAOSpec extends FunSpec with TestJarFinder with FunSpecLi
       success should equal(true)
       val binEggStored = Await.result(dao.getBinary(binEgg.appName), timeout)
       binEggStored should equal(Some(binEgg))
+      // WHEEL
+      success = Await.result(dao.saveBinary(binWheel.appName, binWheel.binaryType,
+        binWheel.uploadTime, binWheel.binaryStorageId.get), timeout)
+      success should equal(true)
+      val binWheelStored = Await.result(dao.getBinary(binWheel.appName), timeout)
+      binWheelStored should equal(Some(binWheel))
     }
 
     it("should retrieve the last uploaded binary") {
