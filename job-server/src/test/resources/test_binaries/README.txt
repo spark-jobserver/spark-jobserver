@@ -12,7 +12,7 @@ The jar contains only the compiled version of:
       }
     }
 
-The egg contains the python package of the following:
+The egg/wheel contains the python package of the following:
 
     print("This program does nothing")
 

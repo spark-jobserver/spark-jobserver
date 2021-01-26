@@ -10,8 +10,8 @@ trait TestJarFinder {
   val extrasJarBaseDir = "job-server-extras"
   lazy val testJarDir = testJarBaseDir + "/target/scala-" + version + "/"
   lazy val extrasJarDir = extrasJarBaseDir + "/target/scala-" + version + "/"
-  val testEggBaseDir = "job-server-python"
-  lazy val testEggDir = testEggBaseDir + "/target/python/"
+  val testPythonBaseDir = "job-server-python"
+  lazy val testPythonDir = testPythonBaseDir + "/target/python/"
 
   lazy val emptyBinaryBaseDir = "job-server"
   lazy val emptyBinaryDir = emptyBinaryBaseDir + "/target/scala-" + version + "/test-classes/test_binaries"
@@ -21,6 +21,8 @@ trait TestJarFinder {
     new java.io.File(this.getClass.getClassLoader.getResource("test_binaries/empty.jar").getFile())
   lazy val emptyEgg =
     new java.io.File(this.getClass.getClassLoader.getResource("test_binaries/empty.egg").getFile())
+  lazy val emptyWheel =
+    new java.io.File(this.getClass.getClassLoader.getResource("test_binaries/empty.whl").getFile())
 
   /**
     * Returns the base directory of a given package
@@ -28,7 +30,7 @@ trait TestJarFinder {
     * @param pkg
     * @return
     */
-  def getBaseDir(pkg: String): String ={
+  def getBaseDir(pkg: String): String = {
     // Current directory.  Find out if we are in project root, and need to go up a level.
     val cwd = Paths.get(".").toAbsolutePath.normalize().toString
     val dotdot = if (Paths.get(cwd + s"/$pkg").toFile.isDirectory) "" else "../"
@@ -57,11 +59,17 @@ trait TestJarFinder {
     allJars.head
   }
 
-  lazy val testEgg: java.io.File = {
-    val dir = new java.io.File(getBaseDir(testEggBaseDir) + testEggDir)
-    val eggFiles = dir.listFiles().filter(_.getName.endsWith(".egg")).filter(_.getName.contains("examples"))
-    assert(eggFiles.size == 1, eggFiles.toList.toString)
-    eggFiles.head
+  lazy val testEgg: java.io.File = loadPython(".egg")
+
+  lazy val testWheel: java.io.File = loadPython(".whl")
+
+  private def loadPython(fileEnding: String) = {
+    val dir = new java.io.File(getBaseDir(testPythonBaseDir) + testPythonDir)
+    val files = dir.listFiles()
+      .filter(_.getName.endsWith(fileEnding))
+      .filter(_.getName.contains("examples"))
+    assert(files.size == 1, files.toList.toString)
+    files.head
   }
 
   lazy val extrasJar: java.io.File = {

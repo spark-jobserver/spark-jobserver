@@ -12,7 +12,7 @@
 
 ## Uploading binaries for the job
 
-Jar and Egg files can be uploaded to jobserver using `POST /binaries/<binary_name>` requests.
+Jar, Egg and Wheel files can be uploaded to jobserver using `POST /binaries/<binary_name>` requests.
 
 Sample POST request for jar file:
 ```
@@ -20,8 +20,9 @@ curl -X POST localhost:8090/binaries/test -H "Content-Type: application/java-arc
 OK
 ```
 
-To upload an egg file `Content-Type` should be changed to `application/python-archive`.
-So far jobserver supports only `application/python-archive` and `application/java-archive` content types for uploaded binaries.
+To upload an egg file `Content-Type` should be changed to `application/python-egg` or `application/python-archive` (deprecated).
+Similarly, to upload a wheel file `Content-Type` should be changed to `application/python-wheel`.
+So far jobserver supports only `application/python-egg`, `application/python-wheel`, `application/python-archive` (deprecated) and `application/java-archive` content types for uploaded binaries.
 
 
 ## Posting jobs
@@ -74,7 +75,7 @@ In Jobserver **version > 0.9.0** an alternative to `classPath` and `appName` is 
 of multiple jars without the need of packing everything into a single main application jar.
  
 From now on a job can be also submitted without uploading binary to Jobserver, just specifying URI with supported protocol is enough. Please note,
-that for Python jobs **only one egg file can be used**.
+that for Python jobs **only one package file can be used**.
 
 Sample `POST` request using new parameters:
 ```

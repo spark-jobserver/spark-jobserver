@@ -9,7 +9,7 @@ import spark.jobserver.util.JobserverPy4jGateway
 import scala.sys.process.{Process, ProcessLogger}
 import scala.util.{Failure, Success, Try}
 
-case class PythonJob[X <: PythonContextLike](eggPath: String,
+case class PythonJob[X <: PythonContextLike](packagePath: String,
                                              modulePath: String,
                                              py4JImports: Seq[String]) extends SparkJobBase {
   override type JobData = Config
@@ -51,10 +51,10 @@ case class PythonJob[X <: PythonContextLike](eggPath: String,
     * @return the job result
     */
   override def runJob(sc: X, runtime: JobEnvironment, data: Config): Any = {
-    logger.info(s"Running $modulePath from $eggPath")
+    logger.info(s"Running $modulePath from $packagePath")
     val ep = endpoint(sc, runtime.contextConfig, runtime.jobId, data)
     val pythonPathDelimiter : String = if (System.getProperty("os.name").indexOf("Win") >= 0) ";" else ":"
-    val pythonPath = (eggPath +: sc.pythonPath).mkString(pythonPathDelimiter)
+    val pythonPath = (packagePath +: sc.pythonPath).mkString(pythonPathDelimiter)
     logger.info(s"Using Python path of ${pythonPath}")
 
     val jobserverPy4jGateway = new JobserverPy4jGateway()
@@ -66,7 +66,7 @@ case class PythonJob[X <: PythonContextLike](eggPath: String,
         Process(Seq(sc.pythonExecutable, "-m", "sparkjobserver.subprocess",
             gatewayPort, jobserverPy4jGateway.getToken()),
           None,
-          "EGGPATH" -> eggPath,
+          "PACKAGEPATH" -> packagePath,
           "PYTHONPATH" -> pythonPath,
           "PYSPARK_PYTHON" -> sc.pythonExecutable)
       val err = new StringBuffer

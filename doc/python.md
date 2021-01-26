@@ -47,7 +47,7 @@ A basic config supporting Python might look like:
         python {
           paths = [
             ${SPARK_HOME}/python,
-            "/home/user/spark-jobserver/job-server-extras/job-server-python/target/python/spark_jobserver_python-0.10.1-py3-none-any.whl"
+            "/home/user/spark-jobserver/job-server-extras/job-server-python/target/python/spark_jobserver_python-0.10.1_SNAPSHOT-py3-none-any.whl"
           ]
 
           # The default value in application.conf is "python3"
@@ -140,8 +140,8 @@ would be fine.
 
 ### Packaging a job
 
-In order to be able to push a job to the the job server, it must be packaged into a Python Egg file. Similar to a Jar,
-this is just a Zip file with a particular internal structure. Eggs can be built using the
+In order to be able to push a job to the job server, it must be packaged into a Python Egg or Wheel file. Similar to a
+Jar, both formats are just a Zip file with a particular internal structure. They can be built using the
 [setuptools](https://setuptools.readthedocs.io/en/latest/) library.
 
 In the most basic setup, a job ready for packaging would be structured as:
@@ -153,7 +153,7 @@ In the most basic setup, a job ready for packaging would be structured as:
 `setup.py` would contain something like:
 
 ```python
-    from setuptools import setup,
+    from setuptools import setup
 
     setup(
         name='my_job_package',
@@ -161,20 +161,30 @@ In the most basic setup, a job ready for packaging would be structured as:
     )
 ```
 
-Then, running `python setup.py bdist_egg` will create a file `dist/my_job_package-0.0.0-py2.7.egg`.
+Then, running `python3 setup.py bdist_wheel` will create a file similar to `dist/my_job_package-0.0.0-py3-none-any.whl`.
+
+## Uploading a Package
+
+Whereas Java and Scala jobs are packaged as Jar files, Python jobs need to be packaged as `Egg` or `Wheel` files. A set
+of example jobs can be build using the `job-server-python/` sbt task `job-server-python/buildPyExamples`. This builds an
+examples Egg and Wheel in `job-server-python/target/python` so we could push this to the server as a job binary:
+
+    curl --data-binary @dist/my_job_package-0.0.0-py3-none-any.whl \
+    -H 'Content-Type: application/python-wheel' localhost:8090/binaries/my_py_job
+
+The Spark Jobserver  uses the `Content-Type` header to distinguish between the different python package types:
+
+| Content-Type                 | Package Format                                              |
+|------------------------------|-------------------------------------------------------------|
+| `application/python-egg`     | [Egg](https://packaging.python.org/glossary/#term-Egg)      |
+| `application/python-wheel`   | [Wheel](https://packaging.python.org/glossary/#term-Wheel)  |
+| `application/python-archive` | Egg (deprecated, use `python-egg` instead)                  |
 
 ## Running a job
 
 If Spark Job Server is running with Python support, A Python context can be started with, for example:
 
     curl -X POST "localhost:8090/contexts/py-context?context-factory=spark.jobserver.python.PythonSessionContextFactory"
-
-Whereas Java and Scala jobs are packaged as Jar files, Python jobs need to be packaged as `Egg` files. A set of example jobs
-can be build using the `job-server-python/` sbt task `job-server-python/buildPyExamples`. this builds an examples Egg
-in `job-server-python/target/python` so we could push this to the server as a job binary:
-
-    curl --data-binary @dist/my_job_package-0.0.0-py2.7.egg \
-    -H 'Content-Type: application/python-archive' localhost:8090/binaries/my_py_job
 
 Then, running a Python job is similar to running other job types:
 
@@ -183,12 +193,12 @@ Then, running a Python job is similar to running other job types:
 
     curl "localhost:8090/jobs/<job-id>"
 
-Note: The SparkJobServer takes care of pushing the Egg file you uploaded to Spark as part of the job submission, ensuring that all workers have access to the full contents of the Egg file.  
+Note: The SparkJobServer takes care of pushing the Egg/Wheel file you uploaded to Spark as part of the job submission, ensuring that all workers have access to the full contents of the archive.  
 
 ## PythonSessionContext
 
-Python session context provides full access to Spark Session including access to the underlaying Spark Context.  
-The previously available  `SQLContext` and `HiveContext` Context Factory are no longer supported. 
+Python session context provides full access to Spark Session including access to the underlying Spark Context.  
+The previously available `SQLContext` and `HiveContext` Context Factory are no longer supported. 
 
 
 Simply launch a context using
@@ -228,10 +238,10 @@ The above job implementation checks during the `validate` stage that the `contex
 Then in `run_job` dataframe operations are used, which exist on `SessionContext`.
 
 This job is one of the examples so running the sbt task `job-server-python/buildPyExamples` and uploading the resulting
-Egg makes this job available:
+archive makes this job available:
 
-    curl --data-binary @job-server-python/target/python/sjs_python_examples-0.8.0-py2.7.egg \
-    -H 'Content-Type: application/python-archive' localhost:8090/binaries/example_jobs
+    curl --data-binary @job-server-python/target/python/sjs_python_examples-0.10.1_SNAPSHOT-py3-none-any.whl \
+    -H 'Content-Type: application/python-wheel' localhost:8090/binaries/example_jobs
 
 The input to the job can be provided as a conf file, in this example `sqlinput.conf`, with the contents:
 

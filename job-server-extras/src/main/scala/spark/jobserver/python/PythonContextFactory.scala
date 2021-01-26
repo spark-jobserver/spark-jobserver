@@ -62,13 +62,13 @@ trait PythonContextFactory extends SparkContextFactory {
                                   mainClass: String,
                                   jobCache: JobCache): J Or LoadingError = {
     Try(jobCache.getPythonJob(classPath, mainClass)) match {
-      case Success(jobInfo) => Good(PythonJobContainer(buildJob(jobInfo.eggPath, mainClass)))
+      case Success(jobInfo) => Good(PythonJobContainer(buildJob(jobInfo.packagePath, mainClass)))
       case Failure(t) => Bad(JobLoadError(t))
     }
   }
 
-  def buildJob(eggPath: String, modulePath: String): PythonJob[C] =
-    PythonJob[C](eggPath, modulePath, py4JImports)
+  def buildJob(packagePath: String, modulePath: String): PythonJob[C] =
+    PythonJob[C](packagePath, modulePath, py4JImports)
 
   /**
     *
