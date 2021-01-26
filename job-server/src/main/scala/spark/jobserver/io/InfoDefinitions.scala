@@ -1,8 +1,8 @@
 package spark.jobserver.io
 
-import akka.http.scaladsl.model.MediaType.{Binary, NotCompressible, WithFixedCharset}
+import akka.http.scaladsl.model.MediaType.NotCompressible
 import akka.http.scaladsl.model.headers._
-import akka.http.scaladsl.model.{ContentType, HttpCharsets, MediaType, MediaTypes}
+import akka.http.scaladsl.model.{MediaType, MediaTypes}
 import org.joda.time.{DateTime, Duration}
 import spark.jobserver.util.ErrorData
 
@@ -24,10 +24,19 @@ object BinaryType {
   case object Egg extends BinaryType {
     val extension = "egg"
     val name = "Egg"
-    val mediaType: String = MediaType.applicationBinary("python-archive",
+    val mediaType: String = MediaType.applicationBinary("python-egg",
       NotCompressible, "egg").value
-    @transient val contentType: `Content-Type` = `Content-Type`(MediaType.applicationBinary("python-archive",
+    @transient val contentType: `Content-Type` = `Content-Type`(MediaType.applicationBinary("python-egg",
       NotCompressible, "egg").toContentType)
+  }
+
+  case object Wheel extends BinaryType {
+    val extension = "whl"
+    val name = "Wheel"
+    val mediaType: String = MediaType.applicationBinary("python-wheel",
+      NotCompressible, "whl").value
+    @transient val contentType: `Content-Type` = `Content-Type`(MediaType.applicationBinary("python-wheel",
+      NotCompressible, "whl").toContentType)
   }
 
   case object URI extends BinaryType {
@@ -40,14 +49,17 @@ object BinaryType {
   }
 
   def fromString(typeString: String): BinaryType = typeString match {
-    case "Jar" => Jar
-    case "Egg" => Egg
-    case "Uri" => URI
+    case Jar.name => Jar
+    case Egg.name => Egg
+    case Wheel.name => Wheel
+    case URI.name => URI
   }
 
   def fromMediaType(mediaType: MediaType): Option[BinaryType] = mediaType match {
     case m if m.value == Jar.mediaType => Some(Jar)
+    case m if m.value == Wheel.mediaType => Some(Wheel)
     case m if m.value == Egg.mediaType => Some(Egg)
+    case m if m.value == "python-archive" => Some(Egg) // added for backward compatibility
     case _ => None
   }
 }

@@ -66,7 +66,7 @@ object JarUtils {
     objectRef
   }
 
-  //Jars and Eggs are both zip files
+  //Jars, Eggs and wheels are both zip files
   def binaryIsZip(binaryBytes: Array[Byte]): Boolean = {
     binaryBytes.length > 4 &&
       // For now just check the first few bytes are the ZIP signature: 0x04034b50 little endian

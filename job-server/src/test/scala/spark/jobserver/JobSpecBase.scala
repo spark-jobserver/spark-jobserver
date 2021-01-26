@@ -89,6 +89,7 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
   var manager: ActorRef = _
   def testJar: java.io.File
   def testEgg: java.io.File
+  def testWheel: java.io.File
   var supervisor: ActorRef = _
   val timeout: Duration = 5.seconds
   def extrasJar: java.io.File
@@ -115,6 +116,10 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
   protected def uploadTestEgg(appName: String = "demo"): BinaryInfo = {
     uploadBinary(testEgg.getAbsolutePath, appName, BinaryType.Egg)
+  }
+
+  protected def uploadTestWheel(appName: String = "demo"): BinaryInfo = {
+    uploadBinary(testWheel.getAbsolutePath, appName, BinaryType.Wheel)
   }
 
   protected def getExtrasJarPath: String = extrasJar.getAbsolutePath

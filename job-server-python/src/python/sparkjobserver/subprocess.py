@@ -105,13 +105,13 @@ if __name__ == "__main__":
             exit_with_failure(
                     "Expected JavaSparkContext, SQLContext "
                     "or HiveContext but received %s" % repr(context_class), 2)
-    egg_path = os.environ.get("EGGPATH", None)
-    if egg_path and sc:
+    package_path = os.environ.get("PACKAGEPATH", None)
+    if package_path and sc:
         try:
-            sc.addPyFile(egg_path)
+            sc.addPyFile(package_path)
         except Exception as error:
             exit_with_failure(
-                "Error while adding Python Egg to Spark Context: %s\n%s" %
+                "Error while adding Python package to Spark Context: %s\n%s" %
                 (repr(error), traceback.format_exc()), 5)
     try:
         job_data = job.validate(context, None, job_config)

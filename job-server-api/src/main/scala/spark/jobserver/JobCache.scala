@@ -15,7 +15,7 @@ case class JavaJarInfo(job: BaseJavaJob[_, _],
                        jarFilePath: String) extends BinaryJobInfo
 
 // For python jobs, there is no class loading or constructor required.
-case class PythonJobInfo(eggPath: String) extends BinaryJobInfo
+case class PythonJobInfo(packagePath: String) extends BinaryJobInfo
 
 trait JobCache {
   /**
@@ -27,7 +27,7 @@ trait JobCache {
 
   def getJavaJob(classPath: Seq[String], mainClass: String): JavaJarInfo
   /**
-    * Retrieves a Python job egg location from the cache if it's there, otherwise use the DAO to retrieve it.
+    * Retrieves a Python job location from the cache if it's there, otherwise use the DAO to retrieve it.
     * @param classPath the sequence of binary paths/names
     * @param mainClass the fully qualified name of the class/object to load
     * @return The case class containing the location of the binary file for the specified job.

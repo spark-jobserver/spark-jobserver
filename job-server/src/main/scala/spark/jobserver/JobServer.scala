@@ -354,11 +354,12 @@ object JobServer {
       }
 
       val initialBinariesWithTypes = initialBinaries.mapValues {
-        case s if s.endsWith(".jar") => (BinaryType.Jar, s)
-        case s if s.endsWith(".egg") => (BinaryType.Egg, s)
+        case s if s.endsWith("." + BinaryType.Jar.extension) => (BinaryType.Jar, s)
+        case s if s.endsWith("." + BinaryType.Egg.extension) => (BinaryType.Egg, s)
+        case s if s.endsWith("." + BinaryType.Wheel.extension) => (BinaryType.Wheel, s)
         case other =>
-          throw new Exception(s"Only Jars (with extension .jar) and " +
-            s"Python Egg packages (with extension .egg) are supported. Found $other")
+          throw new Exception(s"Only Jars (with extension .jar), Python Egg packages (with extension .egg) " +
+            s"and Python Wheel packages (with extension .whl) are supported. Found $other")
       }
 
       val contextCreationTimeout = util.SparkJobUtils.getContextCreationTimeout(config)
