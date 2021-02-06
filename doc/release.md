@@ -4,7 +4,10 @@
 
 - [Publishing packages](#publishing-packages)
 - [Releasing from a hotfix branch](#releasing-from-a-hotfix-branch)
-- [Known issues](#known-issues)
+- [Release process issues](#release-process-issues)
+  - [No tracking branch is set up](#no-tracking-branch-is-set-up)
+  - [Only one Scala version was published](#only-one-scala-version-was-published)
+- [Known issues with test setup](#known-issues-with-test-setup)
   - [Failed migration or FlywayException in DAO tests](#failed-migration-or-flywayexception-in-dao-tests)
   - [Python tests errors](#python-tests-errors)
 
@@ -39,7 +42,20 @@ Setting version to 0.10.1-SNAPSHOT
 ```
 - [Go releases page of Jobserver](https://github.com/spark-jobserver/spark-jobserver/releases). Click on the latest release and click on `Edit Tag` button. Put release notes and publish them.
 
-### Errors
+### Releasing from a hotfix branch
+
+Prerequisites:
+- There is a hotfix branch (e.g. `jobserver-0.10.x`) with some fixes for the last release
+- `origin` remote is pointing to Open Source github.com Jobserver
+
+Execute
+```
+git push --set-upstream origin <<hotfix-branch-name>>
+```
+before starting the release process. The rest of the steps are identical to the release from the `master` branch.
+
+
+### Release process issues
 
 #### No tracking branch is set up
 
@@ -85,20 +101,7 @@ git config branch.master.merge refs/heads/master
     ```
 7. Check that all supported Scala versions are published (on Bintray).
 
-
-### Releasing from a hotfix branch
-
-Prerequisites:
-- There is a hotfix branch (e.g. `jobserver-0.10.x`) with some fixes for the last release
-- `origin` remote is pointing to Open Source github.com Jobserver
-
-Execute
-```
-git push --set-upstream origin <<hotfix-branch-name>>
-```
-before starting the release process. The rest of the steps are identical to the release from the `master` branch.
-
-### Known issues
+### Known issues with test setup
 
 Test issues are most likely connected to local setup as there is a Jenkins job running tests before
 and after each PR is getting merged.
