@@ -26,8 +26,12 @@ git log <last release commit hash>..master --format="- %s / (%an | %h)"
 export BINTRAY_USER=<username>
 export BINTRAY_PASS=<API KEY HERE>
 ```
-- In the root project, do `sbt release cross`
-- The release process will ask you for next release number. Input the number.
+- In the root project, do `sbt 'release cross'`
+- The release process will ask you for next release number. Input the number:
+```
+Release version [0.9.1] : 0.10.0
+Next version [0.10.1-SNAPSHOT] :
+```
 - The release process will ask you to push some commits to `master` branch on `origin`. Type `y`. This creates commits like the following in master branch.
 ```
 Setting version to 0.10.0
@@ -35,7 +39,10 @@ Setting version to 0.10.1-SNAPSHOT
 ```
 - [Go releases page of Jobserver](https://github.com/spark-jobserver/spark-jobserver/releases). Click on the latest release and click on `Edit Tag` button. Put release notes and publish them.
 
-Other:
+### Errors
+
+#### No tracking branch is set up
+
 - If you get an error like the following,
 ```
 No tracking branch is set up. Either configure a remote tracking branch, or remove the pushChanges release part.
@@ -47,10 +54,37 @@ git config branch.master.remote origin
 git config branch.master.merge refs/heads/master
 ```
 
-To announce the release on [ls.implicit.ly](http://ls.implicit.ly/), use
-[Herald](https://github.com/n8han/herald#install) after adding release notes in
-the `notes/` dir.  Also regenerate the catalog with `lsWriteVersion` SBT task
-and `lsync`, in project job-server.
+#### Only one Scala version was published
+
+1. Reset your _local_ branch back to the last commit before the release.
+    ```
+    git reset --hard HEAD^^
+    ```
+2. Set Scala version to the Scala version, which was not published:
+    ```
+    export SCALA_VERSION=${NOT_PUBLISHED_VERSION}
+    ```
+3. Trigger release process for this Scala version:
+    ```
+    sbt release
+    ```
+4. Set release versions as in the main step (to exactly the same versions):
+    ```
+    Release version [0.9.1] : 0.10.0
+    Next version [0.10.1-SNAPSHOT] :
+    ```
+5. SBT will complain, that the tag exists. Choose "keep":
+    ```
+    Tag [v0.11.0] exists! Overwrite, keep or abort or enter a new tag (o/k/a)? [a] k
+    [warn] The current tag [v0.11.0] does not point to the commit for this release!
+    ```
+6. SBT will aks, if you want to push new commits, chose "no":
+    ```
+    Push changes to the remote repository (y/n)? [y] n
+    [warn] Remember to push the changes yourself!
+    ```
+7. Check that all supported Scala versions are published (on Bintray).
+
 
 ### Releasing from a hotfix branch
 
