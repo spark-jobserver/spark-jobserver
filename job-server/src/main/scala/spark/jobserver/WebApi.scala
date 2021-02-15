@@ -1,8 +1,5 @@
 package spark.jobserver
 
-import java.net.MalformedURLException
-import java.util.NoSuchElementException
-import java.util.concurrent.TimeUnit
 import akka.actor.{ActorRef, ActorSystem}
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import akka.http.scaladsl.model._
@@ -15,8 +12,6 @@ import akka.pattern.ask
 import akka.util.Timeout
 import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
 import com.typesafe.config._
-
-import javax.net.ssl.SSLContext
 import org.joda.time.DateTime
 import org.slf4j.{Logger, LoggerFactory}
 import spark.jobserver.auth.Permissions._
@@ -29,6 +24,10 @@ import spark.jobserver.io._
 import spark.jobserver.routes.DataRoutes
 import spark.jobserver.util._
 
+import java.net.MalformedURLException
+import java.util.NoSuchElementException
+import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLContext
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.Try
 
@@ -572,23 +571,33 @@ class WebApi(system: ActorSystem,
                     val future = (supervisor ? ListContexts).mapTo[Seq[String]]
                     val lookupTimeout = Try(config.getDuration("spark.jobserver.context-lookup-timeout",
                       TimeUnit.MILLISECONDS).toInt / 1000).getOrElse(1)
-                    val contexts = Await.result(future, lookupTimeout.seconds)
+                    val lookupTimeoutFut = akka.pattern.after(lookupTimeout.seconds, system.scheduler)(
+                      Future.failed(new concurrent.TimeoutException())
+                    )
 
-                    if (sync.isDefined && !sync.get) {
-                      contexts.map(c => supervisor ! StopContext(c))
-                      completeWithSuccess(ctx, StatusCodes.OK, "Context reset requested")
-                    } else {
-                      val stopFutures = contexts.map(c => supervisor ? StopContext(c))
-                      Await.ready(Future.sequence(stopFutures), contextTimeout.seconds)
-
-                      Thread.sleep(1000) // we apparently need some sleeping in here, so spark can catch up
-
-                      (supervisor ? AddContextsFromConfig).onFailure {
-                        case _ =>
-                          completeWithErrorStatus(ctx, "ERROR", StatusCodes.InternalServerError)
+                    Future.firstCompletedOf(Seq(future, lookupTimeoutFut))
+                      .flatMap(contexts => {
+                        if (sync.isDefined && !sync.get) {
+                          contexts.foreach(c => supervisor ! StopContext(c))
+                          completeWithSuccess(ctx, StatusCodes.OK, "Context reset requested")
+                        } else {
+                          val contextTimeoutFut = akka.pattern.after(contextTimeout.seconds,
+                            system.scheduler)(Future.failed(new concurrent.TimeoutException()))
+                          val stopFutures = contexts.map(c => supervisor ? StopContext(c))
+                          Future.firstCompletedOf(Seq(Future.sequence(stopFutures), contextTimeoutFut))
+                            .flatMap(_ => {
+                              // we apparently need some sleeping in here, so spark can catch up
+                              Thread.sleep(1000)
+                              // Supervisor sends no answer. Do not check for failure
+                              supervisor ! AddContextsFromConfig
+                              completeWithSuccess(ctx, StatusCodes.OK, "Context reset")
+                            })
+                        }
+                      })
+                      .recoverWith {
+                        case ex: Throwable =>
+                          completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, ex)
                       }
-                      completeWithSuccess(ctx, StatusCodes.OK, "Context reset")
-                    }
                   case _ =>
                     completeWithErrorStatus(ctx, "ERROR", StatusCodes.InternalServerError)
                 }
