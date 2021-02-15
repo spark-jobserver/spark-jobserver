@@ -1,7 +1,6 @@
 package spark.jobserver.util
 
-import java.io.{Closeable, File, PrintWriter, StringWriter}
-
+import java.io.{Closeable, IOException, PrintWriter, StringWriter}
 import akka.actor.Address
 import com.typesafe.config.Config
 import com.yammer.metrics.core.Timer
@@ -12,6 +11,8 @@ import scala.concurrent.Future
 import scala.concurrent.ExecutionContext
 import org.slf4j.Logger
 import spark.jobserver.JobServer
+
+import java.nio.file.{Files, Path, Paths}
 
 case class ErrorData(message: String, errorClass: String, stackTrace: String)
 
@@ -37,15 +38,17 @@ object Utils {
   }
 
   def createDirectory(folderPath: String): Unit = {
-    val folder = new File(folderPath)
+    val folder = Paths.get(folderPath)
     createDirectory(folder)
   }
 
-  def createDirectory(folder: File): Unit = {
-    if (!folder.exists()) {
-      if (!folder.mkdirs()) {
-        throw new RuntimeException(s"Could not create directory $folder")
+  def createDirectory(folder: Path): Unit = {
+    try {
+      if (!Files.exists(folder)) {
+        Files.createDirectories(folder)
       }
+    } catch {
+      case ex: IOException => throw new RuntimeException(s"Could not create directory $folder", ex)
     }
   }
 

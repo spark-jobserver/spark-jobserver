@@ -6,7 +6,7 @@ import java.io._
 import java.nio.file.{Files, Path, Paths, StandardOpenOption}
 import org.apache.commons.io.FileUtils
 import org.slf4j.LoggerFactory
-import spark.jobserver.util.{DirectoryException, JsonProtocols}
+import spark.jobserver.util.{DirectoryException, JsonProtocols, Utils}
 
 import java.time.format.DateTimeFormatter
 import java.time.{Instant, ZoneId, ZonedDateTime}
@@ -29,13 +29,7 @@ class DataFileDAO(config: Config) {
     val rootDir = Paths.get(config.getString("spark.jobserver.datadao.rootdir")).normalize().toAbsolutePath
     logger.trace("rootDir is {}", rootDir)
     // create the data directory if it doesn't exist
-    try {
-      if (!Files.exists(rootDir)) {
-        Files.createDirectories(rootDir)
-      }
-    } catch {
-      case ex: IOException => throw new RuntimeException("Could not create directory " + rootDir, ex)
-    }
+    Utils.createDirectory(rootDir)
     rootDir
   }
 
