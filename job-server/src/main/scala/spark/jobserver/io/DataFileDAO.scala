@@ -3,10 +3,10 @@ package spark.jobserver.io
 import com.typesafe.config._
 
 import java.io._
-import java.nio.file.Files
+import java.nio.file.{Files, Path, Paths, StandardOpenOption}
 import org.apache.commons.io.FileUtils
 import org.slf4j.LoggerFactory
-import spark.jobserver.util.JsonProtocols
+import spark.jobserver.util.{DirectoryException, JsonProtocols}
 
 import java.time.format.DateTimeFormatter
 import java.time.{Instant, ZoneId, ZonedDateTime}
@@ -25,48 +25,52 @@ class DataFileDAO(config: Config) {
   // set of files managed by this class
   private val files = mutable.HashSet.empty[String]
 
-
-  private val dataFile: File = {
-
-    val rootDir = config.getString("spark.jobserver.datadao.rootdir")
-    val rootDirFile = new File(rootDir)
-    logger.trace("rootDir is {}", rootDirFile.getAbsolutePath)
+  val rootDir: Path = {
+    val rootDir = Paths.get(config.getString("spark.jobserver.datadao.rootdir")).normalize().toAbsolutePath
+    logger.trace("rootDir is {}", rootDir)
     // create the data directory if it doesn't exist
-    if (!rootDirFile.exists()) {
-      if (!rootDirFile.mkdirs()) {
-        throw new RuntimeException("Could not create directory " + rootDir)
+    try {
+      if (!Files.exists(rootDir)) {
+        Files.createDirectories(rootDir)
       }
+    } catch {
+      case ex: IOException => throw new RuntimeException("Could not create directory " + rootDir, ex)
     }
+    rootDir
+  }
 
-    val dataFile = new File(rootDirFile, DataFileDAO.META_DATA_FILE_NAME)
+  private val dataFile: Path = {
+    val dataFile = rootDir.resolve(DataFileDAO.META_DATA_FILE_NAME)
     // read back all files info during startup
-    if (dataFile.exists()) {
-      val in = new DataInputStream(new BufferedInputStream(new FileInputStream(dataFile)))
+    if (Files.exists(dataFile)) {
+      val in = new DataInputStream(new BufferedInputStream(Files.newInputStream(dataFile)))
       try {
         while (true) {
           val dataInfo = readFileInfo(in)
           addFile(dataInfo.appName)
         }
       } catch {
-        case e: EOFException => // do nothing
+        case _: EOFException => // do nothing
       } finally {
         in.close()
       }
     }
+    else {
+      Files.createFile(dataFile)
+    }
     dataFile
   }
 
-  val rootDir = dataFile.getParentFile().getAbsolutePath
-
   // Don't buffer the stream. I want the apps meta data log directly into the file.
   // Otherwise, server crash will lose the buffer data.
-  private val dataOutputStream: DataOutputStream = new DataOutputStream(new FileOutputStream(dataFile, true))
+  private val dataOutputStream = new DataOutputStream(
+    Files.newOutputStream(dataFile, StandardOpenOption.APPEND))
 
   def shutdown() {
     try {
-      dataOutputStream.close
+      dataOutputStream.close()
     } catch {
-      case t: Throwable =>
+      case _: Throwable =>
         logger.error("unable to close output stream")
     }
   }
@@ -77,11 +81,14 @@ class DataFileDAO(config: Config) {
     */
   def saveFile(aNamePrefix: String, uploadTime: ZonedDateTime, aBytes: Array[Byte]): String = {
     // The order is important. Save the file first and then log it into meta data file.
-    val outFile = new File(rootDir, createFileName(aNamePrefix, uploadTime) + DataFileDAO.EXTENSION)
-    val name = outFile.getAbsolutePath
-    val bos = new BufferedOutputStream(new FileOutputStream(outFile))
+    val fileName = createFileName(aNamePrefix, uploadTime) + DataFileDAO.EXTENSION
+    val outFile = verifyRootDir(fileName, requireExistence = false)
+    val name = outFile.normalize().toString
+
+    Files.createFile(outFile)
+    val bos = new BufferedOutputStream(Files.newOutputStream(outFile))
     try {
-      logger.debug("Writing {} bytes to file {}", aBytes.length, outFile.getPath)
+      logger.debug("Writing {} bytes to file {}", aBytes.length, name)
       bos.write(aBytes)
       bos.flush()
     } finally {
@@ -102,38 +109,34 @@ class DataFileDAO(config: Config) {
   }
 
   def readFile(aName: String): Array[Byte] = {
-    if (aName.startsWith(rootDir) && files.contains(aName)) {
-      // only read the file if it is known to this class,
-      // otherwise this could be abused
-      Files.readAllBytes(new File(aName).toPath)
-    } else {
-      throw new IOException("Unknown file: " + aName)
-    }
+    val p = verifyRootDir(aName)
+    Files.readAllBytes(p)
   }
 
-  def deleteAll(): Boolean = {
-    try {
-      FileUtils.deleteDirectory(new File(rootDir))
-      new File(rootDir).mkdir()
-      files.clear()
-      true
-    } catch {
-      case e: Exception => {
-        logger.error("An error occurred while deleting " + rootDir, e)
-        false
-      }
-    }
+  def deleteAll(): Unit = {
+    FileUtils.deleteDirectory(rootDir.toFile)
+    Files.createDirectory(rootDir)
+    files.clear()
   }
 
-  def deleteFile(aName: String): Boolean = {
-    if (aName.startsWith(rootDir) && files.contains(aName)) {
-      // only delete the file if it is known to this class,
-      // otherwise this could be abused
-      val deleteResult = new File(aName).delete
-      if (deleteResult) files -= aName
-      return deleteResult
+  def deleteFile(aName: String): Unit = {
+    val p = verifyRootDir(aName)
+    if (Files.isDirectory(p)) {
+      throw DirectoryException()
     }
-    false
+    Files.delete(p)
+    files -= aName
+  }
+
+  private def verifyRootDir(aName: String, requireExistence: Boolean = true): Path = {
+    val path = rootDir.resolve(aName)
+    if (!path.normalize().toAbsolutePath.startsWith(rootDir) ||
+      (requireExistence && !files.contains(path.normalize().toString))) {
+      // only allow access to the file if it is known to this class,
+      // otherwise this could be abused
+      throw new SecurityException(s"$aName not in data root")
+    }
+    path
   }
 
   private def readFileInfo(in: DataInputStream) = DataFileInfo(in.readUTF,

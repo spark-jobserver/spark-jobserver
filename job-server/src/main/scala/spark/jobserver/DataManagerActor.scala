@@ -6,6 +6,7 @@ import spark.jobserver.common.akka.InstrumentedActor
 
 import java.time.ZonedDateTime
 import scala.collection.mutable
+import scala.util.{Failure, Success, Try}
 
 object DataManagerActor {
   // Messages to DataManager actor
@@ -19,7 +20,7 @@ object DataManagerActor {
   case class Stored(name: String)
   case class Data(bytes: Array[Byte])
   case object Deleted
-  case class Error(msg: String)
+  case class Error(ex: Throwable)
 
   def props(fileDao: DataFileDAO): Props = Props(classOf[DataManagerActor], fileDao)
 }
@@ -38,45 +39,53 @@ class DataManagerActor(fileDao: DataFileDAO) extends InstrumentedActor {
 
     case DeleteData(fileName) =>
       sender ! {
-        if (fileDao.deleteFile(fileName)) {
-          remoteCaches.remove(fileName).map { actors =>
-            actors.map { _ ! JobManagerActor.DeleteData(fileName) }
-          }
-          Deleted
-        } else {
-          Error(s"Unknown file: $fileName")
+        Try(fileDao.deleteFile(fileName)) match {
+          case Success(_) =>
+            remoteCaches.remove(fileName).map { actors =>
+              actors.map { _ ! JobManagerActor.DeleteData(fileName) }
+            }
+            Deleted
+          case Failure(ex) => Error(ex)
         }
       }
 
     case DeleteAllData =>
       sender ! {
-        if (fileDao.deleteAll()) {
-          remoteCaches.keySet.map { fileName =>
-            remoteCaches.remove(fileName).map { actors =>
-              actors.map { _ ! JobManagerActor.DeleteData(fileName) }
+        Try(fileDao.deleteAll()) match {
+          case Success(_) =>
+            remoteCaches.keySet.map { fileName =>
+              remoteCaches.remove(fileName).map { actors =>
+                actors.map {
+                  _ ! JobManagerActor.DeleteData(fileName)
+                }
+              }
             }
-          }
-          Deleted
-        } else {
-          Error("Unable to delete all data")
+            Deleted
+          case Failure(ex) => Error(ex)
         }
       }
 
     case StoreData(aName, aBytes) =>
       logger.info("Storing data in file prefix {}, {} bytes", aName, aBytes.length)
       val uploadTime = ZonedDateTime.now()
-      val fName = fileDao.saveFile(aName, uploadTime, aBytes)
-      remoteCaches(fName) = mutable.HashSet.empty[ActorRef]
-      sender ! Stored(fName)
+      sender ! {
+        Try(fileDao.saveFile(aName, uploadTime, aBytes)) match {
+          case Success(fName) =>
+            remoteCaches(fName) = mutable.HashSet.empty[ActorRef]
+            Stored(fName)
+          case Failure(ex) => Error(ex)
+        }
+      }
 
     case RetrieveData(fileName, jobManager) =>
       logger.info("Sending data file {} to {}", fileName, jobManager.path: Any)
-      try {
-        sender ! Data(fileDao.readFile(fileName))
-        remoteCaches(fileName) += jobManager
-      } catch {
-        case e: Exception =>
-          sender ! Error(s"Failed to read file $fileName: $e")
+      sender ! {
+        Try(fileDao.readFile(fileName)) match {
+          case Success(file) =>
+            remoteCaches(fileName) += jobManager
+            Data(file)
+          case Failure(ex) => Error(ex)
+        }
       }
   }
 }
