@@ -22,10 +22,11 @@ object Versions {
   lazy val py4j = "0.10.7"
   lazy val scalaTest = "2.2.6"
   lazy val scalatic = "2.2.6"
-  lazy val shiro = "1.3.2"
+  lazy val shiro = "1.7.0"
   lazy val slick = "3.1.1"
   lazy val spray = "1.3.3"
   lazy val sprayJson = "1.3.5"
   lazy val typeSafeConfig = if (isJavaAtLeast("1.8")) "1.3.0" else "1.2.1"
   lazy val cassandraConnector = "6.0.9"
+  lazy val beanutils = "1.9.4"
 }
