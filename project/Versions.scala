@@ -22,7 +22,7 @@ object Versions {
   lazy val py4j = "0.10.7"
   lazy val scalaTest = "2.2.6"
   lazy val scalatic = "2.2.6"
-  lazy val shiro = "1.7.0"
+  lazy val shiro = "1.7.1"
   lazy val slick = "3.1.1"
   lazy val spray = "1.3.3"
   lazy val sprayJson = "1.3.5"
