@@ -12,8 +12,14 @@ WORKDIR /usr/src/app/
 
 # install other ci deps
 COPY ci ci
-RUN ci/install-python-dependencies.sh && \
-    ci/install-spark.sh
+
+ARG spark_version="3.0.1"
+ARG hadoop_version="3.2"
+ENV SPARK_VERSION=${spark_version}
+ENV HADOOP_VERSION=${hadoop_version}
+
+RUN ci/install-python-dependencies.sh
+RUN ci/install-spark.sh
 
 # add sbt and cache deps
 COPY project project
@@ -23,7 +29,12 @@ RUN sbt update
 # add the rest of the code
 COPY . .
 
-ENV SPARK_HOME /tmp/spark-2.4.4-bin-hadoop2.7
+ENV SPARK_HOME /tmp/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}
+# from here you should read the version of the py4j package and assign it to the py4j_version build arg
+RUN ls $SPARK_HOME/python/lib -l
+
+ARG py4j_version="0.10.9"
+ENV PYTHONPATH $SPARK_HOME/python:$SPARK_HOME/python/lib/py4j-${py4j_version}-src.zip
 ENV JAVA_OPTIONS "-Xmx1500m -Dakka.test.timefactor=3"
 
 CMD ["/usr/src/app/run_tests.sh"]
