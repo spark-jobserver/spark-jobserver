@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
 set -e
-curl -L -o /tmp/spark.tgz http://archive.apache.org/dist/spark/spark-2.4.4/spark-2.4.4-bin-hadoop2.7.tgz
-tar -xvzf /tmp/spark.tgz -C /tmp
+echo "Spark version $SPARK_VERSION and hadoop version $HADOOP_VERSION are going to be installed"
+wget http://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz
+tar -xvzf spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz -C /tmp
