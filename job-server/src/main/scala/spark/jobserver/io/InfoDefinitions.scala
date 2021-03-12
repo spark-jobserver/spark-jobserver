@@ -59,6 +59,7 @@ object BinaryType {
     case m if m.value == Jar.mediaType => Some(Jar)
     case m if m.value == Wheel.mediaType => Some(Wheel)
     case m if m.value == Egg.mediaType => Some(Egg)
+    case m if m.value == "application/python-archive" => Some(Egg) // added for backward compatibility
     case m if m.value == "python-archive" => Some(Egg) // added for backward compatibility
     case _ => None
   }
