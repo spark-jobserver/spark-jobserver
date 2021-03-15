@@ -7,7 +7,6 @@ import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.{SQLContext, SparkSession}
 import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.{SparkConf, SparkContext}
-import org.joda.time.DateTime
 import org.scalactic.{Bad, Good, Or}
 import org.slf4j.LoggerFactory
 import spark.jobserver._

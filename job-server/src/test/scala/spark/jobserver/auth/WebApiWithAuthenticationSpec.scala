@@ -10,7 +10,6 @@ import akka.http.scaladsl.server.Route.{seal => sealRoute}
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import akka.testkit.TestKit
 import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
-import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
 import spark.jobserver._
 import spark.jobserver.auth.SJSAccessControl.Challenge
@@ -18,6 +17,7 @@ import spark.jobserver.io.JobDAOActor.GetJobInfo
 import spark.jobserver.io.{BinaryInfo, BinaryType, JobInfo, JobStatus}
 import spark.jobserver.util.SparkJobUtils
 
+import java.time.{Instant, ZoneId, ZonedDateTime}
 import scala.collection.mutable.SynchronizedSet
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
@@ -117,7 +117,7 @@ class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndA
   private val authorizationUnknownUser = new Authorization(new BasicHttpCredentials("whoami", "xxx"))
   private val authorizationRestrictedUser = new Authorization(
     new BasicHttpCredentials(RESTRICTED_USER, "12345"))
-  private val dt = DateTime.parse("2013-05-29T00Z")
+  private val dt = Instant.parse("2013-05-29T00:00:00Z").atZone(ZoneId.systemDefault())
   private val jobInfo = JobInfo("foo-1", "cid", "context", "com.abc.meme",
       JobStatus.Running, dt, None, None, Seq(BinaryInfo("demo", BinaryType.Jar, dt)))
   private val ResultKey = "result"

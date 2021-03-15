@@ -5,12 +5,11 @@ import akka.util.Timeout
 import akka.pattern.ask
 import akka.cluster.Cluster
 import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
+
 import java.io.File
 import java.util.concurrent.{TimeUnit, TimeoutException}
-
 import spark.jobserver.io._
 import spark.jobserver.util._
-import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
@@ -21,6 +20,7 @@ import scala.collection.mutable.ListBuffer
 import com.google.common.annotations.VisibleForTesting
 import spark.jobserver.io.zookeeper.AutoPurgeActor
 
+import java.time.ZonedDateTime
 import scala.util.control.NonFatal
 
 /**
@@ -277,7 +277,7 @@ object JobServer {
     val logMsg = s"Reconnecting to context $ctxName failed ->" +
       s"updating status of context $ctxName and related jobs to error"
     logger.info(logMsg)
-    val updatedContextInfo = contextInfo.copy(endTime = Option(DateTime.now()),
+    val updatedContextInfo = contextInfo.copy(endTime = Option(ZonedDateTime.now()),
         state = ContextStatus.Error, error = Some(ContextReconnectFailedException()))
     jobDaoActor ! JobDAOActor.SaveContextInfo(updatedContextInfo)
     try{
@@ -286,7 +286,8 @@ object JobServer {
         case Success(JobDAOActor.JobInfos(jobInfos)) =>
           jobInfos.foreach(jobInfo => {
           jobDaoActor ! JobDAOActor.SaveJobInfo(jobInfo.copy(state = JobStatus.Error,
-              endTime = Some(DateTime.now()), error = Some(ErrorData(ContextReconnectFailedException()))))
+              endTime = Some(ZonedDateTime.now()),
+              error = Some(ErrorData(ContextReconnectFailedException()))))
           })
         case Success(unknownResponse) =>
           logger.error(s"Received unexpected response: $unknownResponse")

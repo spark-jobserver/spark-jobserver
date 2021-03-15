@@ -5,7 +5,7 @@ import akka.pattern.ask
 import akka.util.Timeout
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
-import spark.jobserver.JobManagerActor.{GetContexData, ContexData}
+import spark.jobserver.JobManagerActor.{ContexData, GetContexData}
 import spark.jobserver.JobManagerActor.{SparkContextAlive, SparkContextDead, SparkContextStatus}
 import spark.jobserver.util.SparkJobUtils
 
@@ -14,9 +14,10 @@ import scala.concurrent.Await
 import scala.util.{Failure, Success, Try}
 import spark.jobserver.common.akka.InstrumentedActor
 import akka.pattern.gracefulStop
-import org.joda.time.DateTime
 import spark.jobserver.io.JobDAOActor.CleanContextJobInfos
 import spark.jobserver.io.ContextInfo
+
+import java.time.ZonedDateTime
 
 /** Messages common to all ContextSupervisors */
 object ContextSupervisor {
@@ -193,7 +194,7 @@ class LocalContextSupervisorActor(dao: ActorRef, dataManagerActor: ActorRef) ext
       val name = actorRef.path.name
       logger.info("Actor terminated: " + name)
       contexts.remove(name)
-      dao ! CleanContextJobInfos(name, DateTime.now())
+      dao ! CleanContextJobInfos(name, ZonedDateTime.now())
   }
 
   private def startContext(name: String, contextConfig: Config, isAdHoc: Boolean, timeoutSecs: Int = 1)

@@ -2,7 +2,6 @@ package spark.jobserver
 
 import java.nio.file.{Files, Paths}
 import java.util.concurrent.TimeUnit
-
 import akka.actor._
 import akka.pattern.ask
 import akka.cluster.Cluster
@@ -17,12 +16,13 @@ import scala.util.{Failure, Success, Try}
 import spark.jobserver.common.akka.InstrumentedActor
 
 import scala.concurrent.Await
-import org.joda.time.DateTime
 import spark.jobserver.JobManagerActor.{ContexData, GetContexData, RestartExistingJobs, SparkContextDead}
 import spark.jobserver.io._
 import com.google.common.annotations.VisibleForTesting
 import akka.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerSettings,
   ClusterSingletonProxy, ClusterSingletonProxySettings}
+
+import java.time.ZonedDateTime
 
 object AkkaClusterSupervisorActor {
   val ACTOR_NAME = "context-supervisor"
@@ -183,9 +183,9 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
               logger.info(s"Context (${contextInfo.name}) in ${ContextStatus.Stopping} state is joining" +
                 s"the cluster. Killing it.")
               daoActor ! JobDAOActor.SaveContextInfo(contextInfo.copy(
-                state = ContextStatus.Error, endTime = Some(DateTime.now()),
+                state = ContextStatus.Error, endTime = Some(ZonedDateTime.now()),
                 error = Some(new StoppedContextJoinedBackException)))
-              daoActor ! JobDAOActor.CleanContextJobInfos(contextInfo.id, DateTime.now())
+              daoActor ! JobDAOActor.CleanContextJobInfos(contextInfo.id, ZonedDateTime.now())
               actorRef ! PoisonPill
             case (Some(JobDAOActor.ContextResponse(Some(contextInfo))),
                 Some((successCallback, failureCallback, timeoutMsgCancelHandler))) =>
@@ -212,8 +212,9 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
                     NoCallbackFoundException(contextInfo.id, actorRef.path.toSerializationFormat)
                   logger.error(exception.getMessage, exception)
                   actorRef ! PoisonPill // Since no watch was added, Terminated will not be fired
-                  daoActor ! JobDAOActor.SaveContextInfo(contextInfo.copy(
-                      state = ContextStatus.Error, endTime = Some(DateTime.now()), error = Some(exception)))
+                  daoActor ! JobDAOActor.SaveContextInfo(
+                    contextInfo.copy(state = ContextStatus.Error, endTime = Some(ZonedDateTime.now()),
+                      error = Some(exception)))
               }
             case (None, Some((_, failureCallback, timeoutMsgCancelHandler))) =>
               cancelScheduledMessage(timeoutMsgCancelHandler)
@@ -349,8 +350,8 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
                 val e = new ResolutionFailedOnStopContextException(c)
                 logger.info(s"${e.getMessage} Setting context to error state and cleaning up jobs.")
                 daoActor ! JobDAOActor.SaveContextInfo(contextInfo.copy(state = ContextStatus.Error,
-                    endTime = Some(DateTime.now()), error = Some(e)))
-                daoActor ! JobDAOActor.CleanContextJobInfos(c.id, DateTime.now())
+                    endTime = Some(ZonedDateTime.now()), error = Some(e)))
+                daoActor ! JobDAOActor.CleanContextJobInfos(c.id, ZonedDateTime.now())
                 sender ! NoSuchContext
             }
           }
@@ -390,9 +391,9 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
               case (true, ContextStatus.Killed) =>
                 setStateForContextAndJobs(c, ContextStatus.Restarting)
               case _ =>
-                val contextInfo = c.copy(endTime = Option(DateTime.now()), state = state)
+                val contextInfo = c.copy(endTime = Option(ZonedDateTime.now()), state = state)
                 daoActor ! JobDAOActor.SaveContextInfo(contextInfo)
-                daoActor ! JobDAOActor.CleanContextJobInfos(c.id, DateTime.now())
+                daoActor ! JobDAOActor.CleanContextJobInfos(c.id, ZonedDateTime.now())
             }
         }
       case Some(JobDAOActor.ContextResponse(None)) =>
@@ -409,7 +410,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
   }
 
   private def setStateForContextAndJobs(contextInfo: ContextInfo, state: String) {
-    val newContextInfo = contextInfo.copy(endTime = Option(DateTime.now()),
+    val newContextInfo = contextInfo.copy(endTime = Option(ZonedDateTime.now()),
         state = state)
     logger.info(s"Updating the status to ${state} for context ${contextInfo.id} and jobs within")
     daoActor ! JobDAOActor.SaveContextInfo(newContextInfo)
@@ -426,7 +427,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
         jobInfos.foreach { jobInfo =>
           logger.info(s"Found job ${jobInfo.jobId} for context. Setting state to ${state}.")
           daoActor ! JobDAOActor.SaveJobInfo(jobInfo.copy(state = state,
-              endTime = Some(DateTime.now()), error = Some(error)))
+              endTime = Some(ZonedDateTime.now()), error = Some(error)))
         }
       case Failure(e: Exception) =>
         logger.error(s"Exception occured while fetching jobs for context (${contextInfo.id})", e)
@@ -528,15 +529,16 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
     ).withFallback(contextConfig)
     val contextInfo = ContextInfo(contextId, name,
         mergedContextConfig.root().render(ConfigRenderOptions.concise()), None,
-        DateTime.now(), _: Option[DateTime] , _: String, _: Option[Throwable])
+        ZonedDateTime.now(), _: Option[ZonedDateTime] , _: String, _: Option[Throwable])
     launchDriver(name, contextConfig, contextActorName) match {
       case (false, error) => val e = new Exception(error)
         failureFunc(e)
         daoActor ! JobDAOActor.SaveContextInfo(
-            contextInfo(Some(DateTime.now()), ContextStatus.Error, Some(e)))
+            contextInfo(Some(ZonedDateTime.now()), ContextStatus.Error, Some(e)))
       case (true, _) =>
         val timeoutMsg = ForkedJVMInitTimeout(contextActorName,
-             contextInfo(Some(DateTime.now()), ContextStatus.Error, Some(ContextJVMInitializationTimeout())))
+             contextInfo(Some(ZonedDateTime.now()), ContextStatus.Error,
+               Some(ContextJVMInitializationTimeout())))
         // Scheduler can throw IllegalStateException
         Try(context.system.scheduler.scheduleOnce(forkedJVMInitTimeout.seconds, self, timeoutMsg)) match {
           case Success(timeoutMsgCancelHandler) =>
@@ -546,7 +548,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
           case Failure(e) =>
             logger.error("Failed to schedule a time out message for forked JVM", e)
             daoActor ! JobDAOActor.SaveContextInfo(
-                contextInfo(Some(DateTime.now()), ContextStatus.Error, Some(e)))
+                contextInfo(Some(ZonedDateTime.now()), ContextStatus.Error, Some(e)))
             val unusedCancellable = new Cancellable {
               def cancel(): Boolean = { return false }
               def isCancelled: Boolean = { return false }
@@ -588,7 +590,7 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
         (resp._1, resp._2) match {
           case (true, Some(c)) =>
             val contextInfo = ContextInfo(c.id, c.name, c.config, c.actorAddress, c.startTime,
-              Some(DateTime.now()), ContextStatus.Error,
+              Some(ZonedDateTime.now()), ContextStatus.Error,
               Some(new Throwable("Context was not finished properly")))
             daoActor ! JobDAOActor.SaveContextInfo(contextInfo)
           case (_, _) =>

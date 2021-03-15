@@ -2,7 +2,6 @@ package spark.jobserver.context
 
 import com.typesafe.config.Config
 import org.apache.spark.{SparkConf, SparkContext}
-import org.joda.time.DateTime
 import org.scalactic._
 import org.slf4j.LoggerFactory
 import spark.jobserver.{ContextLike, JobCache, SparkJob}

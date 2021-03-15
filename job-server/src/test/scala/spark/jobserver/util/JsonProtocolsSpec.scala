@@ -1,10 +1,8 @@
 package spark.jobserver.util
 
-import org.joda.time.DateTime
 import org.scalatest.BeforeAndAfter
 import org.scalatest.FunSpec
 import org.scalatest.Matchers
-
 import spark.jobserver.io.BinaryInfo
 import spark.jobserver.io.BinaryType
 import spark.jobserver.io.JobInfo
@@ -12,7 +10,10 @@ import spark.jobserver.util.JsonProtocols._
 import spray.json._
 import DefaultJsonProtocol._
 import spark.jobserver.io.ContextInfo
-import java.text.SimpleDateFormat
+
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 
 class JsonProtocolsSpec extends FunSpec with Matchers with BeforeAndAfter {
 
@@ -21,11 +22,11 @@ class JsonProtocolsSpec extends FunSpec with Matchers with BeforeAndAfter {
    */
 
   // Date formatting
-  val df = new SimpleDateFormat("yyyy-MM-dd HH-mm-ss SS Z")
-  val earlyDate = new DateTime().minusHours(1)
-  val date = new DateTime()
-  val earlyDateStr = df.format(earlyDate.getMillis)
-  val dateStr = df.format(date.getMillis)
+  val df = DateTimeFormatter.ofPattern(JsonProtocols.DATE_PATTERN)
+  val earlyDate = ZonedDateTime.now().minusHours(1).truncatedTo(ChronoUnit.MILLIS)
+  val date = ZonedDateTime.now().truncatedTo(ChronoUnit.MILLIS)
+  val earlyDateStr = df.format(earlyDate)
+  val dateStr = df.format(date)
 
   // BinaryInfo
   val testBinaryInfo = BinaryInfo("SomeName", BinaryType.Jar, earlyDate, Some("SomeStorId"))

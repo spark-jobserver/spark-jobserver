@@ -1,7 +1,6 @@
 package spark.jobserver
 
 import java.nio.charset.Charset
-
 import scala.util.Try
 import akka.actor.{Actor, ActorRef, ActorSystem, Address, Props}
 import akka.cluster.{Cluster, ClusterEvent, MemberStatus}
@@ -9,8 +8,8 @@ import akka.pattern.ask
 import akka.util.Timeout
 import akka.testkit.{TestActor, TestKit, TestProbe}
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
-import java.nio.file.{Files, Path}
 
+import java.nio.file.{Files, Path}
 import scala.concurrent.duration._
 import spark.jobserver.JobServer.InvalidConfiguration
 import spark.jobserver.common.akka
@@ -21,11 +20,11 @@ import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 import java.util.UUID
-
-import org.joda.time.DateTime
 import java.util.concurrent.{CountDownLatch, TimeUnit}
-
 import com.typesafe.config.Config
+
+import java.time.{Instant, LocalDateTime, ZoneId, ZonedDateTime}
+import java.time.format.DateTimeFormatter
 
 object JobServerSpec {
   val system = ActorSystem("test")
@@ -205,7 +204,7 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
 
     def createContext(name: String, status: String, genActor: Boolean): (ContextInfo, Option[ActorRef]) = {
       val uuid = UUID.randomUUID().toString()
-      val ContextInfoPF = ContextInfo(uuid, name, "", _: Option[String], DateTime.now(), None, status, None)
+      val ContextInfoPF = ContextInfo(uuid, name, "", _: Option[String], ZonedDateTime.now(), None, status, None)
 
       genActor match {
         case true =>
@@ -217,7 +216,7 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with 
     }
 
     def genJob(jobId: String, ctx: ContextInfo, status: String): JobInfo = {
-      val dt = DateTime.parse("2013-05-29T00Z")
+      val dt = Instant.parse("2013-05-29T00:00:00Z").atZone(ZoneId.systemDefault())
       JobInfo(jobId, ctx.id, ctx.name, "com.abc.meme",
           status, dt, None, None, Seq(BinaryInfo("demo", BinaryType.Jar, dt)), None)
     }

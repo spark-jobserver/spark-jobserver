@@ -2,7 +2,6 @@ package spark.jobserver.io.zookeeper
 
 import scala.concurrent.Await
 import scala.concurrent.duration.DurationInt
-import org.joda.time.DateTime
 import org.scalatest.BeforeAndAfter
 import org.scalatest.FunSpecLike
 import org.scalatest.Matchers
@@ -10,6 +9,8 @@ import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import spark.jobserver.io._
 import spark.jobserver.util.{CuratorTestCluster, NoCorrespondingContextAliveException, Utils, ZKCleanup}
+
+import java.time.{Instant, ZoneId, ZonedDateTime}
 
 class DAOCleanupSpec extends FunSpecLike with Matchers with BeforeAndAfter {
 
@@ -44,8 +45,8 @@ class DAOCleanupSpec extends FunSpecLike with Matchers with BeforeAndAfter {
    * Test data
    */
 
-  val date = new DateTime(1548683342369L)
-  val otherDate = new DateTime(1548683342370L)
+  val date = ZonedDateTime.ofInstant(Instant.ofEpochMilli(1548683342369L), ZoneId.systemDefault())
+  val otherDate = ZonedDateTime.ofInstant(Instant.ofEpochMilli(1548683342370L), ZoneId.systemDefault())
   val bin = BinaryInfo("binaryWithJar", BinaryType.Jar, date, Some(BinaryDAO.calculateBinaryHashString("1".getBytes)))
 
   val runningJob = JobInfo("1", "someContextId", "someContextName",

@@ -2,7 +2,6 @@ package spark.jobserver.io.zookeeper
 
 import scala.concurrent.Await
 import scala.concurrent.duration.DurationInt
-import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
@@ -23,6 +22,8 @@ import spark.jobserver.io.JobDAOActor.JobInfos
 import spark.jobserver.io.JobInfo
 import spark.jobserver.util.{CuratorTestCluster, ErrorData, JobserverConfig, Utils}
 
+import java.time.ZonedDateTime
+
 object AutoPurgeActorSpec {
   val system = ActorSystem("test")
 }
@@ -34,7 +35,7 @@ object DummyZookeeperDAOActor{
 class DummyZookeeperDAOActor(dao : MetaDataZookeeperDAO) extends InstrumentedActor {
   val timeout = 60 seconds
   override def wrappedReceive: Receive = {
-    case GetContextInfos(_,_) => sender ! ContextInfos(Await.result(dao.getContexts(None, None), timeout))
+    case GetContextInfos(_, _) => sender ! ContextInfos(Await.result(dao.getContexts(None, None), timeout))
     case GetJobInfos(_, _) => sender ! JobInfos(Await.result(dao.getJobs(5000, None), timeout))
   }
 }
@@ -70,7 +71,7 @@ class AutoPurgeActorSpec extends TestKit(AutoPurgeActorSpec.system) with FunSpec
     // Empty database
     Utils.usingResource(zkUtils.getClient) {
       client =>
-        zkUtils.delete(client, "")
+        zkUtils.delete(client, "/")
     }
     // Create actor
     purgeActor = system.actorOf(AutoPurgeActor.props(config, daoActor, 8 * 24))
@@ -84,9 +85,8 @@ class AutoPurgeActorSpec extends TestKit(AutoPurgeActorSpec.system) with FunSpec
    * Test data
    */
 
-  val age = 8 * 24 * 60 * 60 * 1000
-  val rightNow = new DateTime()
-  val backThen = new DateTime(rightNow.getMillis - age)
+  val rightNow = ZonedDateTime.now().withNano(0)
+  val backThen = rightNow.minusDays(8)
   val bin = BinaryInfo("binaryWithJar", BinaryType.Jar, backThen,
     Some(BinaryDAO.calculateBinaryHashString("1".getBytes)))
   val oldContext = ContextInfo("1", "someName", "someConfig", Some("ActorAddress"), backThen,

@@ -3,8 +3,8 @@ package spark.jobserver.io
 import akka.actor.ActorSystem
 import akka.testkit.TestProbe
 import com.typesafe.config.Config
-import org.joda.time.DateTime
 
+import java.time.ZonedDateTime
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -16,7 +16,7 @@ object DAOTestsHelper {
   val binaryDAOSuccessId: String = BinaryDAO.calculateBinaryHashString(binaryDAOBytesSuccess)
   val binaryDAOBytesFail: Array[Byte] = "To test failures BinaryDAO".toCharArray.map(_.toByte)
   val binaryDAOFailId: String = BinaryDAO.calculateBinaryHashString(binaryDAOBytesFail)
-  val defaultDate: DateTime = DateTime.now()
+  val defaultDate: ZonedDateTime = ZonedDateTime.now()
   val someBinaryName: String = "name-del-info-success"
   val someBinaryId = BinaryDAO.calculateBinaryHashString(Array(10, 11, 12))
   val someBinaryInfo: BinaryInfo = BinaryInfo(someBinaryName, BinaryType.Jar, defaultDate, Some(someBinaryId))
@@ -73,7 +73,7 @@ class DummyMetaDataDAO(config: Config) extends MetaDataDAO {
 
   override def saveBinary(name: String,
                           binaryType: BinaryType,
-                          uploadTime: DateTime,
+                          uploadTime: ZonedDateTime,
                           id: String): Future[Boolean] = {
     name match {
       case message if message.contains("save-info-success") || message == "success" =>
@@ -123,7 +123,7 @@ class DummyMetaDataDAO(config: Config) extends MetaDataDAO {
       case message if message.contains("get-info-success") || message == "success" =>
         DAOTestsHelper.testProbe.ref ! "MetaDataDAO: getBinary success"
         Future.successful(Some(
-          BinaryInfo("success", BinaryType.Jar, DateTime.now(), Some(DAOTestsHelper.binaryDAOSuccessId)))
+          BinaryInfo("success", BinaryType.Jar, ZonedDateTime.now(), Some(DAOTestsHelper.binaryDAOSuccessId)))
         )
       case _ =>
         DAOTestsHelper.testProbe.ref ! "MetaDataDAO: getBinary failed"
@@ -161,7 +161,7 @@ class DummyMetaDataDAO(config: Config) extends MetaDataDAO {
       case message if message.contains("get-info-success") || message == "success" =>
         DAOTestsHelper.testProbe.ref ! "MetaDataDAO: getBinariesByStorageId success yes"
         Future.successful(Seq(
-          BinaryInfo("success", BinaryType.Jar, DateTime.now(), Some(DAOTestsHelper.binaryDAOSuccessId)))
+          BinaryInfo("success", BinaryType.Jar, ZonedDateTime.now(), Some(DAOTestsHelper.binaryDAOSuccessId)))
         )
       case _ =>
         DAOTestsHelper.testProbe.ref ! "MetaDataDAO: getBinariesByStorageId success"

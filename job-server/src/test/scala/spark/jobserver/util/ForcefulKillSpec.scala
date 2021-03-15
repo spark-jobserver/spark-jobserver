@@ -1,16 +1,16 @@
 package spark.jobserver.util
 
 import java.nio.charset.Charset
-
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.{HttpEntity, HttpMethods, HttpRequest, HttpResponse, StatusCodes}
 import akka.testkit.TestKit
 import com.typesafe.config.{Config, ConfigFactory}
 
 import collection.JavaConverters._
-import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfterAll, FunSpecLike, Matchers}
 import spark.jobserver.io.ContextInfo
+
+import java.time.ZonedDateTime
 
 object ForcefulKillSpec {
   val PRIMARY_MASTER = 0
@@ -48,7 +48,7 @@ class ForcefulKillSpec extends TestKit(ActorSystem("test")) with FunSpecLike
     ConfigFactory.parseMap(configMap.asJava).withFallback(ConfigFactory.defaultOverrides())
   }
 
-  val unusedContextInfo = ContextInfo("a", "a", "", None, DateTime.now(), None, "", None)
+  val unusedContextInfo = ContextInfo("a", "a", "", None, ZonedDateTime.now(), None, "", None)
 
   describe("Spark standalone forceful UI kill") {
     it("should be able to kill the application") {

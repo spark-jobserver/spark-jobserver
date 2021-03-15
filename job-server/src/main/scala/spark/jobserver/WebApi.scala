@@ -12,7 +12,6 @@ import akka.pattern.ask
 import akka.util.Timeout
 import ch.megard.akka.http.cors.scaladsl.CorsDirectives._
 import com.typesafe.config._
-import org.joda.time.DateTime
 import org.slf4j.{Logger, LoggerFactory}
 import spark.jobserver.auth.Permissions._
 import spark.jobserver.auth.SJSAccessControl._
@@ -26,6 +25,8 @@ import spark.jobserver.util.ResultMarshalling._
 import spark.jobserver.util._
 
 import java.net.{MalformedURLException, URLDecoder}
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatterBuilder
 import java.util.NoSuchElementException
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLContext
@@ -35,6 +36,7 @@ import scala.util.Try
 object WebApi extends SprayJsonSupport {
   import spray.json.DefaultJsonProtocol._
 
+  private val df = new DateTimeFormatterBuilder().appendInstant(3).toFormatter()
   val logger: Logger = LoggerFactory.getLogger(getClass)
 
   def completeWithErrorStatus(ctx: RequestContext, errMsg: String, stcode: StatusCode,
@@ -72,8 +74,8 @@ object WebApi extends SprayJsonSupport {
       case contextInfo: ContextInfo =>
         map("id") = contextInfo.id
         map("name") = contextInfo.name
-        map("startTime") = contextInfo.startTime.toString()
-        map("endTime") = if (contextInfo.endTime.isDefined) contextInfo.endTime.get.toString else "Empty"
+        map("startTime") = df.format(contextInfo.startTime)
+        map("endTime") = contextInfo.endTime.map(df.format).getOrElse("Empty")
         map("state") = contextInfo.state
       case name: String =>
         map("name") = name
@@ -238,7 +240,7 @@ class WebApi(system: ActorSystem,
             case LastBinaryInfo(Some(bin)) =>
               val res = Map("app-name" -> bin.appName,
                   "binary-type" -> bin.binaryType.name,
-                  "upload-time" -> bin.uploadTime.toString())
+                  "upload-time" -> df.format(bin.uploadTime))
               ctx.complete(StatusCodes.OK, res)
             case LastBinaryInfo(None) =>
               completeWithErrorStatus(ctx, s"Can't find binary with name $appName", StatusCodes.NotFound)
@@ -258,11 +260,11 @@ class WebApi(system: ActorSystem,
 
         val timer = binGet.time()
         val future = (binaryManager ? ListBinaries(None)).
-          mapTo[collection.Map[String, (BinaryType, DateTime)]]
+          mapTo[collection.Map[String, (BinaryType, ZonedDateTime)]]
         future.flatMap { binTimeMap =>
           val stringTimeMap = binTimeMap.map {
             case (app, (binType, dt)) =>
-              (app, Map("binary-type" -> binType.name, "upload-time" -> dt.toString()))
+              (app, Map("binary-type" -> binType.name, "upload-time" -> df.format(dt)))
           }.toMap
           ctx.complete(stringTimeMap)
         }.recoverWith {

@@ -4,7 +4,6 @@ import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.testkit.ImplicitSender
 import akka.testkit.TestKit
 import com.typesafe.config.{Config, ConfigFactory}
-import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.context.DefaultSparkContextFactory
@@ -12,6 +11,7 @@ import spark.jobserver.io.JobDAOActor.{GetLastBinaryInfo, LastBinaryInfo, SaveBi
 import spark.jobserver.io.{BinaryDAO, BinaryInfo, BinaryType, MetaDataDAO}
 import spark.jobserver.util.JobserverConfig
 
+import java.time.ZonedDateTime
 import scala.concurrent.duration._
 import scala.util.Success
 
@@ -103,7 +103,7 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
   protected def uploadBinary(jarFilePath: String,
                              appName: String, binaryType: BinaryType): BinaryInfo = {
     val bytes = scala.io.Source.fromFile(jarFilePath, "ISO-8859-1").map(_.toByte).toArray
-    daoActor ! SaveBinary(appName, binaryType, DateTime.now, bytes)
+    daoActor ! SaveBinary(appName, binaryType, ZonedDateTime.now, bytes)
     expectMsg(SaveBinaryResult(Success({})))
 
     daoActor ! GetLastBinaryInfo(appName)
