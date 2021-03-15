@@ -14,7 +14,6 @@ import org.apache.hadoop.conf.Configuration
 import org.apache.spark.{SparkConf, SparkEnv}
 import org.apache.spark.scheduler.SparkListener
 import org.apache.spark.scheduler.SparkListenerApplicationEnd
-import org.joda.time.DateTime
 import org.scalactic._
 import spark.jobserver.api.{DataFileCache, JobEnvironment}
 import spark.jobserver.ContextSupervisor.{ContextStopError, ContextStopInProgress, SparkContextStopped}
@@ -29,6 +28,8 @@ import scala.util.{Failure, Success, Try}
 import scala.concurrent.duration._
 import org.spark_project.guava.annotations.VisibleForTesting
 import spark.jobserver.io.JobDAOActor.{BinaryInfosForCp, BinaryNotFound, GetBinaryInfosForCpFailed}
+
+import java.time.ZonedDateTime
 
 object JobManagerActor {
   // Messages
@@ -300,7 +301,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
 
     case KillJob(jobId: String) =>
       jobContext.sparkContext.cancelJobGroup(jobId)
-      val resp = JobKilled(jobId, DateTime.now())
+      val resp = JobKilled(jobId, ZonedDateTime.now())
       statusActor ! resp
       sender ! resp
 
@@ -568,7 +569,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
         (info.jobId, info.startTime)
       case None =>
         logger.info(s"Creating new JobId for current job")
-        (java.util.UUID.randomUUID().toString, DateTime.now())
+        (java.util.UUID.randomUUID().toString, ZonedDateTime.now())
     }
 
     val jobContainer = factory.loadAndValidateJob(cp, mainClass, jobsLoader) match {
@@ -626,7 +627,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
           job.validate(jobC, jobEnv, jobConfig) match {
             case Bad(reasons) =>
               val err = new Throwable(reasons.toString)
-              statusActor ! JobValidationFailed(jobId, DateTime.now(), err)
+              statusActor ! JobValidationFailed(jobId, ZonedDateTime.now(), err)
               throw err
             case Good(jobData) =>
               statusActor ! JobStarted(jobId: String, jobInfo)
@@ -662,13 +663,13 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
         // Either way an enhancement would be required here to make Stream[_] responses work
         // with context-per-jvm=true configuration
         resultActor ! JobResult(jobId, result)
-        statusActor ! JobFinished(jobId, DateTime.now())
+        statusActor ! JobFinished(jobId, ZonedDateTime.now())
         callbackHandler.success(jobInfo, result)
       case Failure(wrapped: Throwable) =>
         // actual error was wrapped so we could process fatal errors, see #1161
         val error = wrapped.getCause
         // If and only if job validation fails, JobErroredOut message is dropped silently in JobStatusActor.
-        statusActor ! JobErroredOut(jobId, DateTime.now(), error)
+        statusActor ! JobErroredOut(jobId, ZonedDateTime.now(), error)
         logger.error("Exception from job " + jobId + ": ", error)
         postJobError()
         callbackHandler.failure(jobInfo, error)
@@ -808,7 +809,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
 
   private def updateJobInfoWithErrorState(jobInfo: JobInfo, error: Throwable) {
    val updatedJobInfo = jobInfo.copy(state = JobStatus.Error,
-     endTime = Some(DateTime.now()), error = Some(ErrorData(error)))
+     endTime = Some(ZonedDateTime.now()), error = Some(ErrorData(error)))
    daoActor ! JobDAOActor.SaveJobInfo(updatedJobInfo)
   }
 

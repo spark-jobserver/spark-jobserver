@@ -1,12 +1,11 @@
 package spark.jobserver.io
 
 import java.io.File
-
 import com.typesafe.config.Config
-import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import spark.jobserver.util._
 
+import java.time.ZonedDateTime
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.{Await, Future}
 import scala.util.Success
@@ -23,7 +22,7 @@ class JobDAOActorHelper(metaDataDAO: MetaDataDAO, binaryDAO: BinaryDAO, config: 
   private val defaultAwaitTime = JobserverTimeouts.DAO_DEFAULT_TIMEOUT
   private val logger = LoggerFactory.getLogger(getClass)
 
-  def saveBinary(name: String, binaryType: BinaryType, uploadTime: DateTime,
+  def saveBinary(name: String, binaryType: BinaryType, uploadTime: ZonedDateTime,
                           binaryBytes: Array[Byte]): Unit = {
     Utils.usingTimer(binWrite){ () =>
       val binHash = BinaryDAO.calculateBinaryHashString(binaryBytes)
@@ -105,7 +104,7 @@ class JobDAOActorHelper(metaDataDAO: MetaDataDAO, binaryDAO: BinaryDAO, config: 
     }
   }
 
-  def getBinaryPath(name: String, binaryType: BinaryType, uploadTime: DateTime): String = {
+  def getBinaryPath(name: String, binaryType: BinaryType, uploadTime: ZonedDateTime): String = {
     Utils.usingTimer(binRead){ () =>
       Await.result(Utils.usingTimer(binRead){ () => metaDataDAO.getBinary(name)}, defaultAwaitTime) match {
         case Some(binaryInfo) =>

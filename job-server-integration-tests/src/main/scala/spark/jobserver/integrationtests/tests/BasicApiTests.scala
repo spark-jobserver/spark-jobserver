@@ -1,17 +1,16 @@
 package spark.jobserver.integrationtests.tests
 
-import org.joda.time.DateTime
 import org.scalatest.BeforeAndAfterAllConfigMap
 import org.scalatest.ConfigMap
 import org.scalatest.FreeSpec
 import org.scalatest.Matchers
-
 import com.softwaremill.sttp._
-
 import play.api.libs.json.JsObject
 import play.api.libs.json.Json
 import spark.jobserver.integrationtests.util.TestHelper
 import com.typesafe.config.Config
+
+import java.time.ZonedDateTime
 
 class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigMap {
 
@@ -37,7 +36,7 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
   val streamingMain = "spark.jobserver.StreamingTestJob"
 
   "/binaries" - {
-    var binaryUploadDate: DateTime = null
+    var binaryUploadDate: ZonedDateTime = null
 
     "POST /binaries/<app> should upload a binary" in {
       val byteArray = TestHelper.fileToByteArray(bin)
@@ -56,7 +55,7 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
       val json = Json.parse(response.body.merge)
       val testbin = (json \ appName)
       testbin.isDefined should equal(true)
-      binaryUploadDate = new DateTime((testbin \ "upload-time").as[String])
+      binaryUploadDate = ZonedDateTime.parse((testbin \ "upload-time").as[String])
     }
 
     "GET /binaries/<app> should retrieve a specific binary" in {
@@ -83,7 +82,8 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
       val json = Json.parse(getresponse.body.merge)
       val testbin = (json \ appName)
       testbin.isDefined should equal(true)
-      val newUploadDate = new DateTime((testbin \ "upload-time").as[String])
+      // TODO check
+      val newUploadDate = ZonedDateTime.parse((testbin \ "upload-time").as[String])
       newUploadDate.isAfter(binaryUploadDate) should equal(true)
     }
 

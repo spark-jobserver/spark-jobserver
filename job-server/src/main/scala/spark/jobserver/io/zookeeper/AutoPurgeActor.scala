@@ -4,7 +4,6 @@ import scala.concurrent.Await
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.control.NonFatal
-import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import com.typesafe.config.Config
 import akka.actor.ActorRef
@@ -20,6 +19,8 @@ import spark.jobserver.io.JobDAOActor.JobInfos
 import spark.jobserver.io.JobStatus
 import spark.jobserver.io.zookeeper.AutoPurgeActor._
 import spark.jobserver.util.{JobserverConfig, Utils}
+
+import java.time.ZonedDateTime
 
 object AutoPurgeActor {
   val logger = LoggerFactory.getLogger(getClass)
@@ -59,15 +60,14 @@ class AutoPurgeActor(config: Config, daoActor: ActorRef, purgeOlderThanHours: In
     case PurgeOldData =>
       val recipient = sender
       logger.info(s"Purging data older than $purgeOlderThanHours hours.")
-      val olderThanMillis = purgeOlderThanHours * 60 * 60 * 1000
-      val now = new DateTime().getMillis
+      val cutoff = ZonedDateTime.now().minusHours(purgeOlderThanHours)
 
       // Purge contexts
       try {
         val contexts = Await.result((daoActor ? GetContextInfos(None, None))
             .mapTo[ContextInfos], awaitDuration).contextInfos
         val purgePaths = contexts.filter(c => ContextStatus.getFinalStates().contains(c.state))
-          .filter(c => c.endTime.isDefined && c.endTime.get.getMillis < (now - olderThanMillis))
+          .filter(c => c.endTime.exists(_.isBefore(cutoff)))
           .map(c => s"${MetaDataZookeeperDAO.contextsDir}/${c.id}")
         logger.info(s"Purging ${purgePaths.size}/${contexts.size} contexts.")
         deletePaths(purgePaths)
@@ -82,7 +82,7 @@ class AutoPurgeActor(config: Config, daoActor: ActorRef, purgeOlderThanHours: In
       try{
         val jobs = Await.result((daoActor ? GetJobInfos(10000)).mapTo[JobInfos], awaitDuration).jobInfos
         val purgePaths = jobs.filter(j => JobStatus.getFinalStates().contains(j.state))
-          .filter(j => j.endTime.isDefined && j.endTime.get.getMillis < (now - olderThanMillis))
+          .filter(j => j.endTime.exists(_.isBefore(cutoff)))
           .map(j => s"${MetaDataZookeeperDAO.jobsDir}/${j.jobId}")
         logger.info(s"Purging ${purgePaths.size}/${jobs.size} jobs.")
         deletePaths(purgePaths)

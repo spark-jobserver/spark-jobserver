@@ -1,26 +1,26 @@
 package spark.jobserver.io
 
 import java.io.File
-
 import akka.actor.{ActorRef, ActorSystem}
 import akka.pattern.ask
 import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import akka.util.Timeout
 import com.typesafe.config.{Config, ConfigFactory}
-import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
 import spark.jobserver.JobManagerActor.ContextTerminatedException
 import spark.jobserver.io.JobDAOActor._
 import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.util._
 
+import java.time.{Instant, ZoneId, ZonedDateTime}
+import java.time.format.DateTimeFormatter
 import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 
 object JobDAOActorSpec {
   val system = ActorSystem("dao-test")
-  val dt = DateTime.now()
+  val dt = ZonedDateTime.now()
   val dtplus1 = dt.plusHours(1)
 
   val cleanupProbe = TestProbe()(system)
@@ -58,7 +58,7 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
   describe("JobDAOActor with mocked Meta and Binary DAO") {
 
     it("should save binary and metadata for binary and respond with success") {
-      daoActor ! SaveBinary("success", BinaryType.Jar, DateTime.now, DAOTestsHelper.binaryDAOBytesSuccess)
+      daoActor ! SaveBinary("success", BinaryType.Jar, ZonedDateTime.now, DAOTestsHelper.binaryDAOBytesSuccess)
       DAOTestsHelper.testProbe.expectMsg("BinaryDAO: Save success")
       DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: Save success")
       expectMsg(SaveBinaryResult(Success({})))
@@ -66,7 +66,7 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
     }
 
     it("should respond when saving Binary fails") {
-      daoActor ! SaveBinary("binarySaveFail", BinaryType.Jar, DateTime.now, DAOTestsHelper.binaryDAOBytesFail)
+      daoActor ! SaveBinary("binarySaveFail", BinaryType.Jar, ZonedDateTime.now, DAOTestsHelper.binaryDAOBytesFail)
       DAOTestsHelper.testProbe.expectMsg("BinaryDAO: Save failed")
       expectMsgPF(3 seconds){
         case SaveBinaryResult(Failure(ex)) if ex.getMessage.startsWith("can't save binary") =>
@@ -75,7 +75,7 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
     }
 
     it("should try to delete binary if meta data save failed") {
-      daoActor ! SaveBinary("failed", BinaryType.Jar, DateTime.now, DAOTestsHelper.binaryDAOBytesSuccess)
+      daoActor ! SaveBinary("failed", BinaryType.Jar, ZonedDateTime.now, DAOTestsHelper.binaryDAOBytesSuccess)
       DAOTestsHelper.testProbe.expectMsg("BinaryDAO: Save success")
       DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: Save failed")
       DAOTestsHelper.testProbe.expectMsg("MetaDataDAO: getBinariesByStorageId success")
@@ -88,12 +88,12 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
 
     it("should not block other calls to DAO if save binary is taking too long") {
       daoActor ! SaveBinary("long-call-400", BinaryType.Jar,
-        DateTime.now, DAOTestsHelper.binaryDAOBytesSuccess)
+        ZonedDateTime.now, DAOTestsHelper.binaryDAOBytesSuccess)
 
       daoActor ! GetJobInfos(0)
       expectMsg(1.seconds, JobInfos(Seq()))
 
-      daoActor ! SaveBinary("success", BinaryType.Jar, DateTime.now, DAOTestsHelper.binaryDAOBytesSuccess)
+      daoActor ! SaveBinary("success", BinaryType.Jar, ZonedDateTime.now, DAOTestsHelper.binaryDAOBytesSuccess)
       expectMsg(1.seconds, SaveBinaryResult(Success({})))
 
       daoActor ! DeleteBinary("failOnThis")
@@ -179,23 +179,23 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
 
     it("should respond with successful message if dao operation was successful") {
       daoActor ! SaveContextInfo(ContextInfo("success", "name", "config", None,
-        DateTime.now(), None, ContextStatus.Running, None))
+        ZonedDateTime.now(), None, ContextStatus.Running, None))
       expectMsg(SavedSuccessfully)
     }
 
     it("should respond with failure message if dao operation has an exception") {
       daoActor ! SaveContextInfo(ContextInfo("failure", "name", "config", None,
-        DateTime.now(), None, ContextStatus.Running, None))
+        ZonedDateTime.now(), None, ContextStatus.Running, None))
       val failedMsg = expectMsgType[SaveFailed]
       failedMsg.error.getMessage should startWith("can't save context")
     }
 
     it("should update context by id with all attributes") {
       daoActor ! SaveContextInfo(ContextInfo("success", "name", "config", None,
-        DateTime.now(), None, ContextStatus.Running, None))
+        ZonedDateTime.now(), None, ContextStatus.Running, None))
       expectMsg(SavedSuccessfully)
 
-      val endTime = DateTime.now()
+      val endTime = ZonedDateTime.now()
       daoActor ! UpdateContextById("success", ContextInfoModifiable(
           Some("new-address"), Some(endTime), ContextStatus.Error, Some(new Exception("Yay!"))))
       expectMsg(SavedSuccessfully)
@@ -212,7 +212,7 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
     it("should update with new values and if final state is being set then should also set the end time") {
       val contextId = "update-with-address"
       daoActor ! SaveContextInfo(ContextInfo(contextId, "name", "config", Some("address"),
-        DateTime.now(), None, ContextStatus.Running, None))
+        ZonedDateTime.now(), None, ContextStatus.Running, None))
       expectMsg(SavedSuccessfully)
 
       daoActor ! UpdateContextById(contextId, ContextInfoModifiable(
@@ -232,7 +232,7 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
     it("should update with new values and if non-final state is being set then endTime should be None") {
       val contextId = "update-non-final"
       daoActor ! SaveContextInfo(ContextInfo(contextId, "name", "config", None,
-        DateTime.now(), None, ContextStatus.Running, None))
+        ZonedDateTime.now(), None, ContextStatus.Running, None))
       expectMsg(SavedSuccessfully)
 
       daoActor ! UpdateContextById(contextId, ContextInfoModifiable(
@@ -318,10 +318,10 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
 
   describe("CleanContextJobInfos tests using InMemoryDAO") {
     it("should set jobs to error state if running") {
-      val date = DateTime.now()
+      val date = ZonedDateTime.now()
       val contextId = "ctxId"
       val jobId = "dummy"
-      val endTime = DateTime.now()
+      val endTime = ZonedDateTime.now()
       val terminatedException = Some(ErrorData(ContextTerminatedException(contextId)))
       val runningJob = JobInfo(jobId, contextId, "",
         "", JobStatus.Running, date, None, None, Seq(BinaryInfo("", BinaryType.Jar, date)))
@@ -343,8 +343,8 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
 
   describe("GetJobInfos tests using InMemoryDAO") {
     it("should return list of job infos when requested for job statuses") {
-      val dt1 = DateTime.parse("2013-05-28T00Z")
-      val dt2 = DateTime.parse("2013-05-29T00Z")
+      val dt1 = Instant.parse("2013-05-28T00:00:00Z").atZone(ZoneId.systemDefault())
+      val dt2 = Instant.parse("2013-05-29T00:00:00Z").atZone(ZoneId.systemDefault())
       val jobInfo1 =
         JobInfo(
           "foo-1", "cid", "context",
@@ -364,8 +364,8 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
     }
 
     it("should return as many number of job infos as requested") {
-      val dt1 = DateTime.parse("2013-05-28T00Z")
-      val dt2 = DateTime.parse("2013-05-29T00Z")
+      val dt1 = Instant.parse("2013-05-28T00:00:00Z").atZone(ZoneId.systemDefault())
+      val dt2 = Instant.parse("2013-05-29T00:00:00Z").atZone(ZoneId.systemDefault())
       val jobInfo1 = JobInfo("foo-1", "cid", "context", "com.abc.meme",
         JobStatus.Running, dt1, None, None, Seq(BinaryInfo("demo", BinaryType.Jar, dt1)))
       val jobInfo2 = JobInfo("foo-2", "cid", "context", "com.abc.meme",
@@ -379,7 +379,7 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
     }
 
     it("should return job infos as requested status") {
-      val dt1 = DateTime.parse("2013-05-28T00Z")
+      val dt1 = Instant.parse("2013-05-28T00:00:00Z").atZone(ZoneId.systemDefault())
       val dt2 = dt1.plusMinutes(5)
       val dt3 = dt2.plusMinutes(5)
       val dt4 = dt3.plusMinutes(5)
@@ -443,7 +443,7 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
 
   describe("GetJobInfo tests using InMemoryDAO") {
     it("should return job info when requested for jobId that exists") {
-      val dt = DateTime.parse("2013-05-29T00Z")
+      val dt = Instant.parse("2013-05-29T00:00:00Z").atZone(ZoneId.systemDefault())
       val jobInfo = JobInfo("foo", "cid", "context", "com.abc.meme",
         JobStatus.Running, dt, None, None, Seq(BinaryInfo("demo", BinaryType.Jar, dt)))
       val saveJobFuture = inMemoryDaoActor ? SaveJobInfo(jobInfo)
@@ -455,7 +455,7 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
     }
 
     it("should return job info when requested for jobId that exists, where the job is a Python job") {
-      val dt = DateTime.parse("2013-05-29T00Z")
+      val dt = Instant.parse("2013-05-29T00:00:00Z").atZone(ZoneId.systemDefault())
       val jobInfo = JobInfo(
         "bar", "cid", "context",
         "com.abc.meme", JobStatus.Running, dt, None, None, Seq(BinaryInfo("demo", BinaryType.Egg, dt)))
@@ -496,13 +496,14 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
     }
 
     it("should create cache on save binary and delete on delete binary if enabled") {
+      val df = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss_SSS")
       val enabledCachingConfig = ConfigFactory.parseString("spark.jobserver.cache-on-upload = true").
         withFallback(config)
       val daoActorWithEnabledCaching = system.actorOf(JobDAOActor.props(
         new InMemoryMetaDAO, new InMemoryBinaryDAO, enabledCachingConfig))
       val binName = "success"
       val jarFile = new File(config.getString(JobserverConfig.DAO_ROOT_DIR_PATH),
-        binName + "-" + DAOTestsHelper.defaultDate.toString("yyyyMMdd_HHmmss_SSS") + ".jar")
+        binName + "-" + df.format(DAOTestsHelper.defaultDate) + ".jar")
 
       jarFile.exists() should be(false)
 
@@ -514,13 +515,14 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
     }
 
     it("should not cache any binary if disabled") {
+      val df = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss_SSS")
       val disabledCachingConfig = ConfigFactory.parseString("spark.jobserver.cache-on-upload = false").
         withFallback(config)
       val daoActorWithoutCache = system.actorOf(JobDAOActor.props(
         new InMemoryMetaDAO, new InMemoryBinaryDAO, disabledCachingConfig))
       val binName = "success"
       val jarFile = new File(config.getString(JobserverConfig.DAO_ROOT_DIR_PATH),
-        binName + "-" + DAOTestsHelper.defaultDate.toString("yyyyMMdd_HHmmss_SSS") + ".jar")
+        binName + "-" + df.format(DAOTestsHelper.defaultDate) + ".jar")
 
       saveBinaryAndCheckResponse(daoActorWithoutCache, binName)
       jarFile.exists() should be(false)

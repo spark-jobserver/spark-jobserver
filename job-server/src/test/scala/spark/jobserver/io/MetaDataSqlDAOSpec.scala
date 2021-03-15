@@ -8,10 +8,12 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import java.io.File
 import com.google.common.io.Files
 import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
-import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, FunSpecLike, Matchers}
 import spark.jobserver.TestJarFinder
 import spark.jobserver.util.{ErrorData, JobserverConfig}
+
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 
 abstract class MetaDataSqlDAOSpecBase {
   def config : Config
@@ -19,30 +21,31 @@ abstract class MetaDataSqlDAOSpecBase {
 
 class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with FunSpecLike with Matchers
   with BeforeAndAfter {
+  val df = DateTimeFormatter.ofPattern("yyyyMMdd_hhmmss_SSS")
   override def config: Config = ConfigFactory.load("local.test.metadatasqldao.conf")
   val timeout = 60 seconds
   var dao: MetaDataSqlDAO = _
 
   // *** TEST DATA ***
-  val time: DateTime = new DateTime()
+  val time: ZonedDateTime = ZonedDateTime.now().withNano(0)
   val throwable: Throwable = new Throwable("test-error")
   // jar test data
   val jarBytes: Array[Byte] = Files.toByteArray(testJar)
   val jarInfo: BinaryInfo = genJarInfo(false, false)
   var jarFile: File = new File(
       config.getString(JobserverConfig.DAO_ROOT_DIR_PATH),
-      jarInfo.appName + "-" + jarInfo.uploadTime.toString("yyyyMMdd_hhmmss_SSS") + ".jar"
+      jarInfo.appName + "-" + df.format(jarInfo.uploadTime) + ".jar"
   )
 
   val eggBytes: Array[Byte] = Files.toByteArray(emptyEgg)
   val eggInfo: BinaryInfo = BinaryInfo("myEggBinary", BinaryType.Egg, time)
   val eggFile: File = new File(config.getString(JobserverConfig.DAO_ROOT_DIR_PATH),
-    eggInfo.appName + "-" + jarInfo.uploadTime.toString("yyyyMMdd_hhmmss_SSS") + ".egg")
+    eggInfo.appName + "-" + df.format(jarInfo.uploadTime) + ".egg")
 
   val wheelBytes: Array[Byte] = Files.toByteArray(emptyWheel)
   val wheelInfo: BinaryInfo = BinaryInfo("myWheelBinary", BinaryType.Wheel, time)
   val wheelFile: File = new File(config.getString(JobserverConfig.DAO_ROOT_DIR_PATH),
-    wheelInfo.appName + "-" + jarInfo.uploadTime.toString("yyyyMMdd_hhmmss_SSS") + ".whl")
+    wheelInfo.appName + "-" + df.format(jarInfo.uploadTime) + ".whl")
 
   // jobInfo test data
   val jobInfoNoEndNoErr: JobInfo = genJobInfo(jarInfo, false, JobStatus.Running)
@@ -88,10 +91,10 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
 
       val contextName: String = "test-context"
       val classPath: String = "test-classpath"
-      val startTime: DateTime = time
+      val startTime: ZonedDateTime = time
 
-      val noEndTime: Option[DateTime] = None
-      val someEndTime: Option[DateTime] = Some(time) // Any DateTime Option is fine
+      val noEndTime: Option[ZonedDateTime] = None
+      val someEndTime: Option[ZonedDateTime] = Some(time) // Any ZonedDateTime Option is fine
       val someError = Some(ErrorData(throwable))
 
       val endTimeAndError = state match {
@@ -163,7 +166,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
       var save = Await.result(dao.saveBinary(jarInfo.appName, BinaryType.Jar,
             jarInfo.uploadTime, BinaryDAO.calculateBinaryHashString(jarBytes)), timeout)
       save should equal (true)
-      val time = new DateTime()
+      val time = ZonedDateTime.now()
       save = Await.result(dao.saveBinary("new_name", BinaryType.Jar,
             time, BinaryDAO.calculateBinaryHashString(jarBytes)), timeout)
       save should equal (true)
@@ -182,7 +185,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
       var save = Await.result(dao.saveBinary(jarInfo.appName, BinaryType.Jar,
             jarInfo.uploadTime, BinaryDAO.calculateBinaryHashString(jarBytes)), timeout)
       save should equal (true)
-      val time = new DateTime()
+      val time = ZonedDateTime.now()
       save = Await.result(dao.saveBinary("new_name", BinaryType.Jar,
             time, BinaryDAO.calculateBinaryHashString(jarBytes)), timeout)
       save should equal (true)
@@ -197,7 +200,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
     }
 
     it("should be able to get the newest binary") {
-      val time = new DateTime()
+      val time = ZonedDateTime.now().withNano(0)
       val newInfo = BinaryInfo("name", BinaryType.Jar, time.plusHours(1),
           Some(BinaryDAO.calculateBinaryHashString(jarBytes)))
       var save = Await.result(dao.saveBinary("name", BinaryType.Jar, time.plusHours(1),

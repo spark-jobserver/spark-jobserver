@@ -1,8 +1,8 @@
 package spark.jobserver.io
 
 import com.typesafe.config.Config
-import org.joda.time.DateTime
 
+import java.time.{Instant, ZonedDateTime}
 import scala.collection.mutable
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
@@ -11,7 +11,7 @@ class InMemoryMetaDAO extends MetaDataDAO {
   val contextInfos = mutable.HashMap.empty[String, ContextInfo]
   val jobInfos = mutable.HashMap.empty[String, JobInfo]
   val jobConfigs = mutable.HashMap.empty[String, Config]
-  var binaries = mutable.HashMap.empty[(String, DateTime), BinaryInfo]
+  var binaries = mutable.HashMap.empty[(String, ZonedDateTime), BinaryInfo]
 
   override def saveContext(contextInfo: ContextInfo): Future[Boolean] = Future {
       contextInfos(contextInfo.id) = contextInfo
@@ -51,7 +51,7 @@ class InMemoryMetaDAO extends MetaDataDAO {
   }
 
   override def getJobs(limit: Int, status: Option[String]): Future[Seq[JobInfo]] = Future {
-    val allJobs = jobInfos.values.toSeq.sortBy(_.startTime.toString())
+    val allJobs = jobInfos.values.toSeq.sortBy(_.startTime.toInstant)
     val filterJobs = status match {
       case Some(JobStatus.Running) => {
         allJobs.filter(jobInfo => jobInfo.endTime.isEmpty && jobInfo.error.isEmpty)
@@ -99,7 +99,8 @@ class InMemoryMetaDAO extends MetaDataDAO {
       .groupBy(_.appName)
       .map {
         case (appName, binaryInfosWithSameName) =>
-          appName -> binaryInfosWithSameName.toSeq.sortBy(_.uploadTime.getMillis)(Ordering[Long].reverse).head
+          appName -> binaryInfosWithSameName.toSeq
+            .sortBy(_.uploadTime.toInstant)(Ordering[Instant].reverse).head
       }.values.toList
   }
 
@@ -113,7 +114,7 @@ class InMemoryMetaDAO extends MetaDataDAO {
     }.toSeq
   }
 
-  override def saveBinary(name: String, binaryType: BinaryType, uploadTime: DateTime,
+  override def saveBinary(name: String, binaryType: BinaryType, uploadTime: ZonedDateTime,
       binaryStorageId: String): Future[Boolean] = Future {
     binaries((name, uploadTime)) = BinaryInfo(name, binaryType, uploadTime, Some(binaryStorageId))
     true

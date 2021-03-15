@@ -2,8 +2,9 @@ package spark.jobserver
 
 import akka.actor.{ActorRef, Props}
 import spark.jobserver.io.DataFileDAO
-import org.joda.time.DateTime
 import spark.jobserver.common.akka.InstrumentedActor
+
+import java.time.ZonedDateTime
 import scala.collection.mutable
 
 object DataManagerActor {
@@ -63,7 +64,7 @@ class DataManagerActor(fileDao: DataFileDAO) extends InstrumentedActor {
 
     case StoreData(aName, aBytes) =>
       logger.info("Storing data in file prefix {}, {} bytes", aName, aBytes.length)
-      val uploadTime = DateTime.now()
+      val uploadTime = ZonedDateTime.now()
       val fName = fileDao.saveFile(aName, uploadTime, aBytes)
       remoteCaches(fName) = mutable.HashSet.empty[ActorRef]
       sender ! Stored(fName)

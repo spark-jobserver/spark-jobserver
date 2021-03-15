@@ -4,13 +4,14 @@ import akka.actor.{ActorSystem, Props}
 import akka.pattern.ask
 import akka.util.Timeout
 import com.typesafe.config.{Config, ConfigFactory}
-import org.joda.time.DateTime
 
 import scala.concurrent.Await
 import spark.jobserver._
 import spark.jobserver.io.JobDAOActor.{GetLastBinaryInfo, LastBinaryInfo, SaveBinary}
 import spark.jobserver.io.{BinaryInfo, BinaryType, InMemoryBinaryDAO, InMemoryMetaDAO, JobDAOActor}
 import spark.jobserver.util.JobserverTimeouts
+
+import java.time.ZonedDateTime
 
 /**
  * A stress test for launching many jobs within a job context
@@ -36,7 +37,7 @@ object SingleContextJobStress extends App with TestJarFinder {
   implicit val ec = system
   implicit val ShortTimeout = Timeout(3 seconds)
 
-  val jobDaoDir = jobDaoPrefix + DateTime.now.toString()
+  val jobDaoDir = jobDaoPrefix + ZonedDateTime.now.toString()
   lazy val daoConfig: Config = ConfigFactory.load("local.test.dao.conf")
   val inMemoryMetaDAO = new InMemoryMetaDAO
   val inMemoryBinDAO = new InMemoryBinaryDAO
@@ -46,7 +47,7 @@ object SingleContextJobStress extends App with TestJarFinder {
 
   private def uploadJar(jarFilePath: String, appName: String): BinaryInfo = {
     val bytes = scala.io.Source.fromFile(jarFilePath, "ISO-8859-1").map(_.toByte).toArray
-    Await.result(daoActor ? SaveBinary(appName, BinaryType.Jar, DateTime.now, bytes),
+    Await.result(daoActor ? SaveBinary(appName, BinaryType.Jar, ZonedDateTime.now, bytes),
       JobserverTimeouts.DAO_DEFAULT_TIMEOUT)
     Await.result(daoActor ? GetLastBinaryInfo(appName), JobserverTimeouts.DAO_DEFAULT_TIMEOUT).
       asInstanceOf[LastBinaryInfo].lastBinaryInfo.get

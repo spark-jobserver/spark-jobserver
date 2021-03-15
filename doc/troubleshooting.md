@@ -11,7 +11,6 @@
   - [Job server won't start / cannot bind to 0.0.0.0:8090](#job-server-wont-start--cannot-bind-to-00008090)
   - [Job Server Doesn't Connect to Spark Cluster](#job-server-doesnt-connect-to-spark-cluster)
   - [Exception in thread "main" java.lang.NoSuchMethodError: akka.actor.ActorRefFactory.dispatcher()Lscala/concurrent/ExecutionContextExecutor;](#exception-in-thread-main-javalangnosuchmethoderror-akkaactoractorreffactorydispatcherlscalaconcurrentexecutioncontextexecutor)
-  - [java.lang.NoSuchMethodError: org.joda.time.DateTime.now()](#javalangnosuchmethoderror-orgjodatimedatetimenow)
   - [I am running CDH 5.3 and Job Server doesn't work](#i-am-running-cdh-53-and-job-server-doesnt-work)
   - [I want to run job-server on Windows](#i-want-to-run-job-server-on-windows)
   - [Akka Deadletters / Workers disconnect from Job Server](#akka-deadletters--workers-disconnect-from-job-server)
@@ -98,15 +97,6 @@ after this fixed, I can run jobs submitted from a remote job server successfully
 If you are running CDH 5.3 or older, you may have an incompatible version of Akka bundled together.  :(  Fortunately, one of our users has put together a [branch that works](https://github.com/bjoernlohrmann/spark-jobserver/tree/cdh-5.3) ... try that out!
 
 (Older instructions) Try modifying the version of Akka included with spark-jobserver to match the one in CDH (2.2.4, I think), or upgrade to CDH 5.4.   If you are on CDH 5.4, check that `sparkVersion` in `Dependencies.scala` matches CDH.  Or see [isse #154](https://github.com/spark-jobserver/spark-jobserver/issues/154).
-
-## java.lang.NoSuchMethodError: org.joda.time.DateTime.now()
-
-This time the problem is caused by incompatible class versions of the joda.time package in Hive and the Spark Job Server on Cloudera (java.lang.NoSuchMethodError: org.joda.time.DateTime.now()Lorg/joda/time/DateTime exception in the spark job server log). To solve the problem execute the following two commands on the machine the Job Server is installed:
-
-    sed -i -e 's#--driver-class-path.*SPARK_HOME/../hive/lib/.*##' /opt/spark-job-server/manager_start.sh
-    sed -i -e 's#--driver-class-path.*SPARK_HOME/../hive/lib/.*##' /opt/spark-job-server/server_start.sh  
-
-This removes the problematic driver class path entries from the two spark job server scripts.  (from @koetter)
 
 ## I am running CDH 5.3 and Job Server doesn't work
 
