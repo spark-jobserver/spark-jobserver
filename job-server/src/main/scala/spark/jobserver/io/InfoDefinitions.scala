@@ -3,8 +3,10 @@ package spark.jobserver.io
 import akka.http.scaladsl.model.MediaType.NotCompressible
 import akka.http.scaladsl.model.headers._
 import akka.http.scaladsl.model.{MediaType, MediaTypes, Uri}
-import org.joda.time.{DateTime, Duration}
 import spark.jobserver.util.ErrorData
+
+import java.time.ZonedDateTime
+import java.time.temporal.ChronoUnit
 
 trait BinaryType {
   def extension: String
@@ -68,30 +70,30 @@ object BinaryType {
 // Both a response and used to track job progress
 // NOTE: if endTime is not None, then the job has finished.
 case class JobInfo(jobId: String, contextId: String, contextName: String, mainClass: String, state: String,
-                   startTime: DateTime, endTime: Option[DateTime],
+                   startTime: ZonedDateTime, endTime: Option[ZonedDateTime],
                    error: Option[ErrorData], cp: Seq[BinaryInfo],
                    callbackUrl: Option[Uri] = None) {
 
-  def jobLengthMillis: Option[Long] = endTime.map { end => new Duration(startTime, end).getMillis }
+  def jobLengthMillis: Option[Long] = endTime.map { end => ChronoUnit.MILLIS.between(startTime, end) }
 }
 
 trait ContextUnModifiableAttributes {
   def id: String
   def name: String
   def config: String
-  def startTime: DateTime
+  def startTime: ZonedDateTime
 }
 
 trait ContextModifiableAttributes {
   def actorAddress: Option[String]
-  def endTime: Option[DateTime]
+  def endTime: Option[ZonedDateTime]
   def state: String
   def error: Option[Throwable]
 }
 
 case class ContextInfo(id: String, name: String,
                        config: String, actorAddress: Option[String],
-                       startTime: DateTime, endTime: Option[DateTime],
+                       startTime: ZonedDateTime, endTime: Option[ZonedDateTime],
                        state: String, error: Option[Throwable])
   extends ContextUnModifiableAttributes with ContextModifiableAttributes with Equals {
 
@@ -121,16 +123,16 @@ object ContextInfoModifiable {
   def apply(state: String, error: Option[Throwable]): ContextInfoModifiable =
     new ContextInfoModifiable(state, error)
 
-  def getEndTime(state: String): Option[DateTime] = {
+  def getEndTime(state: String): Option[ZonedDateTime] = {
     ContextStatus.getFinalStates().contains(state) match {
-      case true => Some(DateTime.now())
+      case true => Some(ZonedDateTime.now())
       case false => None
     }
   }
 }
 
 case class ContextInfoModifiable(actorAddress: Option[String],
-                                 endTime: Option[DateTime],
+                                 endTime: Option[ZonedDateTime],
                                  state: String,
                                  error: Option[Throwable]) extends ContextModifiableAttributes {
   def this(state: String) = this(None, ContextInfoModifiable.getEndTime(state), state, None)
@@ -141,7 +143,7 @@ case class ContextInfoModifiable(actorAddress: Option[String],
 // Uniquely identifies the binary used to run a job
 case class BinaryInfo(appName: String,
                       binaryType: BinaryType,
-                      uploadTime: DateTime,
+                      uploadTime: ZonedDateTime,
                       binaryStorageId: Option[String] = None)
 
 object JobStatus {

@@ -8,10 +8,11 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.DurationInt
 import scala.reflect.runtime.universe
 import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
-import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import slick.driver.JdbcProfile
 import spark.jobserver.util.{ErrorData, SqlDBUtils}
+
+import java.time.{Instant, ZoneId, ZonedDateTime}
 
 class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
   private val logger = LoggerFactory.getLogger(getClass)
@@ -81,11 +82,12 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
 
   val binaries = TableQuery[Binaries]
 
-  // Convert from joda DateTime to java.sql.Timestamp
-  def convertDateJodaToSql(dateTime: DateTime): Timestamp = new Timestamp(dateTime.getMillis)
+  // Convert from ZonedDateTime to java.sql.Timestamp
+  def convertDateTimeToSql(dateTime: ZonedDateTime): Timestamp = new Timestamp(dateTime.toInstant.toEpochMilli)
 
-  // Convert from java.sql.Timestamp to joda DateTime
-  def convertDateSqlToJoda(timestamp: Timestamp): DateTime = new DateTime(timestamp.getTime)
+  // Convert from java.sql.Timestamp to ZonedDateTime
+  def convertDateSqlToDateTime(timestamp: Timestamp): ZonedDateTime =
+    ZonedDateTime.ofInstant(Instant.ofEpochMilli(timestamp.getTime), ZoneId.systemDefault())
 
   private def contextInfoFromRow(row: (String, String, String, Option[String],
     Timestamp, Option[Timestamp], String, Option[String])): ContextInfo = row match {
@@ -95,15 +97,15 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
         name,
         config,
         actorAddress,
-        convertDateSqlToJoda(start),
-        end.map(convertDateSqlToJoda),
+        convertDateSqlToDateTime(start),
+        end.map(convertDateSqlToDateTime),
         state,
         error.map(new Throwable(_))
       )
   }
 
-  def queryBinaryId(name: String, binaryType: BinaryType, uploadTime: DateTime): Future[Int] = {
-    val dateTime = convertDateJodaToSql(uploadTime)
+  def queryBinaryId(name: String, binaryType: BinaryType, uploadTime: ZonedDateTime): Future[Int] = {
+    val dateTime = convertDateTimeToSql(uploadTime)
     val query = binaries.filter { bin =>
       bin.appName === name && bin.uploadTime === dateTime && bin.binaryType === binaryType.name
     }.map(_.binId).result
@@ -122,7 +124,7 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
       val binInfos = Await.result(
         dbUtils.db.run(query).map(r => r.map(binaryInfoFromRow(_))), timeout)
       val uriInfos = if (uris.nonEmpty) {
-        uris.split(",").toSeq.map(u => BinaryInfo(u, BinaryType.URI, DateTime.now()))
+        uris.split(",").toSeq.map(u => BinaryInfo(u, BinaryType.URI, ZonedDateTime.now()))
       } else {
         Seq.empty
       }
@@ -132,8 +134,8 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
         contextName,
         classpath,
         state,
-        convertDateSqlToJoda(start),
-        end.map(convertDateSqlToJoda),
+        convertDateSqlToDateTime(start),
+        end.map(convertDateSqlToDateTime),
         errorInfo,
         binInfos ++ uriInfos,
         callbackUrl.map(Uri(_))
@@ -147,8 +149,8 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
     * @param contextInfo
     */
   def saveContext(contextInfo: ContextInfo): Future[Boolean] = {
-    val startTime = convertDateJodaToSql(contextInfo.startTime)
-    val endTime = contextInfo.endTime.map(t => convertDateJodaToSql(t))
+    val startTime = convertDateTimeToSql(contextInfo.startTime)
+    val endTime = contextInfo.endTime.map(t => convertDateTimeToSql(t))
     val errors = contextInfo.error.map(e => e.getMessage)
     val row = (contextInfo.id, contextInfo.name, contextInfo.config,
       contextInfo.actorAddress, startTime, endTime, contextInfo.state, errors)
@@ -222,8 +224,8 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
         60.seconds)
     }).mkString(",")
     val uris = jobInfo.cp.filter(_.binaryType == BinaryType.URI).map(_.appName).mkString(",")
-    val startTime = convertDateJodaToSql(jobInfo.startTime)
-    val endTime = jobInfo.endTime.map(t => convertDateJodaToSql(t))
+    val startTime = convertDateTimeToSql(jobInfo.startTime)
+    val endTime = jobInfo.endTime.map(t => convertDateTimeToSql(t))
     val error = jobInfo.error.map(e => e.message)
     val errorClass = jobInfo.error.map(e => e.errorClass)
     val errorStackTrace = jobInfo.error.map(e => e.stackTrace)
@@ -349,7 +351,7 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
           BinaryInfo(
             appName,
             BinaryType.fromString(binaryType),
-            convertDateSqlToJoda(uploadTime)
+            convertDateSqlToDateTime(uploadTime)
           )
       }
     }
@@ -378,11 +380,11 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
     */
   def saveBinary(name: String,
                  binaryType: BinaryType,
-                 uploadTime: DateTime,
+                 uploadTime: ZonedDateTime,
                  binaryStorageId: String): Future[Boolean] = {
     val hash = BinaryDAO.hashStringToBytes(binaryStorageId)
     val dbAction = (binaries +=
-      (-1, name, binaryType.name, convertDateJodaToSql(uploadTime), hash))
+      (-1, name, binaryType.name, convertDateTimeToSql(uploadTime), hash))
     dbUtils.db.run(dbAction).map(_ == 1).recover(logDeleteErrors)
   }
 
@@ -415,7 +417,7 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
       BinaryInfo(
         appName,
         BinaryType.fromString(binaryType),
-        convertDateSqlToJoda(uploadTime),
+        convertDateSqlToDateTime(uploadTime),
         Some(BinaryDAO.hashBytesToString(hash))
       )
   }

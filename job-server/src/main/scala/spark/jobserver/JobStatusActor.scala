@@ -4,12 +4,13 @@ import scala.collection.mutable
 import scala.util.Try
 import akka.actor.{ActorRef, Props}
 import com.yammer.metrics.core.Meter
-import org.joda.time.DateTime
 import spark.jobserver.JobManagerActor.JobKilledException
 import spark.jobserver.common.akka.InstrumentedActor
 import spark.jobserver.common.akka.metrics.YammerMetrics
 import spark.jobserver.io.{JobDAOActor, JobInfo, JobStatus}
 import spark.jobserver.util.ErrorData
+
+import java.time.ZonedDateTime
 
 object JobStatusActor {
   val NAME = "status-actor"
@@ -41,7 +42,7 @@ class JobStatusActor(jobDao: ActorRef) extends InstrumentedActor with YammerMetr
   override def postStop(): Unit = {
     super.postStop()
 
-    val stopTime = DateTime.now()
+    val stopTime = ZonedDateTime.now()
     val stoppedInfos = infos.values.map { info =>
       logger.info(s"Setting job state to ${JobStatus.Error} for ${info.jobId}")
       val errorData = ErrorData(s"Context (${info.contextName}) for this job was terminated", "", "")
@@ -52,7 +53,7 @@ class JobStatusActor(jobDao: ActorRef) extends InstrumentedActor with YammerMetr
 
   override def wrappedReceive: Receive = {
     case GetRunningJobStatus =>
-      sender ! infos.values.toSeq.sortBy(_.startTime) // TODO(kelvinchu): Use toVector instead in Scala 2.10
+      sender ! infos.values.toVector.sortBy(_.startTime.toInstant)
 
     case Unsubscribe(jobId, receiver) =>
       subscribers.get(jobId) match {

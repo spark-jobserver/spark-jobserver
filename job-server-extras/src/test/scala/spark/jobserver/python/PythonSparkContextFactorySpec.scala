@@ -4,7 +4,6 @@ import java.io.File
 
 import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.spark.SparkConf
-import org.joda.time.DateTime
 import spark.jobserver._
 import spark.jobserver.api.JobEnvironment
 import spark.jobserver.util.JobserverConfig

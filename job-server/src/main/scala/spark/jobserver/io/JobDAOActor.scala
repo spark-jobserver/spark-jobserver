@@ -2,10 +2,8 @@ package spark.jobserver.io
 
 import java.io.File
 import java.net.URI
-
 import akka.actor.{ActorRef, Props}
 import com.typesafe.config.Config
-import org.joda.time.DateTime
 
 import scala.util.{Failure, Success, Try}
 import spark.jobserver.common.akka.InstrumentedActor
@@ -14,6 +12,7 @@ import spark.jobserver.util._
 import spark.jobserver.util.DAOMetrics._
 import spark.jobserver.JobManagerActor.ContextTerminatedException
 
+import java.time.ZonedDateTime
 import scala.concurrent.{Await, Future}
 
 object JobDAOActor {
@@ -22,7 +21,7 @@ object JobDAOActor {
   sealed trait JobDAORequest
   case class SaveBinary(appName: String,
                         binaryType: BinaryType,
-                        uploadTime: DateTime,
+                        uploadTime: ZonedDateTime,
                         jarBytes: Array[Byte]) extends JobDAORequest
   case class SaveBinaryResult(outcome: Try[Unit])
 
@@ -32,7 +31,7 @@ object JobDAOActor {
   case class GetApps(typeFilter: Option[BinaryType]) extends JobDAORequest
   case class GetBinaryPath(appName: String,
                            binaryType: BinaryType,
-                           uploadTime: DateTime) extends JobDAORequest
+                           uploadTime: ZonedDateTime) extends JobDAORequest
 
   case class SaveJobInfo(jobInfo: JobInfo) extends JobDAORequest
   case class GetJobInfo(jobId: String) extends JobDAORequest
@@ -41,7 +40,7 @@ object JobDAOActor {
 
   case class SaveJobConfig(jobId: String, jobConfig: Config) extends JobDAORequest
   case class GetJobConfig(jobId: String) extends JobDAORequest
-  case class CleanContextJobInfos(contextId: String, endTime: DateTime)
+  case class CleanContextJobInfos(contextId: String, endTime: ZonedDateTime)
 
   case class GetLastBinaryInfo(appName: String) extends JobDAORequest
   case class SaveContextInfo(contextInfo: ContextInfo)  extends JobDAORequest
@@ -55,7 +54,7 @@ object JobDAOActor {
 
   //Responses
   sealed trait JobDAOResponse
-  case class Apps(apps: Map[String, (BinaryType, DateTime)]) extends JobDAOResponse
+  case class Apps(apps: Map[String, (BinaryType, ZonedDateTime)]) extends JobDAOResponse
   case class BinaryPath(binPath: String) extends JobDAOResponse
   case class JobInfos(jobInfos: Seq[JobInfo]) extends JobDAOResponse
   case class JobConfig(jobConfig: Option[Config]) extends JobDAOResponse
@@ -217,7 +216,7 @@ class JobDAOActor(metaDataDAO: MetaDataDAO, binaryDAO: BinaryDAO, config: Config
 
     case GetBinaryInfosForCp(cp) =>
       val recipient = sender()
-      val currentTime = DateTime.now()
+      val currentTime = ZonedDateTime.now()
       Try {
         cp.flatMap(name => {
           val uri = new URI(name)

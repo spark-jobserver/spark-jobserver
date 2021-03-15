@@ -12,8 +12,6 @@ object Versions {
   lazy val java = sys.env.getOrElse("JAVA_VERSION", "8-jdk")
   lazy val jjwt = "0.9.1"
   lazy val jwksRsa = "0.15.0"
-  lazy val jodaConvert = "1.8.1"
-  lazy val jodaTime = "2.9.3"
   lazy val logback = "1.2.3"
   lazy val metrics = "2.2.0"
   lazy val postgres = "42.2.19"

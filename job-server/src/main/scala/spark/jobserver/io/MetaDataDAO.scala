@@ -1,9 +1,9 @@
 package spark.jobserver.io
 
 import com.typesafe.config._
-import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 
+import java.time.ZonedDateTime
 import scala.concurrent.Future
 
 object MetaDataDAO {
@@ -122,7 +122,7 @@ trait MetaDataDAO {
     */
   def saveBinary(name: String,
                  binaryType: BinaryType,
-                 uploadTime: DateTime,
+                 uploadTime: ZonedDateTime,
                  binaryStorageId: String): Future[Boolean]
 
   /**

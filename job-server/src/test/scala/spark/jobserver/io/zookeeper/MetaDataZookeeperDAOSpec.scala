@@ -1,12 +1,12 @@
 package spark.jobserver.io.zookeeper
 
 import com.typesafe.config.{Config, ConfigFactory}
-import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, FunSpec, FunSpecLike, Matchers}
 import spark.jobserver.io._
 import spark.jobserver.util.{ContextJVMInitializationTimeout, ContextReconnectFailedException, CuratorTestCluster, ErrorData, ResolutionFailedOnStopContextException, Utils}
 import spark.jobserver.TestJarFinder
 
+import java.time.{Instant, ZoneId, ZonedDateTime}
 import scala.concurrent.Await
 import scala.concurrent.duration.DurationInt
 
@@ -34,52 +34,55 @@ class MetaDataZookeeperDAOSpec extends FunSpec with TestJarFinder with FunSpecLi
   before {
     Utils.usingResource(zkUtils.getClient) {
       client =>
-        zkUtils.delete(client, "")
+        zkUtils.delete(client, "/")
     }
   }
+
+  def toDateTime(millis: Long): ZonedDateTime = ZonedDateTime.ofInstant(Instant.ofEpochMilli(millis),
+    ZoneId.systemDefault())
 
   /*
    * Test data
    */
 
   // Binaries
-  val binJar = BinaryInfo("binaryWithJar", BinaryType.Jar, new DateTime(),
+  val binJar = BinaryInfo("binaryWithJar", BinaryType.Jar, ZonedDateTime.now().withNano(0),
       Some(BinaryDAO.calculateBinaryHashString("1".getBytes)))
-  val binEgg = BinaryInfo("binaryWithEgg", BinaryType.Egg, new DateTime(),
+  val binEgg = BinaryInfo("binaryWithEgg", BinaryType.Egg, ZonedDateTime.now().withNano(0),
       Some(BinaryDAO.calculateBinaryHashString("2".getBytes)))
-  val binWheel = BinaryInfo("binaryWithWheel", BinaryType.Wheel, new DateTime(),
+  val binWheel = BinaryInfo("binaryWithWheel", BinaryType.Wheel, ZonedDateTime.now().withNano(0),
       Some(BinaryDAO.calculateBinaryHashString("3".getBytes)))
-  val binURI = BinaryInfo("http://foo/bar", BinaryType.URI, new DateTime(),
+  val binURI = BinaryInfo("http://foo/bar", BinaryType.URI, ZonedDateTime.now().withNano(0),
       Some(BinaryDAO.calculateBinaryHashString("42".getBytes)))
-  val binJarV2 = BinaryInfo("binaryWithJar", BinaryType.Jar, new DateTime().plusHours(1),
+  val binJarV2 = BinaryInfo("binaryWithJar", BinaryType.Jar, ZonedDateTime.now().withNano(0).plusHours(1),
       Some(BinaryDAO.calculateBinaryHashString("3".getBytes)))
-  val binElse = BinaryInfo("anotherBinaryWithJar", BinaryType.Jar, new DateTime(),
+  val binElse = BinaryInfo("anotherBinaryWithJar", BinaryType.Jar, ZonedDateTime.now().withNano(0),
       Some(BinaryDAO.calculateBinaryHashString("3".getBytes)))
 
   // Contexts
   val normalContext = ContextInfo("someId", "someName", "someConfig", Some("ActorAddress"),
-      new DateTime(1548683342369L), Some(new DateTime(1548683342370L)), "someState",
+      toDateTime(1548683342369L), Some(toDateTime(1548683342370L)), "someState",
       Some(new Throwable("message")))
   val sameIdContext = ContextInfo("someId", "someOtherName", "someOtherConfig",
-      Some("OtherActorAddress"), new DateTime(1548683342369L),
-      Some(new DateTime(1548683342370L)), "someOtherState", Some(new Throwable("otherMessage")))
+      Some("OtherActorAddress"), toDateTime(1548683342369L),
+      Some(toDateTime(1548683342370L)), "someOtherState", Some(new Throwable("otherMessage")))
   val minimalContext = new ContextInfo("someOtherId", "someName", "someOtherconfig", None,
-      new DateTime(1548683342368L), None, "someState", None)
+      toDateTime(1548683342368L), None, "someState", None)
   val anotherStateContext = new ContextInfo("anotherId", "anotherName", "someOtherconfig", None,
-      new DateTime(1548683342368L).plusHours(1), None, "someState", None)
+      toDateTime(1548683342368L).plusHours(1), None, "someState", None)
 
   // Jobs
   val normalJob = JobInfo("someJobId", "someContextId", "someContextName",
-      "someClassPath", "someState", new DateTime(), Some(new DateTime()),
+      "someClassPath", "someState", ZonedDateTime.now().withNano(0), Some(ZonedDateTime.now().withNano(0)),
       Some(ErrorData("someMessage", "someError", "someTrace")), Seq(binJar))
   val minimalJob = JobInfo("someOtherJobId", "someContextId", "someOtherContextName",
-      "someClassPath", "someState", new DateTime().plusHours(1), None, None, Seq(binJar))
+      "someClassPath", "someState", ZonedDateTime.now().withNano(0).plusHours(1), None, None, Seq(binJar))
   val sameIdJob = JobInfo("someJobId", "someOtherContextId", "thirdContextName",
-      "someClassPath", "someState", new DateTime().minusHours(1), None, None, Seq(binJar))
+      "someClassPath", "someState", ZonedDateTime.now().withNano(0).minusHours(1), None, None, Seq(binJar))
   val anotherJob = JobInfo("thirdJobId", "someOtherContextId", "thirdContextName",
-      "someClassPath", "anotherState", new DateTime().minusHours(1), None, None, Seq(binJar))
+      "someClassPath", "anotherState", ZonedDateTime.now().withNano(0).minusHours(1), None, None, Seq(binJar))
   val multiJarJob = JobInfo("multiJarJobId", "someOtherContextId", "thirdContextName",
-    "someClassPath", "anotherState", new DateTime().minusHours(1), None, None,
+    "someClassPath", "anotherState", ZonedDateTime.now().withNano(0).minusHours(1), None, None,
     Seq(binJar, binEgg, binWheel, binURI))
 
   // JobConfigs
@@ -187,7 +190,7 @@ class MetaDataZookeeperDAOSpec extends FunSpec with TestJarFinder with FunSpecLi
 
     it("should list all binaries with given storage id with unique (name, binaryStorageId)") {
       Await.result(dao.saveBinary(binJar.appName, binJar.binaryType,
-        DateTime.now(), binJar.binaryStorageId.get), timeout)
+        ZonedDateTime.now().withNano(0), binJar.binaryStorageId.get), timeout)
       Await.result(dao.saveBinary(binJar.appName, binJar.binaryType,
         binJar.uploadTime, binJar.binaryStorageId.get), timeout)
       Await.result(dao.saveBinary(binJar.appName + "2", binJar.binaryType,

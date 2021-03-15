@@ -1,17 +1,14 @@
 package spark.jobserver.io.zookeeper
 
-import com.typesafe.config.Config
-import com.typesafe.config.ConfigRenderOptions
-import com.typesafe.config.ConfigFactory
-import org.joda.time.DateTime
+import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
+import org.apache.curator.framework.CuratorFramework
 import org.slf4j.LoggerFactory
 import spark.jobserver.io._
-import spark.jobserver.util.JsonProtocols
-import spark.jobserver.util.Utils
+import spark.jobserver.util.{JsonProtocols, Utils}
 
+import java.time.{Instant, ZonedDateTime}
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
-import org.apache.curator.framework.CuratorFramework
 
 object MetaDataZookeeperDAO {
   val binariesDir = "/binaries"
@@ -20,8 +17,8 @@ object MetaDataZookeeperDAO {
 }
 
 class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
-  import MetaDataZookeeperDAO._
   import JsonProtocols._
+  import MetaDataZookeeperDAO._
 
   private val logger = LoggerFactory.getLogger(getClass)
   private val zookeeperUtils = new ZookeeperUtils(config)
@@ -68,7 +65,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
           zookeeperUtils.list(client, contextsDir)
             .flatMap(id => zookeeperUtils.read[ContextInfo](client, s"$contextsDir/$id"))
             .filter(_.name == name)
-            .sortBy(_.startTime.getMillis)
+            .sortBy(_.startTime.toInstant)
             .lastOption
       }
     }
@@ -87,7 +84,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
             case Some(allowed) => allContexts.filter(c => allowed.contains(c.state))
           }
           val sortedContexts = filteredContexts
-            .sortBy(_.startTime.getMillis)(Ordering[Long].reverse)
+            .sortBy(_.startTime.toInstant)(Ordering[Instant].reverse)
           limit match {
             case None =>
               sortedContexts
@@ -137,7 +134,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
               case None => allJobs
               case Some(allowed) => allJobs.filter(_.state == allowed)
             }
-          filteredJobs.sortBy(_.startTime.getMillis)(Ordering[Long].reverse)
+          filteredJobs.sortBy(_.startTime.toInstant)(Ordering[Instant].reverse)
             .take(limit)
       }
     }
@@ -157,7 +154,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
               case None => allJobs
               case Some(allowed) => allJobs.filter(j => allowed.contains(j.state))
             }
-          filteredJobs.sortBy(_.startTime.getMillis)(Ordering[Long].reverse)
+          filteredJobs.sortBy(_.startTime.toInstant)(Ordering[Instant].reverse)
       }
     }
   }
@@ -223,7 +220,9 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
           zookeeperUtils.sync(client, path)
           zookeeperUtils.read[Seq[BinaryInfo]](client, path) match {
             case Some(infoForBinary) =>
-              Some(infoForBinary.sortWith(_.uploadTime.getMillis > _.uploadTime.getMillis).head)
+              Some(infoForBinary
+                .sortWith(_.uploadTime.toInstant.toEpochMilli > _.uploadTime.toInstant.toEpochMilli)
+                .head)
             case None =>
               None
           }
@@ -261,7 +260,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
   }
 
   override def saveBinary(name: String, binaryType: BinaryType,
-                          uploadTime: DateTime, binaryStorageId: String): Future[Boolean] = {
+                          uploadTime: ZonedDateTime, binaryStorageId: String): Future[Boolean] = {
     logger.debug(s"Saving binary $name")
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
