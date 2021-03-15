@@ -7,16 +7,17 @@ import org.scalatest.{FunSpecLike, Matchers}
 import spark.jobserver.JobManagerActor.StartJob
 import spark.jobserver.CommonMessages.{JobErroredOut, JobValidationFailed}
 import com.typesafe.config._
-import org.joda.time.DateTime
 import spark.jobserver.io.{BinaryInfo, BinaryType}
+
+import java.time.ZonedDateTime
 
 class StartJobSerializerSpec extends FunSpecLike with Matchers {
 
-  val binInfo: BinaryInfo = BinaryInfo("name", BinaryType.Jar, DateTime.now(), None)
+  val binInfo: BinaryInfo = BinaryInfo("name", BinaryType.Jar, ZonedDateTime.now(), None)
 
   describe("StartJobSerializer") {
     it("should match StartJob after serialize and deserialize") {
-      val binInfo = BinaryInfo("name", BinaryType.Jar, DateTime.now(), None)
+      val binInfo = BinaryInfo("name", BinaryType.Jar, ZonedDateTime.now(), None)
       val startJob = StartJob("spark.jobserver.test.ClassPath", List(binInfo),
         ConfigFactory.parseString("a=2"), Set(classOf[JobErroredOut], classOf[JobValidationFailed]),
         None, Some(Uri("http://example.com")))

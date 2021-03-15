@@ -3,12 +3,13 @@ package spark.jobserver
 import akka.actor.{ActorRef, ActorSystem, PoisonPill, Props}
 import akka.testkit.{ImplicitSender, TestActor, TestKit, TestProbe}
 import spark.jobserver.io._
-import org.joda.time.DateTime
 import org.scalatest.Matchers
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike}
 import spark.jobserver.common.akka
 import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.util.ErrorData
+
+import java.time.ZonedDateTime
 
 object JobStatusActorSpec {
   val system = ActorSystem("test")
@@ -24,11 +25,11 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
   private val contextId = "contextId"
   private val contextName = "contextName"
   private val appName = "appName"
-  private val jarInfo = BinaryInfo(appName, BinaryType.Jar, DateTime.now)
+  private val jarInfo = BinaryInfo(appName, BinaryType.Jar, ZonedDateTime.now)
   private val classPath = "classPath"
   private val jobInfo = JobInfo(jobId, contextId, contextName, classPath, JobStatus.Running,
-      DateTime.now, None, None, Seq(jarInfo))
-  private val endTime = DateTime.now()
+      ZonedDateTime.now, None, None, Seq(jarInfo))
+  private val endTime = ZonedDateTime.now()
   private val error = new Throwable
 
   override def afterAll() {
@@ -162,14 +163,14 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
       actor ! GetRunningJobStatus
       expectMsg(Seq(jobInfo))
 
-      val jobInfoWithStartTime = jobInfo.copy(startTime=DateTime.now)
+      val jobInfoWithStartTime = jobInfo.copy(startTime=ZonedDateTime.now)
       actor ! JobStarted(jobId, jobInfoWithStartTime)
       daoMsgReceiverProbe.expectMsg(JobDAOActor.SaveJobInfo(jobInfoWithStartTime))
 
       actor ! GetRunningJobStatus
       expectMsg(Seq(jobInfoWithStartTime))
 
-      val finishTime = DateTime.now
+      val finishTime = ZonedDateTime.now
       actor ! JobFinished(jobId, finishTime)
       daoMsgReceiverProbe.expectMsg(JobDAOActor.SaveJobInfo(jobInfoWithStartTime.copy(
           state = JobStatus.Finished, endTime = Some(finishTime))))
@@ -180,7 +181,7 @@ with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
     }
 
     it("should update JobValidationFailed status correctly") {
-      val jobInfoWithInitTime = jobInfo.copy(startTime=DateTime.now)
+      val jobInfoWithInitTime = jobInfo.copy(startTime=ZonedDateTime.now)
       actor ! JobInit(jobInfoWithInitTime)
 
       actor ! JobValidationFailed(jobId, endTime, error)

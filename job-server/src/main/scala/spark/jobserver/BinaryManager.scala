@@ -1,23 +1,20 @@
 package spark.jobserver
 
-import java.io.File
-import java.net.URI
-
 import akka.actor.ActorRef
 import akka.util.Timeout
 import spark.jobserver.io.JobDAOActor.{
   BinaryInfosForCp, BinaryNotFound, DeleteBinaryResult, GetBinaryInfosForCpFailed, SaveBinaryResult}
 import spark.jobserver.io.{BinaryInfo, BinaryType, JobDAOActor, JobInfo, JobStatus}
 import spark.jobserver.util.{JarUtils, NoSuchBinaryException}
-import org.joda.time.DateTime
-import java.nio.file.{Files, Paths}
 
-import com.typesafe.config.Config
+import java.nio.file.{Files, Paths}
 
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 import spark.jobserver.common.akka.InstrumentedActor
+
+import java.time.ZonedDateTime
 
 /** Message for storing a JAR for an application given the byte array of the JAR file */
 case class StoreBinary(appName: String, binaryType: BinaryType, binBytes: Array[Byte])
@@ -61,7 +58,7 @@ class BinaryManager(jobDao: ActorRef) extends InstrumentedActor {
   private def saveBinary(appName: String,
                          binaryType: BinaryType,
                          binBytes: Array[Byte]): Future[Try[Unit]] = {
-    val uploadTime = DateTime.now()
+    val uploadTime = ZonedDateTime.now()
     (jobDao ? JobDAOActor.SaveBinary(appName, binaryType, uploadTime, binBytes)).
       mapTo[SaveBinaryResult].map(_.outcome)
   }

@@ -1,8 +1,9 @@
 package spark.jobserver
 
 import akka.actor.ActorRef
-import org.joda.time.DateTime
 import spark.jobserver.io.JobInfo
+
+import java.time.ZonedDateTime
 
 trait StatusMessage {
   val jobId: String
@@ -12,10 +13,10 @@ trait StatusMessage {
 object CommonMessages {
   // job status messages
   case class JobStarted(jobId: String, jobInfo: JobInfo) extends StatusMessage
-  case class JobFinished(jobId: String, endTime: DateTime) extends StatusMessage
-  case class JobValidationFailed(jobId: String, endTime: DateTime, err: Throwable) extends StatusMessage
-  case class JobErroredOut(jobId: String, endTime: DateTime, err: Throwable) extends StatusMessage
-  case class JobKilled(jobId: String, endTime: DateTime) extends StatusMessage
+  case class JobFinished(jobId: String, endTime: ZonedDateTime) extends StatusMessage
+  case class JobValidationFailed(jobId: String, endTime: ZonedDateTime, err: Throwable) extends StatusMessage
+  case class JobErroredOut(jobId: String, endTime: ZonedDateTime, err: Throwable) extends StatusMessage
+  case class JobKilled(jobId: String, endTime: ZonedDateTime) extends StatusMessage
   case class JobRestartFailed(jobId: String, err: Throwable) extends StatusMessage
 
   /**

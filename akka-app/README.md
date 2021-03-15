@@ -13,7 +13,6 @@ akka_app defines a standard stack for Akka applications, as well as traits and u
 ## The included Akka Stack
 
 * Akka 2.2.4 (including remote + testkit)
-* JodaTime
 * Yammer Metrics for stats and instrumentation
 * spray-json for JSON serialization
 * akka-http for embedded web server, with some common routes like /metricz and /statusz
