@@ -1,10 +1,11 @@
 package spark.jobserver.io
 
 import java.io.{BufferedOutputStream, File, FileOutputStream, FilenameFilter}
-
-import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 import spark.jobserver.util.Utils
+
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 
 trait FileCacher {
 
@@ -12,16 +13,18 @@ trait FileCacher {
   val rootDirFile: File
 
   private val logger = LoggerFactory.getLogger(getClass)
+  private val df = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss_SSS")
 
 
   // date format
   val Pattern = "\\d{8}_\\d{6}_\\d{3}".r
 
-  def createBinaryName(appName: String, binaryType: BinaryType, uploadTime: DateTime): String = {
-    appName + "-" + uploadTime.toString("yyyyMMdd_HHmmss_SSS") + s".${binaryType.extension}"
+  def createBinaryName(appName: String, binaryType: BinaryType, uploadTime: ZonedDateTime): String = {
+    appName + "-" + df.format(uploadTime) + s".${binaryType.extension}"
   }
 
-  protected def getPath(appName: String, binaryType: BinaryType, uploadTime: DateTime): Option[String] = {
+  protected def getPath(appName: String, binaryType: BinaryType,
+                        uploadTime: ZonedDateTime): Option[String] = {
     val binFile = new File(rootDirPath, createBinaryName(appName, binaryType, uploadTime))
     if(binFile.exists()) {
       Some(binFile.getAbsolutePath)
@@ -33,7 +36,7 @@ trait FileCacher {
   // Cache the binary file into local file system.
   protected def cacheBinary(appName: String,
                             binaryType: BinaryType,
-                            uploadTime: DateTime,
+                            uploadTime: ZonedDateTime,
                             binBytes: Array[Byte]): String = {
     val targetFullBinaryName = createBinaryName(appName, binaryType, uploadTime)
     val tempSuffix = ".tmp"

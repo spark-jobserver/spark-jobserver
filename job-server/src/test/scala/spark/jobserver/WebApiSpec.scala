@@ -1,13 +1,11 @@
 package spark.jobserver
 
 import java.net.MalformedURLException
-
 import akka.actor.{Actor, ActorSystem, Props}
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import akka.testkit.TestKit
 import com.typesafe.config.ConfigFactory
-import org.joda.time.DateTime
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{Seconds, Span}
 import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
@@ -15,6 +13,8 @@ import spark.jobserver.JobManagerActor.JobKilledException
 import spark.jobserver.io.JobDAOActor._
 import spark.jobserver.io._
 import spark.jobserver.util.ErrorData
+
+import java.time.{Instant, ZoneId, ZonedDateTime}
 
 // Tests web response codes and formatting
 // Does NOT test underlying Supervisor / JarManager functionality
@@ -49,7 +49,7 @@ with ScalatestRouteTest with ScalaFutures with SprayJsonSupport {
   val api = new WebApi(system, config, dummyPort, dummyActor, dummyActor, dummyActor, dummyActor, null)
   val routes = api.myRoutes
 
-  val dt = DateTime.parse("2013-05-29T00Z")
+  val dt = Instant.parse("2013-05-29T00:00:00Z").atZone(ZoneId.of("UTC"))
   val binaryInfo = BinaryInfo("demo", BinaryType.Jar, dt)
   val baseJobInfo = JobInfo("foo-1", "cid", "context", "com.abc.meme", JobStatus.Running, dt,
       None, None, Seq(binaryInfo))
@@ -243,7 +243,7 @@ with ScalatestRouteTest with ScalaFutures with SprayJsonSupport {
       case GetJobConfig(_) => sender ! JobConfig(Some(config))
 
       case SaveJobConfig(_, _) => sender ! JobConfigStored
-      case KillJob(jobId) => sender ! JobKilled(jobId, DateTime.now())
+      case KillJob(jobId) => sender ! JobKilled(jobId, ZonedDateTime.now())
 
       case GetSparkContexData("context1") => sender ! SparkContexData(
         "context1", Some("local-1337"), Some("http://spark:4040"))

@@ -7,7 +7,6 @@ import akka.http.scaladsl.model.Uri
 import akka.pattern.ask
 import akka.testkit.TestProbe
 import akka.util.Timeout
-import org.joda.time.DateTime
 import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.spark.SparkEnv
 import org.slf4j.LoggerFactory
@@ -20,6 +19,7 @@ import spark.jobserver.ContextSupervisor.{ContextStopError, ContextStopInProgres
 import spark.jobserver.io.JobDAOActor.{SaveJobConfig, SaveJobInfo, SavedSuccessfully}
 import spark.jobserver.util._
 
+import java.time.ZonedDateTime
 import scala.collection.mutable
 import scala.concurrent.{Await, Future}
 import scala.concurrent.duration._
@@ -673,7 +673,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val binURI = BinaryInfo( // Additional dependency binary, which contains Empty class
         s"file://${emptyJar.getAbsolutePath}",
         BinaryType.URI,
-        DateTime.now()
+        ZonedDateTime.now()
       )
       manager ! JobManagerActor.StartJob(
         classPrefix + "jobJarDependenciesJob", List(testJar, binURI), emptyConfig, syncEvents ++ errorEvents)
@@ -817,7 +817,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val testJar = uploadTestJar()
 
       daoActor ! JobDAOActor.SaveContextInfo(ContextInfo(contextId, "ctx", "",
-        None, DateTime.now(), None, ContextStatus.Running, None))
+        None, ZonedDateTime.now(), None, ContextStatus.Running, None))
       expectMsg(SavedSuccessfully)
       manager ! JobManagerActor.Initialize(adhocContextConfig, None, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
@@ -1043,7 +1043,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobRestartFailed("dummy-id", new Exception(""))
       deathWatcher.expectNoMessage(2.seconds)
 
-      manager ! JobValidationFailed("dummy-id1", DateTime.now(), new Exception(""))
+      manager ! JobValidationFailed("dummy-id1", ZonedDateTime.now(), new Exception(""))
       deathWatcher.expectNoMessage(2.seconds)
 
       manager ! JobRestartFailed("dummy-id2", new Exception(""))
@@ -1056,7 +1056,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       deathWatcher.watch(manager)
 
       val dummyJob = JobInfo("dummy-id2", "", "", "", JobStatus.Running,
-        DateTime.now(), None, None, Seq(BinaryInfo("dummy", BinaryType.Jar, DateTime.now())))
+        ZonedDateTime.now(), None, None, Seq(BinaryInfo("dummy", BinaryType.Jar, ZonedDateTime.now())))
 
       manager ! JobRestartFailed("dummy-id", new Exception(""))
       deathWatcher.expectNoMessage(2.seconds)
@@ -1064,7 +1064,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobStarted("dummy-id2", dummyJob)
       deathWatcher.expectNoMessage(2.seconds)
 
-      manager ! JobValidationFailed("dummy-id2", DateTime.now(), new Exception(""))
+      manager ! JobValidationFailed("dummy-id2", ZonedDateTime.now(), new Exception(""))
       deathWatcher.expectNoMessage(2.seconds)
     }
 
@@ -1129,9 +1129,9 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val contextId = "dummy-context"
       val daoProbe = TestProbe()
       val managerWatcher = TestProbe()
-      val binaryInfo = BinaryInfo("dummy", BinaryType.Jar, DateTime.now())
+      val binaryInfo = BinaryInfo("dummy", BinaryType.Jar, ZonedDateTime.now())
       val jobInfo = JobInfo("jobId", contextId, "context-name",
-        "test-class", JobStatus.Running, DateTime.now(), None, None, Seq(binaryInfo))
+        "test-class", JobStatus.Running, ZonedDateTime.now(), None, None, Seq(binaryInfo))
       manager = system.actorOf(JobManagerActorSpy.props(daoProbe.ref, "", defaultSmallTimeout, contextId, TestProbe()))
       managerWatcher.watch(manager)
       manager ! JobManagerActor.RestartExistingJobs
@@ -1159,9 +1159,9 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val contextId = "dummy-context"
       val daoProbe = TestProbe()
       val managerWatcher = TestProbe()
-      val binaryInfo = BinaryInfo("dummy", BinaryType.Jar, DateTime.now())
+      val binaryInfo = BinaryInfo("dummy", BinaryType.Jar, ZonedDateTime.now())
       val jobInfo = JobInfo("jobId", contextId, "context-name",
-        "test-class", JobStatus.Running, DateTime.now(), None, None, Seq(binaryInfo))
+        "test-class", JobStatus.Running, ZonedDateTime.now(), None, None, Seq(binaryInfo))
       manager = system.actorOf(JobManagerActorSpy.props(daoProbe.ref, "", defaultSmallTimeout, contextId, TestProbe()))
       managerWatcher.watch(manager)
       manager ! JobManagerActor.RestartExistingJobs
@@ -1190,7 +1190,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val contextId = "dummy-context"
       val binaryInfo = uploadTestJar()
       val jobInfo = JobInfo("jobId", contextId, "context-name",
-        wordCountClass, JobStatus.Running, DateTime.now(), None, None, Seq(binaryInfo))
+        wordCountClass, JobStatus.Running, ZonedDateTime.now(), None, None, Seq(binaryInfo))
       manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", defaultSmallTimeout, contextId, spyProbe))
 
       contextConfig = ConfigFactory.parseString(s"context.id=$contextId").withFallback(contextConfig)
@@ -1212,7 +1212,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val contextId = "dummy-context"
       val binaryInfo = uploadTestJar()
       val jobInfo = JobInfo("jobId", contextId, "context-name",
-        wordCountClass, JobStatus.Running, DateTime.now(), None, None, Seq(binaryInfo))
+        wordCountClass, JobStatus.Running, ZonedDateTime.now(), None, None, Seq(binaryInfo))
       manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", defaultSmallTimeout, contextId, spyProbe))
 
       contextConfig = ConfigFactory.parseString(s"context.id=$contextId").withFallback(contextConfig)
@@ -1234,7 +1234,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val contextId = "dummy-context"
       val binaryInfo = uploadTestJar()
       val jobInfo = JobInfo("jobId", contextId, "context-name",
-        wordCountClass, JobStatus.Restarting, DateTime.now(), None, None, Seq(binaryInfo))
+        wordCountClass, JobStatus.Restarting, ZonedDateTime.now(), None, None, Seq(binaryInfo))
       manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", defaultSmallTimeout, contextId, spyProbe))
 
       contextConfig = ConfigFactory.parseString(s"context.id=$contextId").withFallback(contextConfig)
@@ -1255,7 +1255,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val contextId = "dummy-context"
       val binaryInfo = uploadTestJar()
       val jobInfo = JobInfo("jobId", contextId, "context-name",
-        wordCountClass, JobStatus.Running, DateTime.now(), None, None, Seq(binaryInfo))
+        wordCountClass, JobStatus.Running, ZonedDateTime.now(), None, None, Seq(binaryInfo))
       manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", defaultSmallTimeout, contextId, spyProbe))
 
       contextConfig = ConfigFactory.parseString(s"context.id=$contextId").withFallback(contextConfig)
@@ -1283,7 +1283,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val contextName = "context-name"
       val testJar = uploadTestJar("test-jar")
       val jobInfo = JobInfo("jobId", contextId, contextName,
-        wordCountClass, JobStatus.Running, DateTime.now(), None, None, Seq(testJar))
+        wordCountClass, JobStatus.Running, ZonedDateTime.now(), None, None, Seq(testJar))
       val testJarJobConfig = ConfigFactory.parseString("cp = [\"test-jar\"]").withFallback(stringConfig)
       manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", defaultSmallTimeout, contextId, spyProbe))
 
@@ -1324,7 +1324,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val deathWatcher = TestProbe()
       val binaryInfo = uploadTestJar()
       val jobInfo = JobInfo("jobId", contextId, "context-name",
-        wordCountClass, JobStatus.Running, DateTime.now(), None, None, Seq(binaryInfo))
+        wordCountClass, JobStatus.Running, ZonedDateTime.now(), None, None, Seq(binaryInfo))
       manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", defaultSmallTimeout, contextId, spyProbe))
       deathWatcher.watch(manager)
 
@@ -1350,7 +1350,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val contextId = "dummy-context"
       val contextName = "context-name"
       val jobInfo = JobInfo("jobId", contextId, contextName,
-        wordCountClass, JobStatus.Running, DateTime.now(), None, None, Seq.empty)
+        wordCountClass, JobStatus.Running, ZonedDateTime.now(), None, None, Seq.empty)
       manager = system.actorOf(JobManagerActorSpy.props(daoActor, "", defaultSmallTimeout, contextId, spyProbe))
 
       contextConfig = ConfigFactory.parseString(s"context.id=$contextId,context.name=$contextName").withFallback(contextConfig)
@@ -1403,7 +1403,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       deathWatcher.watch(manager)
 
       daoActor ! JobDAOActor.SaveContextInfo(ContextInfo(contextId, "ctx", "",
-        None, DateTime.now(), None, ContextStatus.Running, None))
+        None, ZonedDateTime.now(), None, ContextStatus.Running, None))
       expectMsg(SavedSuccessfully)
 
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
@@ -1427,7 +1427,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       deathWatcher.watch(manager)
 
       daoActor ! JobDAOActor.SaveContextInfo(ContextInfo(contextId, "ctx", "",
-        None, DateTime.now(), None, ContextStatus.Running, None))
+        None, ZonedDateTime.now(), None, ContextStatus.Running, None))
       expectMsg(SavedSuccessfully)
 
       manager ! JobManagerActor.Initialize(contextConfig, None, emptyActor)
@@ -1449,7 +1449,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager = system.actorOf(JobManagerActorSpyStateUpdate.props(daoActor, "", defaultSmallTimeout, contextId, self))
       val adhocContextConfig = JobManagerActorSpec.getContextConfig(adhoc = true)
       daoActor ! JobDAOActor.SaveContextInfo(ContextInfo(contextId, "ctx", "",
-        None, DateTime.now(), None, ContextStatus.Running, None))
+        None, ZonedDateTime.now(), None, ContextStatus.Running, None))
       expectMsg(SavedSuccessfully)
 
       manager ! JobManagerActor.Initialize(adhocContextConfig, None, emptyActor)

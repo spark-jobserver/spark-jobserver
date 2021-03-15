@@ -1,13 +1,14 @@
 package spark.jobserver.io
 
 import com.typesafe.config._
+
 import java.io._
 import java.nio.file.Files
-
 import org.apache.commons.io.FileUtils
-import org.joda.time.DateTime
 import org.slf4j.LoggerFactory
 
+import java.time.format.DateTimeFormatter
+import java.time.{Instant, ZoneId, ZonedDateTime}
 import scala.collection.mutable
 
 object DataFileDAO {
@@ -15,7 +16,7 @@ object DataFileDAO {
   val META_DATA_FILE_NAME = "files.data"
 }
 
-case class DataFileInfo(appName: String, uploadTime: DateTime)
+case class DataFileInfo(appName: String, uploadTime: ZonedDateTime)
 
 class DataFileDAO(config: Config) {
   private val logger = LoggerFactory.getLogger(getClass)
@@ -73,7 +74,7 @@ class DataFileDAO(config: Config) {
     * save the given data into a new file with the given prefix, a time stamp is appended to
     * ensure uniqueness
     */
-  def saveFile(aNamePrefix: String, uploadTime: DateTime, aBytes: Array[Byte]): String = {
+  def saveFile(aNamePrefix: String, uploadTime: ZonedDateTime, aBytes: Array[Byte]): String = {
     // The order is important. Save the file first and then log it into meta data file.
     val outFile = new File(rootDir, createFileName(aNamePrefix, uploadTime) + DataFileDAO.EXTENSION)
     val name = outFile.getAbsolutePath
@@ -96,7 +97,7 @@ class DataFileDAO(config: Config) {
 
   private def writeFileInfo(out: DataOutputStream, aInfo: DataFileInfo) {
     out.writeUTF(aInfo.appName)
-    out.writeLong(aInfo.uploadTime.getMillis)
+    out.writeLong(aInfo.uploadTime.toInstant.toEpochMilli)
   }
 
   def readFile(aName: String): Array[Byte] = {
@@ -134,7 +135,8 @@ class DataFileDAO(config: Config) {
     false
   }
 
-  private def readFileInfo(in: DataInputStream) = DataFileInfo(in.readUTF, new DateTime(in.readLong))
+  private def readFileInfo(in: DataInputStream) = DataFileInfo(in.readUTF,
+    ZonedDateTime.ofInstant(Instant.ofEpochMilli(in.readLong), ZoneId.systemDefault()))
 
   private def addFile(aName: String) {
     files += aName
@@ -142,8 +144,8 @@ class DataFileDAO(config: Config) {
 
   def listFiles: Set[String] = files.toSet
 
-  private def createFileName(aName: String, uploadTime: DateTime): String =
-    aName + "-" + uploadTime.toString().replace(':', '_')
+  private def createFileName(aName: String, uploadTime: ZonedDateTime): String =
+    aName + "-" + DateTimeFormatter.ISO_INSTANT.format(uploadTime).replace(':', '_')
 
   private def readError(in: DataInputStream) = {
     val error = in.readUTF()

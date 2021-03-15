@@ -1,16 +1,17 @@
 package spark.jobserver.util
 
 import akka.http.scaladsl.model.Uri
-import org.joda.time.DateTime
 import spark.jobserver.common.akka.web.JsonUtils.AnyJsonFormat
 
-import java.text.SimpleDateFormat
 import spark.jobserver.io.{BinaryInfo, BinaryType, ContextInfo, JobInfo, JobStatus}
 import spray.json._
 
+import java.time.format.DateTimeFormatter
+import java.time.{ZoneId, ZonedDateTime}
+
 object JsonProtocols extends DefaultJsonProtocol {
 
-  val DATE_PATTERN = "yyyy-MM-dd HH-mm-ss SS Z"
+  val DATE_PATTERN = "yyyy-MM-dd'T'HH:mm:ss.SSSX"
 
   /*
    * BinaryInfo
@@ -21,7 +22,7 @@ object JsonProtocols extends DefaultJsonProtocol {
       JsObject(
         "appName" -> JsString(c.appName),
         "binaryType" -> JsString(c.binaryType.name),
-        "uploadTime" -> JsString(fromJoda(c.uploadTime)),
+        "uploadTime" -> JsString(fromDateTime(c.uploadTime)),
         "binaryStorageId" -> c.binaryStorageId.toJson)
 
     def read(value: JsValue): BinaryInfo = {
@@ -29,7 +30,7 @@ object JsonProtocols extends DefaultJsonProtocol {
         // Correct json format
         case Seq(JsString(appName), JsString(binaryType), JsString(uploadTime), binaryStorageId) =>
           val binStorageIdOpt = readOpt(binaryStorageId, b => b.convertTo[String])
-          val uploadTimeObj = toJoda(uploadTime)
+          val uploadTimeObj = toDateTime(uploadTime)
           BinaryInfo(appName, BinaryType.fromString(binaryType), uploadTimeObj, binStorageIdOpt)
         // Incorrect json format
         case _ => deserializationError("Fail to parse json content:" +
@@ -51,8 +52,8 @@ object JsonProtocols extends DefaultJsonProtocol {
         "contextName" -> JsString(i.contextName),
         "classPath" -> JsString(i.mainClass),
         "state" -> JsString(i.state),
-        "startTime" -> JsString(df.format(i.startTime.getMillis)),
-        "endTime" -> i.endTime.map(et => fromJoda(et)).toJson,
+        "startTime" -> JsString(fromDateTime(i.startTime)),
+        "endTime" -> i.endTime.map(et => fromDateTime(et)).toJson,
         "error" -> i.error.toJson,
         "cp" -> JsArray(i.cp.toVector.map(_.toJson))
       )
@@ -64,9 +65,9 @@ object JsonProtocols extends DefaultJsonProtocol {
           case Seq(JsString(jobId), JsString(contextId), JsString(contextName),
           JsString(classPath), JsString(state), JsString(startTime), endTime, error, JsArray(cpJson),
           JsString(callbackUrl)) =>
-            val endTimeOpt = readOpt(endTime, et => toJoda(et.convertTo[String]))
+            val endTimeOpt = readOpt(endTime, et => toDateTime(et.convertTo[String]))
             val errorOpt = error.convertTo[Option[ErrorData]]
-            val startTimeObj = toJoda(startTime)
+            val startTimeObj = toDateTime(startTime)
             val cp = cpJson.map(_.convertTo[BinaryInfo])
             JobInfo(jobId, contextId, contextName, classPath,
               state, startTimeObj, endTimeOpt, errorOpt, cp,
@@ -74,18 +75,18 @@ object JsonProtocols extends DefaultJsonProtocol {
           // Legacy json format (for backwards compatibility)
           case Seq(JsString(jobId), JsString(contextId), JsString(contextName),
           JsString(classPath), JsString(state), JsString(startTime), endTime, error, JsArray(cpJson)) =>
-            val endTimeOpt = readOpt(endTime, et => toJoda(et.convertTo[String]))
+            val endTimeOpt = readOpt(endTime, et => toDateTime(et.convertTo[String]))
             val errorOpt = error.convertTo[Option[ErrorData]]
-            val startTimeObj = toJoda(startTime)
+            val startTimeObj = toDateTime(startTime)
             val cp = cpJson.map(_.convertTo[BinaryInfo])
             JobInfo(jobId, contextId, contextName, classPath,
               state, startTimeObj, endTimeOpt, errorOpt, cp, None)
           // Legacy json format (for backwards compatibility)
           case Seq(JsString(jobId), JsString(contextId), JsString(contextName),
           JsString(classPath), JsString(state), JsString(startTime), endTime, error) =>
-              val endTimeOpt = readOpt(endTime, et => toJoda(et.convertTo[String]))
+              val endTimeOpt = readOpt(endTime, et => toDateTime(et.convertTo[String]))
               val errorOpt = error.convertTo[Option[ErrorData]]
-              val startTimeObj = toJoda(startTime)
+              val startTimeObj = toDateTime(startTime)
               JobInfo(jobId, contextId, contextName, classPath,
                 state, startTimeObj, endTimeOpt, errorOpt, Seq.empty, None)
           // Incorrect json format
@@ -107,8 +108,8 @@ object JsonProtocols extends DefaultJsonProtocol {
         "name" -> JsString(i.name),
         "config" -> JsString(i.config),
         "actorAddress" -> i.actorAddress.toJson,
-        "startTime" -> JsString(fromJoda(i.startTime)),
-        "endTime" -> i.endTime.map(et => fromJoda(et)).toJson,
+        "startTime" -> JsString(fromDateTime(i.startTime)),
+        "endTime" -> i.endTime.map(et => fromDateTime(et)).toJson,
         "state" -> JsString(i.state),
         "error" -> i.error.map(e => e.getMessage).toJson)
 
@@ -119,9 +120,9 @@ object JsonProtocols extends DefaultJsonProtocol {
           case Seq(JsString(id), JsString(name), JsString(config),
             actorAddress, JsString(startTime), endTime, JsString(state), error) =>
             val actorAddressOpt = readOpt(actorAddress, a => a.convertTo[String])
-            val endTimeOpt = readOpt(endTime, et => toJoda(et.convertTo[String]))
+            val endTimeOpt = readOpt(endTime, et => toDateTime(et.convertTo[String]))
             val errorOpt = readOpt(error, e => new Throwable(e.convertTo[String]))
-            val startTimeObj = toJoda(startTime)
+            val startTimeObj = toDateTime(startTime)
             ContextInfo(id, name, config, actorAddressOpt, startTimeObj, endTimeOpt, state, errorOpt)
           // Incorrect json format
           case _ => deserializationError("Fail to parse json content:" +
@@ -135,9 +136,10 @@ object JsonProtocols extends DefaultJsonProtocol {
    * Helpers
    */
 
-  private def df : SimpleDateFormat = new SimpleDateFormat(DATE_PATTERN)
-  private def fromJoda(dt: DateTime): String = df.format(dt.getMillis)
-  private def toJoda(s: String): DateTime = new DateTime(df.parse(s).getTime)
+  private def df = DateTimeFormatter.ofPattern(DATE_PATTERN)
+  def fromDateTime(dt: ZonedDateTime): String = df.format(dt)
+  def toDateTime(s: String): ZonedDateTime = ZonedDateTime.parse(s, df)
+    .withZoneSameInstant(ZoneId.systemDefault())
   private def readOpt[A](j: JsValue, f: JsValue => A): Option[A] = {
     if (j == JsNull) None else Some(f(j))
   }
@@ -186,7 +188,7 @@ object ResultMarshalling {
       case JobInfo(_, _, _, _, state, _, _, None, _, _) => Map(StatusKey -> state)
     }
     Map("jobId" -> info.jobId,
-      "startTime" -> info.startTime.toString(),
+      "startTime" -> JsonProtocols.fromDateTime(info.startTime),
       "classPath" -> info.mainClass,
       "context" -> (if (info.contextName.isEmpty) "<<ad-hoc>>" else info.contextName),
       "contextId" -> info.contextId,

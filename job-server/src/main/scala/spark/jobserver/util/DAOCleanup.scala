@@ -1,7 +1,6 @@
 package spark.jobserver.util
 
 import java.util.concurrent.TimeUnit
-
 import scala.concurrent.Await
 import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
@@ -10,11 +9,12 @@ import com.typesafe.config.Config
 import JsonProtocols.ContextInfoJsonFormat
 import JsonProtocols.JobInfoJsonFormat
 import com.google.common.annotations.VisibleForTesting
-import org.joda.time.DateTime
 import spark.jobserver.io._
 import spark.jobserver.io.zookeeper.MetaDataZookeeperDAO
 import spark.jobserver.io.zookeeper.ZookeeperUtils
 import spark.jobserver.io.ContextStatus
+
+import java.time.ZonedDateTime
 
 trait DAOCleanup {
   def cleanup(): Boolean
@@ -102,7 +102,7 @@ class ZKCleanup(config: Config) extends DAOCleanup {
         jobs.map { job =>
           isContextStateFinal(job.contextId) match {
               case true =>
-                val updatedJob = job.copy(endTime = Some(DateTime.now()),
+                val updatedJob = job.copy(endTime = Some(ZonedDateTime.now()),
                     state = JobStatus.Error,
                     error = Some(ErrorData(NoCorrespondingContextAliveException(job.jobId))))
 

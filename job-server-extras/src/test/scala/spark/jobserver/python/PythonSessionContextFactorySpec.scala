@@ -1,7 +1,6 @@
 package spark.jobserver.python
 
 import com.typesafe.config.{Config, ConfigFactory}
-import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, FunSpec, Matchers}
 import java.nio.file.Files
 import java.nio.file.Paths

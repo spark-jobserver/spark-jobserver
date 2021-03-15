@@ -2,29 +2,29 @@ package spark.jobserver
 
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
-
 import akka.actor.{ActorSystem, Props}
 import akka.testkit.{ImplicitSender, TestKit}
-import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfterAll, FunSpecLike, Matchers}
 import spark.jobserver.common.akka.{AkkaTestUtils, InstrumentedActor}
 import spark.jobserver.io.{BinaryInfo, BinaryType, JobInfo, JobStatus}
 import spark.jobserver.io.JobDAOActor.LastBinaryInfo
 
+import java.time.ZonedDateTime
+
 object BinaryManagerSpec {
   val system = ActorSystem("binary-manager-test")
 
-  val dt = DateTime.now
+  val dt = ZonedDateTime.now
   val binaryInfo = BinaryInfo("binary", BinaryType.Jar, dt, None)
 
-  val binInfo = BinaryInfo("demo", BinaryType.Egg, DateTime.now)
+  val binInfo = BinaryInfo("demo", BinaryType.Egg, ZonedDateTime.now)
 
   class DummyDAOActor extends InstrumentedActor {
 
     import spark.jobserver.io.JobDAOActor._
 
     val jobInfo = JobInfo("bar", "cid", "context",
-        "com.abc.meme", JobStatus.Running, DateTime.now, None, None, Seq(binInfo), None)
+        "com.abc.meme", JobStatus.Running, ZonedDateTime.now, None, None, Seq(binInfo), None)
 
     override def wrappedReceive: Receive = {
       case GetLastBinaryInfo("binary") =>

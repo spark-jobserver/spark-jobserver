@@ -1,10 +1,9 @@
 package spark.jobserver.io
 
 import java.util.concurrent.TimeUnit
-
-import org.joda.time.DateTime
 import org.scalatest.{BeforeAndAfter, FunSpecLike, Matchers}
 
+import java.time.ZonedDateTime
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -19,7 +18,7 @@ class InMemoryMetaDAOSpec extends FunSpecLike with Matchers with BeforeAndAfter 
 
   describe("Get binaries tests") {
     it("should return latest binaries for each name group if uploaded with same name") {
-      val current = DateTime.now()
+      val current = ZonedDateTime.now()
 
       val binariesFuture = for {
         _ <- inMemoryMetaDao.saveBinary("test", BinaryType.Jar, current, "")
@@ -37,7 +36,7 @@ class InMemoryMetaDAOSpec extends FunSpecLike with Matchers with BeforeAndAfter 
     }
 
     it("should get the latest one if multiple binaries are uploaded with the same name") {
-      val current = DateTime.now()
+      val current = ZonedDateTime.now()
 
       val binariesFuture = for {
         _ <- inMemoryMetaDao.saveBinary("test", BinaryType.Jar, current, "")
@@ -54,7 +53,7 @@ class InMemoryMetaDAOSpec extends FunSpecLike with Matchers with BeforeAndAfter 
     }
 
     it("should delete binary") {
-      val current = DateTime.now()
+      val current = ZonedDateTime.now()
 
       val binariesFuture = for {
         _ <- inMemoryMetaDao.saveBinary("test", BinaryType.Jar, current, "")
@@ -72,7 +71,7 @@ class InMemoryMetaDAOSpec extends FunSpecLike with Matchers with BeforeAndAfter 
     }
 
     it("should get binaries based on storage id") {
-      val current = DateTime.now()
+      val current = ZonedDateTime.now()
 
       val binariesFuture = for {
         _ <- inMemoryMetaDao.saveBinary("test", BinaryType.Jar, current, "s1")

@@ -10,9 +10,7 @@ object Dependencies {
 
   lazy val miscDeps = Seq(
     "org.scalactic" %% "scalactic" % scalactic,
-    "org.mockito" % "mockito-core" % mockito,
-    "org.joda" % "joda-convert" % jodaConvert,
-    "joda-time" % "joda-time" % jodaTime
+    "org.mockito" % "mockito-core" % mockito
   )
 
   lazy val akkaDeps = Seq(
