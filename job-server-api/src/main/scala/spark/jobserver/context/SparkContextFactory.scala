@@ -2,21 +2,22 @@ package spark.jobserver.context
 
 import com.typesafe.config.Config
 import org.apache.spark.{SparkConf, SparkContext}
-import org.joda.time.DateTime
 import org.scalactic._
 import org.slf4j.LoggerFactory
-import spark.jobserver.{ContextLike, JobCache, SparkJob}
-import spark.jobserver.api
 import spark.jobserver.japi._
 import spark.jobserver.util.SparkJobUtils
+import spark.jobserver.{ContextLike, JobCache, SparkJob, api}
 
 trait JobContainer {
   def getSparkJob: api.SparkJobBase
 }
 
 sealed trait LoadingError
+
 case object JobClassNotFound extends LoadingError
+
 case object JobWrongType extends LoadingError
+
 case class JobLoadError(t: Throwable) extends LoadingError
 
 /**
@@ -28,6 +29,7 @@ case class JobLoadError(t: Throwable) extends LoadingError
   * Python jobs etc., so long as a wrapping SparkJobBase is returned.
   */
 trait SparkContextFactory {
+
   import SparkJobUtils._
 
   type C <: ContextLike
@@ -43,19 +45,21 @@ trait SparkContextFactory {
                          jobCache: JobCache): J Or LoadingError
 
   /**
-   * Creates a SparkContext or derived context.
-   * @param sparkConf the Spark Context configuration.
-   * @param config the context config
-   * @param contextName the name of the context to start
-   * @return the newly created context.
-   */
+    * Creates a SparkContext or derived context.
+    *
+    * @param sparkConf   the Spark Context configuration.
+    * @param config      the context config
+    * @param contextName the name of the context to start
+    * @return the newly created context.
+    */
   def makeContext(sparkConf: SparkConf, config: Config, contextName: String): C
 
   /**
     * Creates a SparkContext or derived context.
-    * @param config the overall system / job server Typesafe Config
+    *
+    * @param config        the overall system / job server Typesafe Config
     * @param contextConfig the config specific to this particular context
-    * @param contextName the name of the context to start
+    * @param contextName   the name of the context to start
     * @return the newly created context.
     */
   def makeContext(config: Config, contextConfig: Config, contextName: String): C = {
@@ -120,14 +124,14 @@ trait JavaContextFactory extends SparkContextFactory {
       val job = jobJarInfo.job
 
       // Validate that job fits the type of context we launched
-      if (isValidJob(job)) Good(ScalaJobContainer(JavaJob(job))) else Bad(JobWrongType)
+      if (isValidJob(job)) Good(ScalaJobContainer(WrappedJavaJob(job))) else Bad(JobWrongType)
     } catch {
       case _: ClassNotFoundException => Bad(JobClassNotFound)
       case t: Throwable => Bad(JobLoadError(t))
     }
   }
 
-  def isValidJob(job: BaseJavaJob[_, _]): Boolean
+  def isValidJob(job: BaseJavaJob[_, _, _]): Boolean
 }
 
 /**

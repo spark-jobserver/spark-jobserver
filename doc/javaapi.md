@@ -35,7 +35,27 @@ For instance the JSparkJob uses the JavaSparkContextFactory.
 
 - `JavaSqlContextFactory` for SQLContext Jobs with `JSqlJob`
 - `JavaStreamingContextFactory` for StreamingContext jobs with `JStreamingJob`
-- `JavaHiveContextFactory` for HiveContext jobs with `JHiveJob`
 
 **NOTE: If you do not use the correct context, the jobs will probably not run correctly, it is imperative you configure
 jobs correctly.**
+
+
+###Configurable Jobs
+Besides the `JSparkJob`, which only configures the return value of `run(...)`, the `JavaSparkJob` exists, which additionally
+allows configuring the return type of `verify(...)`.
+
+```java
+public class JavaConfigurableJob implements JavaSparkJob<String, String> {
+
+    public String run(JavaSparkContext sc, JobEnvironment runtime, String data) {
+        return data;
+    }
+
+    public String verify(JavaSparkContext sc, JobEnvironment runtime, Config config) {
+        return config.getString("input");
+    }
+}
+```
+[Full File Here](https://github.com/spark-jobserver/spark-jobserver/blob/master/job-server-tests/src/main/java/spark/jobserver/JavaHelloWorldJob.java)
+
+Similarly to `JSparkJob`, additional base classes exist for SQLContext Jobs (`JavaSqlJob`) and StreamingContext jobs (`JavaStreamingJob`).

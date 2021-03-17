@@ -29,7 +29,7 @@ public class JSessionTestLoaderJob extends JSessionJob<Long> {
     }
 
     @Override
-    public Config verify(SparkSession contextWrapper, JobEnvironment runtime, Config config) {
+    public Config verify(SparkSession contextWrapper, JobEnvironment runtime, Config config) throws RuntimeException {
         return config;
     }
 }

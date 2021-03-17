@@ -60,8 +60,8 @@ trait SparkJobBase {
 
   /**
     * This method is called by the job server to allow jobs to validate their input and reject
-    * invalid job requests.  If SparkJobInvalid is returned, then the job server returns 400
-    * to the user.
+    * invalid job requests. If the configuration is valid, the input should converted to `JobData`. Otherwise,
+    * `ValidationProblem` should be returned to indicate all problems with the configuration.
     * NOTE: this method should return very quickly.  If it responds slowly then the job server may time out
     * trying to start this job.
     *

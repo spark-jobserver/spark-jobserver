@@ -10,7 +10,7 @@ import spark.jobserver.io.{InMemoryBinaryDAO, InMemoryMetaDAO, JobDAOActor}
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 
-class JavaJobSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) {
+class WrappedJavaJobSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) {
 
   val JobResultCacheSize = Integer.valueOf(30)
   val NumCpuCores = Integer.valueOf(Runtime.getRuntime.availableProcessors())
