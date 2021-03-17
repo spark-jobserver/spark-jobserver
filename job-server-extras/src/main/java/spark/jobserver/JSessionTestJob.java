@@ -17,7 +17,7 @@ public class JSessionTestJob extends JSessionJob<Row[]> {
     }
 
     @Override
-    public Config verify(SparkSession spark, JobEnvironment runtime, Config config) {
+    public Config verify(SparkSession spark, JobEnvironment runtime, Config config) throws RuntimeException {
         return config;
     }
 }

@@ -38,7 +38,7 @@ class JobsLoader(maxEntries: Int,
   }
 
   def getJavaJob(classPath: Seq[String], mainClass: String): JavaJarInfo = {
-    val constructor = JarUtils.loadClassOrObject[BaseJavaJob[_, _]](mainClass, loader)
+    val constructor = JarUtils.loadClassOrObject[BaseJavaJob[_, _, _]](mainClass, loader)
     JavaJarInfo(constructor.apply(), mainClass, "")
   }
 

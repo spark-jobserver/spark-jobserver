@@ -12,7 +12,7 @@ public class JavaHelloWorldJob implements JSparkJob<String> {
         return "Hi!";
     }
 
-    public Config verify(JavaSparkContext sc, JobEnvironment runtime, Config config) {
+    public Config verify(JavaSparkContext sc, JobEnvironment runtime, Config config) throws RuntimeException {
         return ConfigFactory.empty();
     }
 }

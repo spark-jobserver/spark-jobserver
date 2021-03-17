@@ -11,6 +11,11 @@ test-reports/
 *.pyc
 .DS_Store
 
+# Python build ignore
+build/
+dist/
+*.egg-info*
+
 # ignore deployment configs
 config/*.conf
 config/*.sh

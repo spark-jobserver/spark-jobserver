@@ -46,7 +46,7 @@ public class JStreamingTestJob implements JStreamingJob<Integer> {
     }
 
     @Override
-    public Config verify(StreamingContext context, JobEnvironment jEnv, Config cfg) {
+    public Config verify(StreamingContext context, JobEnvironment jEnv, Config cfg) throws RuntimeException {
         return cfg;
     }
 }
