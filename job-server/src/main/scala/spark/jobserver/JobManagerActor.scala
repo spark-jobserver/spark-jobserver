@@ -26,7 +26,6 @@ import spark.jobserver.util.{ContextForcefulKillTimeout, StandaloneForcefulKill}
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 import scala.concurrent.duration._
-import org.spark_project.guava.annotations.VisibleForTesting
 import spark.jobserver.io.JobDAOActor.{BinaryInfosForCp, BinaryNotFound, GetBinaryInfosForCpFailed}
 
 import java.time.ZonedDateTime
@@ -134,13 +133,10 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
   private var contextName: String = _
   private var isAdHoc: Boolean = _
   private var stopContextSenderAndHandler: (Option[ActorRef], Option[Cancellable]) = (None, None)
-  @VisibleForTesting
   protected var statusActor: ActorRef = _
-  @VisibleForTesting
   protected var resultActor: ActorRef = _
   private var factory: SparkContextFactory = _
   private var remoteFileCache: RemoteFileCache = _
-  @VisibleForTesting
   protected var totalJobsToRestart = 0
   private var totalJobsWhichFailedToRestart = 0
 
@@ -539,7 +535,6 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
     }
   }
 
-  @VisibleForTesting
   protected def getUpdateContextByIdFuture(contextId: String, attributes: ContextModifiableAttributes):
       Future[JobDAOActor.SaveResponse] = {
     (daoActor ? JobDAOActor.UpdateContextById(contextId, attributes))(daoAskTimeout)
@@ -845,7 +840,6 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
     }
   }
 
-  @VisibleForTesting
   protected def scheduleContextStopTimeoutMsg(sender: ActorRef): Option[Cancellable] = {
     logger.info("Scheduling a timeout message for context stop")
     val stopTimeoutMsg = ContextStopScheduledMsgTimeout(sender)
@@ -900,7 +894,6 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
     }
   }
 
-  @VisibleForTesting
   protected def forcefulKillCaller(forcefulKill: StandaloneForcefulKill) = {
     forcefulKill.kill()(context.system)
   }
