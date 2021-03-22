@@ -41,6 +41,7 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
     - [Keycloak Authentication](#keycloak-authentication)
   - [User Authorization](#user-authorization)
 - [Deployment](#deployment)
+  - [Spark Version](#spark-version)
   - [Manual steps](#manual-steps)
   - [Context per JVM](#context-per-jvm)
   - [Configuring Spark Jobserver backend](#configuring-spark-jobserver-backend)
@@ -98,6 +99,7 @@ Spark Job Server is included in Datastax Enterprise!
 
 - *"Spark as a Service"*: Simple REST interface (including HTTPS) for all aspects of job, context management
 - Support for Spark SQL, Hive, Streaming Contexts/jobs and custom job contexts!  See [Contexts](doc/contexts.md).
+- Support for Spark 2.4, Spark 3.0 and Spark 3.1.
 - [Python](doc/python.md), Scala, and [Java](doc/javaapi.md) (see [TestJob.java](https://github.com/spark-jobserver/spark-jobserver/blob/master/job-server-api/src/main/java/spark/jobserver/api/TestJob.java)) support
 - LDAP Auth support via Apache Shiro integration
 - Supports sub-second low-latency jobs via long-running job contexts
@@ -632,9 +634,16 @@ user with the required permissions of an endpoint. For a detailed list of all av
 
 See also running on [cluster](doc/cluster.md), [YARN client](doc/yarn.md), on [EMR](doc/EMR.md) and running on [Mesos](doc/mesos.md).
 
+### Spark Version
+By default Spark Jobserver is build for Spark 3.0. Yet, support for Spark 2.4 and Spark 3.1 is also provided. To build
+Spark Jobserver for a specific Spark Version, you have to provide the `SPARK_VERSION` environment variable, e.g.
+```bash
+export SPARK_VERSION="2.4.7"
+```
+
 ### Manual steps
 
-1. Copy `config/local.sh.template` to `<environment>.sh` and edit as appropriate.  NOTE: be sure to set SPARK_VERSION if you need to compile against a different version.
+1. Copy `config/local.sh.template` to `<environment>.sh` and edit as appropriate.  NOTE: be sure to set `SPARK_VERSION` if you need to compile against a different version.
 2. Copy `config/shiro.ini.template` to `shiro.ini` and edit as appropriate. NOTE: only required when `access-control.provider = spark.jobserver.auth.ShiroAccessControl`
 3. Copy `config/local.conf.template` to `<environment>.conf` and edit as appropriate.
 4. `bin/server_deploy.sh <environment>` -- this packages the job server along with config files and pushes

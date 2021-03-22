@@ -113,7 +113,8 @@ class TestSJSApi(unittest.TestCase):
         self.assertEqual('Expected a SQL context', result[0].problem)
         self.assertEqual('config input.data not found', result[1].problem)
 
-    def test_run_sql_job(self):
+    def test__run_sql_job(self):
+        # I am not sure why, but this test has to be executed first. Otherwise, creation of SQLContext fails
         job = SQLJob()
         sqlContext = SQLContext(self.sc)
         config = ConfigFactory.parse_string("""
