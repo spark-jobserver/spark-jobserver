@@ -879,7 +879,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
       // A valid actor which responds to Identify message sent by JobManagerActor
       supervisor = system.actorOf(
-          Props(classOf[LocalContextSupervisorActor], TestProbe().ref, dataManagerActor),
+          Props(classOf[InProcessContextSupervisorActor], TestProbe().ref, dataManagerActor),
         "context-supervisor")
       manager = system.actorOf(
         JobManagerTestActor.props(daoActor,
@@ -904,7 +904,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val dataManagerActor = system.actorOf(Props.empty)
 
       supervisor = system.actorOf(
-          Props(classOf[LocalContextSupervisorActor], TestProbe().ref, dataManagerActor),
+          Props(classOf[InProcessContextSupervisorActor], TestProbe().ref, dataManagerActor),
         "context-supervisor")
       manager = system.actorOf(JobManagerTestActor.props(daoActor,
           s"${supervisor.path.address.toString}${supervisor.path.toStringWithoutAddress}",
@@ -924,7 +924,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val dataManagerActor = system.actorOf(Props.empty)
 
       supervisor = system.actorOf(
-          Props(classOf[LocalContextSupervisorActor], TestProbe().ref, dataManagerActor), "context-supervisor")
+          Props(classOf[InProcessContextSupervisorActor], TestProbe().ref, dataManagerActor), "context-supervisor")
       manager = system.actorOf(JobManagerTestActor.props(daoActor,
           s"${supervisor.path.address.toString}${supervisor.path.toStringWithoutAddress}", contextId,
         3.seconds.dilated, callbackHandler))

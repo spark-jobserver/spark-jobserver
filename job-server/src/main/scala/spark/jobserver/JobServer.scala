@@ -70,7 +70,8 @@ object JobServer {
     val port = config.getInt("spark.jobserver.port")
     val sparkMaster = config.getString("spark.master")
     val driverMode = config.getString("spark.submit.deployMode")
-    val contextPerJvm = config.getBoolean("spark.jobserver.context-per-jvm")
+    val contextPerJvm = Try(config.getBoolean("spark.jobserver.context-per-jvm"))
+      .toOption.getOrElse(true)
     val superviseModeEnabled = config.getBoolean("spark.driver.supervise")
     val akkaTcpPort = config.getInt("akka.remote.netty.tcp.port")
     val daoCleanupEnabled = config.hasPath("spark.jobserver.dao-cleanup-after")
@@ -153,7 +154,9 @@ object JobServer {
         _: HealthCheck)
     contextPerJvm match {
       case false =>
-        val supervisor = system.actorOf(Props(classOf[LocalContextSupervisorActor],
+        logger.warn("Running spark jobserver without separate JVM processes per Spark context." +
+          "Execution of multiple spark contexts in parallel is not possible.")
+        val supervisor = system.actorOf(Props(classOf[InProcessContextSupervisorActor],
             daoActor, dataManager), AkkaClusterSupervisorActor.ACTOR_NAME)
         supervisor ! ContextSupervisor.AddContextsFromConfig  // Create initial contexts
         webApiPF(supervisor, getHealthCheckInstance(supervisor, daoActor, config)).start()
