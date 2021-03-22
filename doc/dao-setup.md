@@ -167,7 +167,7 @@ To set up the DAO only with H2 backend, include the following lines in the confi
     flyway.locations="db/h2/migration"
 ```
 
-If you are using `context-per-jvm = true`, be sure to add [AUTO_MIXED_MODE](http://h2database.com/html/features.html#auto_mixed_mode) to your
+Be sure to add [AUTO_MIXED_MODE](http://h2database.com/html/features.html#auto_mixed_mode) to your
 H2 JDBC URL; this allows multiple processes to share the same H2 database using a lock file.
 
 In yarn-client mode, use H2 in server mode as described below instead of embedded mode.

@@ -100,7 +100,6 @@ Spark Job Server is included in Datastax Enterprise!
 - Support for Spark SQL, Hive, Streaming Contexts/jobs and custom job contexts!  See [Contexts](doc/contexts.md).
 - [Python](doc/python.md), Scala, and [Java](doc/javaapi.md) (see [TestJob.java](https://github.com/spark-jobserver/spark-jobserver/blob/master/job-server-api/src/main/java/spark/jobserver/api/TestJob.java)) support
 - LDAP Auth support via Apache Shiro integration
-- Separate JVM per SparkContext for isolation (EXPERIMENTAL)
 - Supports sub-second low-latency jobs via long-running job contexts
 - Start and stop job contexts for RDD sharing and low-latency jobs; change resources on restart
 - Kill running jobs via stop context and delete job
@@ -146,8 +145,6 @@ Alternatives:
   - `server_package.sh` deploys job server to a local directory, from which you can deploy the directory, or create a .tar.gz for Mesos or YARN deployment.
 * EC2 Deploy scripts - follow the instructions in [EC2](doc/EC2.md) to spin up a Spark cluster with job server and an example application.
 * EMR Deploy instruction - follow the instruction in [EMR](doc/EMR.md)
-
-NOTE: Spark Job Server can optionally run `SparkContext`s in their own, forked JVM process when the config option `spark.jobserver.context-per-jvm` is set to `true`.  This option does not currently work for SBT/local dev mode. See [Deployment](#deployment) section for more info.
 
 ## Development mode
 
@@ -650,15 +647,16 @@ NOTE: Under the hood, the deploy scripts generate an assembly jar from the `job-
 
 ### Context per JVM
 
-Each context can be a separate process launched using SparkLauncher, if `context-per-jvm` is set to true.
-This can be especially desirable when you want to run many contexts at once, or for certain types of contexts such as StreamingContexts which really need their own processes.
-
-Also, the extra processes talk to the master HTTP process via random ports using the Akka Cluster gossip protocol.  If for some reason the separate processes causes issues, set `spark.jobserver.context-per-jvm` to `false`, which will cause the job server to use a single JVM for all contexts.
+Each context is running in a separate process launched using SparkLauncher. The extra processes talk to the master HTTP
+process via random ports using the Akka Cluster gossip protocol.
 
 Among the known issues:
 - Launched contexts do not shut down by themselves.  You need to manually kill each separate process, or do `-X DELETE /contexts/<context-name>`
+- Log files are separated out for each context in their own subdirs under the `LOG_DIR` configured in `settings.sh` in the deployed directory.
 
-Log files are separated out for each context (assuming `context-per-jvm` is `true`) in their own subdirs under the `LOG_DIR` configured in `settings.sh` in the deployed directory.
+If you need to start a spark context in the same JVM process Spark Jobserver is running in, set `spark.jobserver.context-per-jvm` to `false`.
+In this mode, only a single spark context can be running at once. Execution of multiple contexts in parallel is not possible.
+It is highly recommended, that you do *not* use this mode in a production environment.
 
 Note: to test out the deploy to a local staging dir, or package the job server for Mesos,
 use `bin/server_package.sh <environment>`.
@@ -857,10 +855,7 @@ serialized properly:
 - Subclasses of java.util.Map with string key values (non-string keys may be converted to strings)
 - Maps, Seqs, Java Maps and Java Lists may contain nested values of any of the above
 - If a job result is of scala's Stream[Byte] type it will be serialised directly as a chunk encoded stream.
-  This is useful if your job result payload is large and may cause a timeout serialising as objects. Beware, this
-  will not currently work as desired with context-per-jvm=true configuration, since it would require serialising
-  Stream[\_] blob between processes. For now use Stream[\_] job results in context-per-jvm=false configuration, pending
-  potential future enhancements to support this in context-per-jvm=true mode.
+  This is useful if your job result payload is large and may cause a timeout serialising as objects.
 
 If we encounter a data type that is not supported, then the entire result will be serialized to a string.
 
