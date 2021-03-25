@@ -10,6 +10,7 @@ import org.apache.spark.streaming.api.java.JavaPairDStream;
 import org.apache.spark.streaming.api.java.JavaStreamingContext;
 import spark.jobserver.api.JobEnvironment;
 import spark.jobserver.japi.JStreamingJob;
+import spark.jobserver.japi.JavaValidationException;
 
 import java.util.Arrays;
 import java.util.LinkedList;
@@ -46,7 +47,7 @@ public class JStreamingTestJob implements JStreamingJob<Integer> {
     }
 
     @Override
-    public Config verify(StreamingContext context, JobEnvironment jEnv, Config cfg) throws RuntimeException {
+    public Config verify(StreamingContext context, JobEnvironment jEnv, Config cfg) throws JavaValidationException {
         return cfg;
     }
 }

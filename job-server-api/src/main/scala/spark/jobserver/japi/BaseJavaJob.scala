@@ -4,6 +4,12 @@ import com.typesafe.config.Config
 import org.apache.spark.api.java.JavaSparkContext
 import spark.jobserver.api.JobEnvironment
 
+class JavaValidationException extends RuntimeException
+
+case class SingleJavaValidationException(issue: String) extends JavaValidationException
+
+case class MultiJavaValidationException(issues: Seq[String]) extends JavaValidationException
+
 /**
   * This trait is the main API for Java jobs submitted to the Job Server. To implement a Java Job, see
   * `JSparkJob` and `JavaSparkJob`.

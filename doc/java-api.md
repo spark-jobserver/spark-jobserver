@@ -18,10 +18,10 @@ public class JavaConfigurableJob implements JavaSparkJob<String, String> {
         return data;
     }
 
-    public String verify(JavaSparkContext sc, JobEnvironment runtime, Config config) throws RuntimeException {
+    public String verify(JavaSparkContext sc, JobEnvironment runtime, Config config) throws JavaValidationException {
         String input = config.getString("input");
         if (input.length() == 0) {
-            throw new IllegalArgumentException("You passed an empty string");
+            throw new SingleJavaValidationException("You passed an empty string");
         }
         return input;
     }
@@ -56,7 +56,7 @@ public class JavaHelloWorldJob implements JSparkJob<String> {
         return "Hi!";
     }
 
-    public Config verify(JavaSparkContext sc, JobEnvironment runtime, Config config) throws RuntimeException{
+    public Config verify(JavaSparkContext sc, JobEnvironment runtime, Config config) throws JavaValidationException {
         return ConfigFactory.empty();
     }
 }
@@ -64,3 +64,13 @@ public class JavaHelloWorldJob implements JSparkJob<String> {
 [Full File Here](https://github.com/spark-jobserver/spark-jobserver/blob/master/job-server-tests/src/main/java/spark/jobserver/JavaHelloWorldJob.java)
 
 Similarly to `JavaSparkJob`, additional base classes exist for SQLContext Jobs (`JSqlJob`) and StreamingContext jobs (`JStreamingJob`).
+
+### Input Validation
+The `verify` method is supposed to throw a `spark.jobserver.japi.JavaValidationException` in case of invalid input. For
+backward-compatability raising a `RuntimeException` is also supported but not recommended. `JavaValidationException` has
+two different implementations:
+- `spark.jobserver.japi.SingleJavaValidationException`
+- `spark.jobserver.japi.MultiJavaValidationException`
+`MultiJavaValidationException` should be used if the complete input is checked and multiple issues should be reported
+back instead of only the first found issue.
+

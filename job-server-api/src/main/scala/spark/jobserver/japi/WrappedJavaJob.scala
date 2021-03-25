@@ -6,7 +6,8 @@ import spark.jobserver.api._
 
 import scala.reflect.ClassTag
 
-case class JavaValidationException(reason: String, t: Throwable) extends Exception with ValidationProblem
+case class WrappedJavaValidationException(reason: String, t: Throwable) extends Exception
+  with ValidationProblem
 
 /**
   * Internal wrapper for JavaJobs.
@@ -22,7 +23,7 @@ case class JavaValidationException(reason: String, t: Throwable) extends Excepti
 case class WrappedJavaJob[D: ClassTag, R: ClassTag, CX: ClassTag](job: BaseJavaJob[D, R, CX])
   extends SparkJobBase {
 
-  import spark.jobserver.japi.{JavaValidationException => JVE}
+  import spark.jobserver.japi.{WrappedJavaValidationException => JVE}
 
   override type C = CX
   override type JobData = D
@@ -35,6 +36,15 @@ case class WrappedJavaJob[D: ClassTag, R: ClassTag, CX: ClassTag](job: BaseJavaJ
   def validate(sc: CX, runtime: JobEnvironment, config: Config): JobData Or Every[ValidationProblem] = {
     job.verify(sc, runtime, config) match {
       case j: JVE => Bad(One(j))
+      case e: SingleJavaValidationException => Bad(One(JVE(e.issue, e)))
+      case e: MultiJavaValidationException =>
+        val issues: Seq[JVE] = e.issues.map(issue => JVE(issue, e))
+        issues.size match {
+          case 0 => Bad(One(JVE("No issues found but MultiJavaValidationException returned",
+            new RuntimeException)))
+          case 1 => Bad(One(issues.head))
+          case _ => Bad(Many(issues.head, issues(1), issues.drop(2): _*))
+        }
       case t: Throwable => Bad(One(JVE(t.getMessage, t)))
       case data: JobData => Good(data)
     }
