@@ -162,6 +162,26 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
       (json2 \ "state").as[String] should equal("FINISHED")
     }
 
+    "DELETE /contexts/<contextName>?force=true should forcefully delete a context" in {
+      val request_post = sttp.post(uri"$SJS/contexts/$contextName")
+      val response_post = request_post.send()
+      response_post.code should equal(200)
+      val json_post = Json.parse(response_post.body.merge)
+      (json_post \ "status").as[String] should equal("SUCCESS")
+      val request_delete = sttp.delete(uri"$SJS/contexts/$contextName?force=true")
+      val response_delete = request_delete.send()
+      response_delete.code should equal(200)
+      val json_delete = Json.parse(response_delete.body.merge)
+      (json_delete \ "status").as[String] should equal("SUCCESS")
+      // state finished?
+      TestHelper.waitForContextTermination(SJS, contextName)
+      val request_get = sttp.get(uri"$SJS/contexts/$contextName")
+      val response_get = request_get.send()
+      response_get.code should equal(200)
+      val json_get = Json.parse(response_get.body.merge)
+      (json_get \ "state").as[String] should equal("FINISHED")
+    }
+
     "GET /contexts should not list deleted contexts" in {
       val request = sttp.get(uri"$SJS/contexts")
       val response = request.send()
