@@ -2,8 +2,10 @@ package spark.jobserver.util
 
 import java.nio.charset.Charset
 import akka.actor.ActorSystem
-import akka.http.scaladsl.model.{HttpEntity, HttpMethods, HttpRequest, HttpResponse, StatusCodes}
+import akka.http.scaladsl.model._
+import akka.stream.scaladsl.Source
 import akka.testkit.TestKit
+import akka.util.ByteString
 import com.typesafe.config.{Config, ConfigFactory}
 
 import collection.JavaConverters._
@@ -143,6 +145,17 @@ class ForcefulKillSpec extends TestKit(ActorSystem("test")) with AnyFunSpecLike
         }
       }
 
+      helper.kill()
+    }
+
+    it("should be able to kill the application if Spark UI returns chunked HTTP response") {
+      val helper = new StandaloneForcefulKill(buildConfig("spark://master1:8080,master2:8080"), "app-test") {
+        override protected def doRequest(req: HttpRequest)(implicit system: ActorSystem): HttpResponse = {
+          HttpResponse(entity = HttpEntity.Chunked(
+              ContentType(MediaTypes.`application/json`),
+              Source.single(ByteString(sparkUIJson()))))
+        }
+      }
       helper.kill()
     }
   }
