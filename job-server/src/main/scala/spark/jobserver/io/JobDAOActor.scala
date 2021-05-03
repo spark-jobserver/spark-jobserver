@@ -1,9 +1,11 @@
 package spark.jobserver.io
 
-import java.io.File
+import java.io.{ByteArrayInputStream, StreamCorruptedException,
+  ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream, File}
 import java.net.URI
 import akka.actor.{ActorRef, Props}
 import com.typesafe.config.Config
+import org.slf4j.LoggerFactory
 
 import scala.util.{Failure, Success, Try}
 import spark.jobserver.common.akka.InstrumentedActor
@@ -17,16 +19,17 @@ import scala.concurrent.{Await, Future}
 
 object JobDAOActor {
 
+  val objectLogger = LoggerFactory.getLogger(getClass)
+
   //Requests
   sealed trait JobDAORequest
+
   case class SaveBinary(appName: String,
                         binaryType: BinaryType,
                         uploadTime: ZonedDateTime,
                         jarBytes: Array[Byte]) extends JobDAORequest
-  case class SaveBinaryResult(outcome: Try[Unit])
 
   case class DeleteBinary(appName: String) extends JobDAORequest
-  case class DeleteBinaryResult(outcome: Try[Unit])
 
   case class GetApps(typeFilter: Option[BinaryType]) extends JobDAORequest
   case class GetBinaryPath(appName: String,
@@ -52,8 +55,14 @@ object JobDAOActor {
   case class GetJobsByBinaryName(appName: String, statuses: Option[Seq[String]] = None) extends JobDAORequest
   case class GetBinaryInfosForCp(cp: Seq[String]) extends JobDAORequest
 
+  case class SaveJobResult(jobId: String, result: Any) extends JobDAORequest
+  case class GetJobResult(jobId: String) extends JobDAORequest
+  case class DeleteJobResult(jobId: String) extends JobDAORequest
+
   //Responses
   sealed trait JobDAOResponse
+  case class SaveBinaryResult(outcome: Try[Unit])
+  case class DeleteBinaryResult(outcome: Try[Unit])
   case class Apps(apps: Map[String, (BinaryType, ZonedDateTime)]) extends JobDAOResponse
   case class BinaryPath(binPath: String) extends JobDAOResponse
   case class JobInfos(jobInfos: Seq[JobInfo]) extends JobDAOResponse
@@ -64,6 +73,8 @@ object JobDAOActor {
   case class BinaryInfosForCp(binInfos: Seq[BinaryInfo]) extends JobDAOResponse
   case class BinaryNotFound(name: String) extends JobDAOResponse
   case class GetBinaryInfosForCpFailed(error: Throwable)
+  case class JobResult(result: Any) extends JobDAOResponse
+  case object JobResultDeleted extends JobDAOResponse
 
   case object InvalidJar extends JobDAOResponse
   case object JarStored extends JobDAOResponse
@@ -77,6 +88,32 @@ object JobDAOActor {
   def props(metadatadao: MetaDataDAO, binarydao: BinaryDAO, config: Config): Props = {
     Props(classOf[JobDAOActor], metadatadao, binarydao, config)
   }
+
+  def serialize(value: Any): Array[Byte] = {
+    value match {
+      case v: Array[Byte] => v // We don't need to do anything, input is already Array[Byte]
+      case _ =>
+        val stream: ByteArrayOutputStream = new ByteArrayOutputStream()
+        val oos = new ObjectOutputStream(stream)
+        oos.writeObject(value)
+        oos.close()
+        stream.toByteArray
+    }
+  }
+
+  def deserialize(bytes: Array[Byte]): Any = {
+    try {
+      val ois = new ObjectInputStream(new ByteArrayInputStream(bytes))
+      val value = ois.readObject
+      ois.close()
+      value
+    } catch {
+      case _: StreamCorruptedException => bytes // Deserializing an object which is already an Array[Byte]
+      case ex =>
+        objectLogger.error(s"Could not deserialize an object! Exception: ${ex}")
+        None
+    }
+  }
 }
 
 class JobDAOActor(metaDataDAO: MetaDataDAO, binaryDAO: BinaryDAO, config: Config) extends InstrumentedActor
@@ -89,7 +126,6 @@ class JobDAOActor(metaDataDAO: MetaDataDAO, binaryDAO: BinaryDAO, config: Config
   // Required by FileCacher
   val rootDirPath: String = config.getString(JobserverConfig.DAO_ROOT_DIR_PATH)
   val rootDirFile: File = new File(rootDirPath)
-
 
   implicit val daoTimeout = JobserverTimeouts.DAO_DEFAULT_TIMEOUT
   private val defaultAwaitTime = JobserverTimeouts.DAO_DEFAULT_TIMEOUT
@@ -242,7 +278,51 @@ class JobDAOActor(metaDataDAO: MetaDataDAO, binaryDAO: BinaryDAO, config: Config
           recipient ! GetBinaryInfosForCpFailed(exception)
     }
 
+    case SaveJobResult(jobId, result) =>
+      val recipient = sender()
+      Utils.usingTimer(resultWrite) { () =>
+        val byteArray = serialize(result)
+        binaryDAO.save(s"result/${jobId}", byteArray)
+      }.onComplete {
+        case Success(true) => recipient ! SavedSuccessfully
+        case Success(false) =>
+          logger.error(s"Failed to save job result for job ${jobId}. DAO returned false.")
+          recipient ! SaveFailed(new Throwable(s"Failed to save job result for job (${jobId})."))
+        case Failure(t) =>
+          logger.error(s"Failed to save job result for job ${jobId} in DAO.", t)
+          recipient ! SaveFailed(t)
+      }
+
+    case GetJobResult(jobId) =>
+      val recipient = sender()
+      Utils.usingTimer(resultRead) { () =>
+        binaryDAO.get(s"result/${jobId}")
+      }.onComplete {
+        case Success(Some(byteArray)) =>
+          recipient ! JobResult(deserialize(byteArray))
+        case Success(None) =>
+          recipient ! JobResult(None)
+        case Failure(_) =>
+          logger.error(s"Failed to get a job result for job id $jobId")
+          recipient ! JobResult(None)
+      }
+
+    case DeleteJobResult(jobId) =>
+      val recipient = sender()
+      Utils.usingTimer(resultDelete) { () =>
+        binaryDAO.delete(s"result/${jobId}")
+      }.onComplete {
+        case Success(true) =>
+          logger.info(s"Deleted job result for job ${jobId}")
+          recipient ! JobResultDeleted
+        case Success(false) =>
+          logger.error(s"Failed to delete job result for job ${jobId}. DAO returned false.")
+        case Failure(t) =>
+          logger.error(s"Failed to delete job result for job ${jobId} in DAO.", t)
+      }
+
     case anotherEvent => logger.info(s"Ignoring unknown event type: $anotherEvent")
+
   }
 
   private def saveContextAndRespond(recipient: ActorRef, contextInfo: ContextInfo) = {
