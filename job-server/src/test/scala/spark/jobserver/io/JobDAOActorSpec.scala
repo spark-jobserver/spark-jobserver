@@ -530,4 +530,31 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       jarFile.exists() should be(false)
     }
   }
+
+  describe("Result Persistence"){
+
+    it("should save a job result successfully"){
+      inMemoryDaoActor ! SaveJobResult("someId", "abc")
+      expectMsg(SavedSuccessfully)
+    }
+
+    it("should return a job result successfully"){
+      inMemoryDaoActor ! SaveJobResult("someId", "abc")
+      expectMsg(SavedSuccessfully)
+      inMemoryDaoActor ! GetJobResult("someId")
+      expectMsg(JobResult("abc"))
+    }
+
+    it("should delete a job result successfully"){
+      inMemoryDaoActor ! SaveJobResult("someId", "abc")
+      expectMsg(SavedSuccessfully)
+      inMemoryDaoActor ! GetJobResult("someId")
+      expectMsg(JobResult("abc"))
+      inMemoryDaoActor ! DeleteJobResult("someId")
+      expectMsg(JobResultDeleted)
+      inMemoryDaoActor ! GetJobResult("someId")
+      expectMsg(JobResult(None))
+    }
+
+  }
 }
