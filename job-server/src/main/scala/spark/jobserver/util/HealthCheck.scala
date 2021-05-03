@@ -32,7 +32,7 @@ class ActorsHealthCheck(supervisor: ActorRef, daoActor: ActorRef)
       val jobDaoFuture = (daoActor ? GetJobInfos(1, None)).mapTo[JobInfos]
       val jobResultFuture = (for {
         resultActor <- (supervisor ? GetResultActor("getDefaultGlobalActor")).mapTo[ActorRef]
-        result <- resultActor ? GetJobResult("dummyjobid")
+        result <- resultActor ? spark.jobserver.CommonMessages.GetJobResult("dummyjobid")
       } yield result).mapTo[NoSuchJobId.type]
 
 
