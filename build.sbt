@@ -282,7 +282,8 @@ lazy val scoverageSettings = {
 
 lazy val publishSettings = Seq(
   licenses += ("Apache-2.0", url("http://choosealicense.com/licenses/apache/")),
-  bintrayOrganization := Some("spark-jobserver")
+  publishTo := Some("Artifactory Realm" at "https://sparkjobserver.jfrog.io/artifactory/jobserver"),
+  credentials += Credentials("Artifactory Realm", "sparkjobserver.jfrog.io", System.getenv("JFROG_USERNAME"), System.getenv("JFROG_PASSWORD"))
 )
 
 // This is here so we can easily switch back to Logback when Spark fixes its log4j dependency.
