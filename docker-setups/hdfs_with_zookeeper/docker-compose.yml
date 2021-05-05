@@ -1,0 +1,110 @@
+version: "3.8"
+services:
+  spark-jobserver:
+    build: ../../
+    container_name: spark-jobserver
+    depends_on:
+      - spark-master
+      - spark-worker-1
+      - namenode
+      - zookeeper
+      - datanode-1
+    ports:
+      - 8090:8090
+    volumes:
+      - type: bind
+        source: config
+        target: /opt/sparkjobserver/config
+    networks:
+      internal-network:
+        ipv4_address: 10.5.0.30
+
+  zookeeper:
+    container_name: sjs_zookeeper
+    domainname: zookeeper
+    hostname: zookeeper
+    image: zookeeper:3.5.6
+    ports:
+      - "2181:2181"
+    networks:
+      internal-network:
+        ipv4_address: 10.5.0.2
+
+  hadoop:
+    container_name: hadoop
+    image: sequenceiq/hadoop-docker:2.7.1
+    domainname: hadoop
+    hostname: hadoop
+    ports:
+      - 50070:50070
+      - 50075:50075
+    networks:
+      internal-network:
+        ipv4_address: 10.5.0.3
+
+  spark-master:
+    image: bde2020/spark-master:2.4.5-hadoop2.7
+    container_name: sjs_spark-master
+    depends_on:
+      - namenode
+    hostname: spark-master
+    ports:
+      - "58080:8080"
+      - "6066:6066"
+      - "7077:7077"
+    networks:
+      internal-network:
+        ipv4_address: 10.5.0.10
+    environment:
+      - "SPARK_LOCAL_IP=spark-master"
+
+  spark-worker-1:
+    image: bde2020/spark-worker:2.4.5-hadoop2.7
+    container_name: sjs_spark-worker-1
+    depends_on:
+      - spark-master
+    hostname: spark-worker-1
+    ports:
+      - "58081:8081"
+    environment:
+      - "SPARK_LOCAL_IP=spark-worker-1"
+      - "SPARK_MASTER=spark://spark-master:7077"
+      - "SPARK_WORKER_CORES=2"
+      - "SPARK_WORKER_MEMORY=1G"
+      - "SPARK_DRIVER_MEMORY=128m"
+      - "SPARK_EXECUTOR_MEMORY=256m"
+    networks:
+      internal-network:
+        ipv4_address: 10.5.0.20
+
+  spark-worker-2:
+    image: bde2020/spark-worker:2.4.5-hadoop2.7
+    container_name: sjs_spark-worker-2
+    depends_on:
+      - spark-master
+    hostname: spark-worker-2
+    ports:
+      - "58082:8081"
+    environment:
+      - "SPARK_LOCAL_IP=spark-worker-2"
+      - "SPARK_MASTER=spark://spark-master:7077"
+      - "SPARK_WORKER_CORES=2"
+      - "SPARK_WORKER_MEMORY=1G"
+      - "SPARK_DRIVER_MEMORY=128m"
+      - "SPARK_EXECUTOR_MEMORY=256m"
+    networks:
+      internal-network:
+        ipv4_address: 10.5.0.21
+
+volumes:
+  namenode:
+  datanode:
+
+networks:
+  internal-network:
+    name: sjs-network
+    driver: bridge
+    ipam:
+     driver: default
+     config:
+       - subnet: 10.5.0.0/16
