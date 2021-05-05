@@ -24,10 +24,10 @@ git log <last release commit hash>..master --format="- %s / (%an | %h)"
 ```
 - Remove untracked files. You can use `git clean -fd`. Be careful, it will remove untracked files and directories.
 - Make sure that `origin` is pointing to opensource github jobserver.
-- Export bintray username/api key. To get API key, log into bintray > Edit profile > API Key.
+- Export your JFrog Platform username/password for https://sparkjobserver.jfrog.io:
 ```
-export BINTRAY_USER=<username>
-export BINTRAY_PASS=<API KEY HERE>
+export JFROG_USERNAME=<username>
+export JFROG_PASSWORD=<API KEY HERE>
 ```
 - In the root project, do `sbt 'release cross'`
 - The release process will ask you for next release number. Input the number:
@@ -99,7 +99,7 @@ git config branch.master.merge refs/heads/master
     Push changes to the remote repository (y/n)? [y] n
     [warn] Remember to push the changes yourself!
     ```
-7. Check that all supported Scala versions are published (on Bintray).
+7. Check that all supported Scala versions are published (on JFrog).
 
 ### Known issues with test setup
 

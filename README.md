@@ -312,7 +312,7 @@ Now you could remove example application and start adding your one.
 ### Creating a project manually assuming that you already have sbt project structure
 In your `build.sbt`, add this to use the job server jar:
 
-        resolvers += "Job Server Bintray" at "https://dl.bintray.com/spark-jobserver/maven"
+        resolvers += "Artifactory" at "https://sparkjobserver.jfrog.io/artifactory/jobserver/"
 
         libraryDependencies += "spark.jobserver" %% "job-server-api" % "0.8.0" % "provided"
 
