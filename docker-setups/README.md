@@ -25,5 +25,5 @@ The following setups are available:
   Spark Standalone, scala 2.11, spark 2.4.6, hadoop 2.7, single Jobserver, SQL (H2 local) Metadata and Binary Dao, Client mode
 * [PostgreSQL](postgres):
   Spark Standalone, scala 2.11, spark 2.4.6, hadoop 2.7, single Jobserver, SQL (Postgresql) Metadata and Binary Dao, Client mode
-
-
+* [HDFS with Zookeeper](hdfs_with_zookeeper):
+  Spark Standalone, scala 2.11, spark 2.4.6, hadoop 2.7, single Jobserver, Zookeeper Metadata and HDFS Binary Dao, Client mode
