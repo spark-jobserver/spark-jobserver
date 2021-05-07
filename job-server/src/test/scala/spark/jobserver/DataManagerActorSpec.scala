@@ -2,19 +2,21 @@ package spark.jobserver
 
 import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.testkit.{ImplicitSender, TestKit, TestProbe}
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 import java.nio.file.{Files, Paths}
 
 import spark.jobserver.common.akka
 import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.io.DataFileDAO
+import org.scalatest.funspec.AnyFunSpecLike
+import org.scalatest.matchers.should.Matchers
 
 object DataManagerActorSpec {
   val system = ActorSystem("test")
 }
 
 class DataManagerActorSpec extends TestKit(DataManagerActorSpec.system) with ImplicitSender
-    with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
+    with AnyFunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
   import com.typesafe.config._
   import DataManagerActor._

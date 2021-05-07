@@ -6,7 +6,7 @@ import akka.testkit.TestKit
 import com.typesafe.config.{Config, ConfigFactory}
 import io.jsonwebtoken._
 import org.apache.shiro.codec.Base64
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 
 import java.security.spec.X509EncodedKeySpec
 import java.security.{Key, KeyFactory}
@@ -14,8 +14,10 @@ import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
 
 import Permissions._
+import org.scalatest.funspec.AnyFunSpecLike
+import org.scalatest.matchers.should.Matchers
 
-class SJSAccessControlSpec extends FunSpecLike
+class SJSAccessControlSpec extends AnyFunSpecLike
     with ScalatestRouteTest with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
   //set this to true to check your real ldap server

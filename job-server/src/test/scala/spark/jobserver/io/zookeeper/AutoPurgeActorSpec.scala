@@ -2,7 +2,7 @@ package spark.jobserver.io.zookeeper
 
 import scala.concurrent.Await
 import scala.concurrent.duration.DurationInt
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import akka.actor.ActorRef
@@ -23,6 +23,8 @@ import spark.jobserver.io.JobInfo
 import spark.jobserver.util.{CuratorTestCluster, ErrorData, JobserverConfig, Utils}
 
 import java.time.ZonedDateTime
+import org.scalatest.funspec.AnyFunSpecLike
+import org.scalatest.matchers.should.Matchers
 
 object AutoPurgeActorSpec {
   val system = ActorSystem("test")
@@ -40,7 +42,7 @@ class DummyZookeeperDAOActor(dao : MetaDataZookeeperDAO) extends InstrumentedAct
   }
 }
 
-class AutoPurgeActorSpec extends TestKit(AutoPurgeActorSpec.system) with FunSpecLike with Matchers
+class AutoPurgeActorSpec extends TestKit(AutoPurgeActorSpec.system) with AnyFunSpecLike with Matchers
   with BeforeAndAfter with BeforeAndAfterAll with ImplicitSender{
 
   /*

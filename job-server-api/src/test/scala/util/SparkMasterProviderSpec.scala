@@ -2,9 +2,10 @@ package spark.jobserver.util
 
 import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.spark.SparkConf
-import org.scalatest.{Matchers, FunSpec}
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
-class SparkMasterProviderSpec extends FunSpec with Matchers {
+class SparkMasterProviderSpec extends AnyFunSpec with Matchers {
 
   import collection.JavaConverters._
 

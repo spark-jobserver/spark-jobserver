@@ -17,7 +17,7 @@ import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 import scala.util.Try
 import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 
 import scala.concurrent.Await
 import scala.reflect.ClassTag
@@ -27,6 +27,8 @@ import akka.util.Timeout
 import spark.jobserver.io.JobDAOActor._
 
 import java.time.ZonedDateTime
+import org.scalatest.funspec.AnyFunSpecLike
+import org.scalatest.matchers.should.Matchers
 
 object AkkaClusterSupervisorActorSpec {
   // All the Actors System should have the same name otherwise they cannot form a cluster
@@ -240,7 +242,7 @@ class StubbedJobManagerActor(contextConfig: Config) extends Actor {
 }
 
 class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorSpec.system)
-  with ImplicitSender with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
+  with ImplicitSender with AnyFunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
   implicit val futureTimeout = Timeout(5.seconds)
   private val daoTimeout = 5.seconds.dilated

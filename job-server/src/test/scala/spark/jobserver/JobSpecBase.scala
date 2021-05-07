@@ -4,7 +4,7 @@ import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.testkit.ImplicitSender
 import akka.testkit.TestKit
 import com.typesafe.config.{Config, ConfigFactory}
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.context.DefaultSparkContextFactory
 import spark.jobserver.io.JobDAOActor.{GetLastBinaryInfo, LastBinaryInfo, SaveBinary, SaveBinaryResult}
@@ -14,6 +14,8 @@ import spark.jobserver.util.JobserverConfig
 import java.time.ZonedDateTime
 import scala.concurrent.duration._
 import scala.util.Success
+import org.scalatest.funspec.AnyFunSpecLike
+import org.scalatest.matchers.should.Matchers
 
 /**
  * Provides a base Config for tests.  Override the vals to configure.  Mix into an object.
@@ -81,7 +83,7 @@ trait JobSpecConfig {
 }
 
 abstract class JobSpecBaseBase(system: ActorSystem) extends TestKit(system) with ImplicitSender
-with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
+with AnyFunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
   var inMemoryMetaDAO: MetaDataDAO = _
   var inMemoryBinDAO: BinaryDAO = _
   var daoActor: ActorRef = _

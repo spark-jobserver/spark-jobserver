@@ -1,12 +1,14 @@
 package spark.jobserver.common.akka
 
-import org.scalatest.{BeforeAndAfterAll, Matchers, FunSpec}
+import org.scalatest.BeforeAndAfterAll
 import akka.testkit.{TestKit, TestActorRef}
 
 import akka.actor.{Actor, ActorSystem}
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
 
-class ActorMetricsSpec extends FunSpec with Matchers with BeforeAndAfterAll {
+class ActorMetricsSpec extends AnyFunSpec with Matchers with BeforeAndAfterAll {
   implicit val system = ActorSystem("test")
 
   override def afterAll(): Unit = {

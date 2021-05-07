@@ -6,13 +6,15 @@ import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.server.Route.{seal => sealRoute}
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import com.typesafe.config.{Config, ConfigFactory}
-import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
+import org.scalatest.BeforeAndAfterAll
 import spark.jobserver.io.JobDAOActor.GetJobInfo
 import spark.jobserver.io.{InMemoryBinaryDAO, InMemoryMetaDAO, JobDAOActor}
 import spark.jobserver.util.ActorsHealthCheck
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
 
-class HealthzApiSpec extends FunSpec with Matchers with BeforeAndAfterAll
+class HealthzApiSpec extends AnyFunSpec with Matchers with BeforeAndAfterAll
 with ScalatestRouteTest with SprayJsonSupport {
 
   import spray.json._

@@ -1,6 +1,6 @@
 package spark.jobserver.auth
 
-import org.scalatest.{ FunSpecLike, FunSpec, BeforeAndAfter, BeforeAndAfterAll, Matchers }
+import org.scalatest.{ BeforeAndAfter, BeforeAndAfterAll }
 import org.apache.shiro.config.IniSecurityManagerFactory
 import org.apache.shiro.mgt.DefaultSecurityManager
 import org.apache.shiro.mgt.SecurityManager
@@ -12,12 +12,14 @@ import javax.naming.ldap.InitialLdapContext
 import javax.naming.ldap.LdapContext
 import javax.naming._
 import javax.naming.directory._
+import org.scalatest.funspec.AnyFunSpecLike
+import org.scalatest.matchers.should.Matchers
 
 object LdapGroupRealmSpec {
   val memberAttributeName = "memberUid"
 }
 
-class LdapGroupRealmSpec extends FunSpecLike with Matchers {
+class LdapGroupRealmSpec extends AnyFunSpecLike with Matchers {
   import collection.JavaConverters._
 
   private val IniConfig = """
