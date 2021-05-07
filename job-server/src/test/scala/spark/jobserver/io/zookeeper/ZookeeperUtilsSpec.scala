@@ -2,14 +2,16 @@ package spark.jobserver.io.zookeeper
 
 import com.typesafe.config.{Config, ConfigFactory}
 import spark.jobserver.io.{BinaryInfo, BinaryType}
-import org.scalatest.{BeforeAndAfter, FunSpec, Matchers}
+import org.scalatest.BeforeAndAfter
 import spark.jobserver.util.{CuratorTestCluster, JsonProtocols}
 import org.apache.curator.framework.CuratorFramework
 import spark.jobserver.JobServer.InvalidConfiguration
 
 import java.time.ZonedDateTime
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
-class ZookeeperUtilsSpec extends FunSpec with Matchers with BeforeAndAfter {
+class ZookeeperUtilsSpec extends AnyFunSpec with Matchers with BeforeAndAfter {
   private val testServer = new CuratorTestCluster()
 
   def config: Config = ConfigFactory.parseString(

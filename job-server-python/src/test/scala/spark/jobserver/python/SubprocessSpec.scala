@@ -8,12 +8,14 @@ import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.sql.SQLContext
 import org.apache.spark.sql.hive.HiveContext
 import org.apache.spark.{SparkConf, SparkContext}
-import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
+import org.scalatest.BeforeAndAfterAll
 import org.scalatest._
 import spark.jobserver.util.JobserverPy4jGateway
 
 import scala.collection.JavaConverters._
 import scala.sys.process.Process
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
 object SubprocessSpec {
   def getPythonDir(pathRelativeToSubProject: String): String = {
@@ -83,7 +85,7 @@ trait IdentifiedContext {
   def contextType: String
 }
 
-class SubprocessSpec extends FunSpec with Matchers with BeforeAndAfter with BeforeAndAfterAll {
+class SubprocessSpec extends AnyFunSpec with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
   import SubprocessSpec._
   val pythonPathDelimiter : String = if (System.getProperty("os.name").indexOf("Win") >= 0) ";" else ":"

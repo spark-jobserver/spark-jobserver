@@ -1,11 +1,12 @@
 package spark.jobserver.common.akka.web
 
-import org.scalatest.{FunSpec, Matchers}
 import spray.json.JsonParser.ParsingException
 
 import java.time.ZonedDateTime
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
-class JsonUtilsSpec extends FunSpec with Matchers {
+class JsonUtilsSpec extends AnyFunSpec with Matchers {
   import spray.json._
   import spray.json.DefaultJsonProtocol._
 

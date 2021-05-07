@@ -1,15 +1,17 @@
 package spark.jobserver.io
 
 import com.typesafe.config.{Config, ConfigFactory}
-import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
+import org.scalatest.BeforeAndAfterAll
 import spark.jobserver.util.HadoopFSFacade
 import spark.jobserver.JobServer.InvalidConfiguration
 import spark.jobserver.util.HDFSCluster
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
-class HdfsBinaryDAOSpec extends FunSpec with Matchers with BeforeAndAfterAll with HDFSCluster {
+class HdfsBinaryDAOSpec extends AnyFunSpec with Matchers with BeforeAndAfterAll with HDFSCluster {
   private var hdfsDAO: HdfsBinaryDAO = _
   private var testDir: String = _
   private val testFileName = "test_file"

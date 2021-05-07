@@ -8,18 +8,20 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import java.io.File
 import com.google.common.io.Files
 import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
-import org.scalatest.{BeforeAndAfter, FunSpecLike, Matchers}
+import org.scalatest.BeforeAndAfter
 import spark.jobserver.TestJarFinder
 import spark.jobserver.util.{ErrorData, JobserverConfig}
 
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
+import org.scalatest.funspec.AnyFunSpecLike
+import org.scalatest.matchers.should.Matchers
 
 abstract class MetaDataSqlDAOSpecBase {
   def config : Config
 }
 
-class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with FunSpecLike with Matchers
+class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with AnyFunSpecLike with Matchers
   with BeforeAndAfter {
   val df = DateTimeFormatter.ofPattern("yyyyMMdd_hhmmss_SSS")
   override def config: Config = ConfigFactory.load("local.test.metadatasqldao.conf")

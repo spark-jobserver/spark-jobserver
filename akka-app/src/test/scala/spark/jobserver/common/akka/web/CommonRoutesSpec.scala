@@ -3,14 +3,15 @@ package spark.jobserver.common.akka.web
 import java.util.concurrent.TimeUnit
 
 import akka.testkit.TestKit
-import org.scalatest.{FunSpec, Matchers}
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Gauge
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.StatusCodes.OK
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
-class CommonRoutesSpec extends FunSpec with Matchers with ScalatestRouteTest with CommonRoutes {
+class CommonRoutesSpec extends AnyFunSpec with Matchers with ScalatestRouteTest with CommonRoutes {
   def actorRefFactory: ActorSystem = system
 
   val metricCounter = Metrics.newCounter(getClass, "test-counter")

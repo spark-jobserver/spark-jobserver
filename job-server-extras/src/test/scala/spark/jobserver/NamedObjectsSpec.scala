@@ -7,14 +7,16 @@ import org.apache.spark.sql.{Row, SQLContext}
 import org.apache.spark.sql.types._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 import scala.concurrent.duration.{FiniteDuration, _}
+import org.scalatest.funspec.AnyFunSpecLike
+import org.scalatest.matchers.should.Matchers
 
 /**
  * this Spec is a more complex version of the same one in the job-server project,
  * it uses a combination of RDDs and DataFrames instead of just RDDs
  */
-class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with FunSpecLike
+class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with AnyFunSpecLike
     with ImplicitSender with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
   implicit def rddPersister: NamedObjectPersister[NamedRDD[Int]] = new RDDPersister[Int]

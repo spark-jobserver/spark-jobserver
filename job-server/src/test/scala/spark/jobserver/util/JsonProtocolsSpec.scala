@@ -1,7 +1,7 @@
 package spark.jobserver.util
 
 import org.scalatest.BeforeAndAfter
-import org.scalatest.FunSpec
+import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
 import spark.jobserver.io.{BinaryInfo, BinaryType, ContextInfo, JobInfo}
 import spark.jobserver.util.JsonProtocols._
@@ -10,7 +10,7 @@ import spray.json._
 import java.time.{ZoneId, ZonedDateTime}
 import java.util.TimeZone
 
-class JsonProtocolsSpec extends FunSpec with Matchers with BeforeAndAfter {
+class JsonProtocolsSpec extends AnyFunSpec with Matchers with BeforeAndAfter {
 
   /*
    * Test data

@@ -7,7 +7,7 @@ import akka.cluster.{Cluster, ClusterEvent, MemberStatus}
 import akka.pattern.ask
 import akka.util.Timeout
 import akka.testkit.{TestActor, TestKit, TestProbe}
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 
 import java.nio.file.{Files, Path}
 import scala.concurrent.duration._
@@ -25,12 +25,14 @@ import com.typesafe.config.Config
 
 import java.time.{Instant, LocalDateTime, ZoneId, ZonedDateTime}
 import java.time.format.DateTimeFormatter
+import org.scalatest.funspec.AnyFunSpecLike
+import org.scalatest.matchers.should.Matchers
 
 object JobServerSpec {
   val system = ActorSystem("test")
 }
 
-class JobServerSpec extends TestKit(JobServerSpec.system) with FunSpecLike with Matchers
+class JobServerSpec extends TestKit(JobServerSpec.system) with AnyFunSpecLike with Matchers
     with BeforeAndAfter with BeforeAndAfterAll {
 
   import com.typesafe.config._

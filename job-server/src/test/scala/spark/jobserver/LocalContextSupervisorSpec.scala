@@ -3,13 +3,15 @@ package spark.jobserver
 import akka.actor._
 import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import com.typesafe.config.{ConfigFactory, ConfigValueFactory}
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 import spark.jobserver.common.akka
 import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.io.JobDAOActor.CleanContextJobInfos
 import spark.jobserver.util.SparkJobUtils
 
 import scala.concurrent.duration._
+import org.scalatest.funspec.AnyFunSpecLike
+import org.scalatest.matchers.should.Matchers
 
 
 object LocalContextSupervisorSpec {
@@ -53,7 +55,7 @@ object LocalContextSupervisorSpec {
 }
 
 class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.system) with ImplicitSender
-    with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
+    with AnyFunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
   override def afterAll() {
     AkkaTestUtils.shutdownAndWait(LocalContextSupervisorSpec.system)

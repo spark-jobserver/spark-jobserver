@@ -7,17 +7,19 @@ import akka.testkit.TestKit
 import com.typesafe.config.{Config, ConfigFactory}
 
 import collection.JavaConverters._
-import org.scalatest.{BeforeAndAfterAll, FunSpecLike, Matchers}
+import org.scalatest.BeforeAndAfterAll
 import spark.jobserver.io.ContextInfo
 
 import java.time.ZonedDateTime
+import org.scalatest.funspec.AnyFunSpecLike
+import org.scalatest.matchers.should.Matchers
 
 object ForcefulKillSpec {
   val PRIMARY_MASTER = 0
   val SECONDARY_MASTER = 1
 }
 
-class ForcefulKillSpec extends TestKit(ActorSystem("test")) with FunSpecLike
+class ForcefulKillSpec extends TestKit(ActorSystem("test")) with AnyFunSpecLike
   with Matchers with BeforeAndAfterAll {
 
   override def afterAll(): Unit = {

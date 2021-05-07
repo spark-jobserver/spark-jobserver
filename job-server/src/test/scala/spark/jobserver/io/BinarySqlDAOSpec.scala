@@ -1,17 +1,19 @@
 package spark.jobserver.io
 
 import com.typesafe.config.{Config, ConfigFactory}
-import org.scalatest.{BeforeAndAfter, FunSpecLike, Matchers}
+import org.scalatest.BeforeAndAfter
 import spark.jobserver.TestJarFinder
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
+import org.scalatest.funspec.AnyFunSpecLike
+import org.scalatest.matchers.should.Matchers
 
 abstract class BinarySqlDAOSpecBase {
   def config : Config
 }
 
-class BinarySqlDAOSpec extends  BinarySqlDAOSpecBase with TestJarFinder with FunSpecLike with Matchers
+class BinarySqlDAOSpec extends  BinarySqlDAOSpecBase with TestJarFinder with AnyFunSpecLike with Matchers
   with BeforeAndAfter {
   override def config: Config = ConfigFactory.load("local.test.binarysqldao.conf")
   private val timeout = 60 seconds
