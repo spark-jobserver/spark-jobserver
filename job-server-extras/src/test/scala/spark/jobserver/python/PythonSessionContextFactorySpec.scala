@@ -1,7 +1,7 @@
 package spark.jobserver.python
 
 import com.typesafe.config.{Config, ConfigFactory}
-import org.scalatest.{BeforeAndAfter, FunSpec, Matchers}
+import org.scalatest.BeforeAndAfter
 import java.nio.file.Files
 import java.nio.file.Paths
 
@@ -13,6 +13,8 @@ import spark.jobserver.util.{JobserverConfig, SparkJobUtils}
 
 import scala.collection.JavaConverters._
 import org.scalatest._
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
 object PythonSessionContextFactorySpec {
 
@@ -58,7 +60,7 @@ class TestPythonSessionContextFactory extends PythonSessionContextFactory {
   }
 }
 
-class PythonSessionContextFactorySpec extends FunSpec with Matchers with BeforeAndAfter
+class PythonSessionContextFactorySpec extends AnyFunSpec with Matchers with BeforeAndAfter
 with BeforeAndAfterAll {
   import PythonSparkContextFactorySpec._
 

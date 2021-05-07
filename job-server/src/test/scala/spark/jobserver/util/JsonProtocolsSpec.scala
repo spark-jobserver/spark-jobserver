@@ -1,8 +1,6 @@
 package spark.jobserver.util
 
 import org.scalatest.BeforeAndAfter
-import org.scalatest.FunSpec
-import org.scalatest.Matchers
 import spark.jobserver.io.BinaryInfo
 import spark.jobserver.io.BinaryType
 import spark.jobserver.io.JobInfo
@@ -14,8 +12,10 @@ import spark.jobserver.io.ContextInfo
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
-class JsonProtocolsSpec extends FunSpec with Matchers with BeforeAndAfter {
+class JsonProtocolsSpec extends AnyFunSpec with Matchers with BeforeAndAfter {
 
   /*
    * Test data

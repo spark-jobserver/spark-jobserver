@@ -3,16 +3,16 @@ package spark.jobserver.io.zookeeper
 import scala.concurrent.Await
 import scala.concurrent.duration.DurationInt
 import org.scalatest.BeforeAndAfter
-import org.scalatest.FunSpecLike
-import org.scalatest.Matchers
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import spark.jobserver.io._
 import spark.jobserver.util.{CuratorTestCluster, NoCorrespondingContextAliveException, Utils, ZKCleanup}
 
 import java.time.{Instant, ZoneId, ZonedDateTime}
+import org.scalatest.funspec.AnyFunSpecLike
+import org.scalatest.matchers.should.Matchers
 
-class DAOCleanupSpec extends FunSpecLike with Matchers with BeforeAndAfter {
+class DAOCleanupSpec extends AnyFunSpecLike with Matchers with BeforeAndAfter {
 
   /*
    * Setup

@@ -2,9 +2,10 @@ package spark.jobserver.util
 
 import com.typesafe.config.ConfigFactory
 import org.apache.spark.SparkConf
-import org.scalatest.{Matchers, FunSpec}
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
-class SparkJobUtilsSpec extends FunSpec with Matchers {
+class SparkJobUtilsSpec extends AnyFunSpec with Matchers {
   import collection.JavaConverters._
 
   val config = ConfigFactory.parseMap(Map(

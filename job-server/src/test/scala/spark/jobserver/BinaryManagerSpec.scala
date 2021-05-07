@@ -4,12 +4,14 @@ import scala.concurrent.duration._
 import scala.util.{Failure, Success}
 import akka.actor.{ActorSystem, Props}
 import akka.testkit.{ImplicitSender, TestKit}
-import org.scalatest.{BeforeAndAfterAll, FunSpecLike, Matchers}
+import org.scalatest.BeforeAndAfterAll
 import spark.jobserver.common.akka.{AkkaTestUtils, InstrumentedActor}
 import spark.jobserver.io.{BinaryInfo, BinaryType, JobInfo, JobStatus}
 import spark.jobserver.io.JobDAOActor.LastBinaryInfo
 
 import java.time.ZonedDateTime
+import org.scalatest.funspec.AnyFunSpecLike
+import org.scalatest.matchers.should.Matchers
 
 object BinaryManagerSpec {
   val system = ActorSystem("binary-manager-test")
@@ -56,7 +58,7 @@ object BinaryManagerSpec {
 }
 
 class BinaryManagerSpec extends TestKit(BinaryManagerSpec.system) with ImplicitSender
-  with FunSpecLike with Matchers with BeforeAndAfterAll {
+  with AnyFunSpecLike with Matchers with BeforeAndAfterAll {
 
   import spark.jobserver.BinaryManagerSpec._
 

@@ -3,15 +3,16 @@ package spark.jobserver.util
 import akka.http.scaladsl.model.Uri
 
 import java.io.File
-import org.scalatest.{FunSpecLike, Matchers}
 import spark.jobserver.JobManagerActor.StartJob
 import spark.jobserver.CommonMessages.{JobErroredOut, JobValidationFailed}
 import com.typesafe.config._
 import spark.jobserver.io.{BinaryInfo, BinaryType}
 
 import java.time.ZonedDateTime
+import org.scalatest.funspec.AnyFunSpecLike
+import org.scalatest.matchers.should.Matchers
 
-class StartJobSerializerSpec extends FunSpecLike with Matchers {
+class StartJobSerializerSpec extends AnyFunSpecLike with Matchers {
 
   val binInfo: BinaryInfo = BinaryInfo("name", BinaryType.Jar, ZonedDateTime.now(), None)
 

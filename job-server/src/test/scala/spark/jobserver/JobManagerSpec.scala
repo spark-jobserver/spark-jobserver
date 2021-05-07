@@ -9,11 +9,13 @@ import akka.cluster.Cluster
 import akka.cluster.ClusterEvent.{InitialStateAsEvents, MemberUp}
 import akka.util.Timeout
 import com.google.common.net.InetAddresses
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 
 import scala.concurrent.Await
 import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.util.HDFSCluster
+import org.scalatest.funspec.AnyFunSpecLike
+import org.scalatest.matchers.should.Matchers
 
 sealed case class JVMExitException(status: Int) extends SecurityException("sys.exit() is not allowed") {
 }
@@ -29,7 +31,7 @@ sealed class NoExitSecurityManager extends SecurityManager {
   }
 }
 
-class JobManagerSpec extends FunSpecLike with Matchers with BeforeAndAfter
+class JobManagerSpec extends AnyFunSpecLike with Matchers with BeforeAndAfter
     with BeforeAndAfterAll with HDFSCluster {
 
   import akka.testkit._

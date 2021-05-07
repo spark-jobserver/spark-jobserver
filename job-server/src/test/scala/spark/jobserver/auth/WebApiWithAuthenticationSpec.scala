@@ -10,7 +10,7 @@ import akka.http.scaladsl.server.Route.{seal => sealRoute}
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import akka.testkit.TestKit
 import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
-import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
+import org.scalatest.BeforeAndAfterAll
 import spark.jobserver._
 import spark.jobserver.auth.SJSAccessControl.Challenge
 import spark.jobserver.io.JobDAOActor.GetJobInfo
@@ -21,11 +21,13 @@ import java.time.{Instant, ZoneId, ZonedDateTime}
 import scala.collection.mutable.SynchronizedSet
 import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
 // Tests authorization only, actual responses are tested elsewhere
 // Does NOT test underlying Supervisor / JarManager functionality
 // HttpService trait is needed for the seal() which wraps exception handling
-class WebApiWithAuthenticationSpec extends FunSpec with Matchers with BeforeAndAfterAll
+class WebApiWithAuthenticationSpec extends AnyFunSpec with Matchers with BeforeAndAfterAll
     with ScalatestRouteTest with SprayJsonSupport{
   import spray.json._
   import DefaultJsonProtocol._

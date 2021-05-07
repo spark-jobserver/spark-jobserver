@@ -1,14 +1,16 @@
 package spark.jobserver.util
 
-import org.scalatest.{ Matchers, FunSpec, BeforeAndAfter}
+import org.scalatest.BeforeAndAfter
 import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.commons.collections.map.MultiValueMap
 import scala.collection.mutable.HashMap
 import collection.JavaConverters._
 import java.io.File
 import org.apache.spark.launcher.{SparkLauncher, SparkAppHandle}
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
-class ManagerLauncherSpec extends FunSpec with Matchers with BeforeAndAfter with HDFSCluster {
+class ManagerLauncherSpec extends AnyFunSpec with Matchers with BeforeAndAfter with HDFSCluster {
     val stubbedSparkLauncher = new StubbedSparkLauncher()
     val environment = new InMemoryEnvironment
 
