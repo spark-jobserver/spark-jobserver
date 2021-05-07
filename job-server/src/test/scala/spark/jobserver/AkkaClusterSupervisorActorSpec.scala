@@ -183,10 +183,9 @@ class StubbedJobManagerActor(contextConfig: Config) extends Actor {
   var contextName: String = _
   var stopAttemptCount: Int = 0
   def receive: Receive = {
-    case JobManagerActor.Initialize(contextConfig, _, _) =>
+    case JobManagerActor.Initialize(contextConfig, _) =>
       contextName = contextConfig.getString("context.name")
-      val resultActor = context.system.actorOf(Props(classOf[JobResultActor]))
-      sender() ! JobManagerActor.Initialized(contextConfig.getString("context.name"), resultActor)
+      sender() ! JobManagerActor.Initialized(contextConfig.getString("context.name"))
     case JobManagerActor.GetContexData =>
       val appId = Try(contextConfig.getString("manager.context.appId")).getOrElse("")
       val webUiUrl = Try(contextConfig.getString("manager.context.webUiUrl")).getOrElse("")
@@ -762,14 +761,6 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       expectMsg(Seq(contextName)) // Restarting context
     }
 
-    it("should return valid result actor") {
-      supervisor ! AddContext("test-context10", contextConfig)
-      expectMsg(contextInitTimeout, ContextInitialized)
-
-      supervisor ! GetResultActor("test-context10")
-      expectMsgClass(classOf[ActorRef])
-    }
-
     it("should return NoSuchContext if context is not available for GetSparkContextInfo") {
       supervisor ! GetSparkContexData("dummy-name")
       expectMsg(NoSuchContext)
@@ -1024,7 +1015,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       managerProbe.setAutoPilot(new TestActor.AutoPilot {
         def run(sender: ActorRef, msg: Any): TestActor.AutoPilot = {
           msg match {
-            case Initialize(_, _, _) => sender ! JobManagerActor.InitError(new Throwable)
+            case Initialize(_, _) => sender ! JobManagerActor.InitError(new Throwable)
           }
           TestActor.KeepRunning
         }
@@ -1048,7 +1039,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       managerProbe.setAutoPilot(new TestActor.AutoPilot {
         def run(sender: ActorRef, msg: Any): TestActor.AutoPilot = {
           msg match {
-            case Initialize(_, _, _) => sender ! Initialized("", TestProbe().ref)
+            case Initialize(_, _) => sender ! Initialized("")
             case RestartExistingJobs =>
           }
           TestActor.KeepRunning
@@ -1075,7 +1066,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       managerProbe.setAutoPilot(new TestActor.AutoPilot {
         def run(sender: ActorRef, msg: Any): TestActor.AutoPilot = {
           msg match {
-            case Initialize(_, _, _) =>
+            case Initialize(_, _) =>
           }
           TestActor.KeepRunning
         }

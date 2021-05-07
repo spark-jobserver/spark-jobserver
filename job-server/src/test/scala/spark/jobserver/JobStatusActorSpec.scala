@@ -56,7 +56,6 @@ with AnyFunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
     daoActor = daoProbe.ref
     actor = system.actorOf(Props(classOf[JobStatusActor], daoActor))
-    receiver = system.actorOf(Props[JobResultActor])
   }
 
   after {
@@ -68,11 +67,6 @@ with AnyFunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
       actor ! GetRunningJobStatus
       daoMsgReceiverProbe.expectNoMessage()
       expectMsg(Seq.empty)
-    }
-
-    it("should return error if non-existing job is unsubscribed") {
-      actor ! Unsubscribe(jobId, receiver)
-      expectMsg(NoSuchJobId)
     }
 
     it("should not initialize a job more than two times") {

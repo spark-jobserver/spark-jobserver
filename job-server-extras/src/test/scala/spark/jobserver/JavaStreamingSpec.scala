@@ -43,7 +43,7 @@ class JavaStreamingSpec extends ExtrasJobSpecBase(JavaStreamingSpec.getNewSystem
 
   describe("Running Java based Streaming Jobs") {
     it("Should return Correct results") {
-      manager ! JobManagerActor.Initialize(cfg, None, emptyActor)
+      manager ! JobManagerActor.Initialize(cfg, emptyActor)
       expectMsgClass(10 seconds, classOf[JobManagerActor.Initialized])
 
       val binInfo = uploadTestJar()

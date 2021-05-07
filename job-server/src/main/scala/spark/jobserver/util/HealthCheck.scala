@@ -30,13 +30,8 @@ class ActorsHealthCheck(supervisor: ActorRef, daoActor: ActorRef)
       implicit val duration: Timeout = 30 seconds
       val supervisorFuture = (supervisor ? GetContext("dummycontext")).mapTo[NoSuchContext.type]
       val jobDaoFuture = (daoActor ? GetJobInfos(1, None)).mapTo[JobInfos]
-      val jobResultFuture = (for {
-        resultActor <- (supervisor ? GetResultActor("getDefaultGlobalActor")).mapTo[ActorRef]
-        result <- resultActor ? spark.jobserver.CommonMessages.GetJobResult("dummyjobid")
-      } yield result).mapTo[NoSuchJobId.type]
 
-
-      val listOfFutures = Seq(supervisorFuture, jobDaoFuture, jobResultFuture)
+      val listOfFutures = Seq(supervisorFuture, jobDaoFuture)
       val futureOfList = Future.sequence(listOfFutures)
       try {
         val results = Await.result(futureOfList, 60 seconds)

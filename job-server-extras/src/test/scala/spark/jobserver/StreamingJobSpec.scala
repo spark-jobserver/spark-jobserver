@@ -64,7 +64,7 @@ class StreamingJobSpec extends JobSpecBase(StreamingJobSpec.getNewSystem) {
       val deathWatcher = TestProbe()
       deathWatcher.watch(manager)
 
-      manager ! JobManagerActor.Initialize(cfg, None, emptyActor)
+      manager ! JobManagerActor.Initialize(cfg, emptyActor)
       expectMsgClass(10 seconds, classOf[JobManagerActor.Initialized])
       val testBinInfo = uploadTestJar()
       manager ! JobManagerActor.StartJob(
@@ -100,7 +100,7 @@ class StreamingJobSpec extends JobSpecBase(StreamingJobSpec.getNewSystem) {
         |streaming.test.job.printCount = true
       """.stripMargin.replace("\n", ""))
 
-      manager ! JobManagerActor.Initialize(cfgWithGracefulShutdown, None, emptyActor)
+      manager ! JobManagerActor.Initialize(cfgWithGracefulShutdown, emptyActor)
       expectMsgClass(10 seconds, classOf[JobManagerActor.Initialized])
       val testBinInfo = uploadTestJar()
 
@@ -165,7 +165,7 @@ class StreamingJobSpec extends JobSpecBase(StreamingJobSpec.getNewSystem) {
   }
 
   private def triggerFailingStreamingJob(ctxConfig: Config): Unit = {
-    manager ! JobManagerActor.Initialize(ctxConfig, None, emptyActor)
+    manager ! JobManagerActor.Initialize(ctxConfig, emptyActor)
     expectMsgClass(10 seconds, classOf[JobManagerActor.Initialized])
     val testBinInfo = uploadTestJar()
 

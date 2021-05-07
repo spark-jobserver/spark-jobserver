@@ -7,7 +7,7 @@ import com.typesafe.config.{Config, ConfigFactory}
 
 import scala.concurrent.Await
 import spark.jobserver._
-import spark.jobserver.io.JobDAOActor.{GetLastBinaryInfo, LastBinaryInfo, SaveBinary}
+import spark.jobserver.io.JobDAOActor.{GetLastBinaryInfo, JobResult, LastBinaryInfo, SaveBinary}
 import spark.jobserver.io.{BinaryInfo, BinaryType, InMemoryBinaryDAO, InMemoryMetaDAO, JobDAOActor}
 import spark.jobserver.util.JobserverTimeouts
 
@@ -22,9 +22,7 @@ import java.time.ZonedDateTime
  */
 object SingleContextJobStress extends App with TestJarFinder {
 
-  import CommonMessages.JobResult
   import JobManagerActor._
-  import scala.collection.JavaConverters._
   import scala.concurrent.duration._
   val jobDaoPrefix = "target/scala-" + version + "/jobserver/"
   val config = ConfigFactory.parseString("""
@@ -70,7 +68,7 @@ object SingleContextJobStress extends App with TestJarFinder {
   while (true) {
     val f = jobManager ? StartJob(demoJarClass, Seq(testBinInfo), emptyConfig, Set(classOf[JobResult]))
     Await.result(f, 3 seconds) match {
-      case JobResult(info, Some(m)) =>
+      case JobResult(Some(m)) =>
         numJobs += 1
         if (numJobs % 100 == 0) {
           val elapsed = System.currentTimeMillis() - startTime
