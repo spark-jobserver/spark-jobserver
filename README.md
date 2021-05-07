@@ -36,10 +36,10 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
   - [HTTPS / SSL Configuration](#https--ssl-configuration)
     - [Server authentication](#server-authentication)
     - [Client authentication](#client-authentication)
-  - [Access control](#access-control)
-    - [Shiro](#shiro-authentication)
-    - [Keycloak](#keycloak-authentication)
-  - [User authorization](#user-authorization)
+  - [Access Control](#access-control)
+    - [Shiro Authentication](#shiro-authentication)
+    - [Keycloak Authentication](#keycloak-authentication)
+  - [User Authorization](#user-authorization)
 - [Deployment](#deployment)
   - [Manual steps](#manual-steps)
   - [Context per JVM](#context-per-jvm)
@@ -115,23 +115,21 @@ Spark Job Server is included in Datastax Enterprise!
 
 ## Version Information
 
-| Version     | Spark Version |
-|-------------|---------------|
-| 0.3.1       | 0.9.1         |
-| 0.4.0       | 1.0.2         |
-| 0.4.1       | 1.1.0         |
-| 0.5.0       | 1.2.0         |
-| 0.5.1       | 1.3.0         |
-| 0.5.2       | 1.3.1         |
-| 0.6.0       | 1.4.1         |
-| 0.6.1       | 1.5.2         |
-| 0.6.2       | 1.6.1         |
-| 0.7.0       | 1.6.2         |
-| 0.8.0       | 2.2.0         |
-| 0.9.0       | 2.2.0         |
-| 0.10.0      | 2.4.4         |
+| Version     | Spark Version | Scala Version |
+|-------------|---------------|---------------|
+| 0.10.2      | 2.4.4         | 2.11          |
+| 0.11.1      | 2.4.4         | 2.11, 2.12    |
 
 For release notes, look in the `notes/` directory.
+
+[Due to the sunset of Bintray](https://jfrog.com/blog/into-the-sunset-bintray-jcenter-gocenter-and-chartcenter/) all previous release binaries were deleted. Jobserver had to migrate to JFrog Platform and only recent releases are available there.
+To use Spark Jobserver in your SBT project please include the following resolver in you `build.sbt` file:
+
+```scala
+resolvers += "Artifactory" at "https://sparkjobserver.jfrog.io/artifactory/jobserver/"
+```
+
+Check [Creating a project manually assuming that you already have sbt project structure](#creating-a-project-manually-assuming-that-you-already-have-sbt-project-structure) for more information.
 
 If you need non-released jars, please visit [Jitpack](https://jitpack.io) - they provide non-release jar builds for any Git repo.  :)
 
@@ -314,11 +312,11 @@ In your `build.sbt`, add this to use the job server jar:
 
         resolvers += "Artifactory" at "https://sparkjobserver.jfrog.io/artifactory/jobserver/"
 
-        libraryDependencies += "spark.jobserver" %% "job-server-api" % "0.8.0" % "provided"
+        libraryDependencies += "spark.jobserver" %% "job-server-api" % "0.11.1" % "provided"
 
 If a SQL or Hive job/context is desired, you also want to pull in `job-server-extras`:
 
-    libraryDependencies += "spark.jobserver" %% "job-server-extras" % "0.8.0" % "provided"
+    libraryDependencies += "spark.jobserver" %% "job-server-extras" % "0.11.1" % "provided"
 
 For most use cases it's better to have the dependencies be "provided" because you don't want SBT assembly to include the whole job server jar.
 
