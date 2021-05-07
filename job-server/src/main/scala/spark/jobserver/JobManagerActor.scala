@@ -27,15 +27,14 @@ import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 import scala.concurrent.duration._
 import org.spark_project.guava.annotations.VisibleForTesting
-import spark.jobserver.io.JobDAOActor.{BinaryInfosForCp, BinaryNotFound, GetBinaryInfosForCpFailed}
+import spark.jobserver.io.JobDAOActor._
 
 import java.time.ZonedDateTime
 
 object JobManagerActor {
   // Messages
   sealed trait ContextStopSchedule
-  case class Initialize(contextConfig: Config, resultActorOpt: Option[ActorRef],
-                        dataFileActor: ActorRef)
+  case class Initialize(contextConfig: Config, dataFileActor: ActorRef)
   case class StartJob(mainClass: String, cp: Seq[BinaryInfo], config: Config,
                       subscribedEvents: Set[Class[_]], existingJobInfo: Option[JobInfo] = None,
                       callbackUrl: Option[Uri] = None)
@@ -57,7 +56,7 @@ object JobManagerActor {
 
   // Results/Data
   case class ContextConfig(contextName: String, contextConfig: SparkConf, hadoopConfig: Configuration)
-  case class Initialized(contextName: String, resultActor: ActorRef)
+  case class Initialized(contextName: String)
   case class InitError(t: Throwable)
   case class JobLoadingError(err: Throwable)
   case class ContexData(appId: String, url: Option[String])
@@ -75,8 +74,6 @@ object JobManagerActor {
 /**
  * The JobManager actor supervises jobs running in a single SparkContext, as well as shared metadata.
  * It creates a SparkContext (or a StreamingContext etc. depending on the factory class)
- * It also creates and supervises a JobResultActor and JobStatusActor, although an existing JobResultActor
- * can be passed in as well.
  *
  * == contextConfig ==
  * {{{
@@ -136,8 +133,6 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
   private var stopContextSenderAndHandler: (Option[ActorRef], Option[Cancellable]) = (None, None)
   @VisibleForTesting
   protected var statusActor: ActorRef = _
-  @VisibleForTesting
-  protected var resultActor: ActorRef = _
   private var factory: SparkContextFactory = _
   private var remoteFileCache: RemoteFileCache = _
   @VisibleForTesting
@@ -332,7 +327,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
            s" Killing myself (${self.path.address.toString})!")
         self ! PoisonPill
 
-    case Initialize(ctxConfig, resOpt, dataManagerActor) =>
+    case Initialize(ctxConfig, dataManagerActor) =>
       if (isKillingContextOnUnresponsiveSupervisorEnabled()) {
         logger.info("Initialize message received from master, stopping the timer.")
         context.setReceiveTimeout(Duration.Undefined) // Deactivate receive timeout
@@ -343,7 +338,6 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
       contextName = contextConfig.getString("context.name")
       isAdHoc = Try(contextConfig.getBoolean("is-adhoc")).getOrElse(false)
       statusActor = context.actorOf(JobStatusActor.props(daoActor), JobStatusActor.NAME)
-      resultActor = resOpt.getOrElse(context.actorOf(Props[JobResultActor]))
       remoteFileCache = new RemoteFileCache(self, dataManagerActor)
 
       try {
@@ -379,7 +373,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
         classPathURIs.foreach{
           jarURI => jobContext.sparkContext.addJar(jarURI)
         }
-        sender ! Initialized(contextName, resultActor)
+        sender ! Initialized(contextName)
       } catch {
         case ex: MalformedURLException =>
           logger.error(s"Couldn't add URI to class loader for context $contextName; shutting down actor", ex)
@@ -580,7 +574,6 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
     }
 
     // Automatically subscribe the sender to events so it starts getting them right away
-    resultActor ! Subscribe(jobId, subscriber, events)
     statusActor ! Subscribe(jobId, subscriber, events)
 
     val jobInfo = JobInfo(jobId, contextId, contextName, mainClass,
@@ -653,16 +646,19 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
       }
     }(executionContext).andThen {
       case Success(result) =>
-        // TODO: If the result is Stream[_] and this is running with context-per-jvm=true configuration
-        // serializing a Stream[_] blob across process boundaries is not desirable.
-        // In that scenario an enhancement is required here to chunk stream results back.
-        // Something like ChunkedJobResultStart, ChunkJobResultMessage, and ChunkJobResultEnd messages
-        // might be a better way to send results back and then on the other side use chunked encoding
-        // transfer to send the chunks back. Alternatively the stream could be persisted here to HDFS
-        // and the streamed out of InputStream on the other side.
-        // Either way an enhancement would be required here to make Stream[_] responses work
-        // with context-per-jvm=true configuration
-        resultActor ! JobResult(jobId, result)
+        try {
+          // not waiting may cause an empty result for POST /jobs..&sync=true
+          val future = (daoActor ? SaveJobResult(jobId, result))(daoAskTimeout)
+          Await.result(future, daoAskTimeout.duration) match {
+            case SavedSuccessfully =>
+            case SaveFailed(e: Throwable) =>
+              logger.error(s"Couldn't save job result: ${e}")
+          }
+        } catch {
+          case e: Throwable => {
+            logger.error(s"Got exception while trying to save job result:  ${e}")
+          }
+        }
         statusActor ! JobFinished(jobId, ZonedDateTime.now())
         callbackHandler.success(jobInfo, result)
       case Failure(wrapped: Throwable) =>
@@ -678,7 +674,6 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
         // Make sure to decrement the count of running jobs when a job finishes, in both success and failure
         // cases.
         currentRunningJobs.getAndDecrement()
-        resultActor ! Unsubscribe(jobId, subscriber)
         statusActor ! Unsubscribe(jobId, subscriber)
         postEachJob()
     }(executionContext)

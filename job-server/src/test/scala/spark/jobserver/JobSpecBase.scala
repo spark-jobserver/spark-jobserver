@@ -7,7 +7,7 @@ import com.typesafe.config.{Config, ConfigFactory}
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.context.DefaultSparkContextFactory
-import spark.jobserver.io.JobDAOActor.{GetLastBinaryInfo, LastBinaryInfo, SaveBinary, SaveBinaryResult}
+import spark.jobserver.io.JobDAOActor._
 import spark.jobserver.io.{BinaryDAO, BinaryInfo, BinaryType, MetaDataDAO}
 import spark.jobserver.util.JobserverConfig
 

@@ -251,7 +251,7 @@ class WebApiMainRoutesSpec extends WebApiSpec with ScalatestRouteTest {
           sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, Any]] should be (Map(
-          JobId -> "foo",
+          JobId -> "tba", // FIXME: correct job id? Should be fixed with sync endpoint
           ResultKey -> Map(
             masterConfKey->"overriden",
             bindConfKey -> bindConfVal,
@@ -269,7 +269,7 @@ class WebApiMainRoutesSpec extends WebApiSpec with ScalatestRouteTest {
         sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, Any]] should be (Map(
-          JobId -> "foo",
+          JobId -> "tba", // FIXME: correct job id? Should be fixed with sync endpoint
           ResultKey -> Map(
             masterConfKey-> masterConfVal,
             bindConfKey -> bindConfVal,
@@ -287,7 +287,7 @@ class WebApiMainRoutesSpec extends WebApiSpec with ScalatestRouteTest {
         sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, Any]] should be (Map(
-          JobId -> "multi",
+          JobId -> "tba", // FIXME: correct job id? Should be fixed with sync endpoint
           ResultKey -> Map(
             masterConfKey-> masterConfVal,
             bindConfKey -> bindConfVal,
@@ -370,7 +370,7 @@ class WebApiMainRoutesSpec extends WebApiSpec with ScalatestRouteTest {
         sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, Any]] should be (Map(
-          JobId -> "foo",
+          JobId -> "tba", // FIXME: correct job id? Should be fixed with sync endpoint
           ResultKey -> Map(
             masterConfKey -> masterConfVal,
             bindConfKey -> bindConfVal,
@@ -398,7 +398,7 @@ class WebApiMainRoutesSpec extends WebApiSpec with ScalatestRouteTest {
         sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, Any]] should be (Map(
-          JobId -> "foo",
+          JobId -> "tba", // FIXME: correct job id? Should be fixed with sync endpoint
           ResultKey -> Map(
             masterConfKey -> masterConfVal,
             bindConfKey -> bindConfVal,
@@ -455,7 +455,7 @@ class WebApiMainRoutesSpec extends WebApiSpec with ScalatestRouteTest {
       }
     }
 
-    it("should return json without result if result actor fails to return or job is not in cache") {
+    it("should return json without result if no job result was returned") {
       Get("/jobs/fail_to_fetch_result") ~> sealRoute(routes) ~> check {
         status should be (OK)
         responseAs[Map[String, String]] should be (Map(

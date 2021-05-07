@@ -13,7 +13,7 @@ import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import org.scalatest.BeforeAndAfterAll
 import spark.jobserver._
 import spark.jobserver.auth.SJSAccessControl.Challenge
-import spark.jobserver.io.JobDAOActor.GetJobInfo
+import spark.jobserver.io.JobDAOActor.{GetJobInfo, GetJobResult, JobResult}
 import spark.jobserver.io.{BinaryInfo, BinaryType, JobInfo, JobStatus}
 import spark.jobserver.util.SparkJobUtils
 
@@ -132,7 +132,7 @@ class WebApiWithAuthenticationSpec extends AnyFunSpec with Matchers with BeforeA
     def receive: PartialFunction[Any, Unit] = {
       case ListBinaries(_) => sender ! Map()
       case GetJobInfo(id) => sender ! Some(jobInfo)
-      case GetJobResult(id) => sender ! JobResult(id, id + "!!!")
+      case GetJobResult(id) => sender ! JobResult(id + "!!!")
       case ContextSupervisor.ListContexts => sender ! addedContexts.toSeq
       case ContextSupervisor.AddContext(name, _) =>
         if (addedContexts.contains(name)) {

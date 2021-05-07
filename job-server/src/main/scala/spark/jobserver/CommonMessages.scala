@@ -19,13 +19,6 @@ object CommonMessages {
   case class JobKilled(jobId: String, endTime: ZonedDateTime) extends StatusMessage
   case class JobRestartFailed(jobId: String, err: Throwable) extends StatusMessage
 
-  /**
-   * NOTE: For Subscribe, make sure to use `classOf[]` to get the Class for the case classes above.
-   * Otherwise, `.getClass` will get the `java.lang.Class` of the companion object.
-   */
-  case class GetJobResult(jobId: String)
-  case class JobResult(jobId: String, result: Any)
-
   case class Subscribe(jobId: String, receiver: ActorRef, events: Set[Class[_]]) {
     require(events.nonEmpty, "Must subscribe to at least one type of event!")
   }

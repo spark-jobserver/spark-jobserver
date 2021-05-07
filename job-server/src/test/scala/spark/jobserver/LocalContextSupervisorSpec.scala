@@ -99,7 +99,7 @@ class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.syst
     it("should create adhoc context") {
       supervisor ! StartAdHocContext("spark.jobserver.SleepJob", contextConfig)
       expectMsgPF(10 seconds, "manager and result actors") {
-        case (manager: ActorRef, resultActor: ActorRef) =>
+        case (manager: ActorRef) =>
           assert(manager.path.name.endsWith("spark.jobserver.SleepJob"))
       }
     }
@@ -110,7 +110,7 @@ class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.syst
           SparkJobUtils.SPARK_PROXY_USER_PARAM,
           ConfigValueFactory.fromAnyRef("userName")))
       expectMsgPF(10 seconds, "manager and result actors") {
-        case (manager: ActorRef, resultActor: ActorRef) =>
+        case (manager: ActorRef) =>
           assert(manager.path.name.startsWith("userName" + SparkJobUtils.NameContextDelimiter))
           assert(manager.path.name.endsWith("spark.jobserver.SleepJob"))
       }
@@ -125,9 +125,6 @@ class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.syst
       expectMsg(ContextInitialized)
       supervisor ! ListContexts
       expectMsg(Seq("c1", "c2"))
-      supervisor ! GetResultActor("c1")
-      val rActor = expectMsgClass(classOf[ActorRef])
-      rActor.path.toString should not include "global"
     }
 
     it("should be able to get context configs") {
