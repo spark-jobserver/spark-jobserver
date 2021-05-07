@@ -29,7 +29,6 @@ object ContextSupervisor {
   case class AddContext(name: String, contextConfig: Config)
   case class StartAdHocContext(mainClass: String, contextConfig: Config)
   case class GetContext(name: String) // returns JobManager, JobResultActor
-  case class GetResultActor(name: String)  // returns JobResultActor
   case class StopContext(name: String, force: Boolean = false)
   case class GetSparkContexData(name: String)
   case class RestartOfTerminatedJobsFailed(contextId: String)
@@ -92,11 +91,7 @@ class LocalContextSupervisorActor(dao: ActorRef, dataManagerActor: ActorRef) ext
   val contextDeletionTimeout = SparkJobUtils.getContextDeletionTimeout(config)
   import context.dispatcher   // to get ExecutionContext for futures
 
-  private val contexts = mutable.HashMap.empty[String, (ActorRef, ActorRef)]
-
-  // This is for capturing results for ad-hoc jobs. Otherwise when ad-hoc job dies, resultActor also dies,
-  // and there is no way to retrieve results.
-  val globalResultActor = context.actorOf(Props[JobResultActor], "global-result-actor")
+  private val contexts = mutable.HashMap.empty[String, ActorRef]
 
   def wrappedReceive: Receive = {
     case AddContextsFromConfig =>
@@ -107,7 +102,7 @@ class LocalContextSupervisorActor(dao: ActorRef, dataManagerActor: ActorRef) ext
 
     case GetSparkContexData(name) =>
       contexts.get(name) match {
-        case Some((actor, _)) =>
+        case Some(actor) =>
           val future = (actor ? GetContexData)(contextTimeout.seconds)
           val originator = sender
           future.collect {
@@ -156,15 +151,12 @@ class LocalContextSupervisorActor(dao: ActorRef, dataManagerActor: ActorRef) ext
         originator ! ContextInitError(err)
       }
 
-    case GetResultActor(name) =>
-      sender ! contexts.get(name).map(_._2).getOrElse(globalResultActor)
-
     case GetContext(name) =>
       if (contexts contains name) {
-        val future = (contexts(name)._1 ? SparkContextStatus) (contextTimeout.seconds)
+        val future = (contexts(name) ? SparkContextStatus) (contextTimeout.seconds)
         val originator = sender
         future.collect {
-          case SparkContextAlive => originator ! contexts(name)._1
+          case SparkContextAlive => originator ! contexts(name)
           case SparkContextDead =>
             logger.info("SparkContext {} is dead", name)
             self ! StopContext(name)
@@ -178,7 +170,7 @@ class LocalContextSupervisorActor(dao: ActorRef, dataManagerActor: ActorRef) ext
       if (contexts contains name) {
         logger.info("Shutting down context {}", name)
         try {
-          val stoppedCtx = gracefulStop(contexts(name)._1, contextDeletionTimeout seconds)
+          val stoppedCtx = gracefulStop(contexts(name), contextDeletionTimeout seconds)
           Await.result(stoppedCtx, contextDeletionTimeout + 1 seconds)
           contexts.remove(name)
           sender ! ContextStopped
@@ -203,21 +195,20 @@ class LocalContextSupervisorActor(dao: ActorRef, dataManagerActor: ActorRef) ext
     require(!(contexts contains name), "There is already a context named " + name)
     logger.info("Creating a SparkContext named {}", name)
 
-    val resultActorRef = if (isAdHoc) Some(globalResultActor) else None
     val mergedConfig = ConfigFactory.parseMap(
                          Map("is-adhoc" -> isAdHoc.toString, "context.name" -> name).asJava
                        ).withFallback(contextConfig)
     val ref = context.actorOf(JobManagerActor.props(dao), name)
     (ref ? JobManagerActor.Initialize(
-      mergedConfig, resultActorRef, dataManagerActor))(Timeout(timeoutSecs.second)).onComplete {
+      mergedConfig, dataManagerActor))(Timeout(timeoutSecs.second)).onComplete {
       case Failure(e: Exception) =>
         logger.error("Exception after sending Initialize to JobManagerActor", e)
         // Make sure we try to shut down the context in case it gets created anyways
         ref ! PoisonPill
         failureFunc(e)
-      case Success(JobManagerActor.Initialized(_, resultActor)) =>
+      case Success(JobManagerActor.Initialized(_)) =>
         logger.info("SparkContext {} initialized", name)
-        contexts(name) = (ref, resultActor)
+        contexts(name) = ref
         context.watch(ref)
         successFunc(ref)
       case Success(JobManagerActor.InitError(t)) =>

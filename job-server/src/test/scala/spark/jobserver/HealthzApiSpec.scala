@@ -58,10 +58,6 @@ with ScalatestRouteTest with SprayJsonSupport {
         sender ! NoSuchContext
       case GetJobInfos(1, None) =>
         sender ! JobInfos(null)
-      case GetJobResult("dummyjobid") =>
-        sender ! NoSuchJobId
-      case GetResultActor("getDefaultGlobalActor") =>
-        sender ! self // To receive the next message also
     }
   }
   
@@ -76,8 +72,6 @@ with ScalatestRouteTest with SprayJsonSupport {
       case GetContext("dummycontext") =>
         self ! PoisonPill
       case GetJobInfos(1, None) =>
-        self ! PoisonPill
-      case GetJobResult("dummyjobid") =>
         self ! PoisonPill
     }
   }
