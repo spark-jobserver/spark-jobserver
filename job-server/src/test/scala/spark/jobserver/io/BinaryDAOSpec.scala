@@ -1,8 +1,10 @@
 package spark.jobserver.io
 
-import org.scalatest.{BeforeAndAfterAll, FunSpecLike, Matchers}
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.funspec.AnyFunSpecLike
+import org.scalatest.matchers.should.Matchers
 
-class BinaryDAOSpec extends FunSpecLike with BeforeAndAfterAll with Matchers{
+class BinaryDAOSpec extends AnyFunSpecLike with BeforeAndAfterAll with Matchers{
 
   describe("binary hash conversions") {
     it("should convert byte hash to string and back") {

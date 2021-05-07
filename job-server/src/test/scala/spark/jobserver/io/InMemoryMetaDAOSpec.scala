@@ -1,14 +1,16 @@
 package spark.jobserver.io
 
 import java.util.concurrent.TimeUnit
-import org.scalatest.{BeforeAndAfter, FunSpecLike, Matchers}
+import org.scalatest.BeforeAndAfter
 
 import java.time.ZonedDateTime
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 import scala.concurrent.ExecutionContext.Implicits.global
+import org.scalatest.funspec.AnyFunSpecLike
+import org.scalatest.matchers.should.Matchers
 
-class InMemoryMetaDAOSpec extends FunSpecLike with Matchers with BeforeAndAfter {
+class InMemoryMetaDAOSpec extends AnyFunSpecLike with Matchers with BeforeAndAfter {
 
   private var inMemoryMetaDao: InMemoryMetaDAO = _
 

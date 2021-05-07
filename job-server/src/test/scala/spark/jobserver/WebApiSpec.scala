@@ -8,17 +8,19 @@ import akka.testkit.TestKit
 import com.typesafe.config.ConfigFactory
 import org.scalatest.concurrent.ScalaFutures
 import org.scalatest.time.{Seconds, Span}
-import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
+import org.scalatest.BeforeAndAfterAll
 import spark.jobserver.JobManagerActor.JobKilledException
 import spark.jobserver.io.JobDAOActor._
 import spark.jobserver.io._
 import spark.jobserver.util.ErrorData
 
 import java.time.{Instant, ZoneId, ZonedDateTime}
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
 // Tests web response codes and formatting
 // Does NOT test underlying Supervisor / JarManager functionality
-class WebApiSpec extends FunSpec with Matchers with BeforeAndAfterAll
+class WebApiSpec extends AnyFunSpec with Matchers with BeforeAndAfterAll
 with ScalatestRouteTest with ScalaFutures with SprayJsonSupport {
   import scala.collection.JavaConverters._
 

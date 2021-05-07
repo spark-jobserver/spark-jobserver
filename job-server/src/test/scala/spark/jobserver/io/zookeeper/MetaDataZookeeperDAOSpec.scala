@@ -1,7 +1,7 @@
 package spark.jobserver.io.zookeeper
 
 import com.typesafe.config.{Config, ConfigFactory}
-import org.scalatest.{BeforeAndAfter, FunSpec, FunSpecLike, Matchers}
+import org.scalatest.BeforeAndAfter
 import spark.jobserver.io._
 import spark.jobserver.util.{ContextJVMInitializationTimeout, ContextReconnectFailedException, CuratorTestCluster, ErrorData, ResolutionFailedOnStopContextException, Utils}
 import spark.jobserver.TestJarFinder
@@ -9,8 +9,10 @@ import spark.jobserver.TestJarFinder
 import java.time.{Instant, ZoneId, ZonedDateTime}
 import scala.concurrent.Await
 import scala.concurrent.duration.DurationInt
+import org.scalatest.funspec.{ AnyFunSpec, AnyFunSpecLike }
+import org.scalatest.matchers.should.Matchers
 
-class MetaDataZookeeperDAOSpec extends FunSpec with TestJarFinder with FunSpecLike
+class MetaDataZookeeperDAOSpec extends AnyFunSpec with TestJarFinder with AnyFunSpecLike
       with Matchers with BeforeAndAfter {
 
   /*

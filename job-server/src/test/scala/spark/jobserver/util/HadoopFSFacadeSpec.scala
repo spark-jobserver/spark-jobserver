@@ -5,9 +5,11 @@ import java.io.{File, InputStream}
 import com.typesafe.config.Config
 import org.apache.commons.io.IOUtils
 import org.apache.hadoop.conf.Configuration
-import org.scalatest.{BeforeAndAfterAll, FunSpec, Matchers}
+import org.scalatest.BeforeAndAfterAll
+import org.scalatest.funspec.AnyFunSpec
+import org.scalatest.matchers.should.Matchers
 
-class HadoopFSFacadeSpec extends FunSpec with Matchers with BeforeAndAfterAll with HDFSCluster {
+class HadoopFSFacadeSpec extends AnyFunSpec with Matchers with BeforeAndAfterAll with HDFSCluster {
   private var config: Config = _
   private var testClusterUrl: String = _
   private var hdfsFacade: HadoopFSFacade = _

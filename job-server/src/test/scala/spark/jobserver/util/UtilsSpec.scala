@@ -2,10 +2,12 @@ package spark.jobserver.util
 
 import akka.actor.Address
 import com.typesafe.config.ConfigFactory
-import org.scalatest.{BeforeAndAfter, FunSpecLike, Matchers}
+import org.scalatest.BeforeAndAfter
 import spark.jobserver.JobServer
+import org.scalatest.funspec.AnyFunSpecLike
+import org.scalatest.matchers.should.Matchers
 
-class UtilsSpec extends FunSpecLike with Matchers
+class UtilsSpec extends AnyFunSpecLike with Matchers
   with BeforeAndAfter {
 
   describe("getHASeedNodes tests") {

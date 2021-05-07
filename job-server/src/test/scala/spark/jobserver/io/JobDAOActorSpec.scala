@@ -6,7 +6,7 @@ import akka.pattern.ask
 import akka.testkit.{ImplicitSender, TestKit, TestProbe}
 import akka.util.Timeout
 import com.typesafe.config.{Config, ConfigFactory}
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 import spark.jobserver.JobManagerActor.ContextTerminatedException
 import spark.jobserver.io.JobDAOActor._
 import spark.jobserver.common.akka.AkkaTestUtils
@@ -17,6 +17,8 @@ import java.time.format.DateTimeFormatter
 import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.util.{Failure, Success}
+import org.scalatest.funspec.AnyFunSpecLike
+import org.scalatest.matchers.should.Matchers
 
 object JobDAOActorSpec {
   val system = ActorSystem("dao-test")
@@ -31,7 +33,7 @@ object JobDAOActorSpec {
 }
 
 class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSender
-  with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
+  with AnyFunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
   import JobDAOActorSpec._
   implicit val futureTimeout = Timeout(10.seconds)

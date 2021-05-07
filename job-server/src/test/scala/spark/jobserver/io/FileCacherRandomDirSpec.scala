@@ -1,11 +1,12 @@
 package spark.jobserver.io
 
 import java.io.File
-import org.scalatest.{FunSpecLike, Matchers}
 
 import java.time.ZonedDateTime
+import org.scalatest.funspec.AnyFunSpecLike
+import org.scalatest.matchers.should.Matchers
 
-class FileCacherRandomDirSpec extends FileCacher with FunSpecLike with Matchers {
+class FileCacherRandomDirSpec extends FileCacher with AnyFunSpecLike with Matchers {
   override val rootDirPath: String = s"/tmp/spark-jobserver/${util.Random.alphanumeric.take(30).mkString}"
   override val rootDirFile: File = new File(rootDirPath)
 

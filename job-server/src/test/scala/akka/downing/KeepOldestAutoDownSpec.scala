@@ -16,10 +16,12 @@ import akka.cluster.ClusterEvent._
 import akka.cluster.MemberStatus._
 import akka.cluster.{Member, TestMember}
 import akka.testkit.{ImplicitSender, TestKit}
-import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll, FunSpecLike, Matchers}
+import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 
 import scala.collection.immutable
 import scala.concurrent.duration.{FiniteDuration, _}
+import org.scalatest.funspec.AnyFunSpecLike
+import org.scalatest.matchers.should.Matchers
 
 
 case object ShutDownCausedBySplitBrainResolver
@@ -54,7 +56,7 @@ class OldestAutoDownTestActor(address: Address,
 }
 
 class OldestAutoDowningSpec extends TestKit(ActorSystem("OldestAutoDowningSpec")) with ImplicitSender
-  with FunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll  {
+  with AnyFunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll  {
 
   private val memberA = TestMember(Address("akka.tcp", "sys", "first", 2552), Up, Set("master"))
   private val memberB = TestMember(Address("akka.tcp", "sys", "second", 2552), Up, Set("master"))
