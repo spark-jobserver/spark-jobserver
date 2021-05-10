@@ -6,6 +6,7 @@ import java.io._
 import java.nio.file.Files
 import org.apache.commons.io.FileUtils
 import org.slf4j.LoggerFactory
+import spark.jobserver.util.JsonProtocols
 
 import java.time.format.DateTimeFormatter
 import java.time.{Instant, ZoneId, ZonedDateTime}
@@ -144,7 +145,7 @@ class DataFileDAO(config: Config) {
 
   def listFiles: Set[String] = files.toSet
 
-  private val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSXXX")
+  private val formatter = DateTimeFormatter.ofPattern(JsonProtocols.DATE_PATTERN)
   private def createFileName(aName: String, uploadTime: ZonedDateTime): String =
     aName + "-" + formatter.format(uploadTime).replace(':', '_')
 

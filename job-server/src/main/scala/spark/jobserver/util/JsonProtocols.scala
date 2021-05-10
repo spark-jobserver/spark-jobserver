@@ -2,16 +2,18 @@ package spark.jobserver.util
 
 import akka.http.scaladsl.model.Uri
 import spark.jobserver.common.akka.web.JsonUtils.AnyJsonFormat
-
 import spark.jobserver.io.{BinaryInfo, BinaryType, ContextInfo, JobInfo, JobStatus}
 import spray.json._
 
 import java.time.format.DateTimeFormatter
 import java.time.{ZoneId, ZonedDateTime}
+import scala.util.Try
 
 object JsonProtocols extends DefaultJsonProtocol {
 
-  val DATE_PATTERN = "yyyy-MM-dd'T'HH:mm:ss.SSSX"
+  val DATE_PATTERN = "yyyy-MM-dd'T'HH:mm:ss.SSSXXX"
+  @deprecated("Use DATE_PATTERN instead", "0.11.2")
+  val LEGACY_DATE_PATTERN = "yyyy-MM-dd HH-mm-ss SSS Z"
 
   /*
    * BinaryInfo
@@ -137,8 +139,10 @@ object JsonProtocols extends DefaultJsonProtocol {
    */
 
   private def df = DateTimeFormatter.ofPattern(DATE_PATTERN)
+  private def legacyDf = DateTimeFormatter.ofPattern(LEGACY_DATE_PATTERN)
   def fromDateTime(dt: ZonedDateTime): String = df.format(dt)
-  def toDateTime(s: String): ZonedDateTime = ZonedDateTime.parse(s, df)
+  def toDateTime(s: String): ZonedDateTime = Try(ZonedDateTime.parse(s, df))
+    .getOrElse(ZonedDateTime.parse(s, legacyDf)) // Try to load with old datetime format
     .withZoneSameInstant(ZoneId.systemDefault())
   private def readOpt[A](j: JsValue, f: JsValue => A): Option[A] = {
     if (j == JsNull) None else Some(f(j))
