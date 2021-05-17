@@ -82,7 +82,9 @@ with ScalatestRouteTest with ScalaFutures with SprayJsonSupport {
        }
     }
 
-    def receive: PartialFunction[Any, Unit] = {
+    def receive: Receive = customReceive
+
+    def customReceive: Receive = {
       case GetJobInfo("_mapseq") =>
         sender ! Some(finishedJobInfo)
       case GetJobResult("_mapseq") =>
@@ -205,19 +207,6 @@ with ScalatestRouteTest with ScalaFutures with SprayJsonSupport {
           case "err" => sender ! JobErroredOut (
             "foo", dt, new RuntimeException ("oops", new IllegalArgumentException ("foo") ) )
           case "loadErr" => sender ! JobLoadingError(new MalformedURLException("foo"))
-          case "multi" =>
-            assert(Seq("multi", "some", "bin") == cp.map(_.appName), "cp path should include all binaries")
-            statusActor ! Subscribe("multi", sender, events)
-            val jobInfo = JobInfo(
-              "multi", "cid", "context", "com.abc.meme",
-              getStateBasedOnEvents(events), dt, None, None, Seq.empty)
-            statusActor ! JobStatusActor.JobInit(jobInfo)
-            statusActor ! JobStarted(jobInfo.jobId, jobInfo)
-            val map = config.entrySet().asScala.map {
-              entry => entry.getKey -> entry.getValue.unwrapped
-            }.toMap
-            if (events.contains(classOf[JobResult])) sender ! JobResult(map)
-            statusActor ! Unsubscribe("multi", sender)
           case "foo" | "demo" =>
             statusActor ! Subscribe("foo", sender, events)
             val jobInfo = JobInfo(
@@ -225,20 +214,8 @@ with ScalatestRouteTest with ScalaFutures with SprayJsonSupport {
               getStateBasedOnEvents(events), dt, None, None, Seq.empty)
             statusActor ! JobStatusActor.JobInit(jobInfo)
             statusActor ! JobStarted(jobInfo.jobId, jobInfo)
-            val map = config.entrySet().asScala.map {
-              entry => entry.getKey -> entry.getValue.unwrapped
-            }.toMap
-            if (events.contains(classOf[JobResult])) sender ! JobResult(map)
+            if (events.contains(classOf[JobFinished])) sender ! JobFinished(jobInfo.jobId, ZonedDateTime.now())
             statusActor ! Unsubscribe("foo", sender)
-          case "foo.stream" =>
-            statusActor ! Subscribe ("foo.stream", sender, events)
-            val jobInfo = JobInfo (
-            "foo.stream", "cid", "context", "", getStateBasedOnEvents (events), dt, None, None, Seq.empty)
-            statusActor ! JobStatusActor.JobInit (jobInfo)
-            statusActor ! JobStarted (jobInfo.jobId, jobInfo)
-            val result = "\"1, 2, 3, 4, 5, 6\"".getBytes ().toStream
-            if (events.contains (classOf[JobResult] ) ) sender ! JobResult (result)
-            statusActor ! Unsubscribe ("foo.stream", sender)
           case "context-already-stopped" => sender ! ContextStopInProgress
         }
       case GetJobConfig("badjobid") => sender ! JobConfig(None)

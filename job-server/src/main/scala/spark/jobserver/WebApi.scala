@@ -602,7 +602,7 @@ class WebApi(system: ActorSystem,
 
   val errorEvents: Set[Class[_]] = Set(classOf[JobErroredOut], classOf[JobValidationFailed])
   val asyncEvents = Set(classOf[JobStarted]) ++ errorEvents
-  val syncEvents = Set(classOf[JobResult]) ++ errorEvents
+  val syncEvents = Set(classOf[JobFinished], classOf[JobResult]) ++ errorEvents
 
   /**
    * Main routes for starting a job, listing existing jobs, getting job results
@@ -843,17 +843,19 @@ class WebApi(system: ActorSystem,
                           JobManagerActor.StartJob(
                             mainClass, binInfos, jobConfig, events, callbackUrl = callbackOpt))(timeout)
                         future.flatMap {
-                          case JobResult(res) =>
-                            res match {
-                              case s: Stream[_] => sendStreamingResponse(ctx, ResultChunkSize,
-                                resultToByteIterator(Map.empty, s.toIterator))
-                              case _ =>
-                                // TODO somehow get jobId
-                                ctx.complete(resultToTable(res, Some("tba")))
+                          case JobFinished(jobId, _endTime) =>
+                            val resultFuture = (daoActor ? GetJobResult(jobId)).mapTo[JobResult]
+                            resultFuture.flatMap {
+                              case JobResult(result: Stream[_]) => sendStreamingResponse(ctx, ResultChunkSize,
+                                resultToByteIterator(Map.empty, result.toIterator))
+                              case JobResult(result) =>
+                                ctx.complete(resultToTable(result, Some(jobId)))
+                            }.recoverWith {
+                              case e: Exception =>
+                                completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
                             }
                           case JobErroredOut(jobId, _, ex) =>
-                            // TODO somehow get jobId
-                            ctx.complete(exceptionToMap("tba", ex))
+                            ctx.complete(exceptionToMap(jobId, ex))
                           case JobStarted(_, jobInfo) =>
                             val future = daoActor ? SaveJobConfig(jobInfo.jobId, postedJobConfig)
                             future.flatMap {
