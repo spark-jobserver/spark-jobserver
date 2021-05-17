@@ -1,23 +1,43 @@
 package spark.jobserver
 
+import akka.actor.{Actor, ActorRef, Props}
 import akka.http.scaladsl.model.MediaTypes
 import akka.http.scaladsl.model.StatusCodes._
 import akka.http.scaladsl.model.headers.`Content-Type`
+import akka.http.scaladsl.server.Route
 import akka.http.scaladsl.server.Route.{seal => sealRoute}
 import akka.http.scaladsl.testkit.ScalatestRouteTest
 import akka.http.scaladsl.unmarshalling.Unmarshal
 import com.typesafe.config.ConfigFactory
-import spark.jobserver.io.{BinaryType, ContextStatus, JobStatus}
+import spark.jobserver.CommonMessages.{JobErroredOut, JobFinished, JobStarted, Subscribe, Unsubscribe}
+import spark.jobserver.JobManagerActor.{JobLoadingError, StartJob}
+import spark.jobserver.io.JobDAOActor.{GetJobResult, JobResult}
+import spark.jobserver.io.{BinaryType, ContextStatus, JobInfo, JobStatus}
 import spark.jobserver.util.SparkJobUtils
 
+import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 import scala.concurrent.Await
+
+import java.time.ZonedDateTime
 
 // Tests web response codes and formatting
 // Does NOT test underlying Supervisor / JarManager functionality
 class WebApiMainRoutesSpec extends WebApiSpec with ScalatestRouteTest {
   import spark.jobserver.common.akka.web.JsonUtils._
   import spray.json.DefaultJsonProtocol._
+
+  var localDummyJobManager: ActorRef = _
+  var localApi: WebApi = _
+  var localRoutes: Route = _
+  val dummyLocalPort = 9998
+
+  def setupCustomWebAPI(localDummyJobManager: ActorRef): Unit = {
+    localApi = new WebApi(system, config, dummyLocalPort, dummyActor,
+      localDummyJobManager, localDummyJobManager, localDummyJobManager, null)
+    localRoutes = localApi.myRoutes
+  }
+
 
   val getJobStatusInfoMap = {
     Map(
@@ -246,54 +266,82 @@ class WebApiMainRoutesSpec extends WebApiSpec with ScalatestRouteTest {
     }
 
     it("should merge user passed jobConfig with default jobConfig") {
+      val expectedMergedConfig = Map(
+        masterConfKey->"overriden",
+        bindConfKey -> bindConfVal,
+        "foo.baz" -> "booboo",
+        "spark.jobserver.short-timeout" -> "3 s"
+      )
+
+      // Setup custom JobManager response, which can also check that config is merged
+      class JobManagerMockRequiredForTest extends DummyActor {
+        def testHandlers: Receive = {
+          case StartJob(_, _, config, _, _, _) =>
+            val map = config.entrySet().asScala.map {
+              entry => entry.getKey -> entry.getValue.unwrapped
+            }.toMap
+            try {
+              map should be(expectedMergedConfig)
+            } catch {
+              case _ => sender ! JobLoadingError(new Exception("Configuration is not the same!"))
+            }
+            sender ! JobFinished("foo", ZonedDateTime.now())
+        }
+        override def receive: Receive = testHandlers.orElse(super.customReceive)
+      }
+
+      setupCustomWebAPI(system.actorOf(Props(new JobManagerMockRequiredForTest)))
+
       val config2 = "foo.baz = booboo, spark.master=overriden"
       Post("/jobs?appName=foo&classPath=com.abc.meme&context=one&sync=true", config2) ~>
-          sealRoute(routes) ~> check {
+          sealRoute(localRoutes) ~> check {
         status should be (OK)
-        responseAs[Map[String, Any]] should be (Map(
-          JobId -> "tba", // FIXME: correct job id? Should be fixed with sync endpoint
-          ResultKey -> Map(
-            masterConfKey->"overriden",
-            bindConfKey -> bindConfVal,
-            "foo.baz" -> "booboo",
-            "spark.jobserver.short-timeout" -> "3 s"
-          )
-        ))
       }
     }
 
     it("should merge appName and dependent-jar-uris for starting the job") {
+      class JobManagerMockRequiredForTest extends DummyActor {
+        def testHandlers: Receive = {
+          case StartJob(_, _, config, _, _, _) =>
+            try {
+              val dependentJars = config.getList("dependent-jar-uris").unwrapped().asScala.toList
+              dependentJars should be(List("foo"))
+            } catch {
+              case _: Exception =>
+                sender ! JobLoadingError(new Exception("Configuration is not the same!"))
+            }
+            sender ! JobFinished("foo", ZonedDateTime.now()) // because sync=true
+        }
+        override def receive: Receive = testHandlers.orElse(super.customReceive)
+      }
+
+      setupCustomWebAPI(system.actorOf(Props(new JobManagerMockRequiredForTest)))
+
       Post(
         "/jobs?appName=demo&classPath=com.abc.meme&context=one&sync=true", "dependent-jar-uris=[\"foo\"]"
       ) ~>
-        sealRoute(routes) ~> check {
+        sealRoute(localRoutes) ~> check {
         status should be (OK)
-        responseAs[Map[String, Any]] should be (Map(
-          JobId -> "tba", // FIXME: correct job id? Should be fixed with sync endpoint
-          ResultKey -> Map(
-            masterConfKey-> masterConfVal,
-            bindConfKey -> bindConfVal,
-            "spark.jobserver.short-timeout" -> "3 s",
-            "dependent-jar-uris" -> List("foo")
-          )
-        ))
       }
     }
 
     it("should accept several binary names for cp parameter") {
+      class JobManagerMockRequiredForTest extends DummyActor {
+        def testHandlers: Receive = {
+          case StartJob(_, cp, config, events, _, _) =>
+            assert(Seq("multi", "some", "bin") == cp.map(_.appName), "cp path should include all binaries")
+            sender ! JobFinished("someJobID", dt) // because sync=true
+        }
+        override def receive: Receive = testHandlers.orElse(super.customReceive)
+      }
+
+      setupCustomWebAPI(system.actorOf(Props(new JobManagerMockRequiredForTest)))
+
       Post(
         "/jobs?cp=multi,some,bin&mainClass=com.abc.meme&context=one&sync=true", ""
       ) ~>
-        sealRoute(routes) ~> check {
+        sealRoute(localRoutes) ~> check {
         status should be (OK)
-        responseAs[Map[String, Any]] should be (Map(
-          JobId -> "tba", // FIXME: correct job id? Should be fixed with sync endpoint
-          ResultKey -> Map(
-            masterConfKey-> masterConfVal,
-            bindConfKey -> bindConfVal,
-            "spark.jobserver.short-timeout" -> "3 s"
-          )
-        ))
       }
     }
 
@@ -364,27 +412,45 @@ class WebApiMainRoutesSpec extends WebApiSpec with ScalatestRouteTest {
       }
     }
 
-    it("adhoc job of sync route should return 200 and result") {
+    it("adhoc job of sync route should return 200 and merge configurations") {
+      // Setup custom JobManager response, which can also check that config is merged
+      class JobManagerMockRequiredForTest extends DummyActor {
+        def testHandlers: Receive = {
+          case StartJob(_, _, config, _, _, _) =>
+            assert(config.getConfig("foo").getValue("baz").unwrapped() == "booboo",
+              "should include configuration")
+            sender ! JobFinished("someJobID", dt) // because sync=true
+        }
+        override def receive: Receive = testHandlers.orElse(super.customReceive)
+      }
+
+      setupCustomWebAPI(system.actorOf(Props(new JobManagerMockRequiredForTest)))
+
       val config2 = "foo.baz = booboo"
       Post("/jobs?appName=foo&classPath=com.abc.meme&sync=true", config2) ~>
-        sealRoute(routes) ~> check {
+        sealRoute(localRoutes) ~> check {
         status should be (OK)
-        responseAs[Map[String, Any]] should be (Map(
-          JobId -> "tba", // FIXME: correct job id? Should be fixed with sync endpoint
-          ResultKey -> Map(
-            masterConfKey -> masterConfVal,
-            bindConfKey -> bindConfVal,
-            "foo.baz" -> "booboo",
-            "spark.jobserver.short-timeout" -> "3 s"
-          )
-        ))
       }
     }
 
     it("adhoc job with Stream result of sync route should return 200 and chunked result") {
+      // Setup custom JobManager response, which can also check that config is merged
+      val jobId = "someJobId"
+      class JobManagerMockRequiredForTest extends DummyActor {
+        def testHandlers: Receive = {
+          case StartJob(_, _, _, _, _, _) =>
+            sender ! JobFinished(jobId, ZonedDateTime.now())
+          case GetJobResult(_) =>
+            sender ! JobResult("\"1, 2, 3, 4, 5, 6\"".getBytes().toStream)
+        }
+        override def receive: Receive = testHandlers.orElse(super.customReceive)
+      }
+
+      setupCustomWebAPI(system.actorOf(Props(new JobManagerMockRequiredForTest)))
+
       val config2 = "foo.baz = booboo"
       Post("/jobs?appName=foo.stream&classPath=com.abc.meme&sync=true", config2) ~>
-        sealRoute(routes) ~> check {
+        sealRoute(localRoutes) ~> check {
         status should be (OK)
         responseAs[Map[String, Any]] should be (Map(
           ResultKey -> "1, 2, 3, 4, 5, 6"
@@ -393,19 +459,29 @@ class WebApiMainRoutesSpec extends WebApiSpec with ScalatestRouteTest {
     }
 
     it("should be able to take a timeout param") {
+      class JobManagerMockRequiredForTest extends DummyActor {
+        def testHandlers: Receive = {
+          case StartJob(_, _, config, _, _, _) =>
+            try {
+              assert(config.getConfig("foo").getValue("baz").unwrapped() == "booboo",
+                "should include configuration")
+              assert(config.getConfig("spark").getConfig("jobserver").
+                getValue("short-timeout").unwrapped() == "3 s", "should include timeout")
+            } catch {
+              case _: Exception =>
+                sender ! JobLoadingError(new Exception("Configuration is not the same!"))
+            }
+            sender ! JobFinished("foo", ZonedDateTime.now()) // because sync=true
+        }
+        override def receive: Receive = testHandlers.orElse(super.customReceive)
+      }
+
+      setupCustomWebAPI(system.actorOf(Props(new JobManagerMockRequiredForTest)))
+
       val config2 = "foo.baz = booboo"
       Post("/jobs?appName=foo&classPath=com.abc.meme&sync=true&timeout=5", config2) ~>
-        sealRoute(routes) ~> check {
-        status should be (OK)
-        responseAs[Map[String, Any]] should be (Map(
-          JobId -> "tba", // FIXME: correct job id? Should be fixed with sync endpoint
-          ResultKey -> Map(
-            masterConfKey -> masterConfVal,
-            bindConfKey -> bindConfVal,
-            "foo.baz" -> "booboo",
-            "spark.jobserver.short-timeout" -> "3 s"
-          )
-        ))
+        sealRoute(localRoutes) ~> check {
+          status should be (OK)
       }
     }
 
