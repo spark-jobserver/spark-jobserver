@@ -274,6 +274,23 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
         val jobJson = Json.parse(jobResponse.body.merge)
         (jobJson \ "status").as[String] should equal("FINISHED")
       }
+
+      "GET /jobs/<id> should return a result even after job has finished" in {
+        val jobRequest = sttp.get(uri"$SJS/jobs/$adHocJobId")
+        val jobResponse = jobRequest.send()
+        jobResponse.code should equal(200)
+        val jobJson = Json.parse(jobResponse.body.merge)
+        (jobJson \ "result").get should equal(Json.parse("{\"b\":2,\"a\":2,\"see\":1,\"c\":1}"))
+      }
+
+      "POST /jobs?cp=..&mainClass=..&sync=true should start a job in sync mode" in {
+        val request = sttp.post(uri"$SJS/jobs?cp=$app&mainClass=spark.jobserver.WordCountExample&sync=true")
+          .body("input.string = a b c a b see")
+        val response = request.send()
+        response.code should equal(200)
+        val json = Json.parse(response.body.merge)
+        (json \ "result").get should equal(Json.parse("{\"b\":2,\"a\":2,\"see\":1,\"c\":1}"))
+      }
     }
 
     "batch jobs" - {
@@ -305,6 +322,28 @@ class BasicApiTests extends FreeSpec with Matchers with BeforeAndAfterAllConfigM
         contextResponse.code should equal(200)
         val contextJson = Json.parse(contextResponse.body.merge)
         (contextJson \ "state").as[String] should equal("RUNNING")
+        // Cleanup
+        val deleteResponse = sttp.delete(uri"$SJS/contexts/$jobContext").send()
+        deleteResponse.code should equal(200)
+      }
+
+      "POST /jobs?context=<context>&cp=..&mainClass=..&sync=true should start a job in an " +
+        "existing (batch) context in a sync mode" in {
+        // Create context
+        jobContext = batchContextName
+        val contextRequest = sttp.post(uri"$SJS/contexts/$jobContext")
+        val contextResponse = contextRequest.send()
+        contextResponse.code should equal(200)
+        val contextJson = Json.parse(contextResponse.body.merge)
+        (contextJson \ "status").as[String] should equal("SUCCESS")
+        // Start job
+        val request = sttp.post(
+          uri"$SJS/jobs?cp=$app&mainClass=spark.jobserver.WordCountExample&context=$jobContext&sync=true")
+          .body("input.string = a b c a b see")
+        val response = request.send()
+        response.code should equal(200)
+        val json = Json.parse(response.body.merge)
+        (json \ "result").get should equal(Json.parse("{\"b\":2,\"a\":2,\"see\":1,\"c\":1}"))
         // Cleanup
         val deleteResponse = sttp.delete(uri"$SJS/contexts/$jobContext").send()
         deleteResponse.code should equal(200)
