@@ -63,4 +63,33 @@ trait BinaryObjectsDAO {
   def getBinary(id: String): Future[Option[Array[Byte]]] = {
     throw new NotImplementedError()
   }
+
+  /**
+   * Persist a binary object which is representing a job result.
+   * @param jobId unique identifier of the job that result belongs to
+   * @param binaryBytes
+   * @throws NotImplementedError if not implemented in storage class.
+   */
+  def saveJobResult(jobId: String,
+                 binaryBytes: Array[Byte]): Future[Boolean] = {
+    throw new NotImplementedError()
+  }
+
+  /**
+   * Delete a binary file which is representing a job result.
+   * @param jobId unique identifier of the job that result belongs to
+   * @throws NotImplementedError if not implemented in storage class.
+   */
+  def deleteJobResult(jobId: String): Future[Boolean] = {
+    throw new NotImplementedError()
+  }
+
+  /**
+   * Get a binary file which is representing a job result.
+   * @param jobId unique identifier of the job that result belongs to
+   * @throws NotImplementedError if not implemented in storage class.
+   */
+  def getJobResult(jobId: String): Future[Option[Array[Byte]]] = {
+    throw new NotImplementedError()
+  }
 }

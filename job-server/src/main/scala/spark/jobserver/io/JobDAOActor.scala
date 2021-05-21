@@ -282,7 +282,7 @@ class JobDAOActor(metaDataDAO: MetaDataDAO, binaryDAO: BinaryObjectsDAO, config:
       val recipient = sender()
       Utils.usingTimer(resultWrite) { () =>
         val byteArray = serialize(result)
-        binaryDAO.saveBinary(s"result/${jobId}", byteArray)
+        binaryDAO.saveJobResult(jobId, byteArray)
       }.onComplete {
         case Success(true) => recipient ! SavedSuccessfully
         case Success(false) =>
@@ -296,7 +296,7 @@ class JobDAOActor(metaDataDAO: MetaDataDAO, binaryDAO: BinaryObjectsDAO, config:
     case GetJobResult(jobId) =>
       val recipient = sender()
       Utils.usingTimer(resultRead) { () =>
-        binaryDAO.getBinary(s"result/${jobId}")
+        binaryDAO.getJobResult(jobId)
       }.onComplete {
         case Success(Some(byteArray)) =>
           recipient ! JobResult(deserialize(byteArray))
@@ -310,7 +310,7 @@ class JobDAOActor(metaDataDAO: MetaDataDAO, binaryDAO: BinaryObjectsDAO, config:
     case DeleteJobResult(jobId) =>
       val recipient = sender()
       Utils.usingTimer(resultDelete) { () =>
-        binaryDAO.deleteBinary(s"result/${jobId}")
+        binaryDAO.deleteJobResult(jobId)
       }.onComplete {
         case Success(true) =>
           logger.info(s"Deleted job result for job ${jobId}")
