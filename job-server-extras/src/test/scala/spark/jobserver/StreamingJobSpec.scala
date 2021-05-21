@@ -12,7 +12,7 @@ import spark.jobserver.ContextSupervisor._
 import spark.jobserver.JobManagerActor.{ContexData, GetContexData, StartJob, StopContextAndShutdown}
 import spark.jobserver.context.StreamingContextFactory
 import spark.jobserver.io.JobDAOActor.GetJobInfo
-import spark.jobserver.io.{InMemoryBinaryDAO, InMemoryMetaDAO, JobDAOActor, JobInfo, JobStatus}
+import spark.jobserver.io.{InMemoryBinaryObjectsDAO, InMemoryMetaDAO, JobDAOActor, JobInfo, JobStatus}
 import spark.jobserver.util.{JobserverConfig, SparkJobUtils}
 
 import scala.collection.mutable
@@ -46,7 +46,7 @@ class StreamingJobSpec extends JobSpecBase(StreamingJobSpec.getNewSystem) {
 
   before {
     inMemoryMetaDAO = new InMemoryMetaDAO
-    inMemoryBinDAO = new InMemoryBinaryDAO
+    inMemoryBinDAO = new InMemoryBinaryObjectsDAO
     daoActor = system.actorOf(JobDAOActor.props(inMemoryMetaDAO, inMemoryBinDAO, daoConfig))
     manager = system.actorOf(JobManagerActor.props(daoActor))
   }

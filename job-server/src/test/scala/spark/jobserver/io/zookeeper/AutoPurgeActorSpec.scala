@@ -11,7 +11,7 @@ import akka.actor.Props
 import akka.testkit.ImplicitSender
 import akka.testkit.TestKit
 import spark.jobserver.common.akka.InstrumentedActor
-import spark.jobserver.io.BinaryDAO
+import spark.jobserver.io.BinaryObjectsDAO
 import spark.jobserver.io.BinaryInfo
 import spark.jobserver.io.BinaryType
 import spark.jobserver.io.ContextInfo
@@ -90,7 +90,7 @@ class AutoPurgeActorSpec extends TestKit(AutoPurgeActorSpec.system) with AnyFunS
   val rightNow = ZonedDateTime.now().withNano(0)
   val backThen = rightNow.minusDays(8)
   val bin = BinaryInfo("binaryWithJar", BinaryType.Jar, backThen,
-    Some(BinaryDAO.calculateBinaryHashString("1".getBytes)))
+    Some(BinaryObjectsDAO.calculateBinaryHashString("1".getBytes)))
   val oldContext = ContextInfo("1", "someName", "someConfig", Some("ActorAddress"), backThen,
       Some(backThen), "FINISHED", None)
   val recentContext = oldContext.copy(id = "2", endTime = Some(rightNow))

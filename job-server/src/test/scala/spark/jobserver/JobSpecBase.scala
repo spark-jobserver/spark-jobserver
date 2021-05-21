@@ -8,7 +8,7 @@ import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.context.DefaultSparkContextFactory
 import spark.jobserver.io.JobDAOActor._
-import spark.jobserver.io.{BinaryDAO, BinaryInfo, BinaryType, MetaDataDAO}
+import spark.jobserver.io.{BinaryObjectsDAO, BinaryInfo, BinaryType, MetaDataDAO}
 import spark.jobserver.util.JobserverConfig
 
 import java.time.ZonedDateTime
@@ -85,7 +85,7 @@ trait JobSpecConfig {
 abstract class JobSpecBaseBase(system: ActorSystem) extends TestKit(system) with ImplicitSender
 with AnyFunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
   var inMemoryMetaDAO: MetaDataDAO = _
-  var inMemoryBinDAO: BinaryDAO = _
+  var inMemoryBinDAO: BinaryObjectsDAO = _
   var daoActor: ActorRef = _
   val emptyActor = system.actorOf(Props.empty)
   var manager: ActorRef = _

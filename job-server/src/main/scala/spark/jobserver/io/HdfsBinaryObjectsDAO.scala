@@ -13,7 +13,7 @@ import scala.concurrent.Future
   * Data access object for retrieving/persisting binary data on HDFS.
   * @param config config of jobserver
   */
-class HdfsBinaryDAO(config: Config) extends BinaryDAO {
+class HdfsBinaryObjectsDAO(config: Config) extends BinaryObjectsDAO {
   if (!config.hasPath("spark.jobserver.binarydao.dir")) {
     throw new InvalidConfiguration(
       "To use HdfsBinaryDAO please specify absolute HDFS path in configuration file"
@@ -26,19 +26,19 @@ class HdfsBinaryDAO(config: Config) extends BinaryDAO {
     config.getString("spark.jobserver.binarydao.dir").stripSuffix("/")
   private val hdfsFacade = new HadoopFSFacade()
 
-  override def save(id: String, binaryBytes: Array[Byte]): Future[Boolean] = {
+  override def saveBinary(id: String, binaryBytes: Array[Byte]): Future[Boolean] = {
     Future {
       hdfsFacade.save(extendPath(id), binaryBytes, skipIfExists = true)
     }
   }
 
-  override def delete(id: String): Future[Boolean] = {
+  override def deleteBinary(id: String): Future[Boolean] = {
     Future {
       hdfsFacade.delete(extendPath(id))
     }
   }
 
-  override def get(id: String): Future[Option[Array[Byte]]] = {
+  override def getBinary(id: String): Future[Option[Array[Byte]]] = {
     Future {
       hdfsFacade.get(extendPath(id)) match {
         case Some(inputStream) =>

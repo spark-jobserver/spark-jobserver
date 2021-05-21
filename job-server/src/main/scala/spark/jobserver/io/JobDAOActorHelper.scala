@@ -10,7 +10,8 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.{Await, Future}
 import scala.util.Success
 
-class JobDAOActorHelper(metaDataDAO: MetaDataDAO, binaryDAO: BinaryDAO, config: Config) extends FileCacher {
+class JobDAOActorHelper(metaDataDAO: MetaDataDAO, binaryDAO: BinaryObjectsDAO, config: Config) extends
+  FileCacher {
   import spark.jobserver.util.DAOMetrics._
 
 
@@ -25,7 +26,7 @@ class JobDAOActorHelper(metaDataDAO: MetaDataDAO, binaryDAO: BinaryDAO, config: 
   def saveBinary(name: String, binaryType: BinaryType, uploadTime: ZonedDateTime,
                           binaryBytes: Array[Byte]): Unit = {
     Utils.usingTimer(binWrite){ () =>
-      val binHash = BinaryDAO.calculateBinaryHashString(binaryBytes)
+      val binHash = BinaryObjectsDAO.calculateBinaryHashString(binaryBytes)
 
       // saveBinary function is called from WebApi where as getBinaryFilePath is
       // called from driver whose location changes based on client/cluster mode.
@@ -37,7 +38,7 @@ class JobDAOActorHelper(metaDataDAO: MetaDataDAO, binaryDAO: BinaryDAO, config: 
         cacheBinary(name, binaryType, uploadTime, binaryBytes)
       }
 
-      if (Await.result(binaryDAO.save(binHash, binaryBytes), defaultAwaitTime)) {
+      if (Await.result(binaryDAO.saveBinary(binHash, binaryBytes), defaultAwaitTime)) {
         if (Await.result(metaDataDAO.saveBinary(name, binaryType, uploadTime, binHash), defaultAwaitTime)) {
           totalSuccessfulSaveRequests.inc()
           logger.info(s"Successfully uploaded binary for $name")
@@ -47,7 +48,7 @@ class JobDAOActorHelper(metaDataDAO: MetaDataDAO, binaryDAO: BinaryDAO, config: 
           metaDataDAO.getBinariesByStorageId(binHash).map(
             binaryInfos => binaryInfos.nonEmpty
           ) onComplete {
-            case Success(false) => binaryDAO.delete(binHash) onComplete {
+            case Success(false) => binaryDAO.deleteBinary(binHash) onComplete {
               case Success(true) => logger.info(s"Successfully deleted binary for $name after failed save.")
               case _ => logger.error(s"Failed to cleanup binary for $name after failed save.")
             }
@@ -76,7 +77,7 @@ class JobDAOActorHelper(metaDataDAO: MetaDataDAO, binaryDAO: BinaryDAO, config: 
                     + s"The metadata for $name is deleted, but the binary is kept in the binary storage.")
                   totalSuccessfulDeleteRequests.inc()
                 } else {
-                  binaryDAO.delete(hash).map {_ =>
+                  binaryDAO.deleteBinary(hash).map { _ =>
                     totalSuccessfulDeleteRequests.inc()
                   } onFailure {
                     case _ =>
@@ -112,7 +113,7 @@ class JobDAOActorHelper(metaDataDAO: MetaDataDAO, binaryDAO: BinaryDAO, config: 
           binaryInfo.binaryStorageId match {
             case Some(_) =>
               if (!binFile.exists()) {
-                Await.result(binaryDAO.get(binaryInfo.binaryStorageId.get), defaultAwaitTime) match {
+                Await.result(binaryDAO.getBinary(binaryInfo.binaryStorageId.get), defaultAwaitTime) match {
                   case Some(binBytes) =>
                     cacheBinary(name, binaryType, uploadTime, binBytes)
                     binFile.getAbsolutePath

@@ -40,16 +40,16 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
   private val defaultTimeout = 10.seconds
   private val shortTimeout: FiniteDuration = 3 seconds
   val dummyMetaDataDao = new DummyMetaDataDAO(config)
-  val dummyBinaryDao = new DummyBinaryDAO(config)
+  val dummyBinaryDao = new DummyBinaryObjectsDAO(config)
   val daoActor = system.actorOf(JobDAOActor.props(dummyMetaDataDao, dummyBinaryDao, config))
   var inMemoryDaoActor: ActorRef = _
   var inMemoryMetaDAO: MetaDataDAO = _
-  var inMemoryBinDAO: BinaryDAO = _
+  var inMemoryBinDAO: BinaryObjectsDAO = _
 
   before {
     DAOTestsHelper.testProbe = TestProbe()(system)
     inMemoryMetaDAO = new InMemoryMetaDAO
-    inMemoryBinDAO = new InMemoryBinaryDAO
+    inMemoryBinDAO = new InMemoryBinaryObjectsDAO
     inMemoryDaoActor = system.actorOf(JobDAOActor.props(inMemoryMetaDAO, inMemoryBinDAO, config))
   }
 
@@ -502,7 +502,7 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       val enabledCachingConfig = ConfigFactory.parseString("spark.jobserver.cache-on-upload = true").
         withFallback(config)
       val daoActorWithEnabledCaching = system.actorOf(JobDAOActor.props(
-        new InMemoryMetaDAO, new InMemoryBinaryDAO, enabledCachingConfig))
+        new InMemoryMetaDAO, new InMemoryBinaryObjectsDAO, enabledCachingConfig))
       val binName = "success"
       val jarFile = new File(config.getString(JobserverConfig.DAO_ROOT_DIR_PATH),
         binName + "-" + df.format(DAOTestsHelper.defaultDate) + ".jar")
@@ -521,7 +521,7 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       val disabledCachingConfig = ConfigFactory.parseString("spark.jobserver.cache-on-upload = false").
         withFallback(config)
       val daoActorWithoutCache = system.actorOf(JobDAOActor.props(
-        new InMemoryMetaDAO, new InMemoryBinaryDAO, disabledCachingConfig))
+        new InMemoryMetaDAO, new InMemoryBinaryObjectsDAO, disabledCachingConfig))
       val binName = "success"
       val jarFile = new File(config.getString(JobserverConfig.DAO_ROOT_DIR_PATH),
         binName + "-" + df.format(DAOTestsHelper.defaultDate) + ".jar")

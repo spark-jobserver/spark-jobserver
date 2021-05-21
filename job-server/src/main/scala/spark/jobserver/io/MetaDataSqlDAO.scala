@@ -363,9 +363,8 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
     * @return
     */
   def getBinariesByStorageId(storageId: String): Future[Seq[BinaryInfo]] = {
-    val query = binaries.filter(
-          _.binHash === BinaryDAO.hashStringToBytes(storageId)
-        ).result
+    val hashToFind = BinaryObjectsDAO.hashStringToBytes(storageId)
+    val query = binaries.filter(_.binHash === hashToFind).result
     for (m <- dbUtils.db.run(query)) yield {
       m.map(binaryInfoFromRow)
     }
@@ -382,7 +381,7 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
                  binaryType: BinaryType,
                  uploadTime: ZonedDateTime,
                  binaryStorageId: String): Future[Boolean] = {
-    val hash = BinaryDAO.hashStringToBytes(binaryStorageId)
+    val hash = BinaryObjectsDAO.hashStringToBytes(binaryStorageId)
     val dbAction = (binaries +=
       (-1, name, binaryType.name, convertDateTimeToSql(uploadTime), hash))
     dbUtils.db.run(dbAction).map(_ == 1).recover(logDeleteErrors)
@@ -418,7 +417,7 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
         appName,
         BinaryType.fromString(binaryType),
         convertDateSqlToDateTime(uploadTime),
-        Some(BinaryDAO.hashBytesToString(hash))
+        Some(BinaryObjectsDAO.hashBytesToString(hash))
       )
   }
 

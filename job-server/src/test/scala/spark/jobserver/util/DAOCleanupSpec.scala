@@ -47,7 +47,7 @@ class DAOCleanupSpec extends AnyFunSpecLike with Matchers with BeforeAndAfter {
 
   val date = ZonedDateTime.ofInstant(Instant.ofEpochMilli(1548683342369L), ZoneId.systemDefault())
   val otherDate = ZonedDateTime.ofInstant(Instant.ofEpochMilli(1548683342370L), ZoneId.systemDefault())
-  val bin = BinaryInfo("binaryWithJar", BinaryType.Jar, date, Some(BinaryDAO.calculateBinaryHashString("1".getBytes)))
+  val bin = BinaryInfo("binaryWithJar", BinaryType.Jar, date, Some(BinaryObjectsDAO.calculateBinaryHashString("1".getBytes)))
 
   val runningJob = JobInfo("1", "someContextId", "someContextName",
     "someClassPath", "RUNNING", date, None, None, Seq(bin))

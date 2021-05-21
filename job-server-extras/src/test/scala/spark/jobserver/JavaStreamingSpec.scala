@@ -8,7 +8,7 @@ import com.typesafe.config.ConfigFactory
 import spark.jobserver.CommonMessages._
 import spark.jobserver.context.JavaStreamingContextFactory
 import spark.jobserver.io.JobDAOActor.GetJobInfo
-import spark.jobserver.io.{InMemoryBinaryDAO, InMemoryMetaDAO, JobDAOActor, JobInfo, JobStatus}
+import spark.jobserver.io.{InMemoryBinaryObjectsDAO, InMemoryMetaDAO, JobDAOActor, JobInfo, JobStatus}
 
 import scala.concurrent.Await
 import scala.concurrent.duration._
@@ -31,7 +31,7 @@ class JavaStreamingSpec extends ExtrasJobSpecBase(JavaStreamingSpec.getNewSystem
 
   before {
     inMemoryMetaDAO = new InMemoryMetaDAO
-    inMemoryBinDAO = new InMemoryBinaryDAO
+    inMemoryBinDAO = new InMemoryBinaryObjectsDAO
     daoActor = system.actorOf(JobDAOActor.props(inMemoryMetaDAO, inMemoryBinDAO, daoConfig))
     manager = system.actorOf(JobManagerActor.props(daoActor))
     supervisor = TestProbe().ref

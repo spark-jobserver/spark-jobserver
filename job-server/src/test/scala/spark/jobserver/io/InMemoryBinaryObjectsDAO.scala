@@ -4,19 +4,19 @@ import scala.collection.mutable
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
-class InMemoryBinaryDAO extends BinaryDAO {
+class InMemoryBinaryObjectsDAO extends BinaryObjectsDAO {
   var binaries = mutable.HashMap.empty[String, (Array[Byte])]
 
-  override def save(id: String, binaryBytes: Array[Byte]): Future[Boolean] = Future {
+  override def saveBinary(id: String, binaryBytes: Array[Byte]): Future[Boolean] = Future {
     binaries(id) = binaryBytes
     true
   }
 
-  override def get(id: String): Future[Option[Array[Byte]]] = Future {
+  override def getBinary(id: String): Future[Option[Array[Byte]]] = Future {
     binaries.get(id)
   }
 
-  override def delete(id: String): Future[Boolean] = Future {
+  override def deleteBinary(id: String): Future[Boolean] = Future {
     binaries.remove(id) match {
       case None => false
       case Some(_) => true

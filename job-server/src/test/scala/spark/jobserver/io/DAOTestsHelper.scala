@@ -13,23 +13,23 @@ object DAOTestsHelper {
   implicit val system: ActorSystem = ActorSystem("test")
 
   val binaryDAOBytesSuccess: Array[Byte] = "To test success BinaryDAO".toCharArray.map(_.toByte)
-  val binaryDAOSuccessId: String = BinaryDAO.calculateBinaryHashString(binaryDAOBytesSuccess)
+  val binaryDAOSuccessId: String = BinaryObjectsDAO.calculateBinaryHashString(binaryDAOBytesSuccess)
   val binaryDAOBytesFail: Array[Byte] = "To test failures BinaryDAO".toCharArray.map(_.toByte)
-  val binaryDAOFailId: String = BinaryDAO.calculateBinaryHashString(binaryDAOBytesFail)
+  val binaryDAOFailId: String = BinaryObjectsDAO.calculateBinaryHashString(binaryDAOBytesFail)
   val defaultDate: ZonedDateTime = ZonedDateTime.now()
   val someBinaryName: String = "name-del-info-success"
-  val someBinaryId = BinaryDAO.calculateBinaryHashString(Array(10, 11, 12))
+  val someBinaryId = BinaryObjectsDAO.calculateBinaryHashString(Array(10, 11, 12))
   val someBinaryInfo: BinaryInfo = BinaryInfo(someBinaryName, BinaryType.Jar, defaultDate, Some(someBinaryId))
   val someOtherBinaryBytes: Array[Byte] = Array(7, 8, 9)
-  val someOtherBinaryId: String = BinaryDAO.calculateBinaryHashString(someOtherBinaryBytes)
+  val someOtherBinaryId: String = BinaryObjectsDAO.calculateBinaryHashString(someOtherBinaryBytes)
   val someOtherBinaryName: String = "other-name-del-info-success"
   val someOtherBinaryInfo: BinaryInfo = BinaryInfo(someOtherBinaryName, BinaryType.Jar, defaultDate,
       Some(someOtherBinaryId))
   var testProbe: TestProbe = TestProbe()
 }
 
-class DummyBinaryDAO(config: Config) extends BinaryDAO {
-  override def save(id: String, binaryBytes: Array[Byte]): Future[Boolean] = {
+class DummyBinaryObjectsDAO(config: Config) extends BinaryObjectsDAO {
+  override def saveBinary(id: String, binaryBytes: Array[Byte]): Future[Boolean] = {
     id match {
       case DAOTestsHelper.`binaryDAOSuccessId` =>
         DAOTestsHelper.testProbe.ref ! "BinaryDAO: Save success"
@@ -43,7 +43,7 @@ class DummyBinaryDAO(config: Config) extends BinaryDAO {
     }
   }
 
-  override def delete(id: String): Future[Boolean] = {
+  override def deleteBinary(id: String): Future[Boolean] = {
     id match {
       case DAOTestsHelper.`binaryDAOSuccessId` =>
         DAOTestsHelper.testProbe.ref ! "BinaryDAO: Delete success"
@@ -60,7 +60,7 @@ class DummyBinaryDAO(config: Config) extends BinaryDAO {
     }
   }
 
-  override def get(id: String): Future[Option[Array[Byte]]] = {
+  override def getBinary(id: String): Future[Option[Array[Byte]]] = {
     DAOTestsHelper.testProbe.ref ! "BinaryDAO: Get success"
     Future.successful(Some(DAOTestsHelper.binaryDAOBytesSuccess))
   }
