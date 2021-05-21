@@ -72,7 +72,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
       val app = "test-appName" + appCount
       val upload = if (newTime) time.plusMinutes(timeCount) else time
 
-      BinaryInfo(app, BinaryType.Jar, upload, Some(BinaryDAO.calculateBinaryHashString(jarBytes)))
+      BinaryInfo(app, BinaryType.Jar, upload, Some(BinaryObjectsDAO.calculateBinaryHashString(jarBytes)))
     }
 
     genTestJarInfo _
@@ -135,7 +135,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
   describe("binaries") {
     it("should be able to save one jar and get it back") {
       val save = Await.result(dao.saveBinary(jarInfo.appName, BinaryType.Jar,
-            jarInfo.uploadTime, BinaryDAO.calculateBinaryHashString(jarBytes)), timeout)
+            jarInfo.uploadTime, BinaryObjectsDAO.calculateBinaryHashString(jarBytes)), timeout)
       save should equal (true)
 
       val binary = Await.result(dao.getBinary(jarInfo.appName), timeout).get
@@ -146,7 +146,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
 
     it("should be able to save one egg and get it back") {
       val save = Await.result(dao.saveBinary(eggInfo.appName, BinaryType.Egg, eggInfo.uploadTime,
-          BinaryDAO.calculateBinaryHashString(eggBytes)), timeout)
+          BinaryObjectsDAO.calculateBinaryHashString(eggBytes)), timeout)
       save should equal (true)
       val binary = Await.result(dao.getBinary(eggInfo.appName), timeout)
 
@@ -156,7 +156,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
 
     it("should be able to save one wheel and get it back") {
       val save = Await.result(dao.saveBinary(wheelInfo.appName, BinaryType.Wheel, wheelInfo.uploadTime,
-        BinaryDAO.calculateBinaryHashString(wheelBytes)), timeout)
+        BinaryObjectsDAO.calculateBinaryHashString(wheelBytes)), timeout)
       save should equal (true)
       val binary = Await.result(dao.getBinary(wheelInfo.appName), timeout)
 
@@ -166,17 +166,17 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
 
     it("should be able to get binaries with the same hash") {
       var save = Await.result(dao.saveBinary(jarInfo.appName, BinaryType.Jar,
-            jarInfo.uploadTime, BinaryDAO.calculateBinaryHashString(jarBytes)), timeout)
+            jarInfo.uploadTime, BinaryObjectsDAO.calculateBinaryHashString(jarBytes)), timeout)
       save should equal (true)
       val time = ZonedDateTime.now()
       save = Await.result(dao.saveBinary("new_name", BinaryType.Jar,
-            time, BinaryDAO.calculateBinaryHashString(jarBytes)), timeout)
+            time, BinaryObjectsDAO.calculateBinaryHashString(jarBytes)), timeout)
       save should equal (true)
       save = Await.result(dao.saveBinary("other_name", BinaryType.Jar, time,
-            BinaryDAO.calculateBinaryHashString(Array(1.toByte))), timeout)
+            BinaryObjectsDAO.calculateBinaryHashString(Array(1.toByte))), timeout)
       save should equal (true)
       val binaries =
-        Await.result(dao.getBinariesByStorageId(BinaryDAO.calculateBinaryHashString(jarBytes)), timeout)
+        Await.result(dao.getBinariesByStorageId(BinaryObjectsDAO.calculateBinaryHashString(jarBytes)), timeout)
 
       binaries.size should equal (2)
       val names = binaries map { _.appName }
@@ -185,14 +185,14 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
 
     it("should be able to get binaries") {
       var save = Await.result(dao.saveBinary(jarInfo.appName, BinaryType.Jar,
-            jarInfo.uploadTime, BinaryDAO.calculateBinaryHashString(jarBytes)), timeout)
+            jarInfo.uploadTime, BinaryObjectsDAO.calculateBinaryHashString(jarBytes)), timeout)
       save should equal (true)
       val time = ZonedDateTime.now()
       save = Await.result(dao.saveBinary("new_name", BinaryType.Jar,
-            time, BinaryDAO.calculateBinaryHashString(jarBytes)), timeout)
+            time, BinaryObjectsDAO.calculateBinaryHashString(jarBytes)), timeout)
       save should equal (true)
       save = Await.result(dao.saveBinary("other_name", BinaryType.Jar, time.plusHours(1),
-            BinaryDAO.calculateBinaryHashString(Array(1.toByte))), timeout)
+            BinaryObjectsDAO.calculateBinaryHashString(Array(1.toByte))), timeout)
       save should equal (true)
       val binaries = Await.result(dao.getBinaries, timeout)
 
@@ -204,12 +204,12 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
     it("should be able to get the newest binary") {
       val time = ZonedDateTime.now().withNano(0)
       val newInfo = BinaryInfo("name", BinaryType.Jar, time.plusHours(1),
-          Some(BinaryDAO.calculateBinaryHashString(jarBytes)))
+          Some(BinaryObjectsDAO.calculateBinaryHashString(jarBytes)))
       var save = Await.result(dao.saveBinary("name", BinaryType.Jar, time.plusHours(1),
-          BinaryDAO.calculateBinaryHashString(jarBytes)), timeout)
+          BinaryObjectsDAO.calculateBinaryHashString(jarBytes)), timeout)
       save should equal (true)
       save = Await.result(dao.saveBinary("name", BinaryType.Jar, time,
-            BinaryDAO.calculateBinaryHashString(Array(1.toByte))), timeout)
+            BinaryObjectsDAO.calculateBinaryHashString(Array(1.toByte))), timeout)
       save should equal (true)
       val binaries = Await.result(dao.getBinary("name"), timeout)
 
@@ -220,7 +220,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
 
     it("should be able to delete binary") {
       Await.result(dao.saveBinary(jarInfo.appName, BinaryType.Jar, jarInfo.uploadTime,
-          BinaryDAO.calculateBinaryHashString(jarBytes)), timeout)
+          BinaryObjectsDAO.calculateBinaryHashString(jarBytes)), timeout)
       val res = Await.result(dao.deleteBinary(jarInfo.appName), timeout)
       res should equal (true)
 
@@ -230,10 +230,10 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
 
     it("should be able to delete multiple binaries with the same name") {
       var save = Await.result(dao.saveBinary("name", BinaryType.Jar, time.plusHours(1),
-          BinaryDAO.calculateBinaryHashString(jarBytes)), timeout)
+          BinaryObjectsDAO.calculateBinaryHashString(jarBytes)), timeout)
       save should equal (true)
       save = Await.result(dao.saveBinary("name", BinaryType.Jar, time,
-            BinaryDAO.calculateBinaryHashString(Array(1.toByte))), timeout)
+            BinaryObjectsDAO.calculateBinaryHashString(Array(1.toByte))), timeout)
       save should equal (true)
 
       val del = Await.result(dao.deleteBinary("name"), timeout)
@@ -255,7 +255,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
   describe("Basic saveJobInfo() and getJobInfos() tests") {
     it("Save jobInfo and get JobInfos from DB") {
       var save = Await.result(dao.saveBinary(jarInfo.appName, BinaryType.Jar,
-            jarInfo.uploadTime, BinaryDAO.calculateBinaryHashString(jarBytes)), timeout)
+            jarInfo.uploadTime, BinaryObjectsDAO.calculateBinaryHashString(jarBytes)), timeout)
       save should equal (true)
       val id = jobInfoNoEndNoErr.jobId
       save = Await.result(dao.saveJob(jobInfoNoEndNoErr), timeout)
@@ -267,7 +267,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
 
     it("Save jobInfo, bring down DB, bring up DB, should get JobInfos from DB") {
       var save = Await.result(dao.saveBinary(jarInfo.appName, BinaryType.Jar,
-            jarInfo.uploadTime, BinaryDAO.calculateBinaryHashString(jarBytes)), timeout)
+            jarInfo.uploadTime, BinaryObjectsDAO.calculateBinaryHashString(jarBytes)), timeout)
       save should equal (true)
       save = Await.result(dao.saveJob(jobInfoNoEndNoErr), timeout)
       save should equal (true)
@@ -291,7 +291,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
 
     it("list limited amount of jobs") {
       var save = Await.result(dao.saveBinary(jarInfo.appName, BinaryType.Jar,
-            jarInfo.uploadTime, BinaryDAO.calculateBinaryHashString(jarBytes)), timeout)
+            jarInfo.uploadTime, BinaryObjectsDAO.calculateBinaryHashString(jarBytes)), timeout)
       save should equal (true)
       save = Await.result(dao.saveJob(jobInfoNoEndNoErr), timeout)
       save should equal (true)
@@ -309,7 +309,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
 
     it("saving a JobInfo with the same jobId should update the JOBS table") {
       var save = Await.result(dao.saveBinary(jarInfo.appName, BinaryType.Jar,
-            jarInfo.uploadTime, BinaryDAO.calculateBinaryHashString(jarBytes)), timeout)
+            jarInfo.uploadTime, BinaryObjectsDAO.calculateBinaryHashString(jarBytes)), timeout)
       save should equal (true)
 
       val expectedNoEndNoErr = jobInfoNoEndNoErr
@@ -355,7 +355,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
 
     it("should get jobs by binary name") {
       val isSaved = Await.result(dao.saveBinary(jarInfo.appName, BinaryType.Jar,
-        jarInfo.uploadTime, BinaryDAO.calculateBinaryHashString(jarBytes)), timeout)
+        jarInfo.uploadTime, BinaryObjectsDAO.calculateBinaryHashString(jarBytes)), timeout)
       isSaved should equal(true)
 
       Await.result(dao.saveJob(jobInfoNoEndNoErr), timeout) should equal(true)
@@ -366,7 +366,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
     it("should get jobs by binary name and status") {
       // setup
       val isSaved = Await.result(dao.saveBinary(jarInfo.appName, BinaryType.Jar,
-        jarInfo.uploadTime, BinaryDAO.calculateBinaryHashString(jarBytes)), timeout)
+        jarInfo.uploadTime, BinaryObjectsDAO.calculateBinaryHashString(jarBytes)), timeout)
       isSaved should equal(true)
 
       val runningJob = jobInfoNoEndNoErr
@@ -396,7 +396,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
 
     it("should store callbackUrl") {
       var save = Await.result(dao.saveBinary(jarInfo.appName, BinaryType.Jar,
-        jarInfo.uploadTime, BinaryDAO.calculateBinaryHashString(jarBytes)), timeout)
+        jarInfo.uploadTime, BinaryObjectsDAO.calculateBinaryHashString(jarBytes)), timeout)
       save should equal (true)
       val id = jobInfoSomeCallback.jobId
       save = Await.result(dao.saveJob(jobInfoSomeCallback), timeout)

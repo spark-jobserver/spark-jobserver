@@ -85,7 +85,7 @@ object JobDAOActor {
   case object SavedSuccessfully extends SaveResponse
   case class SaveFailed(error: Throwable) extends SaveResponse
 
-  def props(metadatadao: MetaDataDAO, binarydao: BinaryDAO, config: Config): Props = {
+  def props(metadatadao: MetaDataDAO, binarydao: BinaryObjectsDAO, config: Config): Props = {
     Props(classOf[JobDAOActor], metadatadao, binarydao, config)
   }
 
@@ -116,8 +116,8 @@ object JobDAOActor {
   }
 }
 
-class JobDAOActor(metaDataDAO: MetaDataDAO, binaryDAO: BinaryDAO, config: Config) extends InstrumentedActor
-  with YammerMetrics with FileCacher {
+class JobDAOActor(metaDataDAO: MetaDataDAO, binaryDAO: BinaryObjectsDAO, config: Config) extends
+  InstrumentedActor with YammerMetrics with FileCacher {
   import JobDAOActor._
   import akka.pattern.pipe
   import context.dispatcher
@@ -282,7 +282,7 @@ class JobDAOActor(metaDataDAO: MetaDataDAO, binaryDAO: BinaryDAO, config: Config
       val recipient = sender()
       Utils.usingTimer(resultWrite) { () =>
         val byteArray = serialize(result)
-        binaryDAO.save(s"result/${jobId}", byteArray)
+        binaryDAO.saveBinary(s"result/${jobId}", byteArray)
       }.onComplete {
         case Success(true) => recipient ! SavedSuccessfully
         case Success(false) =>
@@ -296,7 +296,7 @@ class JobDAOActor(metaDataDAO: MetaDataDAO, binaryDAO: BinaryDAO, config: Config
     case GetJobResult(jobId) =>
       val recipient = sender()
       Utils.usingTimer(resultRead) { () =>
-        binaryDAO.get(s"result/${jobId}")
+        binaryDAO.getBinary(s"result/${jobId}")
       }.onComplete {
         case Success(Some(byteArray)) =>
           recipient ! JobResult(deserialize(byteArray))
@@ -310,7 +310,7 @@ class JobDAOActor(metaDataDAO: MetaDataDAO, binaryDAO: BinaryDAO, config: Config
     case DeleteJobResult(jobId) =>
       val recipient = sender()
       Utils.usingTimer(resultDelete) { () =>
-        binaryDAO.delete(s"result/${jobId}")
+        binaryDAO.deleteBinary(s"result/${jobId}")
       }.onComplete {
         case Success(true) =>
           logger.info(s"Deleted job result for job ${jobId}")

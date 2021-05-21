@@ -49,17 +49,17 @@ class MetaDataZookeeperDAOSpec extends AnyFunSpec with TestJarFinder with AnyFun
 
   // Binaries
   val binJar = BinaryInfo("binaryWithJar", BinaryType.Jar, ZonedDateTime.now().withNano(0),
-      Some(BinaryDAO.calculateBinaryHashString("1".getBytes)))
+      Some(BinaryObjectsDAO.calculateBinaryHashString("1".getBytes)))
   val binEgg = BinaryInfo("binaryWithEgg", BinaryType.Egg, ZonedDateTime.now().withNano(0),
-      Some(BinaryDAO.calculateBinaryHashString("2".getBytes)))
+      Some(BinaryObjectsDAO.calculateBinaryHashString("2".getBytes)))
   val binWheel = BinaryInfo("binaryWithWheel", BinaryType.Wheel, ZonedDateTime.now().withNano(0),
-      Some(BinaryDAO.calculateBinaryHashString("3".getBytes)))
+      Some(BinaryObjectsDAO.calculateBinaryHashString("3".getBytes)))
   val binURI = BinaryInfo("http://foo/bar", BinaryType.URI, ZonedDateTime.now().withNano(0),
-      Some(BinaryDAO.calculateBinaryHashString("42".getBytes)))
+      Some(BinaryObjectsDAO.calculateBinaryHashString("42".getBytes)))
   val binJarV2 = BinaryInfo("binaryWithJar", BinaryType.Jar, ZonedDateTime.now().withNano(0).plusHours(1),
-      Some(BinaryDAO.calculateBinaryHashString("3".getBytes)))
+      Some(BinaryObjectsDAO.calculateBinaryHashString("3".getBytes)))
   val binElse = BinaryInfo("anotherBinaryWithJar", BinaryType.Jar, ZonedDateTime.now().withNano(0),
-      Some(BinaryDAO.calculateBinaryHashString("3".getBytes)))
+      Some(BinaryObjectsDAO.calculateBinaryHashString("3".getBytes)))
 
   // Contexts
   val normalContext = ContextInfo("someId", "someName", "someConfig", Some("ActorAddress"),
@@ -186,7 +186,7 @@ class MetaDataZookeeperDAOSpec extends AnyFunSpec with TestJarFinder with AnyFun
       Await.result(dao.saveBinary(binElse.appName, binElse.binaryType, binElse.uploadTime,
           binElse.binaryStorageId.get), timeout) should equal(true)
       val binsOnStor3 = Await.result(dao.getBinariesByStorageId(
-          BinaryDAO.calculateBinaryHashString("3".getBytes)), timeout)
+          BinaryObjectsDAO.calculateBinaryHashString("3".getBytes)), timeout)
       binsOnStor3.toSet should equal(Set(binJarV2, binElse))
     }
 

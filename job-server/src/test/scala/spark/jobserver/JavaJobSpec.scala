@@ -6,7 +6,7 @@ import spark.jobserver.CommonMessages.{JobErroredOut, JobFinished, JobStarted}
 import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.context.JavaSparkContextFactory
 import spark.jobserver.io.JobDAOActor.{GetJobResult, JobResult}
-import spark.jobserver.io.{InMemoryBinaryDAO, InMemoryMetaDAO, JobDAOActor}
+import spark.jobserver.io.{InMemoryBinaryObjectsDAO, InMemoryMetaDAO, JobDAOActor}
 
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
@@ -38,7 +38,7 @@ class JavaJobSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) {
 
   before {
     inMemoryMetaDAO = new InMemoryMetaDAO
-    inMemoryBinDAO = new InMemoryBinaryDAO
+    inMemoryBinDAO = new InMemoryBinaryObjectsDAO
     daoActor = system.actorOf(JobDAOActor.props(inMemoryMetaDAO, inMemoryBinDAO, daoConfig))
     manager = system.actorOf(JobManagerActor.props(daoActor))
     supervisor = TestProbe().ref

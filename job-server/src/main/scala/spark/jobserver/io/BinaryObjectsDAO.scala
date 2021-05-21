@@ -7,7 +7,7 @@ import org.slf4j.LoggerFactory
 
 import scala.concurrent.Future
 
-object BinaryDAO {
+object BinaryObjectsDAO {
   private val logger = LoggerFactory.getLogger(getClass)
 
   def calculateBinaryHash(binBytes: Array[Byte]): Array[Byte] = {
@@ -33,34 +33,34 @@ object BinaryDAO {
 /**
   * Core trait for data access objects for persisting binary data.
   */
-trait BinaryDAO {
+trait BinaryObjectsDAO {
   /**
-    * Persist a binary file.
+    * Persist a binary file provided through /binaries endpoint.
     *
     * @param id unique binary identifier
     * @param binaryBytes
     * @throws NotImplementedError if not implemented in storage class.
     */
-  def save(id: String,
-           binaryBytes: Array[Byte]): Future[Boolean] = {
+  def saveBinary(id: String,
+                 binaryBytes: Array[Byte]): Future[Boolean] = {
     throw new NotImplementedError()
   }
 
   /**
-    * Delete a binary file.
+    * Delete a binary file provided through /binaries endpoint.
     * @param id unique binary identifier
     * @throws NotImplementedError if not implemented in storage class.
     */
-  def delete(id: String): Future[Boolean] = {
+  def deleteBinary(id: String): Future[Boolean] = {
     throw new NotImplementedError()
   }
 
   /**
-    * Get a binary file.
+    * Get a binary file provided through /binaries endpoint.
     * @param id unique binary identifier
     * @throws NotImplementedError if not implemented in storage class.
     */
-  def get(id: String): Future[Option[Array[Byte]]] = {
+  def getBinary(id: String): Future[Option[Array[Byte]]] = {
     throw new NotImplementedError()
   }
 }
