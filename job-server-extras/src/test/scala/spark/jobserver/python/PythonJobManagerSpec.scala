@@ -2,7 +2,7 @@ package spark.jobserver.python
 
 import com.typesafe.config.ConfigFactory
 import spark.jobserver.CommonMessages.JobErroredOut
-import spark.jobserver.io.{BinaryInfo, InMemoryBinaryDAO, InMemoryMetaDAO, JobDAOActor}
+import spark.jobserver.io.{BinaryInfo, InMemoryBinaryObjectsDAO, InMemoryMetaDAO, JobDAOActor}
 import spark.jobserver._
 import org.scalatest._
 import spark.jobserver.JobManagerActor.JobLoadingError
@@ -19,7 +19,7 @@ class PythonJobManagerSpec extends ExtrasJobSpecBase(PythonJobManagerSpec.getNew
 
   before {
     inMemoryMetaDAO = new InMemoryMetaDAO
-    inMemoryBinDAO = new InMemoryBinaryDAO
+    inMemoryBinDAO = new InMemoryBinaryObjectsDAO
     daoActor = system.actorOf(JobDAOActor.props(inMemoryMetaDAO, inMemoryBinDAO, daoConfig))
   }
 

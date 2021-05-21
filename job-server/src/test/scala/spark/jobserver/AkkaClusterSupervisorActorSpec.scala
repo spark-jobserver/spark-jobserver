@@ -248,7 +248,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
   private val contextInitTimeout = 10.seconds.dilated
   private var supervisor: ActorRef = _
   private var inMemoryMetaDAO: MetaDataDAO = _
-  private var inMemoryBinDAO: BinaryDAO = _
+  private var inMemoryBinDAO: BinaryObjectsDAO = _
   private var daoActor: ActorRef = _
   private var managerProbe = TestProbe()
   private val contextConfig = AkkaClusterSupervisorActorSpec.config.getConfig("spark.context-settings")
@@ -313,7 +313,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
 
   override def beforeAll() {
     inMemoryMetaDAO = new InMemoryMetaDAO
-    inMemoryBinDAO = new InMemoryBinaryDAO
+    inMemoryBinDAO = new InMemoryBinaryObjectsDAO
     daoActor = system.actorOf(JobDAOActor.props(inMemoryMetaDAO, inMemoryBinDAO, daoConfig))
     val cluster = Cluster(system)
     supervisor = system.actorOf(Props(classOf[StubbedAkkaClusterSupervisorActor], daoActor, TestProbe().ref,

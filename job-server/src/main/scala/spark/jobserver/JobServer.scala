@@ -132,7 +132,7 @@ object JobServer {
         throw new InvalidConfiguration("Couldn't create Metadata DAO instance: please check configuration")
     }
     val binaryDAO = try {
-      ctorBin.newInstance(config).asInstanceOf[BinaryDAO]
+      ctorBin.newInstance(config).asInstanceOf[BinaryObjectsDAO]
     } catch {
       case _: ClassNotFoundException =>
         throw new InvalidConfiguration("Couldn't create Binary DAO instance: please check configuration")

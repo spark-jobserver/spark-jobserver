@@ -16,7 +16,7 @@ import spark.jobserver.common.akka.actor.ProductionReaper
 import spark.jobserver.common.akka.actor.Reaper.WatchMe
 import spark.jobserver.io.JobDAOActor.GetContextInfo
 import spark.jobserver.util.{JobServerRoles, JobserverConfig}
-import spark.jobserver.io.{BinaryDAO, ContextStatus, JobDAOActor, MetaDataDAO}
+import spark.jobserver.io.{BinaryObjectsDAO, ContextStatus, JobDAOActor, MetaDataDAO}
 import spark.jobserver.util.{HadoopFSFacade, NetworkAddressFactory, Utils}
 
 import scala.concurrent.Await
@@ -95,7 +95,7 @@ object JobManager {
         throw new InvalidConfiguration("Couldn't create Metadata DAO instance: please check configuration")
     }
     val binaryDAO = try {
-      ctorBin.newInstance(config).asInstanceOf[BinaryDAO]
+      ctorBin.newInstance(config).asInstanceOf[BinaryObjectsDAO]
     } catch {
       case _: ClassNotFoundException =>
         throw new InvalidConfiguration("Couldn't create Binary DAO instance: please check configuration")

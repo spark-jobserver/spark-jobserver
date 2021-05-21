@@ -8,7 +8,7 @@ import com.typesafe.config.{Config, ConfigFactory}
 import scala.concurrent.Await
 import spark.jobserver._
 import spark.jobserver.io.JobDAOActor.{GetLastBinaryInfo, JobResult, LastBinaryInfo, SaveBinary}
-import spark.jobserver.io.{BinaryInfo, BinaryType, InMemoryBinaryDAO, InMemoryMetaDAO, JobDAOActor}
+import spark.jobserver.io.{BinaryInfo, BinaryType, InMemoryBinaryObjectsDAO, InMemoryMetaDAO, JobDAOActor}
 import spark.jobserver.util.JobserverTimeouts
 
 import java.time.ZonedDateTime
@@ -38,7 +38,7 @@ object SingleContextJobStress extends App with TestJarFinder {
   val jobDaoDir = jobDaoPrefix + ZonedDateTime.now.toString()
   lazy val daoConfig: Config = ConfigFactory.load("local.test.dao.conf")
   val inMemoryMetaDAO = new InMemoryMetaDAO
-  val inMemoryBinDAO = new InMemoryBinaryDAO
+  val inMemoryBinDAO = new InMemoryBinaryObjectsDAO
   val daoActor = system.actorOf(JobDAOActor.props(inMemoryMetaDAO, inMemoryBinDAO, daoConfig))
 
   val jobManager = system.actorOf(Props(classOf[JobManagerActor], daoActor, "c1", "local[4]", config, false))

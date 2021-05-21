@@ -4,7 +4,7 @@ import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import akka.testkit.TestProbe
 import spark.jobserver.CommonMessages.{JobFinished, JobStarted}
 import spark.jobserver.io.JobDAOActor.{GetJobResult, JobResult}
-import spark.jobserver.io.{BinaryInfo, InMemoryBinaryDAO, InMemoryMetaDAO, JobDAOActor}
+import spark.jobserver.io.{BinaryInfo, InMemoryBinaryObjectsDAO, InMemoryMetaDAO, JobDAOActor}
 
 class NamedObjectsJobSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) {
   import scala.concurrent.duration._
@@ -16,7 +16,7 @@ class NamedObjectsJobSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
   override def beforeAll() {
     inMemoryMetaDAO = new InMemoryMetaDAO
-    inMemoryBinDAO = new InMemoryBinaryDAO
+    inMemoryBinDAO = new InMemoryBinaryObjectsDAO
     daoActor = system.actorOf(JobDAOActor.props(inMemoryMetaDAO, inMemoryBinDAO, daoConfig))
     manager = system.actorOf(JobManagerActor.props(daoActor))
     supervisor = TestProbe().ref
