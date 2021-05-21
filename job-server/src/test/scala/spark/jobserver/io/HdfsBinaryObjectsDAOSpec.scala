@@ -67,6 +67,33 @@ class HdfsBinaryObjectsDAOSpec extends AnyFunSpec with Matchers with BeforeAndAf
     }
   }
 
+  describe("write, get, delete job results data") {
+    it("should write, get, delete the file from hdfs") {
+      val validInvalidInput = "Ḽơᶉëᶆ ȋṕšᶙṁ � � � � test 1 4 4 1".toCharArray.map(_.toByte)
+      Await.result(
+        hdfsDAO.getJobResult(testFileName), timeout) should equal (None) // ensure there is no file before
+      Await.result(hdfsDAO.saveJobResult(testFileName, validInvalidInput), timeout) should equal (true)
+      Await.result(hdfsDAO.getJobResult(testFileName), timeout).get should equal (validInvalidInput)
+      Await.result(hdfsDAO.deleteJobResult(testFileName), timeout) should equal (true)
+      Await.result(
+        hdfsDAO.getJobResult(testFileName), timeout) should equal (None) // ensure there is no file after
+    }
+
+    it("should return nothing if file doesn't exist") {
+      Await.result(hdfsDAO.getJobResult(testFileName), timeout) should equal (None)
+    }
+
+    it("should return false if delete is unsuccessful") {
+      Await.result(hdfsDAO.deleteJobResult(testFileName), timeout) should equal (false)
+    }
+
+    it("should return true writing a file which already exists") {
+      val testArray: Array[Byte] = "Test file".toCharArray.map(_.toByte)
+      Await.result(hdfsDAO.saveJobResult(testFileName, testArray), timeout) should equal (true)
+      Await.result(hdfsDAO.saveJobResult(testFileName, testArray), timeout) should equal (true)
+    }
+  }
+
   describe("check behavior if HDFS is misconfigured") {
     it("should return false if save is unsuccessful") {
       def config: Config = ConfigFactory.parseString(

@@ -28,19 +28,19 @@ class HdfsBinaryObjectsDAO(config: Config) extends BinaryObjectsDAO {
 
   override def saveBinary(id: String, binaryBytes: Array[Byte]): Future[Boolean] = {
     Future {
-      hdfsFacade.save(extendPath(id), binaryBytes, skipIfExists = true)
+      hdfsFacade.save(getBinariesPath(id), binaryBytes, skipIfExists = true)
     }
   }
 
   override def deleteBinary(id: String): Future[Boolean] = {
     Future {
-      hdfsFacade.delete(extendPath(id))
+      hdfsFacade.delete(getBinariesPath(id))
     }
   }
 
   override def getBinary(id: String): Future[Option[Array[Byte]]] = {
     Future {
-      hdfsFacade.get(extendPath(id)) match {
+      hdfsFacade.get(getBinariesPath(id)) match {
         case Some(inputStream) =>
           Some(Utils.usingResource(inputStream)(IOUtils.toByteArray))
         case None =>
@@ -50,5 +50,30 @@ class HdfsBinaryObjectsDAO(config: Config) extends BinaryObjectsDAO {
     }
   }
 
-  private def extendPath(id: String): String = s"$binaryBasePath/$id"
+  override def saveJobResult(jobId: String, binaryBytes: Array[Byte]): Future[Boolean] = {
+    Future {
+      hdfsFacade.save(getJobResultsPath(jobId), binaryBytes, skipIfExists = true)
+    }
+  }
+
+  override def deleteJobResult(jobId: String): Future[Boolean] = {
+    Future {
+      hdfsFacade.delete(getJobResultsPath(jobId))
+    }
+  }
+
+  override def getJobResult(jobId: String): Future[Option[Array[Byte]]] = {
+    Future {
+      hdfsFacade.get(getJobResultsPath(jobId)) match {
+        case Some(inputStream) =>
+          Some(Utils.usingResource(inputStream)(IOUtils.toByteArray))
+        case None =>
+          logger.error(s"Failed to get a job result file for job $jobId from HDFS.")
+          None
+      }
+    }
+  }
+
+  private def getBinariesPath(id: String): String = s"$binaryBasePath/$id"
+  private def getJobResultsPath(id: String): String = s"$binaryBasePath/job_results/$id"
 }
