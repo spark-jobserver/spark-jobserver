@@ -117,6 +117,7 @@ Spark Job Server is included in Datastax Enterprise!
 
 | Version     | Spark Version | Scala Version |
 |-------------|---------------|---------------|
+| 0.8.1       | 2.2.0         | 2.11          |
 | 0.10.2      | 2.4.4         | 2.11          |
 | 0.11.1      | 2.4.4         | 2.11, 2.12    |
 
