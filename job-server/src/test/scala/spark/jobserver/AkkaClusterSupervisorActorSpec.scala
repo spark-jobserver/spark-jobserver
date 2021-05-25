@@ -324,6 +324,12 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       case contexts: Seq[_] => contexts.foreach(stopContext(_))
       case _ =>
     }
+
+    // Make sure that all contexts were deleted to avoid flaky tests
+    Utils.retry(5, 1000){
+      supervisor ! ListContexts
+      expectMsg(Seq.empty[String])
+    }
   }
 
   describe("Context create tests") {
@@ -408,10 +414,13 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       supervisor ! AddContext("test-context4", contextConfig)
       expectMsg(contextInitTimeout, ContextInitialized)
 
-      supervisor ! StopContext("test-context4")
-      expectMsg(ContextStopped)
-      managerProbe.expectMsgClass(classOf[Terminated])
-      managerProbe.expectMsg("Executed")
+      // May happen that stop request is sent before context info was successfully saved
+      Utils.retry(3) {
+        supervisor ! StopContext("test-context4")
+        expectMsg(ContextStopped)
+        managerProbe.expectMsgClass(classOf[Terminated])
+        managerProbe.expectMsg("Executed")
+      }
     }
 
     it("context stop should be able to handle case when no context is present") {
