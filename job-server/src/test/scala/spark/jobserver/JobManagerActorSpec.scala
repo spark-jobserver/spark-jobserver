@@ -1,7 +1,5 @@
 package spark.jobserver
 
-import java.io.File
-import java.nio.file.{Files, StandardOpenOption}
 import akka.actor.{ActorRef, ActorSystem, Cancellable, PoisonPill, Props}
 import akka.http.scaladsl.model.Uri
 import akka.pattern.ask
@@ -11,19 +9,21 @@ import org.joda.time.DateTime
 import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.spark.SparkEnv
 import org.slf4j.LoggerFactory
+import spark.jobserver.CommonMessages.{JobRestartFailed, JobStarted, JobValidationFailed}
+import spark.jobserver.ContextSupervisor.{ContextStopError, ContextStopInProgress, SparkContextStopped}
 import spark.jobserver.DataManagerActor.RetrieveData
 import spark.jobserver.JobManagerActor.{Initialize, KillJob}
 import spark.jobserver.common.akka.AkkaTestUtils
-import spark.jobserver.CommonMessages.{JobRestartFailed, JobStarted, JobValidationFailed}
-import spark.jobserver.io._
-import spark.jobserver.ContextSupervisor.{ContextStopError, ContextStopInProgress, SparkContextStopped}
 import spark.jobserver.io.JobDAOActor.{SaveJobConfig, SaveJobInfo, SavedSuccessfully}
+import spark.jobserver.io._
 import spark.jobserver.util._
 
+import java.io.File
+import java.nio.file.{Files, StandardOpenOption}
 import scala.collection.mutable
-import scala.concurrent.{Await, Future}
-import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration._
+import scala.concurrent.{Await, Future}
 import scala.util.Try
 
 /**
@@ -248,9 +248,10 @@ class JobManagerTestActor(daoActor: ActorRef,
 }
 
 class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) {
-  import akka.testkit._
   import CommonMessages._
   import JobManagerActorSpec.MaxJobsPerContext
+  import akka.testkit._
+
   import scala.concurrent.duration._
 
   val logger = LoggerFactory.getLogger(getClass)
@@ -443,8 +444,9 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
     }
 
     it("should start job, return JobStarted (async) and write context id and status to DAO") {
-      import scala.concurrent.Await
       import spark.jobserver.io.JobStatus
+
+      import scala.concurrent.Await
 
       val configWithCtxId = ConfigFactory.parseString(s"context.id=$contextId").withFallback(contextConfig)
       manager ! JobManagerActor.Initialize(configWithCtxId, None, emptyActor)
@@ -457,19 +459,25 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       expectMsgClass(startJobWait, classOf[JobStarted])
       assert(callbackHandler.failureCount == 0)
       assert(callbackHandler.successCount == 0)
-      val jobInfo = Await.result(inMemoryMetaDAO.getJobsByContextId(contextId), defaultSmallTimeout)
+      val jobInfo = Utils.retry(3) {
+        Await.result(inMemoryMetaDAO.getJobsByContextId(contextId)
+          // JobInfo not present in DB yet. Try again later
+          .map(s => if (s.isEmpty) throw new AssertionError("Expected jobInfo to be non-empty") else s),
+          defaultSmallTimeout)
+      }
       jobInfo should not be (None)
       jobInfo.length should be (1)
       jobInfo.head.contextId should be (contextId)
-      jobInfo.head.state should be (JobStatus.Running)
+      Set(JobStatus.Running, JobStatus.Finished) should contain (jobInfo.head.state)
       expectNoMessage()
       assert(callbackHandler.failureCount == 0)
       assert(callbackHandler.successCount == 0)
     }
 
     it("should start job, return JobStarted (async) and invoke callback") {
-      import scala.concurrent.Await
       import spark.jobserver.io.JobStatus
+
+      import scala.concurrent.Await
 
       val configWithCtxId = ConfigFactory.parseString(s"context.id=$contextId").withFallback(contextConfig)
       manager ! JobManagerActor.Initialize(configWithCtxId, None, emptyActor)
@@ -482,11 +490,16 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       expectMsgClass(startJobWait, classOf[JobStarted])
       assert(callbackHandler.failureCount == 0)
       assert(callbackHandler.successCount == 0)
-      val jobInfo = Await.result(inMemoryMetaDAO.getJobsByContextId(contextId), defaultSmallTimeout)
+      val jobInfo = Utils.retry(3) {
+        Await.result(inMemoryMetaDAO.getJobsByContextId(contextId)
+          // JobInfo not present in DB yet. Try again later
+          .map(s => if (s.isEmpty) throw new AssertionError("Expected jobInfo to be non-empty") else s),
+          defaultSmallTimeout)
+      }
       jobInfo should not be (None)
       jobInfo.length should be (1)
       jobInfo.head.contextId should be (contextId)
-      jobInfo.head.state should be (JobStatus.Running)
+      Set(JobStatus.Running, JobStatus.Finished) should contain (jobInfo.head.state)
       expectNoMessage()
       assert(callbackHandler.failureCount == 0)
       assert(callbackHandler.successCount == 1)
