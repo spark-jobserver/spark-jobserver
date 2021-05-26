@@ -47,7 +47,7 @@ trait BinaryObjectsDAO {
   }
 
   /**
-    * Delete a binary file provided through /binaries endpoint.
+    * Delete a binary object provided through /binaries endpoint.
     * @param id unique binary identifier
     * @throws NotImplementedError if not implemented in storage class.
     */
@@ -56,7 +56,7 @@ trait BinaryObjectsDAO {
   }
 
   /**
-    * Get a binary file provided through /binaries endpoint.
+    * Get a binary object provided through /binaries endpoint.
     * @param id unique binary identifier
     * @throws NotImplementedError if not implemented in storage class.
     */
@@ -76,7 +76,7 @@ trait BinaryObjectsDAO {
   }
 
   /**
-   * Delete a binary file which is representing a job result.
+   * Delete a binary object which is representing a job result.
    * @param jobId unique identifier of the job that result belongs to
    * @throws NotImplementedError if not implemented in storage class.
    */
@@ -85,7 +85,7 @@ trait BinaryObjectsDAO {
   }
 
   /**
-   * Get a binary file which is representing a job result.
+   * Get a binary object which is representing a job result.
    * @param jobId unique identifier of the job that result belongs to
    * @throws NotImplementedError if not implemented in storage class.
    */
