@@ -257,6 +257,19 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
   // This is needed to help tests pass on some MBPs when working from home
   System.setProperty("spark.driver.host", "localhost")
 
+  private def startContextAndWaitForItToBeVisible(contextName: String, config: Config = contextConfig) = {
+    supervisor ! AddContext(contextName, config)
+    expectMsg(contextInitTimeout, ContextInitialized)
+
+    Utils.retry(2, 1000) {
+      supervisor ! ListContexts
+      expectMsgPF(3.seconds.dilated) {
+        case contexts: Seq[_] => contexts.contains(contextName)
+        case _ =>
+      }
+    }
+  }
+
   def saveContextAndJobInRestartingState(contextId: String) : String = {
     val dt = DateTime.now()
     saveContextInSomeState(contextId, ContextStatus.Restarting)
@@ -314,9 +327,12 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
     // Cleanup all the context to have a fresh start for next testcase
     def stopContext(contextName: Any) {
       supervisor ! StopContext(contextName.toString())
-      expectMsg(3.seconds.dilated, ContextStopped)
-      managerProbe.expectMsgClass(classOf[Terminated])
-      managerProbe.expectMsg("Executed")
+      expectMsgPF() {
+        case ContextStopped =>
+          managerProbe.expectMsgClass(classOf[Terminated])
+          managerProbe.expectMsg("Executed")
+        case NoSuchContext => // The context was already deleted by a test
+      }
     }
 
     supervisor ! ListContexts
@@ -339,15 +355,14 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
     }
 
     it("should return valid managerActorRef if context exists") {
-      supervisor ! AddContext("test-context1", contextConfig)
-      expectMsg(contextInitTimeout, ContextInitialized)
+      val contextName = "test-context1"
+      startContextAndWaitForItToBeVisible(contextName)
 
-      supervisor ! GetContext("test-context1")
+      supervisor ! GetContext(contextName)
       val isValid = expectMsgPF(2.seconds.dilated) {
         case _: ActorRef => true
         case _ => false
       }
-
       isValid should be (true)
     }
 
@@ -411,16 +426,13 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
     }
 
     it("should be able to stop a running context") {
-      supervisor ! AddContext("test-context4", contextConfig)
-      expectMsg(contextInitTimeout, ContextInitialized)
+      val contextName = "test-context4"
+      startContextAndWaitForItToBeVisible(contextName)
 
-      // May happen that stop request is sent before context info was successfully saved
-      Utils.retry(3) {
-        supervisor ! StopContext("test-context4")
-        expectMsg(ContextStopped)
-        managerProbe.expectMsgClass(classOf[Terminated])
-        managerProbe.expectMsg("Executed")
-      }
+      supervisor ! StopContext(contextName)
+      expectMsg(ContextStopped)
+      managerProbe.expectMsgClass(classOf[Terminated])
+      managerProbe.expectMsg("Executed")
     }
 
     it("context stop should be able to handle case when no context is present") {
@@ -429,8 +441,8 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
     }
 
     it("should respond with ContextStopInProgress if driver failed to stop") {
-      supervisor ! AddContext("send-in-progress-back", contextConfig)
-      expectMsg(contextInitTimeout, ContextInitialized)
+      val contextName = "send-in-progress-back"
+      startContextAndWaitForItToBeVisible(contextName)
 
       supervisor ! StopContext("send-in-progress-back")
 
@@ -438,52 +450,51 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
     }
 
     it("should respond with context stop error if driver doesn't respond back") {
-      supervisor ! AddContext("dont-respond", contextConfig)
-      expectMsg(contextInitTimeout, ContextInitialized)
+      val contextName = "dont-respond"
+      startContextAndWaitForItToBeVisible(contextName)
 
-      supervisor ! StopContext("dont-respond")
+      supervisor ! StopContext(contextName)
 
       expectMsgType[ContextStopError](4.seconds)
     }
 
     it("should stop context eventually if context stop was in progress") {
-      supervisor ! AddContext("multiple-stop-attempts", contextConfig)
-      expectMsg(contextInitTimeout, ContextInitialized)
+      val contextName = "multiple-stop-attempts"
+      startContextAndWaitForItToBeVisible(contextName)
 
-      supervisor ! StopContext("multiple-stop-attempts")
+      supervisor ! StopContext(contextName)
       expectMsg(ContextStopInProgress)
 
-      supervisor ! StopContext("multiple-stop-attempts")
+      supervisor ! StopContext(contextName)
       expectMsg(ContextStopInProgress)
 
-      supervisor ! StopContext("multiple-stop-attempts")
+      supervisor ! StopContext(contextName)
       expectMsg(ContextStopped)
       managerProbe.expectMsgClass(classOf[Terminated])
       managerProbe.expectMsg("Executed")
     }
 
     it("should be able to stop a running context forcefully") {
-      supervisor ! AddContext("test-context6", contextConfig)
-      expectMsg(contextInitTimeout, ContextInitialized)
+      val contextName = "test-context6"
+      startContextAndWaitForItToBeVisible(contextName)
 
-      supervisor ! StopContext("test-context6", true)
+      supervisor ! StopContext(contextName, true)
       expectMsg(ContextStopped)
       managerProbe.expectMsgClass(classOf[Terminated])
       managerProbe.expectMsg("Executed")
     }
 
     it("should respond with context stop error if there is no answer after forcefull stop request") {
-      supervisor ! AddContext("dont-respond-if-force", contextConfig)
-      expectMsg(contextInitTimeout, ContextInitialized)
+      val contextName = "dont-respond-if-force"
+      startContextAndWaitForItToBeVisible(contextName)
 
-      supervisor ! StopContext("dont-respond-if-force", true)
-
+      supervisor ! StopContext(contextName, true)
       expectMsgType[ContextStopError](4.seconds)
     }
 
     it("should respond with context stop error if error was sent back") {
-      supervisor ! AddContext("send-on-error", contextConfig)
-      expectMsg(contextInitTimeout, ContextInitialized)
+      val contextName = "send-on-error"
+      startContextAndWaitForItToBeVisible(contextName)
 
       supervisor ! StopContext("send-on-error", true)
 
@@ -523,11 +534,8 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
     }
 
     it("should be able to start multiple contexts") {
-      supervisor ! AddContext("test-context7", contextConfig)
-      expectMsg(contextInitTimeout, ContextInitialized)
-
-      supervisor ! AddContext("test-context8", contextConfig)
-      expectMsg(contextInitTimeout, ContextInitialized)
+      startContextAndWaitForItToBeVisible("test-context7")
+      startContextAndWaitForItToBeVisible("test-context8")
 
       supervisor ! ListContexts
       expectMsgAnyOf(Seq("test-context7", "test-context8"), Seq("test-context8", "test-context7"))
@@ -726,8 +734,7 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
 
     it("should be able to list running/restarting/stopping contexts") {
       val contextName = "test-context9"
-      supervisor ! AddContext(contextName, contextConfig)
-      expectMsg(contextInitTimeout, ContextInitialized)
+      startContextAndWaitForItToBeVisible(contextName)
 
       daoActor ! JobDAOActor.GetContextInfoByName(contextName)
       val msg = expectMsgType[JobDAOActor.ContextResponse]
@@ -770,44 +777,40 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       val configWithContextInfo = ConfigFactory.parseString(
         "manager.context.webUiUrl=dummy-url,manager.context.appId=appId-dummy"
       ).withFallback(contextConfig)
-      supervisor ! AddContext("test-context11", configWithContextInfo)
-      expectMsg(contextInitTimeout, ContextInitialized)
+      val contextName = "test-context11"
+      startContextAndWaitForItToBeVisible(contextName, configWithContextInfo)
 
-      Utils.retry(3, 1000) {
-        val context = Await.result(daoActor ? GetContextInfoByName("test-context11"), 3 seconds).
-          asInstanceOf[ContextResponse].contextInfo.get
-        context.state should equal(ContextStatus.Running)
+      val context = Await.result(daoActor ? GetContextInfoByName(contextName), 3 seconds).
+        asInstanceOf[ContextResponse].contextInfo.get
+      context.state should equal(ContextStatus.Running)
 
-        supervisor ! GetSparkContexData("test-context11")
-        expectMsg(SparkContexData(context,
-          Some("appId-dummy"), Some("dummy-url")))
-      }
+      supervisor ! GetSparkContexData(contextName)
+      expectMsg(SparkContexData(context,
+        Some("appId-dummy"), Some("dummy-url")))
     }
 
     it("should return valid contextInfo, appId but no webUiUrl") {
       val configWithContextInfo = ConfigFactory.parseString("manager.context.appId=appId-dummy")
                 .withFallback(contextConfig)
-      supervisor ! AddContext("test-context12", configWithContextInfo)
-      expectMsg(contextInitTimeout, ContextInitialized)
+      val contextName = "test-context12"
+      startContextAndWaitForItToBeVisible(contextName, configWithContextInfo)
 
-      Utils.retry(3, 1000) {
-        val context = Await.result(daoActor ? GetContextInfoByName("test-context12"), 3 seconds).
-          asInstanceOf[ContextResponse].contextInfo.get
-        context.state should equal(ContextStatus.Running)
+      val context = Await.result(daoActor ? GetContextInfoByName(contextName), 3 seconds).
+        asInstanceOf[ContextResponse].contextInfo.get
+      context.state should equal(ContextStatus.Running)
 
-        supervisor ! GetSparkContexData("test-context12")
-        expectMsg(SparkContexData(context, Some("appId-dummy"), None))
-      }
+      supervisor ! GetSparkContexData(contextName)
+      expectMsg(SparkContexData(context, Some("appId-dummy"), None))
     }
 
     it("should return valid contextInfo and no appId or webUiUrl if SparkContextDead is received") {
       val configWithContextInfo = ConfigFactory.parseString("")
                 .withFallback(contextConfig)
-      supervisor ! AddContext("test-context13", configWithContextInfo)
-      expectMsg(contextInitTimeout, ContextInitialized)
+      val contextName = "test-context13"
+      startContextAndWaitForItToBeVisible(contextName, configWithContextInfo)
 
       Utils.retry(3, 1000) {
-        val context = Await.result(daoActor ? GetContextInfoByName("test-context13"), 3 seconds).
+        val context = Await.result(daoActor ? GetContextInfoByName(contextName), 3 seconds).
           asInstanceOf[ContextResponse].contextInfo.get
         context.state should equal(ContextStatus.Running)
 
@@ -819,17 +822,16 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
     it("should return valid contextInfo and no appId or webUiUrl if Expception occurs") {
       val configWithContextInfo = ConfigFactory.parseString("manager.context.appId=Error")
                 .withFallback(contextConfig)
-      supervisor ! AddContext("test-context14", configWithContextInfo)
-      expectMsg(contextInitTimeout, ContextInitialized)
+      val contextName = "test-context14"
+      startContextAndWaitForItToBeVisible(contextName, configWithContextInfo)
 
-      Utils.retry(3, 1000) {
-        val context = Await.result(daoActor ? GetContextInfoByName("test-context14"), 3 seconds).
-          asInstanceOf[ContextResponse].contextInfo.get
-        context.state should equal(ContextStatus.Running)
+      val context = Await.result(daoActor ? GetContextInfoByName("test-context14"), 3 seconds).
+        asInstanceOf[ContextResponse].contextInfo.get
+      context.state should equal(ContextStatus.Running)
 
-        supervisor ! GetSparkContexData("test-context14")
-        expectMsg(SparkContexData(context, None, None))
-      }
+      supervisor ! GetSparkContexData("test-context14")
+      expectMsg(SparkContexData(context, None, None))
+
     }
 
     it("should return UnexpectedError if a problem with db happens") {
@@ -985,10 +987,10 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
 
   describe("Supervise mode tests") {
     it("should start context if supervise mode is disabled") {
-      supervisor ! AddContext("test-context", contextConfig)
-      expectMsg(contextInitTimeout, ContextInitialized)
+      val contextName = "test-context"
+      startContextAndWaitForItToBeVisible(contextName)
 
-      val contextInfo = Await.result(daoActor ? GetContextInfoByName("test-context"), daoTimeout).
+      val contextInfo = Await.result(daoActor ? GetContextInfoByName(contextName), daoTimeout).
         asInstanceOf[ContextResponse].contextInfo
       contextInfo should not be None
     }
@@ -1007,10 +1009,10 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
     it("should start context with supervise mode enabled") {
       val configWithSuperviseMode = ConfigFactory.parseString(
           s"${ManagerLauncher.CONTEXT_SUPERVISE_MODE_KEY}=true").withFallback(contextConfig)
-      supervisor ! AddContext("test-context", configWithSuperviseMode)
-      expectMsg(contextInitTimeout, ContextInitialized)
+      val contextName = "test-context"
+      startContextAndWaitForItToBeVisible(contextName, configWithSuperviseMode)
 
-      val contextInfo = Await.result(daoActor ? GetContextInfoByName("test-context"), daoTimeout).
+      val contextInfo = Await.result(daoActor ? GetContextInfoByName(contextName), daoTimeout).
         asInstanceOf[ContextResponse].contextInfo
       contextInfo should not be None
     }
