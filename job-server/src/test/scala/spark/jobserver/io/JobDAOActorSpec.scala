@@ -576,4 +576,74 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
     }
 
   }
+
+  describe("Cleanup"){
+
+    it("should cleanup jobs, configs and results in final state older than a certain date"){
+      // Test data
+      val oldDate = DateTime.now().minusHours(48)
+      val recentDate = DateTime.now().minusHours(23)
+      val oldJob = JobInfo("oldJob", "contextId1", "ContextName1", "mainClass", "FINISHED",
+        DateTime.now, Some(oldDate), None, Seq.empty)
+      val recentJob = JobInfo("recentJob", "contextId2", "ContextName2", "mainClass", "FINISHED",
+        DateTime.now, Some(recentDate), None, Seq.empty)
+      val runningJob = JobInfo("runningJob", "contextId3", "ContextName3", "mainClass", "RUNNING",
+        DateTime.now, None, None, Seq.empty)
+      val restartingJob = JobInfo("restartingJob", "contextId4", "ContextName4", "mainClass", "RESTARTING",
+        DateTime.now, Some(oldDate), None, Seq.empty)
+
+      // Persist jobInfos and results
+      inMemoryDaoActor ! SaveJobInfo(oldJob)
+      expectMsg(true)
+      inMemoryDaoActor ! SaveJobConfig(oldJob.jobId, ConfigFactory.parseString("{test=abc}"))
+      expectMsg(JobConfigStored)
+      inMemoryDaoActor ! SaveJobResult(oldJob.jobId, "abc")
+      expectMsg(SavedSuccessfully)
+      inMemoryDaoActor ! SaveJobInfo(recentJob)
+      expectMsg(true)
+      inMemoryDaoActor ! SaveJobConfig(recentJob.jobId, ConfigFactory.parseString("{test=def}"))
+      expectMsg(JobConfigStored)
+      inMemoryDaoActor ! SaveJobResult(recentJob.jobId, "def")
+      expectMsg(SavedSuccessfully)
+      inMemoryDaoActor ! SaveJobInfo(runningJob)
+      expectMsg(true)
+      inMemoryDaoActor ! SaveJobConfig(runningJob.jobId, ConfigFactory.parseString("{test=ghi}"))
+      expectMsg(JobConfigStored)
+      inMemoryDaoActor ! SaveJobInfo(restartingJob)
+      expectMsg(true)
+      inMemoryDaoActor ! SaveJobConfig(restartingJob.jobId, ConfigFactory.parseString("{test=jkl}"))
+      expectMsg(JobConfigStored)
+
+      // Cleanup
+      inMemoryDaoActor ! CleanupJobs(24)
+      expectNoMessage()
+
+      // Verify cleanup worked
+      inMemoryDaoActor ! GetJobInfo(oldJob.jobId)
+      expectMsg(None)
+      inMemoryDaoActor ! GetJobResult(oldJob.jobId)
+      expectMsg(JobResult(None))
+      inMemoryDaoActor ! GetJobConfig(oldJob.jobId)
+      expectMsg(JobConfig(None))
+
+      // Verify no accidental deletion took place
+      inMemoryDaoActor ! GetJobInfo(recentJob.jobId)
+      expectMsg(Some(recentJob))
+      inMemoryDaoActor ! GetJobResult(recentJob.jobId)
+      expectMsg(JobResult("def"))
+      inMemoryDaoActor ! GetJobConfig(recentJob.jobId)
+      expectMsg(JobConfig(Some(ConfigFactory.parseString("{test=def}"))))
+      inMemoryDaoActor ! GetJobInfo(runningJob.jobId)
+      expectMsg(Some(runningJob))
+      inMemoryDaoActor ! GetJobConfig(runningJob.jobId)
+      expectMsg(JobConfig(Some(ConfigFactory.parseString("{test=ghi}"))))
+      inMemoryDaoActor ! GetJobInfo(restartingJob.jobId)
+      expectMsg(Some(restartingJob))
+      inMemoryDaoActor ! GetJobConfig(restartingJob.jobId)
+      expectMsg(JobConfig(Some(ConfigFactory.parseString("{test=jkl}"))))
+
+    }
+
+  }
+
 }

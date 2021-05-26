@@ -40,4 +40,8 @@ class InMemoryBinaryObjectsDAO extends BinaryObjectsDAO {
     }
   }
 
+  override def deleteJobResults(jobIds: Seq[String]): Future[Boolean] = Future {
+    jobIds.foreach(jobId => jobResults.remove(jobId))
+    true
+  }
 }

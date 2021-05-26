@@ -58,6 +58,7 @@ object JobDAOActor {
   case class SaveJobResult(jobId: String, result: Any) extends JobDAORequest
   case class GetJobResult(jobId: String) extends JobDAORequest
   case class DeleteJobResult(jobId: String) extends JobDAORequest
+  case class CleanupJobs(ageInHours: Int) extends JobDAORequest
 
   //Responses
   sealed trait JobDAOResponse
@@ -319,6 +320,26 @@ class JobDAOActor(metaDataDAO: MetaDataDAO, binaryDAO: BinaryObjectsDAO, config:
           logger.error(s"Failed to delete job result for job ${jobId}. DAO returned false.")
         case Failure(t) =>
           logger.error(s"Failed to delete job result for job ${jobId} in DAO.", t)
+      }
+
+    case CleanupJobs(ageInHours) =>
+      // Calculate cutoff date to delete jobs
+      val cutoffDate = DateTime.now().minusHours(ageInHours)
+      // Clean up metadata
+      metaDataDAO.deleteJobs(cutoffDate).onComplete{
+        case Success(jobIds) =>
+          logger.info(s"Cleaned up metadata for ${jobIds.size} jobs older than ${ageInHours} hours.")
+          // Clean up binary data
+          binaryDAO.deleteJobResults(jobIds).onComplete{
+            case Success(true) =>
+              logger.info(s"Cleaned up job results for ${jobIds.size} jobs older than ${ageInHours} hours.")
+            case Success(false) =>
+              logger.error("Failed to delete job results. DAO returned false.")
+            case Failure(t) =>
+              logger.error("Failed to delete job results.", t)
+          }
+        case Failure(t) =>
+          logger.error("Failed to clean up job metadata.", t)
       }
 
     case anotherEvent => logger.info(s"Ignoring unknown event type: $anotherEvent")

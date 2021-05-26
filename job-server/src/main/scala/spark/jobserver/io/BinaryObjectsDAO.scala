@@ -85,6 +85,16 @@ trait BinaryObjectsDAO {
   }
 
   /**
+   * Delete a list of binary objects representing job results.
+   * @param jobIds Sequence of unique job identifiers for which results should be deleted
+   * @return true if deletion was successful, false otherwise
+   * @throws NotImplementedError if not implemented in storage class.
+   */
+  def deleteJobResults(jobIds: Seq[String]): Future[Boolean] = {
+    throw new NotImplementedError()
+  }
+
+  /**
    * Get a binary object which is representing a job result.
    * @param jobId unique identifier of the job that result belongs to
    * @throws NotImplementedError if not implemented in storage class.

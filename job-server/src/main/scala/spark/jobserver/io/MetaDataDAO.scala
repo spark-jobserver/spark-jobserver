@@ -78,6 +78,17 @@ trait MetaDataDAO {
     */
   def getJobsByBinaryName(binName: String, statuses: Option[Seq[String]] = None): Future[Seq[JobInfo]]
 
+
+  /**
+    * Clean up all jobs where the endTime is older than a certain date
+    * @param olderThan Minimum end time for jobs to be qualified for deletion
+    * @return Sequence of jobIds that were deleted
+    */
+  def deleteJobs(olderThan: DateTime): Future[Seq[String]] = {
+    // TODO remove
+    throw new NotImplementedError()
+  }
+
   /**
     * Persist a job configuration along with provided job id.
     *
