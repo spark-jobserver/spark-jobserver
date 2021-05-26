@@ -314,9 +314,12 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
     // Cleanup all the context to have a fresh start for next testcase
     def stopContext(contextName: Any) {
       supervisor ! StopContext(contextName.toString())
-      expectMsg(3.seconds.dilated, ContextStopped)
-      managerProbe.expectMsgClass(classOf[Terminated])
-      managerProbe.expectMsg("Executed")
+      expectMsgPF() {
+        case ContextStopped =>
+          managerProbe.expectMsgClass(classOf[Terminated])
+          managerProbe.expectMsg("Executed")
+        case NoSuchContext => // The context was already deleted by a test
+      }
     }
 
     supervisor ! ListContexts
@@ -342,13 +345,16 @@ class AkkaClusterSupervisorActorSpec extends TestKit(AkkaClusterSupervisorActorS
       supervisor ! AddContext("test-context1", contextConfig)
       expectMsg(contextInitTimeout, ContextInitialized)
 
-      supervisor ! GetContext("test-context1")
-      val isValid = expectMsgPF(2.seconds.dilated) {
-        case _: ActorRef => true
-        case _ => false
+      // Depending on test setup, this test may be flaky if DAO save operation, which
+      // is triggered async, takes a bit more time
+      Utils.retry(2, 1000) {
+        supervisor ! GetContext("test-context1")
+        val isValid = expectMsgPF(2.seconds.dilated) {
+          case _: ActorRef => true
+          case _ => false
+        }
+        isValid should be (true)
       }
-
-      isValid should be (true)
     }
 
     it("should not create context in case of error") {
