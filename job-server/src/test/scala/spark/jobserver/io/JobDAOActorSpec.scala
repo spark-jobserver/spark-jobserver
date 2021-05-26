@@ -316,6 +316,25 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       daoActor ! SaveJobInfo(jobInfo)
       expectMsg(false)
     }
+
+    it("should return an error if result was not saved successfully"){
+      daoActor ! SaveJobResult("saveUnsuccessful", "abc")
+      DAOTestsHelper.testProbe.expectMsg("JobResult: Save unsuccessful")
+      expectMsgType[SaveFailed]
+      daoActor ! SaveJobResult("saveFailure", "abc")
+      DAOTestsHelper.testProbe.expectMsg("JobResult: Save failure")
+      expectMsgType[SaveFailed]
+    }
+
+    it("should return JobResult(None) in case the result cannot be retrieved successfully"){
+      daoActor ! GetJobResult("getUnsuccessful")
+      DAOTestsHelper.testProbe.expectMsg("JobResult: Get unsuccessful")
+      expectMsg(JobResult(None))
+      daoActor ! GetJobResult("getFailure")
+      DAOTestsHelper.testProbe.expectMsg("JobResult: Get failure")
+      expectMsg(JobResult(None))
+    }
+
   }
 
   describe("CleanContextJobInfos tests using InMemoryDAO") {

@@ -64,6 +64,41 @@ class DummyBinaryObjectsDAO(config: Config) extends BinaryObjectsDAO {
     DAOTestsHelper.testProbe.ref ! "BinaryDAO: Get success"
     Future.successful(Some(DAOTestsHelper.binaryDAOBytesSuccess))
   }
+
+  override def saveJobResult(jobId: String, binaryBytes: Array[Byte]): Future[Boolean] = {
+    jobId match {
+      case "saveSuccess" =>
+        DAOTestsHelper.testProbe.ref ! "JobResult: Save success"
+        Future.successful(true)
+      case "saveUnsuccessful" =>
+        DAOTestsHelper.testProbe.ref ! "JobResult: Save unsuccessful"
+        Future.successful(false)
+      case "saveFailure" =>
+        DAOTestsHelper.testProbe.ref ! "JobResult: Save failure"
+        Future.failed(new Throwable())
+      case _ =>
+        DAOTestsHelper.testProbe.ref ! s"JobResult: Unexpected jobId $jobId"
+        Future.failed(new Throwable("Undefined case in DummyDAO"))
+    }
+  }
+
+  override def getJobResult(jobId: String): Future[Option[Array[Byte]]] = {
+    jobId match {
+      case "getSuccess" =>
+        DAOTestsHelper.testProbe.ref ! "JobResult: Get success"
+        Future.successful(Some("Bytearray".toCharArray.map(_.toByte)))
+      case "getUnsuccessful" =>
+        DAOTestsHelper.testProbe.ref ! "JobResult: Get unsuccessful"
+        Future.successful(None)
+      case "getFailure" =>
+        DAOTestsHelper.testProbe.ref ! "JobResult: Get failure"
+        Future.failed(new Throwable())
+      case _ =>
+        DAOTestsHelper.testProbe.ref ! s"JobResult: Unexpected jobId $jobId"
+        Future.failed(new Throwable("Undefined case in DummyDAO"))
+    }
+
+  }
 }
 
 class DummyMetaDataDAO(config: Config) extends MetaDataDAO {
