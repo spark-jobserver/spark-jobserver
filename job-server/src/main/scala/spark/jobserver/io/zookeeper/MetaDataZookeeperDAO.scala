@@ -95,6 +95,31 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
     }
   }
 
+  override def deleteContexts(olderThan: DateTime): Future[Boolean] = {
+    logger.debug(s"Deleting context older than ${olderThan}")
+    Future{
+      Utils.usingResource(zookeeperUtils.getClient) {
+        client =>
+          zookeeperUtils.sync(client, contextsDir)
+          lazy val toBeDeleted = zookeeperUtils.list(client, contextsDir)
+            .flatMap(id => zookeeperUtils.read[ContextInfo](client, s"$contextsDir/$id"))
+            .filter(contextInfo => ContextStatus.getFinalStates().contains(contextInfo.state))
+            .filter(contextInfo => contextInfo.endTime.isDefined
+              && contextInfo.endTime.get.isBefore(olderThan))
+          var success = true
+          toBeDeleted.foreach( context => {
+            zookeeperUtils.delete(client, s"${contextsDir}/${context.id}") match {
+              case true => logger.trace(s"Deleted context ${context.name} (${context.id})")
+              case false =>
+                success = false
+                logger.error(s"Could not delete context ${context.name} (${context.id})")
+            }
+          })
+          success
+      }
+    }
+  }
+
   /*
    * Jobs
    */
@@ -158,6 +183,30 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
       }
     }
   }
+
+  override def deleteJobs(olderThan: DateTime): Future[Seq[String]] = {
+    logger.debug(s"Deleting jobs older than ${olderThan}")
+    Future{
+      Utils.usingResource(zookeeperUtils.getClient) {
+        client =>
+          zookeeperUtils.sync(client, jobsDir)
+          lazy val toBeDeleted = zookeeperUtils.list(client, jobsDir)
+            .flatMap(id => zookeeperUtils.read[JobInfo](client, s"$jobsDir/$id"))
+            .filter(jobInfo => JobStatus.getFinalStates().contains(jobInfo.state))
+            .filter(jobInfo => jobInfo.endTime.isDefined
+              && jobInfo.endTime.get.isBefore(olderThan))
+            .map(_.jobId)
+          toBeDeleted.foreach( jobId => {
+            zookeeperUtils.delete(client, s"${jobsDir}/${jobId}") match {
+              case true => logger.trace(s"Deleted job ${jobId}")
+              case false => logger.error(s"Could not delete job ${jobId}")
+            }
+          })
+          toBeDeleted.toSeq
+      }
+    }
+  }
+
 
   /*
    * Helpers
