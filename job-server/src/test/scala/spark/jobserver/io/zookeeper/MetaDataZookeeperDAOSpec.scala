@@ -314,6 +314,34 @@ class MetaDataZookeeperDAOSpec extends AnyFunSpec with TestJarFinder with AnyFun
         equal(contextContextJVMInitializationTimeout)
     }
 
+    it("should delete contexts in final state older than a certain date") {
+      // Persist three contexts
+      val cutoffDate = new DateTime(724291200L)
+      val oldContext = normalContext.copy(id = "1", state = ContextStatus.Finished,
+        endTime = Some(cutoffDate.minusHours(1)))
+      val recentContext = normalContext.copy(id = "2", state = ContextStatus.Finished,
+        endTime = Some(cutoffDate.plusHours(1)))
+      val runningContext = normalContext.copy(id = "3", state = ContextStatus.Running,
+        endTime = None)
+      val restartingContext = normalContext.copy(id = "4", state = ContextStatus.Restarting,
+        endTime = Some(cutoffDate.minusHours(1)))
+      Await.result(dao.saveContext(oldContext), timeout)
+      Await.result(dao.saveContext(recentContext), timeout)
+      Await.result(dao.saveContext(runningContext), timeout)
+      Await.result(dao.saveContext(restartingContext), timeout)
+      Await.result(dao.getContexts(None, None), timeout).size should equal(4)
+      // Delete (one) old one
+      val result = Await.result(dao.deleteContexts(cutoffDate), timeout)
+      result should equal(true)
+      // Assert that (only) old one is gone
+      Await.result(dao.getContexts(None, None), timeout) should
+        equal(Seq(recentContext, runningContext, restartingContext))
+      Await.result(dao.getContext(oldContext.id), timeout) should equal(None)
+      Await.result(dao.getContext(recentContext.id), timeout) should equal(Some(recentContext))
+      Await.result(dao.getContext(runningContext.id), timeout) should equal(Some(runningContext))
+      Await.result(dao.getContext(restartingContext.id), timeout) should equal(Some(restartingContext))
+    }
+
   }
 
   /*
@@ -410,6 +438,49 @@ class MetaDataZookeeperDAOSpec extends AnyFunSpec with TestJarFinder with AnyFun
       val success = Await.result(dao.saveJob(multiJarJob), timeout)
       success should equal(true)
       Await.result(dao.getJob(multiJarJob.jobId), timeout) should equal(Some(multiJarJob))
+    }
+
+    it("should delete jobs in final state older than a certain date") {
+      // Persist three jobs
+      val cutoffDate = new DateTime(724291200L)
+      val oldJob = normalJob.copy(jobId = "1", state = JobStatus.Finished,
+        endTime = Some(cutoffDate.minusHours(1)))
+      val recentJob = normalJob.copy(jobId = "2", state = JobStatus.Finished,
+        endTime = Some(cutoffDate.plusHours(1)))
+      val runningJob = normalJob.copy(jobId = "3", state = JobStatus.Running,
+        endTime = None)
+      val restartingJob = normalJob.copy(jobId = "4", state = JobStatus.Restarting,
+        endTime = Some(cutoffDate.minusHours(1)))
+      Await.result(dao.saveJob(oldJob), timeout)
+      Await.result(dao.saveJob(recentJob), timeout)
+      Await.result(dao.saveJob(runningJob), timeout)
+      Await.result(dao.saveJob(restartingJob), timeout)
+      Await.result(dao.getJobs(100, None), timeout).size should equal(4)
+      // Delete (one) old one
+      val result = Await.result(dao.deleteJobs(cutoffDate), timeout)
+      result should equal(Seq(oldJob.jobId))
+      // Assert that (only) old one is gone
+      Await.result(dao.getJobs(100, None), timeout) should equal(Seq(recentJob, runningJob, restartingJob))
+      Await.result(dao.getJob(oldJob.jobId), timeout) should equal(None)
+      Await.result(dao.getJob(recentJob.jobId), timeout) should equal(Some(recentJob))
+      Await.result(dao.getJob(runningJob.jobId), timeout) should equal(Some(runningJob))
+      Await.result(dao.getJob(restartingJob.jobId), timeout) should equal(Some(restartingJob))
+    }
+
+    it("should delete job configs with jobs"){
+      val cutoffDate = new DateTime(724291200L)
+      // Persist job with config
+      val oldJob = normalJob.copy(jobId = "1", state = JobStatus.Finished,
+        endTime = Some(cutoffDate.minusHours(1)))
+      Await.result(dao.saveJob(oldJob), timeout)
+      Await.result(dao.saveJobConfig(oldJob.jobId, config1), timeout)
+      Await.result(dao.getJobConfig(oldJob.jobId), timeout) should equal (Some(config1))
+      // Delete
+      val result = Await.result(dao.deleteJobs(cutoffDate), timeout)
+      result should equal(Seq("1"))
+      // Assert
+      Await.result(dao.getJob(oldJob.jobId), timeout) should equal(None)
+      Await.result(dao.getJobConfig(oldJob.jobId), timeout) should equal(None)
     }
 
     it("should be able to access data after DAO recreation") {
