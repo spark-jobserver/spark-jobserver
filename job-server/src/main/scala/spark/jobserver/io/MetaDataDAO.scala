@@ -45,6 +45,15 @@ trait MetaDataDAO {
   Future[Seq[ContextInfo]]
 
   /**
+    * Clean up all contexts where the endTime is older than a certain date
+    * @param olderThan Minimum end time for contexts to be qualified for deletion
+    * @return true if deletion was successful
+    */
+  def deleteContexts(olderThan: DateTime) : Future[Boolean] = {
+    throw new NotImplementedError()
+  }
+
+  /**
     * Persist a job info.
     *
     * @param jobInfo
