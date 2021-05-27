@@ -644,6 +644,47 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
 
     }
 
+    it("should cleanup contexts and results in final state older than a certain date"){
+      // Test data
+      val oldDate = DateTime.now().minusHours(48)
+      val recentDate = DateTime.now().minusHours(23)
+      val oldContext = ContextInfo("oldContext", "context1", "someConfig", None,
+        DateTime.now(), Some(oldDate), "FINISHED", None)
+      val recentContext = ContextInfo("recentContext", "context2", "someConfig", None,
+        DateTime.now(), Some(recentDate), "FINISHED", None)
+      val runningContext = ContextInfo("runningContext", "context3", "someConfig", None,
+        DateTime.now(), None, "RUNNING", None)
+      val restartingContext = ContextInfo("restartingContext", "context4", "someConfig", None,
+        DateTime.now(), Some(oldDate), "RESTARTING", None)
+
+      // Persist context
+      inMemoryDaoActor ! SaveContextInfo(oldContext)
+      expectMsg(SavedSuccessfully)
+      inMemoryDaoActor ! SaveContextInfo(recentContext)
+      expectMsg(SavedSuccessfully)
+      inMemoryDaoActor ! SaveContextInfo(runningContext)
+      expectMsg(SavedSuccessfully)
+      inMemoryDaoActor ! SaveContextInfo(restartingContext)
+      expectMsg(SavedSuccessfully)
+
+      // Cleanup
+      inMemoryDaoActor ! CleanupContexts(24)
+      expectNoMessage()
+
+      // Verify cleanup worked
+      inMemoryDaoActor ! GetContextInfo("oldContext")
+      expectMsg(ContextResponse(None))
+
+      // Verify no accidental deletion took place
+      inMemoryDaoActor ! GetContextInfo("recentContext")
+      expectMsg(ContextResponse(Some(recentContext)))
+      inMemoryDaoActor ! GetContextInfo("runningContext")
+      expectMsg(ContextResponse(Some(runningContext)))
+      inMemoryDaoActor ! GetContextInfo("restartingContext")
+      expectMsg(ContextResponse(Some(restartingContext)))
+
+    }
+
   }
 
 }
