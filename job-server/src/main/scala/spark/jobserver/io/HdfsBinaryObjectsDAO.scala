@@ -50,6 +50,8 @@ class HdfsBinaryObjectsDAO(config: Config) extends BinaryObjectsDAO {
     }
   }
 
+  private def extendPath(id: String): String = s"$binaryBasePath/$id"
+
   override def saveJobResult(jobId: String, binaryBytes: Array[Byte]): Future[Boolean] = {
     Future {
       hdfsFacade.save(getJobResultsPath(jobId), binaryBytes, skipIfExists = true)
@@ -71,6 +73,13 @@ class HdfsBinaryObjectsDAO(config: Config) extends BinaryObjectsDAO {
           logger.error(s"Failed to get a job result file for job $jobId from HDFS.")
           None
       }
+    }
+  }
+
+  override def deleteJobResults(jobIds: Seq[String]): Future[Boolean] = {
+    Future {
+      jobIds.map(getJobResultsPath(_))
+        .forall(hdfsFacade.delete(_))
     }
   }
 
