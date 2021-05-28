@@ -1,12 +1,13 @@
 package spark.jobserver.io
 
-import java.io.{ByteArrayInputStream, StreamCorruptedException,
-  ByteArrayOutputStream, ObjectInputStream, ObjectOutputStream, File}
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream, File, ObjectInputStream,
+  ObjectOutputStream, StreamCorruptedException}
 import java.net.URI
 import akka.actor.{ActorRef, Props}
 import com.typesafe.config.Config
 import org.slf4j.LoggerFactory
 
+import scala.concurrent.duration.DurationInt
 import scala.util.{Failure, Success, Try}
 import spark.jobserver.common.akka.InstrumentedActor
 import spark.jobserver.common.akka.metrics.YammerMetrics
@@ -87,8 +88,9 @@ object JobDAOActor {
   case object SavedSuccessfully extends SaveResponse
   case class SaveFailed(error: Throwable) extends SaveResponse
 
-  def props(metadatadao: MetaDataDAO, binarydao: BinaryObjectsDAO, config: Config): Props = {
-    Props(classOf[JobDAOActor], metadatadao, binarydao, config)
+  def props(metadatadao: MetaDataDAO, binarydao: BinaryObjectsDAO,
+            config: Config, cleanup: Boolean = false): Props = {
+    Props(classOf[JobDAOActor], metadatadao, binarydao, config, cleanup)
   }
 
   def serialize(value: Any): Array[Byte] = {
@@ -118,12 +120,18 @@ object JobDAOActor {
   }
 }
 
-class JobDAOActor(metaDataDAO: MetaDataDAO, binaryDAO: BinaryObjectsDAO, config: Config) extends
+class JobDAOActor(metaDataDAO: MetaDataDAO, binaryDAO: BinaryObjectsDAO,
+                  config: Config, cleanup: Boolean) extends
   InstrumentedActor with YammerMetrics with FileCacher {
   import JobDAOActor._
   import akka.pattern.pipe
   import context.dispatcher
 
+  if (cleanup) {
+    val age = config.getDuration("spark.jobserver.dao-cleanup-after").toHours.toInt
+    context.system.scheduler.schedule(2 minutes, 1 hour, self, CleanupContexts(age))
+    context.system.scheduler.schedule(2 minutes, 1 hour, self, CleanupJobs(age))
+  }
 
   // Required by FileCacher
   val rootDirPath: String = config.getString(JobserverConfig.DAO_ROOT_DIR_PATH)
