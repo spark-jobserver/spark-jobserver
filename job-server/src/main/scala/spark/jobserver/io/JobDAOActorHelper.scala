@@ -8,7 +8,7 @@ import spark.jobserver.util._
 import java.time.ZonedDateTime
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.{Await, Future}
-import scala.util.Success
+import scala.util.{Failure, Success}
 
 class JobDAOActorHelper(metaDataDAO: MetaDataDAO, binaryDAO: BinaryObjectsDAO, config: Config) extends
   FileCacher {
@@ -79,10 +79,11 @@ class JobDAOActorHelper(metaDataDAO: MetaDataDAO, binaryDAO: BinaryObjectsDAO, c
                 } else {
                   binaryDAO.deleteBinary(hash).map { _ =>
                     totalSuccessfulDeleteRequests.inc()
-                  } onFailure {
-                    case _ =>
+                  } onComplete {
+                    case Failure(_) =>
                       totalFailedDeleteBinaryDAORequests.inc()
                       logger.error(s"Failed to delete binary file for $name, leaving an artifact")
+                    case Success(_) =>
                   }
                 }
                 cleanCacheBinaries(name)

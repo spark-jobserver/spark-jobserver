@@ -1,6 +1,7 @@
 package spark.jobserver.io.zookeeper
 
 import com.typesafe.config.Config
+
 import java.util.concurrent.TimeUnit
 import org.apache.curator.framework.{CuratorFramework, CuratorFrameworkFactory}
 import org.apache.curator.framework.api.{BackgroundCallback, CuratorEvent}
@@ -15,7 +16,7 @@ import spray.json._
 import scala.util.control.NonFatal
 
 // Fix type mismatch: java.util.List[String] in curator results
-import scala.collection.JavaConversions._ // scalastyle:ignore
+import collection.JavaConverters._ // scalastyle:ignore
 
 object ZookeeperUtils {
   private val settings = Map(
@@ -66,7 +67,7 @@ class ZookeeperUtils(config: Config) extends YammerMetrics {
     if (client.checkExists().forPath(dir) == null) {
       Seq.empty[String]
     } else {
-      client.getChildren.forPath(dir).toList
+      client.getChildren.forPath(dir).asScala
     }
   }
 

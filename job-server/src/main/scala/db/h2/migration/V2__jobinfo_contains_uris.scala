@@ -21,8 +21,8 @@ import scala.util.control.NonFatal
 class V2__jobinfo_contains_uris extends JdbcMigration{
   private val logger = LoggerFactory.getLogger(getClass)
   private val timeout = 10 minutes
-  private def logErrors = PartialFunction[Throwable, Unit] {
-    e: Throwable => logger.error(e.getMessage, e)
+  private def logErrors: PartialFunction[Throwable, Unit] = {
+    case e: Throwable => logger.error(e.getMessage, e)
   }
 
   private case class JobBinInfo(jobId: String, binId: String)

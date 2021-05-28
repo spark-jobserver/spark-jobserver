@@ -295,6 +295,8 @@ object JobServer {
           logger.error(s"Received unexpected response: $unknownResponse")
         case Failure(e: Exception) =>
           logger.error(s"Exception occurred while fetching jobs for context (${contextInfo.id})", e)
+        case _ =>
+          logger.error(s"Received unexpected response")
       }
     } catch {
       case _ : TimeoutException =>

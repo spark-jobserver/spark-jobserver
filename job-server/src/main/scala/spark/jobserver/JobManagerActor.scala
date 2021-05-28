@@ -550,7 +550,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
     def failed(msg: Any): Future[Any] = {
       subscriber ! msg
       postEachJob()
-      Future.successful()
+      Future.successful(Unit)
     }
     val (jobId, startDateTime) = existingJobInfo match {
       case Some(info) =>
