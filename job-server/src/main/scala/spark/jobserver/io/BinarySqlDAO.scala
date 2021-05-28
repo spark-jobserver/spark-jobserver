@@ -5,7 +5,7 @@ import java.sql.Blob
 import com.typesafe.config.Config
 import javax.sql.rowset.serial.SerialBlob
 import org.slf4j.LoggerFactory
-import slick.driver.JdbcProfile
+import slick.jdbc.JdbcProfile
 import spark.jobserver.util.SqlDBUtils
 
 import scala.concurrent.ExecutionContext.Implicits.global

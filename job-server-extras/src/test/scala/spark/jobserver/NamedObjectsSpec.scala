@@ -3,11 +3,12 @@ package spark.jobserver
 import akka.actor.ActorSystem
 import akka.testkit.{ImplicitSender, TestKit}
 import org.apache.spark.{SparkConf, SparkContext}
-import org.apache.spark.sql.{Row, SQLContext}
+import org.apache.spark.sql.{Row, SQLContext, SparkSession}
 import org.apache.spark.sql.types._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
+
 import scala.concurrent.duration.{FiniteDuration, _}
 import org.scalatest.funspec.AnyFunSpecLike
 import org.scalatest.matchers.should.Matchers
@@ -20,7 +21,7 @@ class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with Any
     with ImplicitSender with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
   implicit def rddPersister: NamedObjectPersister[NamedRDD[Int]] = new RDDPersister[Int]
-  implicit def dataFramePersister = new DataFramePersister
+  implicit def dataFramePersister: DataFramePersister = new DataFramePersister
 
   private var sc : SparkContext = _
   private var sqlContext : SQLContext = _
@@ -28,7 +29,7 @@ class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with Any
   
   override def beforeAll {
     sc = new SparkContext("local[3]", getClass.getSimpleName, new SparkConf)
-    sqlContext = new SQLContext(sc)
+    sqlContext = SparkSession.builder().config(sc.getConf).getOrCreate().sqlContext
     namedObjects = new JobServerNamedObjects(system)
     namedObjects.getNames.foreach { namedObjects.forget(_) }
   }
@@ -148,9 +149,8 @@ class NamedObjectsSpec extends TestKit(ActorSystem("NamedObjectsSpec")) with Any
     }
 
     it("should include underlying exception when error occurs") {
-      def errorFunc = {
+      def errorFunc: NamedDataFrame = {
         throw new IllegalArgumentException("boo!")
-        NamedDataFrame(sqlContext.createDataFrame(rows, struct), false, StorageLevel.MEMORY_ONLY)
       }
       val err = intercept[RuntimeException] { namedObjects.getOrElseCreate("xx", errorFunc) }
       err.getClass should equal(classOf[IllegalArgumentException])
