@@ -100,8 +100,7 @@ object JobManager {
       case _: ClassNotFoundException =>
         throw new InvalidConfiguration("Couldn't create Binary DAO instance: please check configuration")
     }
-    val daoActor = system.actorOf(
-      Props(classOf[JobDAOActor], metaDataDAO, binaryDAO, config), "dao-manager-jobmanager")
+    val daoActor = system.actorOf(JobDAOActor.props(metaDataDAO, binaryDAO, config), "dao-manager-jobmanager")
 
     logger.info("Starting JobManager named " + managerName + " with config {}",
       config.getConfig("spark").root.render())
