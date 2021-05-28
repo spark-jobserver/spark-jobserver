@@ -18,7 +18,6 @@ import scala.concurrent.duration._
 import scala.util.{Failure, Success, Try}
 import scala.collection.mutable.ListBuffer
 import com.google.common.annotations.VisibleForTesting
-import spark.jobserver.io.zookeeper.AutoPurgeActor
 
 import java.time.ZonedDateTime
 import scala.util.control.NonFatal
@@ -67,7 +66,6 @@ object JobServer {
     logger.info("Starting JobServer with config {}", config.getConfig("spark").root.render())
     logger.info("Akka HTTP config: {}", config.getConfig("akka.http.server").root.render())
 
-    // TODO: Hardcode for now to get going. Make it configurable later.
     val system = makeSystem(config)
     val port = config.getInt("spark.jobserver.port")
     val sparkMaster = config.getString("spark.master")
@@ -75,6 +73,7 @@ object JobServer {
     val contextPerJvm = config.getBoolean("spark.jobserver.context-per-jvm")
     val superviseModeEnabled = config.getBoolean("spark.driver.supervise")
     val akkaTcpPort = config.getInt("akka.remote.netty.tcp.port")
+    val daoCleanupEnabled = config.hasPath("spark.jobserver.dao-cleanup-after")
 
     // ensure context-per-jvm is enabled
     if (sparkMaster.startsWith("yarn") && !contextPerJvm) {
@@ -139,13 +138,13 @@ object JobServer {
     }
 
     // Start actors and managers
-    val daoActor = system.actorOf(Props(classOf[JobDAOActor], metaDataDAO, binaryDAO, config), "dao-manager")
+    val daoActor = system.actorOf(Props(classOf[JobDAOActor], metaDataDAO, binaryDAO,
+      config, daoCleanupEnabled), "dao-manager")
     val dataFileDAO = new DataFileDAO(config)
     val dataManager = system.actorOf(Props(classOf[DataManagerActor], dataFileDAO), "data-manager")
     val binManager = system.actorOf(Props(classOf[BinaryManager], daoActor), "binary-manager")
 
     startCleanupIfEnabled(config)
-    startAutoPurge(system, daoActor, config)
 
     // Add initial job JARs, if specified in configuration.
     storeInitialBinaries(config, binManager)
@@ -381,20 +380,6 @@ object JobServer {
       superviseModeEnabled: Boolean, akkaTcpPort: Int) {
     if (driverMode == "cluster" && superviseModeEnabled == true && akkaTcpPort == 0) {
       throw new InvalidConfiguration("Supervise mode requires akka.remote.netty.tcp.port to be hardcoded")
-    }
-  }
-
-  private def startAutoPurge(system: ActorSystem, daoActor: ActorRef, config : Config) : Unit = {
-    val enabled = AutoPurgeActor.isEnabled(config)
-
-    if (enabled){
-      val age = config.getInt("spark.jobserver.zookeeperdao.autopurge_after_hours")
-      val actor = system.actorOf(AutoPurgeActor.props(config, daoActor, age))
-      val initialPurge = (actor ? AutoPurgeActor.PurgeOldData)(AutoPurgeActor.maxPurgeDuration)
-      Await.result(initialPurge, AutoPurgeActor.maxPurgeDuration) match {
-        case AutoPurgeActor.PurgeComplete => logger.info("Initial auto purge completed successfully.")
-        case _ => logger.error("Initial auto purge unsuccessful.")
-      }
     }
   }
 
