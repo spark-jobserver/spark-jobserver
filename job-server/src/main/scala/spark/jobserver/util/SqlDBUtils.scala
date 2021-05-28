@@ -5,7 +5,7 @@ import javax.sql.DataSource
 import org.apache.commons.dbcp.BasicDataSource
 import org.flywaydb.core.Flyway
 import org.slf4j.LoggerFactory
-import slick.driver.JdbcProfile
+import slick.jdbc.JdbcProfile
 
 import scala.reflect.runtime.universe
 

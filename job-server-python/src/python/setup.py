@@ -9,5 +9,5 @@ setup(
     url="https://github.com/spark-jobserver/spark-jobserver",
     license="Apache License 2.0",
     packages=find_packages(exclude=["test*", "example*"]),
-    install_requires=["pyhocon", "py4j"]
+    install_requires=["pyhocon", "py4j", "wheel"]
 )

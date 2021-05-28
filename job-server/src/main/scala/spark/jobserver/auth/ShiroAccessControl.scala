@@ -3,10 +3,10 @@ package spark.jobserver.auth
 import akka.actor.ActorSystem
 import akka.http.scaladsl.model.headers.BasicHttpCredentials
 import com.typesafe.config.Config
-import org.apache.shiro.SecurityUtils
 import org.apache.shiro.authc._
 import org.apache.shiro.authz.AuthorizationException
-import org.apache.shiro.config.IniSecurityManagerFactory
+import org.apache.shiro.env.BasicIniEnvironment
+import org.apache.shiro.{SecurityUtils, mgt}
 
 import scala.concurrent.duration.DurationInt
 import scala.concurrent.{Await, ExecutionContext, Future}
@@ -19,7 +19,8 @@ class ShiroAccessControl(override protected val authConfig: Config)
                         (implicit ec: ExecutionContext, s: ActorSystem)
   extends SJSAccessControl(authConfig) {
 
-  val sManager = new IniSecurityManagerFactory(authConfig.getString("shiro.config.path")).getInstance()
+  private val env = new BasicIniEnvironment(authConfig.getString("shiro.config.path"))
+  val sManager: mgt.SecurityManager = env.getSecurityManager
   SecurityUtils.setSecurityManager(sManager)
 
   override def authenticate(credentials: BasicHttpCredentials): Option[AuthInfo] = {

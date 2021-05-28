@@ -101,7 +101,7 @@ If you wish to use the `SQLContext` or `HiveContext`, be sure to pull down the j
 ### Running Multiple HiveContexts (Thanks cgeorge-rms)
 
 This isn't an issue, but wanted to give everyone heads up if someone is searching on this problem.
-When running `context-per-jvm=true` and running multiple HiveContexts without using a shared mysql database you will get an exception about derby locking.
+When running multiple HiveContexts without using a shared mysql database you will get an exception about derby locking.
 I found that if you put a hive-site.xml in spark/conf directory containing:
 
 

@@ -18,7 +18,6 @@ See also running [YARN in client mode](yarn.md), running [YARN on EMR](EMR.md) a
 Add the following properties in your job server config file:
 - set `spark.master` property to `yarn`, `spark://...` or `mesos://...`
 - set `spark.submit.deployMode` property to `cluster`
-- set `spark.jobserver.context-per-jvm` to `true`
 - set `akka.remote.netty.tcp.hostname` to the cluster interface of the host running the frontend
 - set `akka.remote.netty.tcp.maximum-frame-size` to support big remote jars fetch
 - set `spark.jobserver.network-address-resolver` to a suitable value according to your environment. `akka` is recommended.
@@ -35,8 +34,6 @@ Example job server config (replace `CLUSTER-IP` with the internal IP of the host
       submit.deployMode = cluster
 
       jobserver {
-        context-per-jvm = true
-
         # start a H2 DB server, reachable in your cluster
         sqldao {
           jdbc {

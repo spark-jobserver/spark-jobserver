@@ -14,7 +14,7 @@ import org.scalatest.funspec.AnyFunSpecLike
 import org.scalatest.matchers.should.Matchers
 
 
-object LocalContextSupervisorSpec {
+object InProcessSupervisorSpec {
   val config = ConfigFactory.parseString("""
     spark {
       master = "local[4]"
@@ -54,18 +54,18 @@ object LocalContextSupervisorSpec {
   val system = ActorSystem("test", config)
 }
 
-class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.system) with ImplicitSender
+class InProcessSupervisorSpec extends TestKit(InProcessSupervisorSpec.system) with ImplicitSender
     with AnyFunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
   override def afterAll() {
-    AkkaTestUtils.shutdownAndWait(LocalContextSupervisorSpec.system)
+    AkkaTestUtils.shutdownAndWait(InProcessSupervisorSpec.system)
   }
 
   var supervisor: ActorRef = _
   var daoProbe: TestProbe = _
   var dataManager: ActorRef = _
 
-  val contextConfig = LocalContextSupervisorSpec.config.getConfig("spark.context-settings")
+  val contextConfig = InProcessSupervisorSpec.config.getConfig("spark.context-settings")
 
   // This is needed to help tests pass on some MBPs when working from home
   System.setProperty("spark.driver.host", "localhost")
@@ -73,7 +73,7 @@ class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.syst
   before {
     daoProbe = TestProbe()
     dataManager = system.actorOf(Props.empty)
-    supervisor = system.actorOf(Props(classOf[LocalContextSupervisorActor], daoProbe.ref, dataManager))
+    supervisor = system.actorOf(Props(classOf[InProcessContextSupervisorActor], daoProbe.ref, dataManager))
   }
 
   after {
@@ -116,16 +116,20 @@ class LocalContextSupervisorSpec extends TestKit(LocalContextSupervisorSpec.syst
       }
     }
 
-    it("should be able to add multiple new contexts") {
+    it("should have at most one spark context running in parallel") {
       // serializing the creation at least until SPARK-2243 gets
       // solved.
       supervisor ! AddContext("c1", contextConfig)
       expectMsg(ContextInitialized)
       supervisor ! AddContext("c2", contextConfig)
-      expectMsg(ContextInitialized)
+      expectMsgType[ContextInitError]
       supervisor ! ListContexts
-      expectMsg(Seq("c1", "c2"))
-      supervisor ! GetResultActor("c1")
+      expectMsg(Seq("c1"))
+      supervisor ! StopContext("c1")
+      expectMsg(ContextStopped)
+      supervisor ! AddContext("c2", contextConfig)
+      expectMsg(ContextInitialized)
+      supervisor ! GetResultActor("c2")
       val rActor = expectMsgClass(classOf[ActorRef])
       rActor.path.toString should not include "global"
     }

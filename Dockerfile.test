@@ -1,18 +1,24 @@
 FROM openjdk:8-jdk
 
+ARG spark_version="3.0.2"
+ENV SPARK_VERSION=${spark_version}
+
 USER root
 # install and cache sbt, python
 
-RUN echo 'deb http://dl.bintray.com/sbt/debian /' > /etc/apt/sources.list.d/sbt.list && \
-    apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv 99E82A75642AC823 && \
+RUN echo "deb https://repo.scala-sbt.org/scalasbt/debian all main" | tee /etc/apt/sources.list.d/sbt.list && \
+    curl -sL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x2EE0EA64E40A89B84B2DF73499E82A75642AC823" | apt-key add && \
     apt-get -qq update && \
-    apt-get install -y --force-yes python3 python3-pip python-pip sbt=1.1.6
+    apt-get install -y --force-yes python3 python3-pip python-pip sbt=1.5.2 && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /usr/src/app/
 
 # install other ci deps
 COPY ci ci
-RUN ci/install-python-dependencies.sh && \
+RUN chmod +x ci/*.sh && \
+    mv ci/run_tests.sh . && \
+    ci/install-python-dependencies.sh && \
     ci/install-spark.sh
 
 # add sbt and cache deps
@@ -23,7 +29,6 @@ RUN sbt update
 # add the rest of the code
 COPY . .
 
-ENV SPARK_HOME /tmp/spark-2.4.4-bin-hadoop2.7
 ENV JAVA_OPTIONS "-Xmx1500m -Dakka.test.timefactor=3"
 
-CMD ["/usr/src/app/run_tests.sh"]
+ENTRYPOINT ["/usr/src/app/run_tests.sh"]

@@ -38,3 +38,8 @@ install:
 
 script:
   - docker run `/bin/bash <(curl -s https://codecov.io/env)` --rm -t -i $DOCKER_IMAGE
+# Uncomment the following lines to test explicit spark versions
+#  - docker run `/bin/bash <(curl -s https://codecov.io/env)` --rm -t -i $DOCKER_IMAGE 2.4.7
+#  - docker run `/bin/bash <(curl -s https://codecov.io/env)` --rm -t -i $DOCKER_IMAGE 3.0.2
+#  - docker run `/bin/bash <(curl -s https://codecov.io/env)` --rm -t -i $DOCKER_IMAGE 3.1.1
+

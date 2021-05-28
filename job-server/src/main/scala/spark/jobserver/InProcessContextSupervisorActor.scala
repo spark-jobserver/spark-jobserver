@@ -1,88 +1,29 @@
 package spark.jobserver
 
 import akka.actor.{ActorRef, PoisonPill, Props, Terminated}
-import akka.pattern.ask
+import akka.pattern.{ask, gracefulStop}
 import akka.util.Timeout
-import com.typesafe.config.Config
-import com.typesafe.config.ConfigFactory
-import spark.jobserver.JobManagerActor.{ContexData, GetContexData}
-import spark.jobserver.JobManagerActor.{SparkContextAlive, SparkContextDead, SparkContextStatus}
+import com.typesafe.config.{Config, ConfigFactory}
+import spark.jobserver.JobManagerActor._
+import spark.jobserver.common.akka.InstrumentedActor
+import spark.jobserver.io.ContextInfo
+import spark.jobserver.io.JobDAOActor.CleanContextJobInfos
 import spark.jobserver.util.SparkJobUtils
 
+import java.time.ZonedDateTime
 import scala.collection.mutable
 import scala.concurrent.Await
 import scala.util.{Failure, Success, Try}
-import spark.jobserver.common.akka.InstrumentedActor
-import akka.pattern.gracefulStop
-import spark.jobserver.io.JobDAOActor.CleanContextJobInfos
-import spark.jobserver.io.ContextInfo
-
-import java.time.ZonedDateTime
-
-/** Messages common to all ContextSupervisors */
-object ContextSupervisor {
-  sealed trait StopContextResponse
-  sealed trait StopForcefullyContextResponse
-  // Messages/actions
-  case object AddContextsFromConfig // Start up initial contexts
-  case object ListContexts
-  case class AddContext(name: String, contextConfig: Config)
-  case class StartAdHocContext(mainClass: String, contextConfig: Config)
-  case class GetContext(name: String) // returns JobManager, JobResultActor
-  case class GetResultActor(name: String)  // returns JobResultActor
-  case class StopContext(name: String, force: Boolean = false)
-  case class GetSparkContexData(name: String)
-  case class RestartOfTerminatedJobsFailed(contextId: String)
-  case class ForkedJVMInitTimeout(contextActorName: String, contextInfo: ContextInfo)
-  case object SparkContextStopped extends StopContextResponse with StopForcefullyContextResponse
-
-  // Errors/Responses
-  case object ContextInitialized
-  case class ContextInitError(t: Throwable)
-  case class ContextStopError(t: Throwable) extends StopForcefullyContextResponse
-  case object ContextStopInProgress extends StopContextResponse
-  case object ContextAlreadyExists
-  case object NoSuchContext
-  case object ContextStopped
-  case class SparkContexData[T](context: T, appId: Option[String], url: Option[String])
-  case object UnexpectedError
-}
 
 /**
  * This class starts and stops JobManagers / Contexts in-process.
  * It is responsible for watching out for the death of contexts/JobManagers.
- *
- * == Auto context start configuration ==
- * Contexts can be configured to be created automatically at job server initialization.
- * Configuration example:
- * {{{
- *   spark {
- *     contexts {
- *       olap-demo {
- *         num-cpu-cores = 4            # Number of cores to allocate.  Required.
- *         memory-per-node = 1024m      # Executor memory per node, -Xmx style eg 512m, 1G, etc.
- *       }
- *     }
- *   }
- * }}}
- *
- * == Other configuration ==
- * {{{
- *   spark {
- *     jobserver {
- *       context-creation-timeout = 15 s
- *       yarn-context-creation-timeout = 40 s
- *     }
- *
- *     # Default settings for all context creation
- *     context-settings {
- *       spark.mesos.coarse = true
- *     }
- *   }
- * }}}
+ * This class is mainly used for testing and development as running multiple spark contexts
+ * in parallel is *not* possible.
  */
-class LocalContextSupervisorActor(dao: ActorRef, dataManagerActor: ActorRef) extends InstrumentedActor {
+class InProcessContextSupervisorActor(dao: ActorRef, dataManagerActor: ActorRef) extends InstrumentedActor {
   import ContextSupervisor._
+
   import scala.collection.JavaConverters._
   import scala.concurrent.duration._
 
@@ -92,7 +33,8 @@ class LocalContextSupervisorActor(dao: ActorRef, dataManagerActor: ActorRef) ext
   val contextDeletionTimeout = SparkJobUtils.getContextDeletionTimeout(config)
   import context.dispatcher   // to get ExecutionContext for futures
 
-  private val contexts = mutable.HashMap.empty[String, (ActorRef, ActorRef)]
+  case class RunningContext(name: String, managerActor: ActorRef, resultActor: ActorRef)
+  private var runningContext: Option[RunningContext] = None
 
   // This is for capturing results for ad-hoc jobs. Otherwise when ad-hoc job dies, resultActor also dies,
   // and there is no way to retrieve results.
@@ -103,12 +45,13 @@ class LocalContextSupervisorActor(dao: ActorRef, dataManagerActor: ActorRef) ext
       addContextsFromConfig(config)
 
     case ListContexts =>
-      sender ! contexts.keys.toSeq
+      logger.info("Running contexts " + runningContext.map(_.name).toSeq)
+      sender ! runningContext.map(_.name).toSeq
 
     case GetSparkContexData(name) =>
-      contexts.get(name) match {
-        case Some((actor, _)) =>
-          val future = (actor ? GetContexData)(contextTimeout.seconds)
+      runningContext.filter(_.name == name) match {
+        case Some(context) =>
+          val future = (context.managerActor ? GetContexData)(contextTimeout.seconds)
           val originator = sender
           future.collect {
             case ContexData(appId, Some(webUi)) =>
@@ -124,7 +67,7 @@ class LocalContextSupervisorActor(dao: ActorRef, dataManagerActor: ActorRef) ext
     case AddContext(name, contextConfig) =>
       val originator = sender // Sender is a mutable reference, must capture in immutable val
       val mergedConfig = contextConfig.withFallback(defaultContextConfig)
-      if (contexts contains name) {
+      if (runningContext.exists(_.name == name)) {
         originator ! ContextAlreadyExists
       } else {
         startContext(name, mergedConfig, false, contextTimeout) { contextMgr =>
@@ -142,29 +85,25 @@ class LocalContextSupervisorActor(dao: ActorRef, dataManagerActor: ActorRef) ext
       val userNamePrefix = Try(mergedConfig.getString(SparkJobUtils.SPARK_PROXY_USER_PARAM))
         .map(SparkJobUtils.userNamePrefix(_)).getOrElse("")
 
-      // Keep generating context name till there is no collision
-      var contextName = ""
-      do {
-        contextName = userNamePrefix +
-          java.util.UUID.randomUUID().toString().substring(0, 8) + "-" + classPath
-      } while (contexts contains contextName)
+      val contextName = s"$userNamePrefix-${java.util.UUID.randomUUID().toString.substring(0, 8)}-$classPath"
 
       // Create JobManagerActor and JobResultActor
       startContext(contextName, mergedConfig, true, contextTimeout) { contextMgr =>
-        originator ! contexts(contextName)
+        originator ! runningContext.map(ctx => (ctx.managerActor, ctx.resultActor)).get
       } { err =>
         originator ! ContextInitError(err)
       }
 
     case GetResultActor(name) =>
-      sender ! contexts.get(name).map(_._2).getOrElse(globalResultActor)
+      sender ! runningContext.filter(_.name == name).map(_.resultActor).getOrElse(globalResultActor)
 
     case GetContext(name) =>
-      if (contexts contains name) {
-        val future = (contexts(name)._1 ? SparkContextStatus) (contextTimeout.seconds)
+      println(runningContext)
+      if (runningContext.exists(_.name == name)) {
+        val future = (runningContext.map(_.managerActor).get ? SparkContextStatus) (contextTimeout.seconds)
         val originator = sender
         future.collect {
-          case SparkContextAlive => originator ! contexts(name)._1
+          case SparkContextAlive => originator ! runningContext.map(_.managerActor).get
           case SparkContextDead =>
             logger.info("SparkContext {} is dead", name)
             self ! StopContext(name)
@@ -175,16 +114,18 @@ class LocalContextSupervisorActor(dao: ActorRef, dataManagerActor: ActorRef) ext
       }
 
     case StopContext(name, force) =>
-      if (contexts contains name) {
+      if (runningContext.exists(_.name == name)) {
         logger.info("Shutting down context {}", name)
         try {
-          val stoppedCtx = gracefulStop(contexts(name)._1, contextDeletionTimeout seconds)
-          Await.result(stoppedCtx, contextDeletionTimeout + 1 seconds)
-          contexts.remove(name)
+          val stoppedCtx = gracefulStop(runningContext.get.managerActor, contextDeletionTimeout seconds)
+          Await.result(stoppedCtx, contextDeletionTimeout + 5 seconds)
+          runningContext = None
           sender ! ContextStopped
         }
         catch {
-          case err: Exception => sender ! ContextStopError(err)
+          case err: Exception => {
+            sender ! ContextStopError(err)
+          }
         }
       } else {
         sender ! NoSuchContext
@@ -193,14 +134,18 @@ class LocalContextSupervisorActor(dao: ActorRef, dataManagerActor: ActorRef) ext
     case Terminated(actorRef) =>
       val name = actorRef.path.name
       logger.info("Actor terminated: " + name)
-      contexts.remove(name)
+      runningContext = None
       dao ! CleanContextJobInfos(name, ZonedDateTime.now())
   }
 
   private def startContext(name: String, contextConfig: Config, isAdHoc: Boolean, timeoutSecs: Int = 1)
                           (successFunc: ActorRef => Unit)
                           (failureFunc: Throwable => Unit) {
-    require(!(contexts contains name), "There is already a context named " + name)
+    if (runningContext.isDefined) {
+      failureFunc(new IllegalArgumentException("Spark does not support multiple contexts per JVM." +
+        "Running context: " + runningContext.map(_.name).getOrElse("Not found")))
+      return
+    }
     logger.info("Creating a SparkContext named {}", name)
 
     val resultActorRef = if (isAdHoc) Some(globalResultActor) else None
@@ -217,7 +162,7 @@ class LocalContextSupervisorActor(dao: ActorRef, dataManagerActor: ActorRef) ext
         failureFunc(e)
       case Success(JobManagerActor.Initialized(_, resultActor)) =>
         logger.info("SparkContext {} initialized", name)
-        contexts(name) = (ref, resultActor)
+        runningContext = Some(RunningContext(name, ref, resultActor))
         context.watch(ref)
         successFunc(ref)
       case Success(JobManagerActor.InitError(t)) =>

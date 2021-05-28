@@ -1,19 +1,17 @@
 package spark.jobserver.auth
 
-import org.scalatest.{ BeforeAndAfter, BeforeAndAfterAll }
-import org.apache.shiro.config.IniSecurityManagerFactory
-import org.apache.shiro.mgt.DefaultSecurityManager
-import org.apache.shiro.mgt.SecurityManager
-import org.apache.shiro.realm.Realm
-import org.apache.shiro.authz._
 import org.apache.shiro.SecurityUtils
+import org.apache.shiro.authz._
 import org.apache.shiro.config.Ini
-import javax.naming.ldap.InitialLdapContext
-import javax.naming.ldap.LdapContext
-import javax.naming._
-import javax.naming.directory._
+import org.apache.shiro.env.BasicIniEnvironment
+import org.apache.shiro.mgt.DefaultSecurityManager
+import org.apache.shiro.realm.Realm
 import org.scalatest.funspec.AnyFunSpecLike
 import org.scalatest.matchers.should.Matchers
+
+import javax.naming._
+import javax.naming.directory._
+import javax.naming.ldap.LdapContext
 
 object LdapGroupRealmSpec {
   val memberAttributeName = "memberUid"
@@ -47,9 +45,8 @@ securityManager.cacheManager = $cacheManager
       tmp.load(IniConfig)
       tmp
     }
-    val factory = new IniSecurityManagerFactory(ini)
-
-    val sManager = factory.getInstance()
+    val env = new BasicIniEnvironment(ini)
+    val sManager = env.getSecurityManager
     SecurityUtils.setSecurityManager(sManager)
 
     val realms = sManager match {

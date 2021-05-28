@@ -16,8 +16,6 @@ spark {
   jobserver {
     port = 8090
 
-    context-per-jvm = false
-
     jobdao = spark.jobserver.io.JobSqlDAO
 
     datadao {
