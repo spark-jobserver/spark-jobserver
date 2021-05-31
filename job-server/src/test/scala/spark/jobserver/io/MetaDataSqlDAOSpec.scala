@@ -49,6 +49,11 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
   val wheelFile: File = new File(config.getString(JobserverConfig.DAO_ROOT_DIR_PATH),
     wheelInfo.appName + "-" + df.format(jarInfo.uploadTime) + ".whl")
 
+  // contextInfo test data
+  val normalContext = ContextInfo("someId", "someName", "someConfig", Some("ActorAddress"),
+    new DateTime(1548683342369L), Some(new DateTime(1548683342370L)), "someState",
+    Some(new Throwable("message")))
+
   // jobInfo test data
   val jobInfoNoEndNoErr: JobInfo = genJobInfo(jarInfo, false, JobStatus.Running)
   val expectedJobInfo: JobInfo = jobInfoNoEndNoErr
@@ -56,8 +61,12 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
   val jobInfoSomeEndSomeErr: JobInfo = genJobInfo(jarInfo, false, ContextStatus.Error)
   val jobInfoSomeCallback: JobInfo = genJobInfo(jarInfo, false, JobStatus.Finished,
     None, Some(Uri("http://example.com")))
+  val normalJob = JobInfo("someJobId", "someContextId", "someContextName",
+    "someClassPath", "someState", new DateTime(), Some(new DateTime()),
+    Some(ErrorData("someMessage", "someError", "someTrace")), Seq(jarInfo))
 
   // job config test data
+  val config1 = ConfigFactory.parseString("{key : value}")
   val jobId: String = jobInfoNoEndNoErr.jobId
 
   // Helper functions and closures!!
@@ -252,7 +261,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
     }
   }
 
-  describe("Basic saveJobInfo() and getJobInfos() tests") {
+  describe("jobs") {
     it("Save jobInfo and get JobInfos from DB") {
       var save = Await.result(dao.saveBinary(jarInfo.appName, BinaryType.Jar,
             jarInfo.uploadTime, BinaryObjectsDAO.calculateBinaryHashString(jarBytes)), timeout)
@@ -404,6 +413,84 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
       val job = Await.result(dao.getJob(id), timeout).get
 
       job should equal (jobInfoSomeCallback)
+    }
+    
+    it("should delete jobs in final state older than a certain date") {
+      // Persist three jobs
+      val cutoffDate = new DateTime(724291200L)
+      val oldJob = normalJob.copy(jobId = "1", state = JobStatus.Finished,
+        endTime = Some(cutoffDate.minusHours(1)))
+      val recentJob = normalJob.copy(jobId = "2", state = JobStatus.Finished,
+        endTime = Some(cutoffDate.plusHours(1)))
+      val runningJob = normalJob.copy(jobId = "3", state = JobStatus.Running,
+        endTime = None)
+      val restartingJob = normalJob.copy(jobId = "4", state = JobStatus.Restarting,
+        endTime = Some(cutoffDate.minusHours(1)))
+      Await.result(dao.saveBinary(jarInfo.appName, BinaryType.Jar,
+        jarInfo.uploadTime, BinaryObjectsDAO.calculateBinaryHashString(jarBytes)), timeout)
+      Await.result(dao.saveJob(oldJob), timeout)
+      Await.result(dao.saveJob(recentJob), timeout)
+      Await.result(dao.saveJob(runningJob), timeout)
+      Await.result(dao.saveJob(restartingJob), timeout)
+      Await.result(dao.getJobs(100, None), timeout).size should equal(4)
+      // Delete (one) old one
+      val result = Await.result(dao.deleteJobs(cutoffDate), timeout)
+      result should equal(Seq(oldJob.jobId))
+      // Assert that (only) old one is gone
+      Await.result(dao.getJobs(100, None), timeout).toSet should equal(
+        Set(restartingJob, runningJob, recentJob))
+      Await.result(dao.getJob(oldJob.jobId), timeout) should equal(None)
+      Await.result(dao.getJob(recentJob.jobId), timeout) should equal(Some(recentJob))
+      Await.result(dao.getJob(runningJob.jobId), timeout) should equal(Some(runningJob))
+      Await.result(dao.getJob(restartingJob.jobId), timeout) should equal(Some(restartingJob))
+    }
+
+    it("should delete job configs with jobs"){
+      val cutoffDate = new DateTime(724291200L)
+      // Persist job with config
+      val oldJob = normalJob.copy(jobId = "1", state = JobStatus.Finished,
+        endTime = Some(cutoffDate.minusHours(1)))
+      Await.result(dao.saveBinary(jarInfo.appName, BinaryType.Jar,
+        jarInfo.uploadTime, BinaryObjectsDAO.calculateBinaryHashString(jarBytes)), timeout)
+      Await.result(dao.saveJob(oldJob), timeout)
+      Await.result(dao.saveJobConfig(oldJob.jobId, config1), timeout)
+      Await.result(dao.getJobConfig(oldJob.jobId), timeout) should equal (Some(config1))
+      // Delete
+      val result = Await.result(dao.deleteJobs(cutoffDate), timeout)
+      result should equal(Seq("1"))
+      // Assert
+      Await.result(dao.getJob(oldJob.jobId), timeout) should equal(None)
+      Await.result(dao.getJobConfig(oldJob.jobId), timeout) should equal(None)
+    }
+  }
+
+  describe("contexts"){
+    it("should delete contexts in final state older than a certain date") {
+      // Persist three contexts
+      val cutoffDate = new DateTime(724291200L)
+      val oldContext = normalContext.copy(id = "1", state = ContextStatus.Finished,
+        endTime = Some(cutoffDate.minusHours(1)))
+      val recentContext = normalContext.copy(id = "2", state = ContextStatus.Finished,
+        endTime = Some(cutoffDate.plusHours(1)))
+      val runningContext = normalContext.copy(id = "3", state = ContextStatus.Running,
+        endTime = None)
+      val restartingContext = normalContext.copy(id = "4", state = ContextStatus.Restarting,
+        endTime = Some(cutoffDate.minusHours(1)))
+      Await.result(dao.saveContext(oldContext), timeout)
+      Await.result(dao.saveContext(recentContext), timeout)
+      Await.result(dao.saveContext(runningContext), timeout)
+      Await.result(dao.saveContext(restartingContext), timeout)
+      Await.result(dao.getContexts(None, None), timeout).size should equal(4)
+      // Delete (one) old one
+      val result = Await.result(dao.deleteContexts(cutoffDate), timeout)
+      result should equal(true)
+      // Assert that (only) old one is gone
+      Await.result(dao.getContexts(None, None), timeout) should
+        equal(Seq(recentContext, runningContext, restartingContext))
+      Await.result(dao.getContext(oldContext.id), timeout) should equal(None)
+      Await.result(dao.getContext(recentContext.id), timeout) should equal(Some(recentContext))
+      Await.result(dao.getContext(runningContext.id), timeout) should equal(Some(runningContext))
+      Await.result(dao.getContext(restartingContext.id), timeout) should equal(Some(restartingContext))
     }
   }
 }

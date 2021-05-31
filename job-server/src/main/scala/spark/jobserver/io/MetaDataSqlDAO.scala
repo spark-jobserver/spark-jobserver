@@ -209,6 +209,14 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
     }
   }
 
+  override def deleteContexts(olderThan: DateTime): Future[Boolean] = {
+    val deleteContexts = contexts
+      .filter(_.state.inSet(ContextStatus.getFinalStates()))
+      .filter(_.endTime < convertDateJodaToSql(olderThan))
+      .delete
+    dbUtils.db.run(deleteContexts).map(_ > 0).recover(logDeleteErrors)
+  }
+
   /**
     * Persist a job info.
     *
@@ -311,6 +319,28 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
       }
     }
   }
+
+  override def deleteJobs(olderThan: DateTime): Future[Seq[String]]  = {
+    // Query jobIds of old, final jobs
+    val oldFinalJobQuery = jobs
+      .filter(_.state.inSet(JobStatus.getFinalStates()))
+      .filter(_.endTime.isDefined)
+      .filter(_.endTime < convertDateJodaToSql(olderThan))
+    dbUtils.db.run(oldFinalJobQuery.result).map(_.map(_._1)) map {
+      oldFinalJobIds =>
+        // Delete job infos
+        val deleteJobsQuery = jobs
+          .filter(_.jobId.inSet(oldFinalJobIds))
+          .delete
+        dbUtils.db.run(deleteJobsQuery).map(_ > 0).recover(logDeleteErrors)
+        // Delete job configs
+        val deleteConfigsQuery = configs
+          .filter(_.jobId.inSet(oldFinalJobIds))
+          .delete
+        dbUtils.db.run(deleteConfigsQuery).map(_ > 0).recover(logDeleteErrors)
+        oldFinalJobIds
+      }
+    }
 
   /**
     * Returns a config for a given job id
