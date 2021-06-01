@@ -88,17 +88,21 @@ class InMemoryMetaDAO extends MetaDataDAO {
     throw new NotImplementedError()
   }
 
-  override def deleteJobsOlderThan(olderThan: DateTime): Future[Seq[String]] = {
+  override def getFinalJobsOlderThan(olderThan: DateTime): Future[Seq[JobInfo]] = {
     Future{
-      val toBeDeleted = jobInfos.values
+      jobInfos.values
         .filter(jobInfo => JobStatus.getFinalStates().contains(jobInfo.state))
         .filter(jobInfo => jobInfo.endTime.isDefined && jobInfo.endTime.get.isBefore(olderThan))
-        .map(jobInfo => jobInfo.jobId)
+        .toSeq
+    }
+  }
+
+  override def deleteJobs(jobIds: Seq[String]): Future[Boolean] = {
+    Future{
       // Delete
-      toBeDeleted.foreach(jobId => jobInfos.remove(jobId))
-      toBeDeleted.foreach(jobId => jobConfigs.remove(jobId))
-      // Return deleted items
-      toBeDeleted.toSeq
+      jobIds.foreach(jobId => jobInfos.remove(jobId))
+      jobIds.foreach(jobId => jobConfigs.remove(jobId))
+      true
     }
   }
 
