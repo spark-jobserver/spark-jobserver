@@ -87,11 +87,18 @@ trait MetaDataDAO {
 
 
   /**
-    * Clean up all jobs where the endTime is older than a certain date
-    * @param cutoffDate Minimum end time for jobs to be qualified for deletion
-    * @return Sequence of jobIds that were deleted
+    * Retrieve all final state jobs where the endTime is older than a certain date
+    * @param cutoffDate Minimum end time for jobs
+    * @return Sequence of all job infos matching query
     */
-  def deleteJobsOlderThan(cutoffDate: DateTime): Future[Seq[String]]
+  def getFinalJobsOlderThan(cutoffDate: DateTime): Future[Seq[JobInfo]]
+
+  /**
+    * Delete a list of job infos including configs
+    * @param jobIds Sequence of unique job identifiers for which job infos and configs should be deleted
+    * @return true if deletion was successful, false otherwise
+    */
+  def deleteJobs(jobIds: Seq[String]): Future[Boolean]
 
   /**
     * Persist a job configuration along with provided job id.
