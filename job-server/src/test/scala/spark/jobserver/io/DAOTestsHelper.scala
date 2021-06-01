@@ -303,5 +303,7 @@ class DummyMetaDataDAO(config: Config) extends MetaDataDAO {
 
   override def deleteFinalContextsOlderThan(cutoffDate: DateTime): Future[Boolean] = ???
 
-  override def deleteJobsOlderThan(cutoffDate: DateTime): Future[Seq[String]] = ???
+  override def getFinalJobsOlderThan(cutoffDate: DateTime): Future[Seq[JobInfo]] = ???
+
+  override def deleteJobs(jobIds: Seq[String]): Future[Boolean] = ???
 }

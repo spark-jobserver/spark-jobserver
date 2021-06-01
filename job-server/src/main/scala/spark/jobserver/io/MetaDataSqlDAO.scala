@@ -320,27 +320,36 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
     }
   }
 
-  override def deleteJobsOlderThan(olderThan: DateTime): Future[Seq[String]]  = {
+  override def getFinalJobsOlderThan(olderThan: DateTime): Future[Seq[JobInfo]]  = {
     // Query jobIds of old, final jobs
     val oldFinalJobQuery = jobs
       .filter(_.state.inSet(JobStatus.getFinalStates()))
       .filter(_.endTime.isDefined)
       .filter(_.endTime < convertDateJodaToSql(olderThan))
-    dbUtils.db.run(oldFinalJobQuery.result).map(_.map(_._1)) map {
-      oldFinalJobIds =>
-        // Delete job infos
-        val deleteJobsQuery = jobs
-          .filter(_.jobId.inSet(oldFinalJobIds))
-          .delete
-        dbUtils.db.run(deleteJobsQuery).map(_ > 0).recover(logDeleteErrors)
-        // Delete job configs
-        val deleteConfigsQuery = configs
-          .filter(_.jobId.inSet(oldFinalJobIds))
-          .delete
-        dbUtils.db.run(deleteConfigsQuery).map(_ > 0).recover(logDeleteErrors)
-        oldFinalJobIds
-      }
+    dbUtils.db.run(oldFinalJobQuery.result).map(_.map(jobInfoFromRow))
+  }
+
+  override def deleteJobs(jobIds: Seq[String]): Future[Boolean] = {
+    // Delete job infos
+    val deleteJobsQuery = jobs
+      .filter(_.jobId.inSet(jobIds))
+      .delete
+    val jobSuccess = dbUtils.db.run(deleteJobsQuery).map(_ > 0).recover(logDeleteErrors)
+    // Delete job configs
+    val deleteConfigsQuery = configs
+      .filter(_.jobId.inSet(jobIds))
+      .delete
+    val configSuccess = dbUtils.db.run(deleteConfigsQuery)
+      .map(_ >= 0) // It is possible that no config exists for the job, hence 0 deleted lines are ok
+      .recover(logDeleteErrors)
+    // Combine futures
+    for {
+      j <- jobSuccess
+      c <- configSuccess
+    } yield {
+      j && c
     }
+  }
 
   /**
     * Returns a config for a given job id

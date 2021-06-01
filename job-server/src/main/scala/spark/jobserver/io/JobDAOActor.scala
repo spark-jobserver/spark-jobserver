@@ -316,37 +316,16 @@ class JobDAOActor(metaDataDAO: MetaDataDAO, binaryDAO: BinaryObjectsDAO,
       }
 
     case CleanupJobs(ageInHours) =>
-      // Calculate cutoff date to delete jobs
       val cutoffDate = DateTime.now().minusHours(ageInHours)
-      // Clean up metadata
-      metaDataDAO.deleteJobsOlderThan(cutoffDate).onComplete{
-        case Success(jobIds) =>
-          logger.info(s"Cleaned up metadata for ${jobIds.size} jobs older than ${ageInHours} hours.")
-          // Clean up binary data
-          binaryDAO.deleteJobResults(jobIds).onComplete{
-            case Success(true) =>
-              logger.info(s"Cleaned up job results for ${jobIds.size} jobs older than ${ageInHours} hours.")
-            case Success(false) =>
-              logger.error("Failed to delete job results. DAO returned false.")
-            case Failure(t) =>
-              logger.error("Failed to delete job results.", t)
-          }
-        case Failure(t) =>
-          logger.error("Failed to clean up job metadata.", t)
+      metaDataDAO.getFinalJobsOlderThan(cutoffDate).onComplete{
+        case Success(jobs) =>
+          metaDataDAO.deleteJobs(jobs.map(_.jobId))
+          binaryDAO.deleteJobResults(jobs.map(_.jobId))
       }
 
     case CleanupContexts(ageInHours) =>
-      // Calculate cutoff date to delete contexts
       val cutoffDate = DateTime.now().minusHours(ageInHours)
-      // Clean up metadata
-      metaDataDAO.deleteFinalContextsOlderThan(cutoffDate).onComplete{
-        case Success(true) =>
-          logger.info(s"Cleaned up metadata for contexts older than ${ageInHours} hours.")
-        case Success(false) =>
-          logger.error("Failed to clean up context metadata. DAO returned false.")
-        case Failure(t) =>
-          logger.error("Failed to clean up context metadata.", t)
-      }
+      metaDataDAO.deleteFinalContextsOlderThan(cutoffDate)
 
     case anotherEvent => logger.info(s"Ignoring unknown event type: $anotherEvent")
 

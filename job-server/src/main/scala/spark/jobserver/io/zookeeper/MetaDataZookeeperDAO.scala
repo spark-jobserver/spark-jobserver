@@ -184,25 +184,34 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
     }
   }
 
-  override def deleteJobsOlderThan(olderThan: DateTime): Future[Seq[String]] = {
-    logger.debug(s"Deleting jobs older than ${olderThan}")
+  override def getFinalJobsOlderThan(olderThan: DateTime): Future[Seq[JobInfo]] = {
+    logger.debug(s"Retrieving jobs older than ${olderThan}")
     Future{
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
           zookeeperUtils.sync(client, jobsDir)
-          lazy val toBeDeleted = zookeeperUtils.list(client, jobsDir)
+          zookeeperUtils.list(client, jobsDir)
             .flatMap(id => zookeeperUtils.read[JobInfo](client, s"$jobsDir/$id"))
             .filter(jobInfo => JobStatus.getFinalStates().contains(jobInfo.state))
             .filter(jobInfo => jobInfo.endTime.isDefined
               && jobInfo.endTime.get.isBefore(olderThan))
-            .map(_.jobId)
-          toBeDeleted.foreach( jobId => {
-            zookeeperUtils.delete(client, s"${jobsDir}/${jobId}") match {
+      }
+    }
+  }
+
+  override def deleteJobs(jobIds: Seq[String]): Future[Boolean] = {
+    logger.debug(s"Deleting ${jobIds.size} jobs")
+    Future {
+      Utils.usingResource(zookeeperUtils.getClient) {
+        client =>
+          jobIds.forall( jobId => {
+            val success = zookeeperUtils.delete(client, s"${jobsDir}/${jobId}")
+            success match {
               case true => logger.trace(s"Deleted job ${jobId}")
               case false => logger.error(s"Could not delete job ${jobId}")
             }
+            success
           })
-          toBeDeleted.toSeq
       }
     }
   }
