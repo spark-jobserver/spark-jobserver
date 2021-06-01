@@ -58,12 +58,6 @@ class HdfsBinaryObjectsDAO(config: Config) extends BinaryObjectsDAO {
     }
   }
 
-  override def deleteJobResult(jobId: String): Future[Boolean] = {
-    Future {
-      hdfsFacade.delete(getJobResultsPath(jobId))
-    }
-  }
-
   override def getJobResult(jobId: String): Future[Option[Array[Byte]]] = {
     Future {
       hdfsFacade.get(getJobResultsPath(jobId)) match {

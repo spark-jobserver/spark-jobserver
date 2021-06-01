@@ -331,7 +331,7 @@ class MetaDataZookeeperDAOSpec extends AnyFunSpec with TestJarFinder with AnyFun
       Await.result(dao.saveContext(restartingContext), timeout)
       Await.result(dao.getContexts(None, None), timeout).size should equal(4)
       // Delete (one) old one
-      val result = Await.result(dao.deleteContexts(cutoffDate), timeout)
+      val result = Await.result(dao.deleteFinalContextsOlderThan(cutoffDate), timeout)
       result should equal(true)
       // Assert that (only) old one is gone
       Await.result(dao.getContexts(None, None), timeout) should
@@ -457,7 +457,7 @@ class MetaDataZookeeperDAOSpec extends AnyFunSpec with TestJarFinder with AnyFun
       Await.result(dao.saveJob(restartingJob), timeout)
       Await.result(dao.getJobs(100, None), timeout).size should equal(4)
       // Delete (one) old one
-      val result = Await.result(dao.deleteJobs(cutoffDate), timeout)
+      val result = Await.result(dao.deleteJobsOlderThan(cutoffDate), timeout)
       result should equal(Seq(oldJob.jobId))
       // Assert that (only) old one is gone
       Await.result(dao.getJobs(100, None), timeout) should equal(Seq(recentJob, runningJob, restartingJob))
@@ -476,7 +476,7 @@ class MetaDataZookeeperDAOSpec extends AnyFunSpec with TestJarFinder with AnyFun
       Await.result(dao.saveJobConfig(oldJob.jobId, config1), timeout)
       Await.result(dao.getJobConfig(oldJob.jobId), timeout) should equal (Some(config1))
       // Delete
-      val result = Await.result(dao.deleteJobs(cutoffDate), timeout)
+      val result = Await.result(dao.deleteJobsOlderThan(cutoffDate), timeout)
       result should equal(Seq("1"))
       // Assert
       Await.result(dao.getJob(oldJob.jobId), timeout) should equal(None)

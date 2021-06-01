@@ -95,7 +95,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
     }
   }
 
-  override def deleteContexts(olderThan: DateTime): Future[Boolean] = {
+  override def deleteFinalContextsOlderThan(olderThan: DateTime): Future[Boolean] = {
     logger.debug(s"Deleting context older than ${olderThan}")
     Future{
       Utils.usingResource(zookeeperUtils.getClient) {
@@ -184,7 +184,7 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
     }
   }
 
-  override def deleteJobs(olderThan: DateTime): Future[Seq[String]] = {
+  override def deleteJobsOlderThan(olderThan: DateTime): Future[Seq[String]] = {
     logger.debug(s"Deleting jobs older than ${olderThan}")
     Future{
       Utils.usingResource(zookeeperUtils.getClient) {
