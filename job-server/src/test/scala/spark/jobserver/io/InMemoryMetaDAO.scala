@@ -41,7 +41,7 @@ class InMemoryMetaDAO extends MetaDataDAO {
       }
   }
 
-  override def deleteContexts(olderThan: DateTime): Future[Boolean] = Future {
+  override def deleteFinalContextsOlderThan(olderThan: DateTime): Future[Boolean] = Future {
     val toBeDeleted = contextInfos.values
       .filter(contextInfo => ContextStatus.getFinalStates().contains(contextInfo.state))
       .filter(contextInfo => contextInfo.endTime.isDefined && contextInfo.endTime.get.isBefore(olderThan))
@@ -88,7 +88,7 @@ class InMemoryMetaDAO extends MetaDataDAO {
     throw new NotImplementedError()
   }
 
-  override def deleteJobs(olderThan: DateTime): Future[Seq[String]] = {
+  override def deleteJobsOlderThan(olderThan: DateTime): Future[Seq[String]] = {
     Future{
       val toBeDeleted = jobInfos.values
         .filter(jobInfo => JobStatus.getFinalStates().contains(jobInfo.state))

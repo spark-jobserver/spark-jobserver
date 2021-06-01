@@ -84,15 +84,6 @@ class SqlBinaryObjectsDAO(config: Config) extends BinaryObjectsDAO {
     dbUtils.db.run(dbAction).map(_ > 0).recover(dbUtils.logDeleteErrors)
   }
 
-  /**
-   * Delete a binary object which is representing a job result.
-   * @param jobId unique identifier of the job that result belongs to
-   */
-  override def deleteJobResult(jobId: String): Future[Boolean] = {
-    val dbAction = jobResults.filter(_.jobId === jobId).delete
-    dbUtils.db.run(dbAction).map(_ > 0).recover(dbUtils.logDeleteErrors)
-  }
-
   override def deleteJobResults(jobIds: Seq[String]): Future[Boolean] = {
     Future.sequence(
       jobIds.map(jobId => {
