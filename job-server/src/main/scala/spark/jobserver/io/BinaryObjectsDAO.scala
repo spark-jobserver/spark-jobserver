@@ -42,27 +42,21 @@ trait BinaryObjectsDAO {
     * @throws NotImplementedError if not implemented in storage class.
     */
   def saveBinary(id: String,
-                 binaryBytes: Array[Byte]): Future[Boolean] = {
-    throw new NotImplementedError()
-  }
+                 binaryBytes: Array[Byte]): Future[Boolean]
 
   /**
     * Delete a binary object provided through /binaries endpoint.
     * @param id unique binary identifier
     * @throws NotImplementedError if not implemented in storage class.
     */
-  def deleteBinary(id: String): Future[Boolean] = {
-    throw new NotImplementedError()
-  }
+  def deleteBinary(id: String): Future[Boolean]
 
   /**
     * Get a binary object provided through /binaries endpoint.
     * @param id unique binary identifier
     * @throws NotImplementedError if not implemented in storage class.
     */
-  def getBinary(id: String): Future[Option[Array[Byte]]] = {
-    throw new NotImplementedError()
-  }
+  def getBinary(id: String): Future[Option[Array[Byte]]]
 
   /**
    * Persist a binary object which is representing a job result.
@@ -71,18 +65,7 @@ trait BinaryObjectsDAO {
    * @throws NotImplementedError if not implemented in storage class.
    */
   def saveJobResult(jobId: String,
-                 binaryBytes: Array[Byte]): Future[Boolean] = {
-    throw new NotImplementedError()
-  }
-
-  /**
-   * Delete a binary object which is representing a job result.
-   * @param jobId unique identifier of the job that result belongs to
-   * @throws NotImplementedError if not implemented in storage class.
-   */
-  def deleteJobResult(jobId: String): Future[Boolean] = {
-    throw new NotImplementedError()
-  }
+                 binaryBytes: Array[Byte]): Future[Boolean]
 
   /**
    * Delete a list of binary objects representing job results.
@@ -90,16 +73,12 @@ trait BinaryObjectsDAO {
    * @return true if deletion was successful, false otherwise
    * @throws NotImplementedError if not implemented in storage class.
    */
-  def deleteJobResults(jobIds: Seq[String]): Future[Boolean] = {
-    throw new NotImplementedError()
-  }
+  def deleteJobResults(jobIds: Seq[String]): Future[Boolean]
 
   /**
    * Get a binary object which is representing a job result.
    * @param jobId unique identifier of the job that result belongs to
    * @throws NotImplementedError if not implemented in storage class.
    */
-  def getJobResult(jobId: String): Future[Option[Array[Byte]]] = {
-    throw new NotImplementedError()
-  }
+  def getJobResult(jobId: String): Future[Option[Array[Byte]]]
 }

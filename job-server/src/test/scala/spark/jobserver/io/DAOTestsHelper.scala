@@ -99,6 +99,9 @@ class DummyBinaryObjectsDAO(config: Config) extends BinaryObjectsDAO {
     }
 
   }
+
+  override def deleteJobResults(jobIds: Seq[String]): Future[Boolean] = ???
+
 }
 
 class DummyMetaDataDAO(config: Config) extends MetaDataDAO {
@@ -297,4 +300,8 @@ class DummyMetaDataDAO(config: Config) extends MetaDataDAO {
         }
     }
   }
+
+  override def deleteFinalContextsOlderThan(cutoffDate: DateTime): Future[Boolean] = ???
+
+  override def deleteJobsOlderThan(cutoffDate: DateTime): Future[Seq[String]] = ???
 }

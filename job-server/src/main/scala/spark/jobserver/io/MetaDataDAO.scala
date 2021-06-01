@@ -45,13 +45,11 @@ trait MetaDataDAO {
   Future[Seq[ContextInfo]]
 
   /**
-    * Clean up all contexts where the endTime is older than a certain date
-    * @param olderThan Minimum end time for contexts to be qualified for deletion
+    * Clean up all final state contexts where the endTime is older than a certain date
+    * @param cutoffDate Minimum end time for contexts to be qualified for deletion
     * @return true if deletion was successful
     */
-  def deleteContexts(olderThan: DateTime) : Future[Boolean] = {
-    throw new NotImplementedError()
-  }
+  def deleteFinalContextsOlderThan(cutoffDate: DateTime) : Future[Boolean]
 
   /**
     * Persist a job info.
@@ -90,13 +88,10 @@ trait MetaDataDAO {
 
   /**
     * Clean up all jobs where the endTime is older than a certain date
-    * @param olderThan Minimum end time for jobs to be qualified for deletion
+    * @param cutoffDate Minimum end time for jobs to be qualified for deletion
     * @return Sequence of jobIds that were deleted
     */
-  def deleteJobs(olderThan: DateTime): Future[Seq[String]] = {
-    // TODO remove
-    throw new NotImplementedError()
-  }
+  def deleteJobsOlderThan(cutoffDate: DateTime): Future[Seq[String]]
 
   /**
     * Persist a job configuration along with provided job id.

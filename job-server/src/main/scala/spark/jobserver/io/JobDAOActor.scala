@@ -58,7 +58,6 @@ object JobDAOActor {
 
   case class SaveJobResult(jobId: String, result: Any) extends JobDAORequest
   case class GetJobResult(jobId: String) extends JobDAORequest
-  case class DeleteJobResult(jobId: String) extends JobDAORequest
   case class CleanupJobs(ageInHours: Int) extends JobDAORequest
   case class CleanupContexts(ageInHours: Int) extends JobDAORequest
 
@@ -77,7 +76,6 @@ object JobDAOActor {
   case class BinaryNotFound(name: String) extends JobDAOResponse
   case class GetBinaryInfosForCpFailed(error: Throwable)
   case class JobResult(result: Any) extends JobDAOResponse
-  case object JobResultDeleted extends JobDAOResponse
 
   case object InvalidJar extends JobDAOResponse
   case object JarStored extends JobDAOResponse
@@ -317,25 +315,11 @@ class JobDAOActor(metaDataDAO: MetaDataDAO, binaryDAO: BinaryObjectsDAO,
           recipient ! JobResult(None)
       }
 
-    case DeleteJobResult(jobId) =>
-      val recipient = sender()
-      Utils.usingTimer(resultDelete) { () =>
-        binaryDAO.deleteJobResult(jobId)
-      }.onComplete {
-        case Success(true) =>
-          logger.info(s"Deleted job result for job ${jobId}")
-          recipient ! JobResultDeleted
-        case Success(false) =>
-          logger.error(s"Failed to delete job result for job ${jobId}. DAO returned false.")
-        case Failure(t) =>
-          logger.error(s"Failed to delete job result for job ${jobId} in DAO.", t)
-      }
-
     case CleanupJobs(ageInHours) =>
       // Calculate cutoff date to delete jobs
       val cutoffDate = DateTime.now().minusHours(ageInHours)
       // Clean up metadata
-      metaDataDAO.deleteJobs(cutoffDate).onComplete{
+      metaDataDAO.deleteJobsOlderThan(cutoffDate).onComplete{
         case Success(jobIds) =>
           logger.info(s"Cleaned up metadata for ${jobIds.size} jobs older than ${ageInHours} hours.")
           // Clean up binary data
@@ -355,7 +339,7 @@ class JobDAOActor(metaDataDAO: MetaDataDAO, binaryDAO: BinaryObjectsDAO,
       // Calculate cutoff date to delete contexts
       val cutoffDate = DateTime.now().minusHours(ageInHours)
       // Clean up metadata
-      metaDataDAO.deleteContexts(cutoffDate).onComplete{
+      metaDataDAO.deleteFinalContextsOlderThan(cutoffDate).onComplete{
         case Success(true) =>
           logger.info(s"Cleaned up metadata for contexts older than ${ageInHours} hours.")
         case Success(false) =>
