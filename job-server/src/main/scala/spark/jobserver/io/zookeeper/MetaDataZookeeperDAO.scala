@@ -204,14 +204,16 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
     Future {
       Utils.usingResource(zookeeperUtils.getClient) {
         client =>
-          jobIds.forall( jobId => {
-            val success = zookeeperUtils.delete(client, s"${jobsDir}/${jobId}")
-            success match {
+          var success = true
+          jobIds.foreach( jobId => {
+            zookeeperUtils.delete(client, s"${jobsDir}/${jobId}")
+            match {
               case true => logger.trace(s"Deleted job ${jobId}")
-              case false => logger.error(s"Could not delete job ${jobId}")
+              case false => success = false
+                logger.error(s"Could not delete job ${jobId}")
             }
-            success
           })
+          success
       }
     }
   }

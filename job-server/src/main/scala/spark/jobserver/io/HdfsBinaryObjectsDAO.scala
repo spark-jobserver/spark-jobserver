@@ -72,8 +72,12 @@ class HdfsBinaryObjectsDAO(config: Config) extends BinaryObjectsDAO {
 
   override def deleteJobResults(jobIds: Seq[String]): Future[Boolean] = {
     Future {
+      var success = true
       jobIds.map(getJobResultsPath(_))
-        .forall(hdfsFacade.delete(_))
+        .foreach(path => {
+          success &= hdfsFacade.delete(path)
+        })
+      success
     }
   }
 
