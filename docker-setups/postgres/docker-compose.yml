@@ -1,0 +1,69 @@
+version: '3'
+services:
+
+  postgres:
+    build: .
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - "POSTGRES_DB=spark_jobserver"
+      - "POSTGRES_USER=postgres"
+      - "POSTGRES_PASSWORD=secret"
+
+  spark-master:
+    image: bde2020/spark-master:2.4.5-hadoop2.7
+    container_name: spark-master
+    hostname: spark-master
+    ports:
+      - "8080:8080"
+      - "6066:6066"
+      - "7077:7077"
+    environment:
+      - "SPARK_LOCAL_IP=spark-master"
+
+  spark-worker-1:
+    image: bde2020/spark-worker:2.4.5-hadoop2.7
+    container_name: spark-worker-1
+    depends_on:
+      - spark-master
+    hostname: spark-worker-1
+    ports:
+      - "8081:8081"
+    environment:
+      - "SPARK_LOCAL_IP=spark-worker-1"
+      - "SPARK_MASTER=spark://spark-master:7077"
+      - "SPARK_WORKER_CORES=2"
+      - "SPARK_WORKER_MEMORY=1G"
+      - "SPARK_DRIVER_MEMORY=128m"
+      - "SPARK_EXECUTOR_MEMORY=256m"
+
+  spark-worker-2:
+    image: bde2020/spark-worker:2.4.5-hadoop2.7
+    container_name: spark-worker-2
+    depends_on:
+      - spark-master
+    hostname: spark-worker-2
+    ports:
+      - "8082:8081"
+    environment:
+      - "SPARK_LOCAL_IP=spark-worker-2"
+      - "SPARK_MASTER=spark://spark-master:7077"
+      - "SPARK_WORKER_CORES=2"
+      - "SPARK_WORKER_MEMORY=1G"
+      - "SPARK_DRIVER_MEMORY=128m"
+      - "SPARK_EXECUTOR_MEMORY=256m"
+
+  spark-jobserver:
+    build: ../../
+    container_name: spark-jobserver
+    depends_on:
+      - spark-master
+      - spark-worker-1
+      - spark-worker-2
+    ports:
+      - 8090:8090
+    volumes:
+      - type: bind
+        source: ./config
+        target: /opt/sparkjobserver/config
