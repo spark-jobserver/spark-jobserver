@@ -14,6 +14,4 @@ addSbtPlugin("org.scoverage" %% "sbt-scoverage" % "1.5.1")
 
 addSbtPlugin("com.github.gseitz" % "sbt-release" % "1.0.9")
 
-addSbtPlugin("se.marcuslonnberg" % "sbt-docker" % "1.8.0")
-
 addSbtPlugin("com.typesafe.sbt" % "sbt-multi-jvm" % "0.4.0")

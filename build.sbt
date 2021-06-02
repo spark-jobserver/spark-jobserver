@@ -94,10 +94,9 @@ lazy val root = Project(id = "root", base = file("."))
   .settings(Release.settings)
   .settings(noPublishSettings)
   .settings(rootSettings)
-  .settings(dockerSettings)
   .aggregate(jobServer, jobServerApi, jobServerTestJar, akkaApp, jobServerExtras, jobServerPython)
   .dependsOn(jobServer, jobServerExtras)
-  .disablePlugins(SbtScalariform).enablePlugins(DockerPlugin)
+  .disablePlugins(SbtScalariform)
 
 lazy val jobServerExtrasSettings = revolverSettings ++ Assembly.settings ++ publishSettings ++ Seq(
   libraryDependencies ++= sparkExtraDeps,
@@ -143,55 +142,6 @@ lazy val noPublishSettings = Seq(
   publishArtifact := false,
   publish := {},
   publish / skip := true
-)
-
-lazy val dockerSettings = Seq(
-  // Make the docker task depend on the assembly task, which generates a fat JAR file
-  docker := docker.dependsOn(jobServerExtras / assembly).value,
-  docker / dockerfile := {
-    val artifact = (jobServerExtras / assembly / assemblyOutputPath).value
-    val artifactTargetPath = s"/app/${artifact.name}"
-    new sbtdocker.mutable.Dockerfile {
-      from(s"openjdk:${Versions.java}")
-      // Dockerfile best practices: https://docs.docker.com/articles/dockerfile_best-practices/
-      expose(8090)
-      expose(9999) // for JMX
-      env("JOBSERVER_MEMORY", "1G")
-      env("SPARK_HOME", "/spark")
-      env("HADOOP_VERSION", Versions.hadoop.slice(0,3))
-      env("SPARK_VERSION", Versions.spark)
-      env("SCALA_VERSION", scalaBinaryVersion.value)
-      runRaw(
-        """wget --no-verbose http://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz && \
-        tar -xvzf spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz && \
-        mv spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION} ${SPARK_HOME} && \
-        rm spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz
-        """)
-      copy(artifact, artifactTargetPath)
-      copy(baseDirectory(_ / "bin" / "server_start.sh").value, file("app/server_start.sh"))
-      copy(baseDirectory(_ / "bin" / "server_stop.sh").value, file("app/server_stop.sh"))
-      copy(baseDirectory(_ / "bin" / "setenv.sh").value, file("app/setenv.sh"))
-      copy(baseDirectory(_ / "config" / "log4j-stdout.properties").value, file("app/log4j-server.properties"))
-      copy(baseDirectory(_ / "config" / "docker.conf").value, file("app/docker.conf"))
-      copy(baseDirectory(_ / "config" / "docker.sh").value, file("app/settings.sh"))
-
-      // Use a volume to persist database between container invocations
-      run("mkdir", "-p", "/database")
-      volume("/database")
-      entryPoint("app/server_start.sh")
-    }
-  },
-   docker / imageNames := Seq(
-    sbtdocker.ImageName(namespace = Some("sparkjobserver"),
-      repository = "spark-jobserver",
-      tag = Some(
-        s"${version.value}" +
-          s".spark-${Versions.spark}" +
-          s".hadoop-${Versions.hadoop}" +
-          s".scala-${scalaBinaryVersion.value}" +
-          s".jdk-${Versions.java}")
-    )
-  )
 )
 
 lazy val rootSettings = Seq(
