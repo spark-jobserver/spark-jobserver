@@ -209,10 +209,10 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
     }
   }
 
-  override def deleteFinalContextsOlderThan(olderThan: DateTime): Future[Boolean] = {
+  override def deleteFinalContextsOlderThan(olderThan: ZonedDateTime): Future[Boolean] = {
     val deleteContexts = contexts
       .filter(_.state.inSet(ContextStatus.getFinalStates()))
-      .filter(_.endTime < convertDateJodaToSql(olderThan))
+      .filter(_.endTime < convertDateTimeToSql(olderThan))
       .delete
     dbUtils.db.run(deleteContexts).map(_ > 0).recover(logDeleteErrors)
   }
@@ -320,12 +320,12 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
     }
   }
 
-  override def getFinalJobsOlderThan(olderThan: DateTime): Future[Seq[JobInfo]]  = {
+  override def getFinalJobsOlderThan(olderThan: ZonedDateTime): Future[Seq[JobInfo]]  = {
     // Query jobIds of old, final jobs
     val oldFinalJobQuery = jobs
       .filter(_.state.inSet(JobStatus.getFinalStates()))
       .filter(_.endTime.isDefined)
-      .filter(_.endTime < convertDateJodaToSql(olderThan))
+      .filter(_.endTime < convertDateTimeToSql(olderThan))
     dbUtils.db.run(oldFinalJobQuery.result).map(_.map(jobInfoFromRow))
   }
 

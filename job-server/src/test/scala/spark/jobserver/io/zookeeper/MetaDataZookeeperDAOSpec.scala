@@ -316,7 +316,7 @@ class MetaDataZookeeperDAOSpec extends AnyFunSpec with TestJarFinder with AnyFun
 
     it("should delete contexts in final state older than a certain date") {
       // Persist three contexts
-      val cutoffDate = new DateTime(724291200L)
+      val cutoffDate = toDateTime(724291200L)
       val oldContext = normalContext.copy(id = "1", state = ContextStatus.Finished,
         endTime = Some(cutoffDate.minusHours(1)))
       val recentContext = normalContext.copy(id = "2", state = ContextStatus.Finished,
@@ -442,7 +442,7 @@ class MetaDataZookeeperDAOSpec extends AnyFunSpec with TestJarFinder with AnyFun
 
     it("should delete jobs in final state older than a certain date") {
       // Persist a few jobs
-      val cutoffDate = new DateTime(724291200L)
+      val cutoffDate = toDateTime(724291200L)
       val oldJob = normalJob.copy(jobId = "1", state = JobStatus.Finished,
         endTime = Some(cutoffDate.minusHours(1)))
       val recentJob = normalJob.copy(jobId = "2", state = JobStatus.Finished,
@@ -477,7 +477,7 @@ class MetaDataZookeeperDAOSpec extends AnyFunSpec with TestJarFinder with AnyFun
     }
 
     it("should delete job configs with jobs"){
-      val cutoffDate = new DateTime(724291200L)
+      val cutoffDate = toDateTime(724291200L)
       // Persist job with config
       Await.result(dao.saveJob(normalJob), timeout)
       Await.result(dao.saveJobConfig(normalJob.jobId, config1), timeout)
