@@ -6,14 +6,15 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext.Implicits.global
 import java.io.File
+
 import com.google.common.io.Files
 import com.typesafe.config.{Config, ConfigFactory, ConfigValueFactory}
 import org.scalatest.BeforeAndAfter
 import spark.jobserver.TestJarFinder
 import spark.jobserver.util.{ErrorData, JobserverConfig}
-
-import java.time.ZonedDateTime
+import java.time.{Instant, ZoneId, ZonedDateTime}
 import java.time.format.DateTimeFormatter
+
 import org.scalatest.funspec.AnyFunSpecLike
 import org.scalatest.matchers.should.Matchers
 
@@ -51,7 +52,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
 
   // contextInfo test data
   val normalContext = ContextInfo("someId", "someName", "someConfig", Some("ActorAddress"),
-    new DateTime(1548683342369L), Some(new DateTime(1548683342370L)), "someState",
+    toDateTime(1548683342369L), Some(toDateTime(1548683342370L)), "someState",
     Some(new Throwable("message")))
 
   // jobInfo test data
@@ -62,7 +63,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
   val jobInfoSomeCallback: JobInfo = genJobInfo(jarInfo, false, JobStatus.Finished,
     None, Some(Uri("http://example.com")))
   val normalJob = JobInfo("someJobId", "someContextId", "someContextName",
-    "someClassPath", "someState", new DateTime(), Some(new DateTime()),
+    "someClassPath", "someState", time, Some(time),
     Some(ErrorData("someMessage", "someError", "someTrace")), Seq(jarInfo))
 
   // job config test data
@@ -121,6 +122,9 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
 
   def genJarInfo: (Boolean, Boolean) => BinaryInfo = genJarInfoClosure
   lazy val genJobInfo = GenJobInfoClosure()
+
+  def toDateTime(millis: Long): ZonedDateTime = ZonedDateTime.ofInstant(Instant.ofEpochMilli(millis),
+    ZoneId.systemDefault())
 
   before {
     dao = new MetaDataSqlDAO(config)
@@ -417,7 +421,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
     
     it("should delete jobs in final state older than a certain date") {
       // Persist a few jobs
-      val cutoffDate = new DateTime(724291200L)
+      val cutoffDate = toDateTime(724291200L)
       val oldJob = normalJob.copy(jobId = "1", state = JobStatus.Finished,
         endTime = Some(cutoffDate.minusHours(1)))
       val recentJob = normalJob.copy(jobId = "2", state = JobStatus.Finished,
@@ -456,7 +460,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
     }
 
     it("should delete job configs with jobs"){
-      val cutoffDate = new DateTime(724291200L)
+      val cutoffDate = toDateTime(724291200L)
       // Persist job with config
       Await.result(dao.saveBinary(jarInfo.appName, BinaryType.Jar,
         jarInfo.uploadTime, BinaryObjectsDAO.calculateBinaryHashString(jarBytes)), timeout)
@@ -474,7 +478,7 @@ class MetaDataSqlDAOSpec extends MetaDataSqlDAOSpecBase with TestJarFinder with 
   describe("contexts"){
     it("should delete contexts in final state older than a certain date") {
       // Persist three contexts
-      val cutoffDate = new DateTime(724291200L)
+      val cutoffDate = toDateTime(724291200L)
       val oldContext = normalContext.copy(id = "1", state = ContextStatus.Finished,
         endTime = Some(cutoffDate.minusHours(1)))
       val recentContext = normalContext.copy(id = "2", state = ContextStatus.Finished,

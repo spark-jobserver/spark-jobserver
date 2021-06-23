@@ -49,7 +49,7 @@ trait MetaDataDAO {
     * @param cutoffDate Minimum end time for contexts to be qualified for deletion
     * @return true if deletion was successful
     */
-  def deleteFinalContextsOlderThan(cutoffDate: DateTime) : Future[Boolean]
+  def deleteFinalContextsOlderThan(cutoffDate: ZonedDateTime) : Future[Boolean]
 
   /**
     * Persist a job info.
@@ -91,7 +91,7 @@ trait MetaDataDAO {
     * @param cutoffDate Minimum end time for jobs
     * @return Sequence of all job infos matching query
     */
-  def getFinalJobsOlderThan(cutoffDate: DateTime): Future[Seq[JobInfo]]
+  def getFinalJobsOlderThan(cutoffDate: ZonedDateTime): Future[Seq[JobInfo]]
 
   /**
     * Delete a list of job infos including configs
