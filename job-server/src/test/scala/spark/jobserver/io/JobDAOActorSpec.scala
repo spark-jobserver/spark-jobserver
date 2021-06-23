@@ -570,16 +570,16 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
 
     it("should cleanup jobs, configs and results in final state older than a certain date"){
       // Test data
-      val oldDate = DateTime.now().minusHours(48)
-      val recentDate = DateTime.now().minusHours(23)
+      val oldDate = ZonedDateTime.now().minusHours(48)
+      val recentDate = ZonedDateTime.now().minusHours(23)
       val oldJob = JobInfo("oldJob", "contextId1", "ContextName1", "mainClass", "FINISHED",
-        DateTime.now, Some(oldDate), None, Seq.empty)
+        ZonedDateTime.now, Some(oldDate), None, Seq.empty)
       val recentJob = JobInfo("recentJob", "contextId2", "ContextName2", "mainClass", "FINISHED",
-        DateTime.now, Some(recentDate), None, Seq.empty)
+        ZonedDateTime.now, Some(recentDate), None, Seq.empty)
       val runningJob = JobInfo("runningJob", "contextId3", "ContextName3", "mainClass", "RUNNING",
-        DateTime.now, None, None, Seq.empty)
+        ZonedDateTime.now, None, None, Seq.empty)
       val restartingJob = JobInfo("restartingJob", "contextId4", "ContextName4", "mainClass", "RESTARTING",
-        DateTime.now, Some(oldDate), None, Seq.empty)
+        ZonedDateTime.now, Some(oldDate), None, Seq.empty)
 
       // Persist jobInfos and results
       inMemoryDaoActor ! SaveJobInfo(oldJob)
@@ -635,16 +635,16 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
 
     it("should cleanup contexts and results in final state older than a certain date"){
       // Test data
-      val oldDate = DateTime.now().minusHours(48)
-      val recentDate = DateTime.now().minusHours(23)
+      val oldDate = ZonedDateTime.now().minusHours(48)
+      val recentDate = ZonedDateTime.now().minusHours(23)
       val oldContext = ContextInfo("oldContext", "context1", "someConfig", None,
-        DateTime.now(), Some(oldDate), "FINISHED", None)
+        ZonedDateTime.now(), Some(oldDate), "FINISHED", None)
       val recentContext = ContextInfo("recentContext", "context2", "someConfig", None,
-        DateTime.now(), Some(recentDate), "FINISHED", None)
+        ZonedDateTime.now(), Some(recentDate), "FINISHED", None)
       val runningContext = ContextInfo("runningContext", "context3", "someConfig", None,
-        DateTime.now(), None, "RUNNING", None)
+        ZonedDateTime.now(), None, "RUNNING", None)
       val restartingContext = ContextInfo("restartingContext", "context4", "someConfig", None,
-        DateTime.now(), Some(oldDate), "RESTARTING", None)
+        ZonedDateTime.now(), Some(oldDate), "RESTARTING", None)
 
       // Persist context
       inMemoryDaoActor ! SaveContextInfo(oldContext)

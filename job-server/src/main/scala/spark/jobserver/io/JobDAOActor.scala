@@ -316,7 +316,7 @@ class JobDAOActor(metaDataDAO: MetaDataDAO, binaryDAO: BinaryObjectsDAO,
       }
 
     case CleanupJobs(ageInHours) =>
-      val cutoffDate = DateTime.now().minusHours(ageInHours)
+      val cutoffDate = ZonedDateTime.now().minusHours(ageInHours)
       metaDataDAO.getFinalJobsOlderThan(cutoffDate).onComplete{
         case Success(jobs) =>
           metaDataDAO.deleteJobs(jobs.map(_.jobId))
@@ -324,7 +324,7 @@ class JobDAOActor(metaDataDAO: MetaDataDAO, binaryDAO: BinaryObjectsDAO,
       }
 
     case CleanupContexts(ageInHours) =>
-      val cutoffDate = DateTime.now().minusHours(ageInHours)
+      val cutoffDate = ZonedDateTime.now().minusHours(ageInHours)
       metaDataDAO.deleteFinalContextsOlderThan(cutoffDate)
 
     case anotherEvent => logger.info(s"Ignoring unknown event type: $anotherEvent")
