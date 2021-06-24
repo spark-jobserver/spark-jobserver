@@ -1,13 +1,13 @@
 package spark.jobserver.io
 
-import java.io.File
 import com.typesafe.config.Config
 import org.slf4j.LoggerFactory
 import spark.jobserver.util._
 
+import java.nio.file.{Files, Path, Paths}
 import java.time.ZonedDateTime
 import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.{Await, Future}
+import scala.concurrent.Await
 import scala.util.Success
 
 class JobDAOActorHelper(metaDataDAO: MetaDataDAO, binaryDAO: BinaryDAO, config: Config) extends FileCacher {
@@ -15,8 +15,7 @@ class JobDAOActorHelper(metaDataDAO: MetaDataDAO, binaryDAO: BinaryDAO, config: 
 
 
   // Required by FileCacher
-  val rootDirPath: String = config.getString(JobserverConfig.DAO_ROOT_DIR_PATH)
-  val rootDirFile: File = new File(rootDirPath)
+  val rootDir: Path = Paths.get(config.getString(JobserverConfig.DAO_ROOT_DIR_PATH))
 
   implicit val daoTimeout = JobserverTimeouts.DAO_DEFAULT_TIMEOUT
   private val defaultAwaitTime = JobserverTimeouts.DAO_DEFAULT_TIMEOUT
@@ -104,32 +103,32 @@ class JobDAOActorHelper(metaDataDAO: MetaDataDAO, binaryDAO: BinaryDAO, config: 
     }
   }
 
-  def getBinaryPath(name: String, binaryType: BinaryType, uploadTime: ZonedDateTime): String = {
+  def getBinaryPath(name: String, binaryType: BinaryType, uploadTime: ZonedDateTime): Option[Path] = {
     Utils.usingTimer(binRead){ () =>
       Await.result(Utils.usingTimer(binRead){ () => metaDataDAO.getBinary(name)}, defaultAwaitTime) match {
         case Some(binaryInfo) =>
-          val binFile = new File(rootDirPath, createBinaryName(name, binaryType, uploadTime))
+          val binFile = rootDir.resolve(createBinaryName(name, binaryType, uploadTime))
           binaryInfo.binaryStorageId match {
             case Some(_) =>
-              if (!binFile.exists()) {
+              if (!Files.exists(binFile)) {
                 Await.result(binaryDAO.get(binaryInfo.binaryStorageId.get), defaultAwaitTime) match {
                   case Some(binBytes) =>
                     cacheBinary(name, binaryType, uploadTime, binBytes)
-                    binFile.getAbsolutePath
+                    Some(binFile)
                   case None =>
                     logger.warn(s"Failed to fetch bytes from binary dao for $name/$uploadTime")
-                    ""
+                    None
                 }
               } else {
-                binFile.getAbsolutePath
+                Some(binFile)
               }
             case _ =>
               logger.error(s"Failed to get binary file path for $name, hash is not found")
-              ""
+              None
           }
         case None =>
           logger.warn(s"Couldn't find meta data information for $name")
-          ""
+          None
       }
     }
   }

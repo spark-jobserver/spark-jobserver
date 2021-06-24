@@ -11,7 +11,9 @@ import spark.jobserver.DataManagerActor.{Error, StoreData, Stored, _}
 import spark.jobserver.auth.AuthInfo
 import spark.jobserver.auth.Permissions._
 import spark.jobserver.util.ResultMarshalling.ResultKey
+import spark.jobserver.util.DirectoryException
 
+import java.nio.file.{DirectoryNotEmptyException, FileAlreadyExistsException, NoSuchFileException}
 import scala.concurrent.ExecutionContext
 
 /**
@@ -47,9 +49,15 @@ trait DataRoutes extends SprayJsonSupport {
           respondWithMediaType(MediaTypes.`application/json`) { ctx =>
             future.flatMap {
               case Deleted => ctx.complete(StatusCodes.OK)
-              case Error =>
-                completeWithErrorStatus(
-                  ctx, "Unable to delete data file '" + filename + "'.", StatusCodes.BadRequest)
+              case Error(ex) =>
+                ex match {
+                  case ex: NoSuchFileException =>
+                    completeWithException(ctx, "ERROR", StatusCodes.NotFound, ex)
+                  case ex @ (_: DirectoryException | _: DirectoryNotEmptyException | _: SecurityException) =>
+                    completeWithException(ctx, "ERROR", StatusCodes.BadRequest, ex)
+                  case ex =>
+                    completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, ex)
+                }
             }.recoverWith {
               case e: Exception => completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
             }
@@ -70,8 +78,8 @@ trait DataRoutes extends SprayJsonSupport {
                     val future = dataManager ? DeleteAllData
                     future.flatMap {
                       case Deleted => completeWithSuccess(ctx, StatusCodes.OK, "Data reset")
-                      case Error =>
-                        completeWithErrorStatus(ctx, "Unable to delete data folder", StatusCodes.BadRequest)
+                      case Error(ex) =>
+                        completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, ex)
                     }.recoverWith {
                       case e: Exception =>
                         completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
@@ -98,9 +106,14 @@ trait DataRoutes extends SprayJsonSupport {
                   ctx.complete(StatusCodes.OK, Map[String, Any](
                     ResultKey -> Map("filename" -> filename)))
                 }
-                case Error =>
-                  completeWithErrorStatus(
-                    ctx, "Failed to store data file '" + filename + "'.", StatusCodes.BadRequest)
+                case Error(ex) =>
+                  ex match {
+                    case ex @ (_: DirectoryException | _: DirectoryNotEmptyException |
+                         _: SecurityException | _: FileAlreadyExistsException) =>
+                      completeWithException(ctx, "ERROR", StatusCodes.BadRequest, ex)
+                    case ex =>
+                      completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, ex)
+                  }
               }.recoverWith {
                 case e: Exception => completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
               }

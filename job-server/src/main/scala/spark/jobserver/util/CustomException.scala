@@ -1,6 +1,7 @@
 package spark.jobserver.util
 
 import spark.jobserver.io.ContextInfo
+import java.nio.file.FileSystemException
 
 final case class InsufficientConfiguration(private val msg: String) extends Exception(msg)
 
@@ -67,3 +68,5 @@ final case class NoCorrespondingContextAliveException(jobId: String) extends
   Exception(s"No context is alive against running job ($jobId). Cleaning the job.")
 
 final case class WrongFormatException(msg: String) extends Exception(msg)
+
+final case class DirectoryException() extends FileSystemException("Unable to delete directories")

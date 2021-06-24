@@ -1,6 +1,5 @@
 package spark.jobserver.io
 
-import java.io.File
 import java.net.URI
 import akka.actor.{ActorRef, Props}
 import com.typesafe.config.Config
@@ -12,6 +11,7 @@ import spark.jobserver.util._
 import spark.jobserver.util.DAOMetrics._
 import spark.jobserver.JobManagerActor.ContextTerminatedException
 
+import java.nio.file.{Path, Paths}
 import java.time.ZonedDateTime
 import scala.concurrent.{Await, Future}
 
@@ -55,7 +55,7 @@ object JobDAOActor {
   //Responses
   sealed trait JobDAOResponse
   case class Apps(apps: Map[String, (BinaryType, ZonedDateTime)]) extends JobDAOResponse
-  case class BinaryPath(binPath: String) extends JobDAOResponse
+  case class BinaryPath(binPath: Option[Path]) extends JobDAOResponse
   case class JobInfos(jobInfos: Seq[JobInfo]) extends JobDAOResponse
   case class JobConfig(jobConfig: Option[Config]) extends JobDAOResponse
   case class LastBinaryInfo(lastBinaryInfo: Option[BinaryInfo]) extends JobDAOResponse
@@ -87,8 +87,7 @@ class JobDAOActor(metaDataDAO: MetaDataDAO, binaryDAO: BinaryDAO, config: Config
 
 
   // Required by FileCacher
-  val rootDirPath: String = config.getString(JobserverConfig.DAO_ROOT_DIR_PATH)
-  val rootDirFile: File = new File(rootDirPath)
+  val rootDir: Path = Paths.get(config.getString(JobserverConfig.DAO_ROOT_DIR_PATH))
 
 
   implicit val daoTimeout = JobserverTimeouts.DAO_DEFAULT_TIMEOUT

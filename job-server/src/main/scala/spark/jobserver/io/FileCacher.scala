@@ -1,16 +1,17 @@
 package spark.jobserver.io
 
-import java.io.{BufferedOutputStream, File, FileOutputStream, FilenameFilter}
 import org.slf4j.LoggerFactory
 import spark.jobserver.util.Utils
 
+import java.io.{BufferedOutputStream, IOException}
+import java.net.URLEncoder
+import java.nio.file.{Files, Path}
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
 trait FileCacher {
 
-  val rootDirPath: String
-  val rootDirFile: File
+  val rootDir: Path
 
   private val logger = LoggerFactory.getLogger(getClass)
   private val df = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss_SSS")
@@ -20,34 +21,23 @@ trait FileCacher {
   val Pattern = "\\d{8}_\\d{6}_\\d{3}".r
 
   def createBinaryName(appName: String, binaryType: BinaryType, uploadTime: ZonedDateTime): String = {
-    appName + "-" + df.format(uploadTime) + s".${binaryType.extension}"
+    s"${escapeAppName(appName)}-${df.format(uploadTime)}.${binaryType.extension}"
   }
 
-  protected def getPath(appName: String, binaryType: BinaryType,
-                        uploadTime: ZonedDateTime): Option[String] = {
-    val binFile = new File(rootDirPath, createBinaryName(appName, binaryType, uploadTime))
-    if(binFile.exists()) {
-      Some(binFile.getAbsolutePath)
-    } else {
-      None
-    }
-  }
+  private def escapeAppName(appName: String) = URLEncoder.encode(appName, "UTF-8")
 
   // Cache the binary file into local file system.
   protected def cacheBinary(appName: String,
                             binaryType: BinaryType,
                             uploadTime: ZonedDateTime,
-                            binBytes: Array[Byte]): String = {
-    val targetFullBinaryName = createBinaryName(appName, binaryType, uploadTime)
-    val tempSuffix = ".tmp"
-    val rootDir = new File(rootDirPath)
+                            binBytes: Array[Byte]): Path = {
     Utils.createDirectory(rootDir)
-    val tempOutFile = File.createTempFile(targetFullBinaryName + "-", tempSuffix, rootDir)
-    val tempOutFileName = tempOutFile.getName
-    val bos = new BufferedOutputStream(new FileOutputStream(tempOutFile))
+    val targetFullBinaryName = createBinaryName(appName, binaryType, uploadTime)
+    val tempOutFile = Files.createTempFile(rootDir, targetFullBinaryName + "-", ".tmp")
+    val bos = new BufferedOutputStream(Files.newOutputStream(tempOutFile))
 
     try {
-      logger.debug("Writing {} bytes to a temporary file {}", binBytes.length, tempOutFile.getPath)
+      logger.debug("Writing {} bytes to a temporary file {}", binBytes.length, tempOutFile)
       bos.write(binBytes)
       bos.flush()
     } finally {
@@ -55,37 +45,41 @@ trait FileCacher {
     }
 
     logger.debug("Renaming the temporary file {} to the target full binary name {}",
-      tempOutFileName, targetFullBinaryName: Any)
+      tempOutFile, targetFullBinaryName: Any)
 
-    val tempFile = new File(rootDirPath, tempOutFileName)
-    val renamedFile = new File(rootDirPath, targetFullBinaryName)
-    renamedFile.deleteOnExit()
-    if (!tempFile.renameTo(renamedFile)) {
-      logger.debug("Renaming the temporary file {} failed, another process has probably already updated " +
-        "the target file - deleting the redundant temp file", tempOutFileName)
-      if (!tempFile.delete()) {
-        logger.warn("Could not delete the temporary file {}", tempOutFileName)
-      }
+    val renamedFile = tempOutFile.resolveSibling(targetFullBinaryName)
+    try {
+      Files.move(tempOutFile, renamedFile)
+      renamedFile.toFile.deleteOnExit()
     }
-
-    renamedFile.getAbsolutePath
+    catch {
+      case _: IOException =>
+        logger.debug("Renaming the temporary file {} failed, another process has probably already updated " +
+          "the target file - deleting the redundant temp file", tempOutFile)
+        try {
+          Files.deleteIfExists(tempOutFile)
+        }
+        catch {
+          case _: Throwable => logger.warn("Could not delete the temporary file {}", tempOutFile)
+        }
+    }
+    renamedFile
   }
 
   protected def cleanCacheBinaries(appName: String): Unit = {
-    val dir = new File(rootDirPath)
-    val binaries = dir.listFiles(new FilenameFilter {
-      override def accept(dir: File, name: String): Boolean = {
-        val prefix = appName + "-"
+    Utils.createDirectory(rootDir)
+
+    Files.list(rootDir)
+      .filter(p => {
+        val prefix = escapeAppName(appName) + "-"
+        val name = p.getFileName.toString
         if (name.startsWith(prefix)) {
           val suffix = name.substring(prefix.length)
           (Pattern findFirstIn suffix).isDefined
         } else {
           false
         }
-      }
-    })
-    if (binaries != null) {
-      binaries.foreach(f => f.delete())
-    }
+      })
+      .forEach(p => Files.deleteIfExists(p))
   }
 }
