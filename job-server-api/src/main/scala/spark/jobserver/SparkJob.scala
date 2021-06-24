@@ -6,6 +6,7 @@ import org.scalactic._
 
 import spark.jobserver.api.{SparkJobBase => NewSparkJob, JobEnvironment, ValidationProblem}
 
+@Deprecated
 sealed trait SparkJobValidation {
   // NOTE(harish): We tried using lazy eval here by passing in a function
   // instead, which worked fine with tests but when run with the job-server
@@ -15,7 +16,9 @@ sealed trait SparkJobValidation {
     case x => x
   }
 }
+@Deprecated
 case object SparkJobValid extends SparkJobValidation
+@Deprecated
 case class SparkJobInvalid(reason: String) extends SparkJobValidation with ValidationProblem
 
 /**
@@ -59,6 +62,7 @@ trait SparkJobBase extends NewSparkJob {
   def validate(sc: C, config: Config): SparkJobValidation
 }
 
+@Deprecated
 trait SparkJob extends SparkJobBase {
   type C = SparkContext
 }

@@ -11,7 +11,7 @@ import spark.jobserver.util.{JobserverConfig, SparkJobUtils}
 class JavaSessionContextFactory extends JavaContextFactory {
   type C = SparkSessionContextLikeWrapper
 
-  def isValidJob(job: BaseJavaJob[_, _]): Boolean = job.isInstanceOf[JSessionJob[_]]
+  def isValidJob(job: BaseJavaJob[_, _, _]): Boolean = job.isInstanceOf[JSessionJob[_]]
 
   def makeContext(sparkConf: SparkConf, config: Config, contextName: String): C = {
     val builder = SparkSession.builder()
@@ -36,7 +36,7 @@ class JavaSessionContextFactory extends JavaContextFactory {
 class JavaStreamingContextFactory extends JavaContextFactory {
   type C = StreamingContext with ContextLike
 
-  def isValidJob(job: BaseJavaJob[_, _]): Boolean = job.isInstanceOf[JStreamingJob[_]]
+  def isValidJob(job: BaseJavaJob[_, _, _]): Boolean = job.isInstanceOf[JStreamingJob[_]]
 
   def makeContext(sparkConf: SparkConf, config: Config, contextName: String): C = {
     val interval = config.getInt("streaming.batch_interval")

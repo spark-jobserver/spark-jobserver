@@ -1,10 +1,10 @@
 package spark.jobserver;
 
 import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
 import org.apache.spark.api.java.JavaSparkContext;
 import spark.jobserver.japi.JSparkJob;
 import spark.jobserver.api.JobEnvironment;
+import spark.jobserver.japi.JavaValidationException;
 
 public class JavaHelloWorldJob implements JSparkJob<String> {
 
@@ -12,7 +12,8 @@ public class JavaHelloWorldJob implements JSparkJob<String> {
         return "Hi!";
     }
 
-    public Config verify(JavaSparkContext sc, JobEnvironment runtime, Config config) {
-        return ConfigFactory.empty();
+    public Config verify(JavaSparkContext sc, JobEnvironment runtime, Config config) throws JavaValidationException {
+        // No configuration verification needed for run
+        return config;
     }
 }

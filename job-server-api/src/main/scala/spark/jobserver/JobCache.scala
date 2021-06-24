@@ -10,7 +10,7 @@ case class JobJarInfo(constructor: () => api.SparkJobBase,
                       className: String,
                       jarFilePath: String) extends BinaryJobInfo
 
-case class JavaJarInfo(job: BaseJavaJob[_, _],
+case class JavaJarInfo(job: BaseJavaJob[_, _, _],
                        className: String,
                        jarFilePath: String) extends BinaryJobInfo
 

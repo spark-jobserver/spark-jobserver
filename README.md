@@ -97,8 +97,11 @@ Spark Job Server is included in Datastax Enterprise!
 ## Features
 
 - *"Spark as a Service"*: Simple REST interface (including HTTPS) for all aspects of job, context management
-- Support for Spark SQL, Hive, Streaming Contexts/jobs and custom job contexts!  See [Contexts](doc/contexts.md).
-- [Python](doc/python.md), Scala, and [Java](doc/javaapi.md) (see [TestJob.java](https://github.com/spark-jobserver/spark-jobserver/blob/master/job-server-api/src/main/java/spark/jobserver/api/TestJob.java)) support
+- Support for Spark SQL, Hive, Streaming Contexts/jobs and custom job contexts! See [Contexts](doc/contexts.md).
+- Provides APIs for
+    - [Python](doc/python-api.md)
+    - [Scala](doc/scala-api.md)
+    - [Java](doc/java-api.md) support
 - LDAP Auth support via Apache Shiro integration
 - Separate JVM per SparkContext for isolation (EXPERIMENTAL)
 - Supports sub-second low-latency jobs via long-running job contexts

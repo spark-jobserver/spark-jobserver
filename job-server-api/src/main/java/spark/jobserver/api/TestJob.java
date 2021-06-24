@@ -11,7 +11,7 @@ public class TestJob implements JSparkJob<Integer> {
         return 0;
     }
 
-    public Config verify(JavaSparkContext sc, JobEnvironment runtime, Config config) {
+    public Config verify(JavaSparkContext sc, JobEnvironment runtime, Config config) throws RuntimeException {
         return ConfigFactory.empty();
     }
 }

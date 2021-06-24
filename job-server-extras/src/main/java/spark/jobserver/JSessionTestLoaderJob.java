@@ -5,8 +5,8 @@ import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import spark.jobserver.api.JobEnvironment;
-//import spark.jobserver.context.SparkSessionContextLikeWrapper;
 import spark.jobserver.japi.JSessionJob;
+import spark.jobserver.japi.JavaValidationException;
 
 public class JSessionTestLoaderJob extends JSessionJob<Long> {
 
@@ -29,7 +29,7 @@ public class JSessionTestLoaderJob extends JSessionJob<Long> {
     }
 
     @Override
-    public Config verify(SparkSession contextWrapper, JobEnvironment runtime, Config config) {
+    public Config verify(SparkSession contextWrapper, JobEnvironment runtime, Config config) throws JavaValidationException {
         return config;
     }
 }
