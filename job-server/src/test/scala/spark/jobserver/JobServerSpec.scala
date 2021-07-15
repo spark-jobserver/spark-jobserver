@@ -13,7 +13,7 @@ import java.nio.file.{Files, Path}
 import scala.concurrent.duration._
 import spark.jobserver.JobServer.InvalidConfiguration
 import spark.jobserver.common.akka
-import spark.jobserver.io.{BinaryInfo, BinaryType, ContextInfo, ContextStatus, InMemoryBinaryDAO, InMemoryMetaDAO, JobDAOActor, JobInfo, JobStatus}
+import spark.jobserver.io.{BinaryInfo, BinaryType, ContextInfo, ContextStatus, InMemoryBinaryObjectsDAO, InMemoryMetaDAO, JobDAOActor, JobInfo, JobStatus}
 import spark.jobserver.util.{ContextReconnectFailedException, DAOCleanup, JobserverConfig}
 
 import scala.concurrent.Await
@@ -297,7 +297,7 @@ class JobServerSpec extends TestKit(JobServerSpec.system) with AnyFunSpecLike wi
     it("should return empty list if no context is available to reconnect") {
       lazy val daoConfig: Config = ConfigFactory.load("local.test.dao.conf")
       val daoActor = actorSystem.actorOf(JobDAOActor.props(
-        new InMemoryMetaDAO, new InMemoryBinaryDAO, daoConfig))
+        new InMemoryMetaDAO, new InMemoryBinaryObjectsDAO, daoConfig))
 
       val existingManagerActorRefs = JobServer.getExistingManagerActorRefs(actorSystem, daoActor)
       existingManagerActorRefs should be(List())

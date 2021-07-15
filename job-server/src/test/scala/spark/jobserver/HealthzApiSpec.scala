@@ -8,7 +8,7 @@ import akka.http.scaladsl.testkit.ScalatestRouteTest
 import com.typesafe.config.{Config, ConfigFactory}
 import org.scalatest.BeforeAndAfterAll
 import spark.jobserver.io.JobDAOActor.GetJobInfo
-import spark.jobserver.io.{InMemoryBinaryDAO, InMemoryMetaDAO, JobDAOActor}
+import spark.jobserver.io.{InMemoryBinaryObjectsDAO, InMemoryMetaDAO, JobDAOActor}
 import spark.jobserver.util.ActorsHealthCheck
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
@@ -41,7 +41,7 @@ with ScalatestRouteTest with SprayJsonSupport {
   val aliveActor = system.actorOf(Props(classOf[AliveActor], this))
   val deadActor = system.actorOf(Props(classOf[DeadActor], this))
   val inMemoryMetaDAO = new InMemoryMetaDAO
-  val inMemoryBinDAO = new InMemoryBinaryDAO
+  val inMemoryBinDAO = new InMemoryBinaryObjectsDAO
   val daoConfig: Config = ConfigFactory.load("local.test.combineddao.conf")
   val jobDaoActor = system.actorOf(JobDAOActor.props(inMemoryMetaDAO, inMemoryBinDAO, daoConfig))
   val statusActor = system.actorOf(JobStatusActor.props(jobDaoActor))
@@ -58,10 +58,6 @@ with ScalatestRouteTest with SprayJsonSupport {
         sender ! NoSuchContext
       case GetJobInfos(1, None) =>
         sender ! JobInfos(null)
-      case GetJobResult("dummyjobid") =>
-        sender ! NoSuchJobId
-      case GetResultActor("getDefaultGlobalActor") =>
-        sender ! self // To receive the next message also
     }
   }
   
@@ -76,8 +72,6 @@ with ScalatestRouteTest with SprayJsonSupport {
       case GetContext("dummycontext") =>
         self ! PoisonPill
       case GetJobInfos(1, None) =>
-        self ! PoisonPill
-      case GetJobResult("dummyjobid") =>
         self ! PoisonPill
     }
   }

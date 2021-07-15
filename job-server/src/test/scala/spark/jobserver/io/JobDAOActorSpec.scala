@@ -40,16 +40,16 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
   private val defaultTimeout = 10.seconds
   private val shortTimeout: FiniteDuration = 3 seconds
   val dummyMetaDataDao = new DummyMetaDataDAO(config)
-  val dummyBinaryDao = new DummyBinaryDAO(config)
+  val dummyBinaryDao = new DummyBinaryObjectsDAO(config)
   val daoActor = system.actorOf(JobDAOActor.props(dummyMetaDataDao, dummyBinaryDao, config))
   var inMemoryDaoActor: ActorRef = _
   var inMemoryMetaDAO: MetaDataDAO = _
-  var inMemoryBinDAO: BinaryDAO = _
+  var inMemoryBinDAO: BinaryObjectsDAO = _
 
   before {
     DAOTestsHelper.testProbe = TestProbe()(system)
     inMemoryMetaDAO = new InMemoryMetaDAO
-    inMemoryBinDAO = new InMemoryBinaryDAO
+    inMemoryBinDAO = new InMemoryBinaryObjectsDAO
     inMemoryDaoActor = system.actorOf(JobDAOActor.props(inMemoryMetaDAO, inMemoryBinDAO, config))
   }
 
@@ -316,6 +316,25 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       daoActor ! SaveJobInfo(jobInfo)
       expectMsg(false)
     }
+
+    it("should return an error if result was not saved successfully"){
+      daoActor ! SaveJobResult("saveUnsuccessful", "abc")
+      DAOTestsHelper.testProbe.expectMsg("JobResult: Save unsuccessful")
+      expectMsgType[SaveFailed]
+      daoActor ! SaveJobResult("saveFailure", "abc")
+      DAOTestsHelper.testProbe.expectMsg("JobResult: Save failure")
+      expectMsgType[SaveFailed]
+    }
+
+    it("should return JobResult(None) in case the result cannot be retrieved successfully"){
+      daoActor ! GetJobResult("getUnsuccessful")
+      DAOTestsHelper.testProbe.expectMsg("JobResult: Get unsuccessful")
+      expectMsg(JobResult(None))
+      daoActor ! GetJobResult("getFailure")
+      DAOTestsHelper.testProbe.expectMsg("JobResult: Get failure")
+      expectMsg(JobResult(None))
+    }
+
   }
 
   describe("CleanContextJobInfos tests using InMemoryDAO") {
@@ -502,7 +521,7 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       val enabledCachingConfig = ConfigFactory.parseString("spark.jobserver.cache-on-upload = true").
         withFallback(config)
       val daoActorWithEnabledCaching = system.actorOf(JobDAOActor.props(
-        new InMemoryMetaDAO, new InMemoryBinaryDAO, enabledCachingConfig))
+        new InMemoryMetaDAO, new InMemoryBinaryObjectsDAO, enabledCachingConfig))
       val binName = "success"
       val jarFile = new File(config.getString(JobserverConfig.DAO_ROOT_DIR_PATH),
         binName + "-" + df.format(DAOTestsHelper.defaultDate) + ".jar")
@@ -521,7 +540,7 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       val disabledCachingConfig = ConfigFactory.parseString("spark.jobserver.cache-on-upload = false").
         withFallback(config)
       val daoActorWithoutCache = system.actorOf(JobDAOActor.props(
-        new InMemoryMetaDAO, new InMemoryBinaryDAO, disabledCachingConfig))
+        new InMemoryMetaDAO, new InMemoryBinaryObjectsDAO, disabledCachingConfig))
       val binName = "success"
       val jarFile = new File(config.getString(JobserverConfig.DAO_ROOT_DIR_PATH),
         binName + "-" + df.format(DAOTestsHelper.defaultDate) + ".jar")
@@ -530,4 +549,131 @@ class JobDAOActorSpec extends TestKit(JobDAOActorSpec.system) with ImplicitSende
       jarFile.exists() should be(false)
     }
   }
+
+  describe("Result Persistence"){
+
+    it("should save a job result successfully"){
+      inMemoryDaoActor ! SaveJobResult("someId", "abc")
+      expectMsg(SavedSuccessfully)
+    }
+
+    it("should return a job result successfully"){
+      inMemoryDaoActor ! SaveJobResult("someId", "abc")
+      expectMsg(SavedSuccessfully)
+      inMemoryDaoActor ! GetJobResult("someId")
+      expectMsg(JobResult("abc"))
+    }
+
+  }
+
+  describe("Cleanup"){
+
+    it("should cleanup jobs, configs and results in final state older than a certain date"){
+      // Test data
+      val oldDate = ZonedDateTime.now().minusHours(48)
+      val recentDate = ZonedDateTime.now().minusHours(23)
+      val oldJob = JobInfo("oldJob", "contextId1", "ContextName1", "mainClass", "FINISHED",
+        ZonedDateTime.now, Some(oldDate), None, Seq.empty)
+      val recentJob = JobInfo("recentJob", "contextId2", "ContextName2", "mainClass", "FINISHED",
+        ZonedDateTime.now, Some(recentDate), None, Seq.empty)
+      val runningJob = JobInfo("runningJob", "contextId3", "ContextName3", "mainClass", "RUNNING",
+        ZonedDateTime.now, None, None, Seq.empty)
+      val restartingJob = JobInfo("restartingJob", "contextId4", "ContextName4", "mainClass", "RESTARTING",
+        ZonedDateTime.now, Some(oldDate), None, Seq.empty)
+
+      // Persist jobInfos and results
+      inMemoryDaoActor ! SaveJobInfo(oldJob)
+      expectMsg(true)
+      inMemoryDaoActor ! SaveJobConfig(oldJob.jobId, ConfigFactory.parseString("{test=abc}"))
+      expectMsg(JobConfigStored)
+      inMemoryDaoActor ! SaveJobResult(oldJob.jobId, "abc")
+      expectMsg(SavedSuccessfully)
+      inMemoryDaoActor ! SaveJobInfo(recentJob)
+      expectMsg(true)
+      inMemoryDaoActor ! SaveJobConfig(recentJob.jobId, ConfigFactory.parseString("{test=def}"))
+      expectMsg(JobConfigStored)
+      inMemoryDaoActor ! SaveJobResult(recentJob.jobId, "def")
+      expectMsg(SavedSuccessfully)
+      inMemoryDaoActor ! SaveJobInfo(runningJob)
+      expectMsg(true)
+      inMemoryDaoActor ! SaveJobConfig(runningJob.jobId, ConfigFactory.parseString("{test=ghi}"))
+      expectMsg(JobConfigStored)
+      inMemoryDaoActor ! SaveJobInfo(restartingJob)
+      expectMsg(true)
+      inMemoryDaoActor ! SaveJobConfig(restartingJob.jobId, ConfigFactory.parseString("{test=jkl}"))
+      expectMsg(JobConfigStored)
+
+      // Cleanup
+      inMemoryDaoActor ! CleanupJobs(24)
+      expectNoMessage()
+
+      // Verify cleanup worked
+      inMemoryDaoActor ! GetJobInfo(oldJob.jobId)
+      expectMsg(None)
+      inMemoryDaoActor ! GetJobResult(oldJob.jobId)
+      expectMsg(JobResult(None))
+      inMemoryDaoActor ! GetJobConfig(oldJob.jobId)
+      expectMsg(JobConfig(None))
+
+      // Verify no accidental deletion took place
+      inMemoryDaoActor ! GetJobInfo(recentJob.jobId)
+      expectMsg(Some(recentJob))
+      inMemoryDaoActor ! GetJobResult(recentJob.jobId)
+      expectMsg(JobResult("def"))
+      inMemoryDaoActor ! GetJobConfig(recentJob.jobId)
+      expectMsg(JobConfig(Some(ConfigFactory.parseString("{test=def}"))))
+      inMemoryDaoActor ! GetJobInfo(runningJob.jobId)
+      expectMsg(Some(runningJob))
+      inMemoryDaoActor ! GetJobConfig(runningJob.jobId)
+      expectMsg(JobConfig(Some(ConfigFactory.parseString("{test=ghi}"))))
+      inMemoryDaoActor ! GetJobInfo(restartingJob.jobId)
+      expectMsg(Some(restartingJob))
+      inMemoryDaoActor ! GetJobConfig(restartingJob.jobId)
+      expectMsg(JobConfig(Some(ConfigFactory.parseString("{test=jkl}"))))
+
+    }
+
+    it("should cleanup contexts and results in final state older than a certain date"){
+      // Test data
+      val oldDate = ZonedDateTime.now().minusHours(48)
+      val recentDate = ZonedDateTime.now().minusHours(23)
+      val oldContext = ContextInfo("oldContext", "context1", "someConfig", None,
+        ZonedDateTime.now(), Some(oldDate), "FINISHED", None)
+      val recentContext = ContextInfo("recentContext", "context2", "someConfig", None,
+        ZonedDateTime.now(), Some(recentDate), "FINISHED", None)
+      val runningContext = ContextInfo("runningContext", "context3", "someConfig", None,
+        ZonedDateTime.now(), None, "RUNNING", None)
+      val restartingContext = ContextInfo("restartingContext", "context4", "someConfig", None,
+        ZonedDateTime.now(), Some(oldDate), "RESTARTING", None)
+
+      // Persist context
+      inMemoryDaoActor ! SaveContextInfo(oldContext)
+      expectMsg(SavedSuccessfully)
+      inMemoryDaoActor ! SaveContextInfo(recentContext)
+      expectMsg(SavedSuccessfully)
+      inMemoryDaoActor ! SaveContextInfo(runningContext)
+      expectMsg(SavedSuccessfully)
+      inMemoryDaoActor ! SaveContextInfo(restartingContext)
+      expectMsg(SavedSuccessfully)
+
+      // Cleanup
+      inMemoryDaoActor ! CleanupContexts(24)
+      expectNoMessage()
+
+      // Verify cleanup worked
+      inMemoryDaoActor ! GetContextInfo("oldContext")
+      expectMsg(ContextResponse(None))
+
+      // Verify no accidental deletion took place
+      inMemoryDaoActor ! GetContextInfo("recentContext")
+      expectMsg(ContextResponse(Some(recentContext)))
+      inMemoryDaoActor ! GetContextInfo("runningContext")
+      expectMsg(ContextResponse(Some(runningContext)))
+      inMemoryDaoActor ! GetContextInfo("restartingContext")
+      expectMsg(ContextResponse(Some(restartingContext)))
+
+    }
+
+  }
+
 }

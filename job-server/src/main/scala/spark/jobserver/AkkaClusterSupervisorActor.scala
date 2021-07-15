@@ -79,12 +79,6 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
 
   protected val selfAddress = cluster.selfAddress
 
-  private val FINAL_STATES = Set(ContextStatus.Error, ContextStatus.Finished, ContextStatus.Killed)
-
-  // This is for capturing results for ad-hoc jobs. Otherwise when ad-hoc job dies, resultActor also dies,
-  // and there is no way to retrieve results.
-  val globalResultActor = context.actorOf(Props[JobResultActor], "global-result-actor")
-
   logger.info("Subscribing to MemberUp event")
   cluster.subscribe(self, classOf[MemberEvent])
   regainWatchOnExistingContexts()
@@ -292,9 +286,6 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
         originator ! ContextInitError(err)
       }
 
-    case GetResultActor(name) =>
-      sender ! resultActorRefs.get(name).getOrElse(globalResultActor)
-
     case GetContext(name) =>
       val resp = getContextByName(name)
       resp match {
@@ -445,9 +436,8 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
                           successFunc: ActorRef => Unit,
                           failureFunc: Throwable => Unit): Unit = {
     import akka.pattern.ask
-    val resultActor = if (isAdHoc) globalResultActor else context.actorOf(Props(classOf[JobResultActor]))
     (ref ? JobManagerActor.Initialize(
-      contextConfig, Some(resultActor), dataManagerActor))(Timeout(timeoutSecs.second)).onComplete {
+      contextConfig, dataManagerActor))(Timeout(timeoutSecs.second)).onComplete {
       case Failure(e: Exception) =>
         logger.info("Failed to send initialize message to context " + ref, e)
         context.stop(ref)
@@ -460,9 +450,8 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
         ref ! PoisonPill
         failureFunc(t)
         initContextHelp(actorName, Some(ref.path.address.toString), ContextStatus.Error, Some(t))
-      case Success(JobManagerActor.Initialized(ctxName, resActor)) =>
+      case Success(JobManagerActor.Initialized(ctxName)) =>
         logger.info("SparkContext {} joined", ctxName)
-        resultActorRefs(ctxName) = resActor
         context.watch(ref)
         (initContextHelp(actorName, Some(ref.path.address.toString), ContextStatus.Running, None),
             isRestartScenario) match {

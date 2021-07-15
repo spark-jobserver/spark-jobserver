@@ -95,6 +95,31 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
     }
   }
 
+  override def deleteFinalContextsOlderThan(olderThan: ZonedDateTime): Future[Boolean] = {
+    logger.debug(s"Deleting context older than ${olderThan}")
+    Future{
+      Utils.usingResource(zookeeperUtils.getClient) {
+        client =>
+          zookeeperUtils.sync(client, contextsDir)
+          lazy val toBeDeleted = zookeeperUtils.list(client, contextsDir)
+            .flatMap(id => zookeeperUtils.read[ContextInfo](client, s"$contextsDir/$id"))
+            .filter(contextInfo => ContextStatus.getFinalStates().contains(contextInfo.state))
+            .filter(contextInfo => contextInfo.endTime.isDefined
+              && contextInfo.endTime.get.isBefore(olderThan))
+          var success = true
+          toBeDeleted.foreach( context => {
+            zookeeperUtils.delete(client, s"${contextsDir}/${context.id}") match {
+              case true => logger.trace(s"Deleted context ${context.name} (${context.id})")
+              case false =>
+                success = false
+                logger.error(s"Could not delete context ${context.name} (${context.id})")
+            }
+          })
+          success
+      }
+    }
+  }
+
   /*
    * Jobs
    */
@@ -158,6 +183,41 @@ class MetaDataZookeeperDAO(config: Config) extends MetaDataDAO {
       }
     }
   }
+
+  override def getFinalJobsOlderThan(olderThan: ZonedDateTime): Future[Seq[JobInfo]] = {
+    logger.debug(s"Retrieving jobs older than ${olderThan}")
+    Future{
+      Utils.usingResource(zookeeperUtils.getClient) {
+        client =>
+          zookeeperUtils.sync(client, jobsDir)
+          zookeeperUtils.list(client, jobsDir)
+            .flatMap(id => zookeeperUtils.read[JobInfo](client, s"$jobsDir/$id"))
+            .filter(jobInfo => JobStatus.getFinalStates().contains(jobInfo.state))
+            .filter(jobInfo => jobInfo.endTime.isDefined
+              && jobInfo.endTime.get.isBefore(olderThan))
+      }
+    }
+  }
+
+  override def deleteJobs(jobIds: Seq[String]): Future[Boolean] = {
+    logger.debug(s"Deleting ${jobIds.size} jobs")
+    Future {
+      Utils.usingResource(zookeeperUtils.getClient) {
+        client =>
+          var success = true
+          jobIds.foreach( jobId => {
+            zookeeperUtils.delete(client, s"${jobsDir}/${jobId}")
+            match {
+              case true => logger.trace(s"Deleted job ${jobId}")
+              case false => success = false
+                logger.error(s"Could not delete job ${jobId}")
+            }
+          })
+          success
+      }
+    }
+  }
+
 
   /*
    * Helpers

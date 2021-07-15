@@ -45,7 +45,7 @@ with ScalatestRouteTest with ScalaFutures with SprayJsonSupport {
   // for actors declared as inner classes we need to pass this as first arg
   val dummyActor = system.actorOf(Props(classOf[DummyActor], this))
   lazy val daoConfig = ConfigFactory.load("local.test.dao.conf")
-  val jobDaoActor = system.actorOf(JobDAOActor.props(new InMemoryMetaDAO, new InMemoryBinaryDAO, daoConfig))
+  val jobDaoActor = system.actorOf(JobDAOActor.props(new InMemoryMetaDAO, new InMemoryBinaryObjectsDAO, daoConfig))
   val statusActor = system.actorOf(JobStatusActor.props(jobDaoActor))
 
   val api = new WebApi(system, config, dummyPort, dummyActor, dummyActor, dummyActor, dummyActor, null)
@@ -82,32 +82,34 @@ with ScalatestRouteTest with ScalaFutures with SprayJsonSupport {
        }
     }
 
-    def receive: PartialFunction[Any, Unit] = {
+    def receive: Receive = customReceive
+
+    def customReceive: Receive = {
       case GetJobInfo("_mapseq") =>
         sender ! Some(finishedJobInfo)
       case GetJobResult("_mapseq") =>
         val map = Map("first" -> Seq(1, 2, Seq("a", "b")))
-        sender ! JobResult("_seqseq", map)
+        sender ! JobResult(map)
       case GetJobInfo("_mapmap") =>
         sender ! Some(finishedJobInfo)
       case GetJobResult("_mapmap") =>
         val map = Map("second" -> Map("K" -> Map("one" -> 1)))
-        sender ! JobResult("_mapmap", map)
+        sender ! JobResult(map)
       case GetJobInfo("_seq") =>
         sender ! Some(finishedJobInfo)
       case GetJobResult("_seq") =>
-        sender ! JobResult("_seq", Seq(1, 2, Map("3" -> "three")))
+        sender ! JobResult(Seq(1, 2, Map("3" -> "three")))
       case GetJobResult("_stream") =>
-        sender ! JobResult("_stream", "\"1, 2, 3, 4, 5, 6, 7\"".getBytes().toStream)
+        sender ! JobResult("\"1, 2, 3, 4, 5, 6, 7\"".getBytes().toStream)
       case GetJobInfo("_stream") =>
         sender ! Some(finishedJobInfo)
       case GetJobInfo("_num") =>
         sender ! Some(finishedJobInfo)
       case GetJobResult("_num") =>
-        sender ! JobResult("_num", 5000)
+        sender ! JobResult(5000)
       case GetJobInfo("_unk") =>
         sender ! Some(finishedJobInfo)
-      case GetJobResult("_unk") => sender ! JobResult("_case", Seq(1, math.BigInt(101)))
+      case GetJobResult("_unk") => sender ! JobResult(Seq(1, math.BigInt(101)))
       case GetJobInfo("_running") =>
         sender ! Some(baseJobInfo)
       case GetJobResult("_running") =>
@@ -119,13 +121,13 @@ with ScalatestRouteTest with ScalaFutures with SprayJsonSupport {
       case GetJobInfo("fail_to_fetch_result") =>
         sender ! Some(finishedJobInfo)
       case GetJobResult("fail_to_fetch_result") =>
-        sender ! NoSuchJobId
+        sender ! JobResult(None)
       case GetJobInfo("job_to_kill") => sender ! Some(baseJobInfo)
       case GetJobInfo("wrong_job_id") => sender ! None
       case GetJobInfo("job_kill_with_error") => sender ! Some(errorJobInfo)
       case GetJobInfo("already_killed") => sender ! Some(killedJobInfo)
       case GetJobInfo(id) => sender ! Some(baseJobInfo)
-      case GetJobResult(id) => sender ! JobResult(id, id + "!!!")
+      case GetJobResult(id) => sender ! JobResult(id + "!!!")
       case GetJobInfos(limitOpt, statusOpt) => {
         statusOpt match {
           case Some(JobStatus.Error) => sender ! JobInfos(Seq(errorJobInfo))
@@ -205,19 +207,6 @@ with ScalatestRouteTest with ScalaFutures with SprayJsonSupport {
           case "err" => sender ! JobErroredOut (
             "foo", dt, new RuntimeException ("oops", new IllegalArgumentException ("foo") ) )
           case "loadErr" => sender ! JobLoadingError(new MalformedURLException("foo"))
-          case "multi" =>
-            assert(Seq("multi", "some", "bin") == cp.map(_.appName), "cp path should include all binaries")
-            statusActor ! Subscribe("multi", sender, events)
-            val jobInfo = JobInfo(
-              "multi", "cid", "context", "com.abc.meme",
-              getStateBasedOnEvents(events), dt, None, None, Seq.empty)
-            statusActor ! JobStatusActor.JobInit(jobInfo)
-            statusActor ! JobStarted(jobInfo.jobId, jobInfo)
-            val map = config.entrySet().asScala.map {
-              entry => entry.getKey -> entry.getValue.unwrapped
-            }.toMap
-            if (events.contains(classOf[JobResult])) sender ! JobResult("multi", map)
-            statusActor ! Unsubscribe("multi", sender)
           case "foo" | "demo" =>
             statusActor ! Subscribe("foo", sender, events)
             val jobInfo = JobInfo(
@@ -225,20 +214,8 @@ with ScalatestRouteTest with ScalaFutures with SprayJsonSupport {
               getStateBasedOnEvents(events), dt, None, None, Seq.empty)
             statusActor ! JobStatusActor.JobInit(jobInfo)
             statusActor ! JobStarted(jobInfo.jobId, jobInfo)
-            val map = config.entrySet().asScala.map {
-              entry => entry.getKey -> entry.getValue.unwrapped
-            }.toMap
-            if (events.contains(classOf[JobResult])) sender ! JobResult("foo", map)
+            if (events.contains(classOf[JobFinished])) sender ! JobFinished(jobInfo.jobId, ZonedDateTime.now())
             statusActor ! Unsubscribe("foo", sender)
-          case "foo.stream" =>
-            statusActor ! Subscribe ("foo.stream", sender, events)
-            val jobInfo = JobInfo (
-            "foo.stream", "cid", "context", "", getStateBasedOnEvents (events), dt, None, None, Seq.empty)
-            statusActor ! JobStatusActor.JobInit (jobInfo)
-            statusActor ! JobStarted (jobInfo.jobId, jobInfo)
-            val result = "\"1, 2, 3, 4, 5, 6\"".getBytes ().toStream
-            if (events.contains (classOf[JobResult] ) ) sender ! JobResult ("foo.stream", result)
-            statusActor ! Unsubscribe ("foo.stream", sender)
           case "context-already-stopped" => sender ! ContextStopInProgress
         }
       case GetJobConfig("badjobid") => sender ! JobConfig(None)
@@ -259,7 +236,6 @@ with ScalatestRouteTest with ScalaFutures with SprayJsonSupport {
         contextInfo, Some("local-1337"), Some("http://spark:4040"))
       case GetSparkContexData("finishedContextWithInfo") => sender ! SparkContexData(
         finishedContextInfo, None, None)
-      case ContextSupervisor.GetResultActor(_) => sender ! self
     }
   }
 

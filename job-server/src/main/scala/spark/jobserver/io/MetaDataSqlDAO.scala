@@ -209,6 +209,14 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
     }
   }
 
+  override def deleteFinalContextsOlderThan(olderThan: ZonedDateTime): Future[Boolean] = {
+    val deleteContexts = contexts
+      .filter(_.state.inSet(ContextStatus.getFinalStates()))
+      .filter(_.endTime < convertDateTimeToSql(olderThan))
+      .delete
+    dbUtils.db.run(deleteContexts).map(_ > 0).recover(logDeleteErrors)
+  }
+
   /**
     * Persist a job info.
     *
@@ -312,6 +320,37 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
     }
   }
 
+  override def getFinalJobsOlderThan(olderThan: ZonedDateTime): Future[Seq[JobInfo]]  = {
+    // Query jobIds of old, final jobs
+    val oldFinalJobQuery = jobs
+      .filter(_.state.inSet(JobStatus.getFinalStates()))
+      .filter(_.endTime.isDefined)
+      .filter(_.endTime < convertDateTimeToSql(olderThan))
+    dbUtils.db.run(oldFinalJobQuery.result).map(_.map(jobInfoFromRow))
+  }
+
+  override def deleteJobs(jobIds: Seq[String]): Future[Boolean] = {
+    // Delete job infos
+    val deleteJobsQuery = jobs
+      .filter(_.jobId.inSet(jobIds))
+      .delete
+    val jobSuccess = dbUtils.db.run(deleteJobsQuery).map(_ > 0).recover(logDeleteErrors)
+    // Delete job configs
+    val deleteConfigsQuery = configs
+      .filter(_.jobId.inSet(jobIds))
+      .delete
+    val configSuccess = dbUtils.db.run(deleteConfigsQuery)
+      .map(_ >= 0) // It is possible that no config exists for the job, hence 0 deleted lines are ok
+      .recover(logDeleteErrors)
+    // Combine futures
+    for {
+      j <- jobSuccess
+      c <- configSuccess
+    } yield {
+      j && c
+    }
+  }
+
   /**
     * Returns a config for a given job id
     * @return
@@ -363,9 +402,8 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
     * @return
     */
   def getBinariesByStorageId(storageId: String): Future[Seq[BinaryInfo]] = {
-    val query = binaries.filter(
-          _.binHash === BinaryDAO.hashStringToBytes(storageId)
-        ).result
+    val hashToFind = BinaryObjectsDAO.hashStringToBytes(storageId)
+    val query = binaries.filter(_.binHash === hashToFind).result
     for (m <- dbUtils.db.run(query)) yield {
       m.map(binaryInfoFromRow)
     }
@@ -382,7 +420,7 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
                  binaryType: BinaryType,
                  uploadTime: ZonedDateTime,
                  binaryStorageId: String): Future[Boolean] = {
-    val hash = BinaryDAO.hashStringToBytes(binaryStorageId)
+    val hash = BinaryObjectsDAO.hashStringToBytes(binaryStorageId)
     val dbAction = (binaries +=
       (-1, name, binaryType.name, convertDateTimeToSql(uploadTime), hash))
     dbUtils.db.run(dbAction).map(_ == 1).recover(logDeleteErrors)
@@ -418,7 +456,7 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
         appName,
         BinaryType.fromString(binaryType),
         convertDateSqlToDateTime(uploadTime),
-        Some(BinaryDAO.hashBytesToString(hash))
+        Some(BinaryObjectsDAO.hashBytesToString(hash))
       )
   }
 

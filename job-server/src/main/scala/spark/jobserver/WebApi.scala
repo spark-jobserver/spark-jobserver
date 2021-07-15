@@ -18,7 +18,7 @@ import spark.jobserver.auth.SJSAccessControl._
 import spark.jobserver.auth._
 import spark.jobserver.common.akka.web.JsonUtils.AnyJsonFormat
 import spark.jobserver.common.akka.web.{CommonRoutes, WebService}
-import spark.jobserver.io.JobDAOActor._
+import spark.jobserver.io.JobDAOActor.{GetJobResult, _}
 import spark.jobserver.io._
 import spark.jobserver.routes.DataRoutes
 import spark.jobserver.util.ResultMarshalling._
@@ -602,7 +602,7 @@ class WebApi(system: ActorSystem,
 
   val errorEvents: Set[Class[_]] = Set(classOf[JobErroredOut], classOf[JobValidationFailed])
   val asyncEvents = Set(classOf[JobStarted]) ++ errorEvents
-  val syncEvents = Set(classOf[JobResult]) ++ errorEvents
+  val syncEvents = Set(classOf[JobFinished], classOf[JobResult]) ++ errorEvents
 
   /**
    * Main routes for starting a job, listing existing jobs, getting job results
@@ -655,17 +655,16 @@ class WebApi(system: ActorSystem,
                   logger.info(jobReport.toString())
                   ctx.complete(jobReport)
                 } else {
-                  val resultFuture = for {
-                    resultActor <- (supervisor ?
-                      ContextSupervisor.GetResultActor(info.contextName)).mapTo[ActorRef]
-                    result <- resultActor ? GetJobResult(jobId)
-                  } yield result
+                  val resultFuture = (daoActor ? GetJobResult(jobId)).mapTo[JobResult]
                   resultFuture.flatMap {
-                    case JobResult(_, result) =>
+                    case JobResult(result) =>
                       result match {
                         case s: Stream[_] =>
                           sendStreamingResponse(ctx, ResultChunkSize,
                             resultToByteIterator(jobReport, s.toIterator))
+                        case None =>
+                          logger.info(jobReport.toString())
+                          ctx.complete(jobReport)
                         case _ =>
                           logger.info(jobReport.toString() + ", " + result)
                           ctx.complete(jobReport ++ resultToTable(result))
@@ -844,12 +843,16 @@ class WebApi(system: ActorSystem,
                           JobManagerActor.StartJob(
                             mainClass, binInfos, jobConfig, events, callbackUrl = callbackOpt))(timeout)
                         future.flatMap {
-                          case JobResult(jobId, res) =>
-                            res match {
-                              case s: Stream[_] => sendStreamingResponse(ctx, ResultChunkSize,
-                                resultToByteIterator(Map.empty, s.toIterator))
-                              case _ =>
-                                ctx.complete(resultToTable(res, Some(jobId)))
+                          case JobFinished(jobId, _endTime) =>
+                            val resultFuture = (daoActor ? GetJobResult(jobId)).mapTo[JobResult]
+                            resultFuture.flatMap {
+                              case JobResult(result: Stream[_]) => sendStreamingResponse(ctx, ResultChunkSize,
+                                resultToByteIterator(Map.empty, result.toIterator))
+                              case JobResult(result) =>
+                                ctx.complete(resultToTable(result, Some(jobId)))
+                            }.recoverWith {
+                              case e: Exception =>
+                                completeWithException(ctx, "ERROR", StatusCodes.InternalServerError, e)
                             }
                           case JobErroredOut(jobId, _, ex) =>
                             ctx.complete(exceptionToMap(jobId, ex))

@@ -49,17 +49,17 @@ class MetaDataZookeeperDAOSpec extends AnyFunSpec with TestJarFinder with AnyFun
 
   // Binaries
   val binJar = BinaryInfo("binaryWithJar", BinaryType.Jar, ZonedDateTime.now().withNano(0),
-      Some(BinaryDAO.calculateBinaryHashString("1".getBytes)))
+      Some(BinaryObjectsDAO.calculateBinaryHashString("1".getBytes)))
   val binEgg = BinaryInfo("binaryWithEgg", BinaryType.Egg, ZonedDateTime.now().withNano(0),
-      Some(BinaryDAO.calculateBinaryHashString("2".getBytes)))
+      Some(BinaryObjectsDAO.calculateBinaryHashString("2".getBytes)))
   val binWheel = BinaryInfo("binaryWithWheel", BinaryType.Wheel, ZonedDateTime.now().withNano(0),
-      Some(BinaryDAO.calculateBinaryHashString("3".getBytes)))
+      Some(BinaryObjectsDAO.calculateBinaryHashString("3".getBytes)))
   val binURI = BinaryInfo("http://foo/bar", BinaryType.URI, ZonedDateTime.now().withNano(0),
-      Some(BinaryDAO.calculateBinaryHashString("42".getBytes)))
+      Some(BinaryObjectsDAO.calculateBinaryHashString("42".getBytes)))
   val binJarV2 = BinaryInfo("binaryWithJar", BinaryType.Jar, ZonedDateTime.now().withNano(0).plusHours(1),
-      Some(BinaryDAO.calculateBinaryHashString("3".getBytes)))
+      Some(BinaryObjectsDAO.calculateBinaryHashString("3".getBytes)))
   val binElse = BinaryInfo("anotherBinaryWithJar", BinaryType.Jar, ZonedDateTime.now().withNano(0),
-      Some(BinaryDAO.calculateBinaryHashString("3".getBytes)))
+      Some(BinaryObjectsDAO.calculateBinaryHashString("3".getBytes)))
 
   // Contexts
   val normalContext = ContextInfo("someId", "someName", "someConfig", Some("ActorAddress"),
@@ -186,7 +186,7 @@ class MetaDataZookeeperDAOSpec extends AnyFunSpec with TestJarFinder with AnyFun
       Await.result(dao.saveBinary(binElse.appName, binElse.binaryType, binElse.uploadTime,
           binElse.binaryStorageId.get), timeout) should equal(true)
       val binsOnStor3 = Await.result(dao.getBinariesByStorageId(
-          BinaryDAO.calculateBinaryHashString("3".getBytes)), timeout)
+          BinaryObjectsDAO.calculateBinaryHashString("3".getBytes)), timeout)
       binsOnStor3.toSet should equal(Set(binJarV2, binElse))
     }
 
@@ -314,6 +314,34 @@ class MetaDataZookeeperDAOSpec extends AnyFunSpec with TestJarFinder with AnyFun
         equal(contextContextJVMInitializationTimeout)
     }
 
+    it("should delete contexts in final state older than a certain date") {
+      // Persist three contexts
+      val cutoffDate = toDateTime(724291200L)
+      val oldContext = normalContext.copy(id = "1", state = ContextStatus.Finished,
+        endTime = Some(cutoffDate.minusHours(1)))
+      val recentContext = normalContext.copy(id = "2", state = ContextStatus.Finished,
+        endTime = Some(cutoffDate.plusHours(1)))
+      val runningContext = normalContext.copy(id = "3", state = ContextStatus.Running,
+        endTime = None)
+      val restartingContext = normalContext.copy(id = "4", state = ContextStatus.Restarting,
+        endTime = Some(cutoffDate.minusHours(1)))
+      Await.result(dao.saveContext(oldContext), timeout)
+      Await.result(dao.saveContext(recentContext), timeout)
+      Await.result(dao.saveContext(runningContext), timeout)
+      Await.result(dao.saveContext(restartingContext), timeout)
+      Await.result(dao.getContexts(None, None), timeout).size should equal(4)
+      // Delete (one) old one
+      val result = Await.result(dao.deleteFinalContextsOlderThan(cutoffDate), timeout)
+      result should equal(true)
+      // Assert that (only) old one is gone
+      Await.result(dao.getContexts(None, None), timeout) should
+        equal(Seq(recentContext, runningContext, restartingContext))
+      Await.result(dao.getContext(oldContext.id), timeout) should equal(None)
+      Await.result(dao.getContext(recentContext.id), timeout) should equal(Some(recentContext))
+      Await.result(dao.getContext(runningContext.id), timeout) should equal(Some(runningContext))
+      Await.result(dao.getContext(restartingContext.id), timeout) should equal(Some(restartingContext))
+    }
+
   }
 
   /*
@@ -410,6 +438,55 @@ class MetaDataZookeeperDAOSpec extends AnyFunSpec with TestJarFinder with AnyFun
       val success = Await.result(dao.saveJob(multiJarJob), timeout)
       success should equal(true)
       Await.result(dao.getJob(multiJarJob.jobId), timeout) should equal(Some(multiJarJob))
+    }
+
+    it("should delete jobs in final state older than a certain date") {
+      // Persist a few jobs
+      val cutoffDate = toDateTime(724291200L)
+      val oldJob = normalJob.copy(jobId = "1", state = JobStatus.Finished,
+        endTime = Some(cutoffDate.minusHours(1)))
+      val recentJob = normalJob.copy(jobId = "2", state = JobStatus.Finished,
+        endTime = Some(cutoffDate.plusHours(1)))
+      val runningJob = normalJob.copy(jobId = "3", state = JobStatus.Running,
+        endTime = None)
+      val restartingJob = normalJob.copy(jobId = "4", state = JobStatus.Restarting,
+        endTime = Some(cutoffDate.minusHours(1)))
+      Await.result(dao.saveJob(oldJob), timeout)
+      Await.result(dao.saveJob(recentJob), timeout)
+      Await.result(dao.saveJob(runningJob), timeout)
+      Await.result(dao.saveJob(restartingJob), timeout)
+      Await.result(dao.getJobs(100, None), timeout).size should equal(4)
+      // Query old ones
+      val result = Await.result(dao.getFinalJobsOlderThan(cutoffDate), timeout)
+      result should equal(Seq(oldJob))
+    }
+
+    it("should delete a list of jobs"){
+      // Persist two jobs
+      val job1 = normalJob.copy(jobId = "1")
+      val job2 = normalJob.copy(jobId = "2")
+      Await.result(dao.saveJob(job1), timeout)
+      Await.result(dao.saveJob(job2), timeout)
+      // Delete one
+      Await.result(dao.deleteJobs(Seq(job1.jobId)), timeout) should equal (true)
+      // Assert that (only) one is gone
+      Await.result(dao.getJobs(100, None), timeout).toSet should equal(
+        Set(job2))
+      Await.result(dao.getJob(job1.jobId), timeout) should equal(None)
+      Await.result(dao.getJob(job2.jobId), timeout) should equal(Some(job2))
+    }
+
+    it("should delete job configs with jobs"){
+      val cutoffDate = toDateTime(724291200L)
+      // Persist job with config
+      Await.result(dao.saveJob(normalJob), timeout)
+      Await.result(dao.saveJobConfig(normalJob.jobId, config1), timeout)
+      Await.result(dao.getJobConfig(normalJob.jobId), timeout) should equal (Some(config1))
+      // Delete
+      Await.result(dao.deleteJobs(Seq(normalJob.jobId)), timeout) should equal(true)
+      // Assert
+      Await.result(dao.getJob(normalJob.jobId), timeout) should equal(None)
+      Await.result(dao.getJobConfig(normalJob.jobId), timeout) should equal(None)
     }
 
     it("should be able to access data after DAO recreation") {

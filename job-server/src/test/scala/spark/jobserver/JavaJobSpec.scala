@@ -2,10 +2,11 @@ package spark.jobserver
 
 import akka.testkit._
 import com.typesafe.config.ConfigFactory
-import spark.jobserver.CommonMessages.{JobErroredOut, JobResult}
+import spark.jobserver.CommonMessages.{JobErroredOut, JobFinished, JobStarted}
 import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.context.JavaSparkContextFactory
-import spark.jobserver.io.{InMemoryBinaryDAO, InMemoryMetaDAO, JobDAOActor}
+import spark.jobserver.io.JobDAOActor.{GetJobResult, JobResult}
+import spark.jobserver.io.{InMemoryBinaryObjectsDAO, InMemoryMetaDAO, JobDAOActor}
 
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
@@ -37,7 +38,7 @@ class JavaJobSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) {
 
   before {
     inMemoryMetaDAO = new InMemoryMetaDAO
-    inMemoryBinDAO = new InMemoryBinaryDAO
+    inMemoryBinDAO = new InMemoryBinaryObjectsDAO
     daoActor = system.actorOf(JobDAOActor.props(inMemoryMetaDAO, inMemoryBinDAO, daoConfig))
     manager = system.actorOf(JobManagerActor.props(daoActor))
     supervisor = TestProbe().ref
@@ -59,18 +60,22 @@ class JavaJobSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) {
     it("Should run a java job") {
       val testJar = uploadTestJar()
 
-      manager ! JobManagerActor.Initialize(config, None, emptyActor)
+      manager ! JobManagerActor.Initialize(config, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
-      manager ! JobManagerActor.StartJob(javaJob, List(testJar), config, syncEvents ++ errorEvents)
+      manager ! JobManagerActor.StartJob(javaJob, List(testJar), config, allEvents)
       expectMsgPF(startJobWait, "No job ever returned :'(") {
-        case JobResult(_, result) => result should be("Hi!")
+        case JobStarted(jobId, _jobInfo) =>
+          expectMsgClass(classOf[JobFinished])
+          daoActor ! GetJobResult(jobId)
+          expectMsg(JobResult("Hi!"))
       }
     }
+
     it("Should fail running this java job"){
       val testJar = uploadTestJar()
 
-      manager ! JobManagerActor.Initialize(config, None, emptyActor)
+      manager ! JobManagerActor.Initialize(config, emptyActor)
       expectMsgClass(initMsgWait, classOf[JobManagerActor.Initialized])
 
       manager ! JobManagerActor.StartJob(failedJob, List(testJar), config, errorEvents)
