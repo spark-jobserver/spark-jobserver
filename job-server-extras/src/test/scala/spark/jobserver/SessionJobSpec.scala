@@ -1,14 +1,18 @@
 package spark.jobserver
 
+import akka.util.Timeout
+import akka.pattern.ask
 import com.typesafe.config.{Config, ConfigFactory}
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.sql.{Row, SparkSession}
+import spark.jobserver.CommonMessages.{JobFinished, JobStarted}
 import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.context.{SessionContextFactory, SparkSessionContextLikeWrapper}
-import spark.jobserver.io.JobDAOActor.JobResult
+import spark.jobserver.io.JobDAOActor.{GetJobResult, JobResult}
 import spark.jobserver.io.{InMemoryBinaryObjectsDAO, InMemoryMetaDAO, JobDAOActor}
 import spark.jobserver.util.{JobserverConfig, SparkJobUtils}
 
+import scala.concurrent.Await
 import scala.concurrent.duration._
 
 class TestSessionContextFactory extends SessionContextFactory {
@@ -48,6 +52,20 @@ class SessionJobSpec extends ExtrasJobSpecBase(SessionJobSpec.getNewSystem) {
   )
   lazy val contextConfig = SessionJobSpec.getContextConfig(false, SessionJobSpec.contextConfig)
 
+  val smallTimeout = 5.seconds
+  val longTimeout = 10.seconds
+  implicit private val futureTimeout = Timeout(smallTimeout)
+
+  private def waitAndFetchJobResult(jobFinishTimeout: FiniteDuration): Any = {
+    expectMsgPF(smallTimeout, "Never got a JobStarted event") {
+      case JobStarted(jobId, _jobInfo) =>
+        expectMsgClass(jobFinishTimeout, classOf[JobFinished])
+        val future = daoActor ? GetJobResult(jobId)
+        Await.result(future, smallTimeout).asInstanceOf[JobResult].result
+      case message: Any => throw new Exception(s"Got unexpected message $message")
+    }
+  }
+
   before {
     inMemoryMetaDAO = new InMemoryMetaDAO
     inMemoryBinDAO = new InMemoryBinaryObjectsDAO
@@ -68,19 +86,16 @@ class SessionJobSpec extends ExtrasJobSpecBase(SessionJobSpec.getNewSystem) {
 
       var testBinInfo = uploadTestJar()
       manager ! JobManagerActor.StartJob(
-        hiveLoaderClass, Seq(testBinInfo), emptyConfig, syncEvents ++ errorEvents)
-      expectMsgPF(120 seconds, "Did not get JobResult") {
-        case JobResult(result: Long) => result should equal (3L)
-      }
+        hiveLoaderClass, Seq(testBinInfo), emptyConfig, allEvents)
+      val result1 = waitAndFetchJobResult(120 seconds)
+      result1 should equal(3L)
       expectNoMessage(1.seconds)
 
       manager ! JobManagerActor.StartJob(
-        hiveQueryClass, Seq(testBinInfo), queryConfig, syncEvents ++ errorEvents)
-      expectMsgPF(6 seconds, "Did not get JobResult") {
-        case JobResult(result: Array[Row]) =>
-          result should have length 2
-          result(0)(0) should equal ("Bob")
-      }
+        hiveQueryClass, Seq(testBinInfo), queryConfig, allEvents)
+      val result = waitAndFetchJobResult(6 seconds).asInstanceOf[Array[Row]]
+      result should have length 2
+      result(0)(0) should equal ("Bob")
       expectNoMessage(1.seconds)
     }
 
@@ -102,10 +117,8 @@ class SessionJobSpec extends ExtrasJobSpecBase(SessionJobSpec.getNewSystem) {
 
         val testBinInfo = uploadTestJar()
         manager ! JobManagerActor.StartJob(
-          hiveLoaderClass, Seq(testBinInfo), emptyConfig, syncEvents ++ errorEvents)
-        expectMsgPF(120 seconds, "Did not get JobResult") {
-          case JobResult(result: Long) => result should equal (3L)
-        }
+          hiveLoaderClass, Seq(testBinInfo), emptyConfig, allEvents)
+        waitAndFetchJobResult(120 seconds)
       }
 
       exception.getMessage.contains(
