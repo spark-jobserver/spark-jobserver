@@ -1,8 +1,8 @@
 package spark.jobserver
 
 import com.typesafe.config.Config
-import org.apache.spark.api.java.JavaSparkContext
 import org.apache.spark.SparkContext
+import org.apache.spark.api.java.JavaSparkContext
 
 /**
  * A class to make Java jobs easier to write.  In Java:
@@ -10,7 +10,10 @@ import org.apache.spark.SparkContext
  *   @override
  *   public Object runJob(JavaSparkContext jsc, Config jobConfig) { ... }
  * }
+ *
+ * Deprecated. Use `spark.jobserver.japi.BaseJavaJob` instead.
  */
+@Deprecated
 class JavaSparkJob extends SparkJob {
 
   def runJob(sc: SparkContext, jobConfig: Config): Any = {

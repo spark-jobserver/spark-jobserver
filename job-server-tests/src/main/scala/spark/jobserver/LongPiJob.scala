@@ -1,27 +1,27 @@
 package spark.jobserver
 
 import com.typesafe.config.{Config, ConfigFactory}
-import java.util.{Random, Date}
 import org.apache.spark._
 import org.scalactic._
+import spark.jobserver.api.{JobEnvironment, ValidationProblem, SparkJob => JobBase}
+
+import java.util.{Date, Random}
 import scala.util.Try
 
-import spark.jobserver.api._
-
 /**
- * A long job for stress tests purpose.
- * Iterative and randomized algorithm to compute Pi.
- * Imagine a square centered at (1,1) of length 2 units.
- * It tightly encloses a circle centered also at (1,1) of radius 1 unit.
- * Randomly throw darts to them.
- * We can use the ratio of darts inside the square and circle to approximate the Pi.
- *
- * stress.test.longpijob.duration controls how long it run in seconds.
- * Longer duration increases precision.
- *
- */
-object LongPiJob extends api.SparkJob {
-  private val rand = new Random(now)
+  * A long job for stress tests purpose.
+  * Iterative and randomized algorithm to compute Pi.
+  * Imagine a square centered at (1,1) of length 2 units.
+  * It tightly encloses a circle centered also at (1,1) of radius 1 unit.
+  * Randomly throw darts to them.
+  * We can use the ratio of darts inside the square and circle to approximate the Pi.
+  *
+  * stress.test.longpijob.duration controls how long it run in seconds.
+  * Longer duration increases precision.
+  *
+  */
+object LongPiJob extends JobBase {
+  private val rand = new Random(now())
 
   type JobData = Int
   type JobOutput = Double
@@ -32,8 +32,10 @@ object LongPiJob extends api.SparkJob {
     val sc = new SparkContext(conf)
     val env = new JobEnvironment {
       def jobId: String = "abcdef"
+
       //scalastyle:off
       def namedObjects: NamedObjects = ???
+
       def contextConfig: Config = ConfigFactory.empty
     }
     val results = runJob(sc, env, 5)
@@ -41,7 +43,7 @@ object LongPiJob extends api.SparkJob {
   }
 
   def validate(sc: SparkContext, runtime: JobEnvironment, config: Config):
-    JobData Or Every[ValidationProblem] = {
+  JobData Or Every[ValidationProblem] = {
     val duration = Try(config.getInt("stress.test.longpijob.duration")).getOrElse(5)
     Good(duration)
   }
@@ -50,8 +52,8 @@ object LongPiJob extends api.SparkJob {
     val duration = data
     var hit = 0L
     var total = 0L
-    val start = now
-    while(stillHaveTime(start, duration)) {
+    val start = now()
+    while (stillHaveTime(start, duration)) {
       val counts = estimatePi(sc)
       hit += counts._1
       total += counts._2
@@ -61,10 +63,10 @@ object LongPiJob extends api.SparkJob {
   }
 
   /**
-   *
-   * @param sc
-   * @return (hit, total) where hit is the count hit inside circle and total is the total darts
-   */
+    *
+    * @param sc
+    * @return (hit, total) where hit is the count hit inside circle and total is the total darts
+    */
   private def estimatePi(sc: SparkContext): Tuple2[Int, Int] = {
     val data = Array.iterate(0, 1000)(x => x + 1)
 
@@ -76,10 +78,10 @@ object LongPiJob extends api.SparkJob {
   }
 
   /**
-   * Throw a dart.
-   *
-   * @return true if the dart hits inside the circle.
-   */
+    * Throw a dart.
+    *
+    * @return true if the dart hits inside the circle.
+    */
   private def throwADart(): Boolean = {
     val x = rand.nextDouble() * 2
     val y = rand.nextDouble() * 2

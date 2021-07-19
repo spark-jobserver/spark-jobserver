@@ -6,6 +6,7 @@ import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import spark.jobserver.api.JobEnvironment;
 import spark.jobserver.japi.JSessionJob;
+import spark.jobserver.japi.JavaValidationException;
 
 public class JSessionTestJob extends JSessionJob<Row[]> {
 
@@ -17,7 +18,7 @@ public class JSessionTestJob extends JSessionJob<Row[]> {
     }
 
     @Override
-    public Config verify(SparkSession spark, JobEnvironment runtime, Config config) {
+    public Config verify(SparkSession spark, JobEnvironment runtime, Config config) throws JavaValidationException {
         return config;
     }
 }
