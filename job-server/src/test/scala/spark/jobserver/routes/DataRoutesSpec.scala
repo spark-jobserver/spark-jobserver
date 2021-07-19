@@ -26,8 +26,10 @@ class DataRoutesSpec extends WebApiSpec {
     it("POST - should report error when receiver reports error") {
       Post("/data/errorfileToRemove", Array[Byte](0, 1, 2)) ~> sealRoute(routes) ~> check {
         status should be(BadRequest)
-        responseAs[Map[String, String]] should be(Map(
-          StatusKey -> JobStatus.Error, ResultKey -> "Failed to store data file 'errorfileToRemove'."))
+        val res = responseAs[Map[String, Any]]
+        withoutStack(res) should be(Map(
+          StatusKey -> JobStatus.Error, ResultKey -> Map("message" -> "errorfileToRemove",
+            "errorClass" -> "java.nio.file.FileAlreadyExistsException")))
       }
     }
 
@@ -47,11 +49,23 @@ class DataRoutesSpec extends WebApiSpec {
 
     it("DELETE - should report error when receiver reports error") {
       Delete("/data/errorfileToRemove") ~> sealRoute(routes) ~> check {
-        status should be(BadRequest)
-        responseAs[Map[String, String]] should be(Map(
-          StatusKey -> JobStatus.Error, ResultKey -> "Unable to delete data file 'errorfileToRemove'."))
+        status should be(NotFound)
+        val res = responseAs[Map[String, Any]]
+        withoutStack(res) should be(Map(
+          StatusKey -> JobStatus.Error, ResultKey -> Map("message" -> "errorfileToRemove",
+            "errorClass" -> "java.nio.file.NoSuchFileException")))
       }
     }
 
+    def withoutStack(map: Map[String, Any]): Map[String, Any] = {
+      if (map.contains(ResultKey)) {
+        val result = map(ResultKey).asInstanceOf[Map[String, String]]
+          .filterKeys(k => k != "stack")
+        map.filterKeys(k => k != ResultKey) ++ Map(ResultKey -> result)
+      }
+      else {
+        map
+      }
+    }
   }
 }

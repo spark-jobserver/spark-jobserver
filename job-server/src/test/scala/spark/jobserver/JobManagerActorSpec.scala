@@ -1032,7 +1032,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
 
       // return error from file manager
       dataFileActor.expectMsgClass(classOf[RetrieveData])
-      dataFileActor.reply(DataManagerActor.Error("test"))
+      dataFileActor.reply(DataManagerActor.Error(new RuntimeException("test")))
 
       expectMsgClass(classOf[JobErroredOut])
     }

@@ -748,7 +748,7 @@ class JobManagerActor(daoActor: ActorRef, supervisorActorAddress: String, contex
         case _ =>
               val jarPath = dependenciesCache.getBinaryPath(
                 binInfo.appName, binInfo.binaryType, binInfo.uploadTime)
-              Some(s"file://${new File(jarPath).getAbsolutePath}")
+              Some(s"file://${jarPath.toAbsolutePath}")
       }
     })
   }

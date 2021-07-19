@@ -14,6 +14,7 @@ import spark.jobserver.io.JobDAOActor._
 import spark.jobserver.io._
 import spark.jobserver.util.ErrorData
 
+import java.nio.file.{FileAlreadyExistsException, NoSuchFileException}
 import java.time.{Instant, ZoneId, ZonedDateTime}
 import org.scalatest.funspec.AnyFunSpec
 import org.scalatest.matchers.should.Matchers
@@ -157,13 +158,15 @@ with ScalatestRouteTest with ScalaFutures with SprayJsonSupport {
       case DeleteBinary("failure") => sender ! BinaryDeletionFailure(new Exception("deliberate"))
       case DeleteBinary(_) => sender ! BinaryDeleted
 
-      case DataManagerActor.StoreData("errorfileToRemove", _) => sender ! DataManagerActor.Error
+      case DataManagerActor.StoreData("errorfileToRemove", _) =>
+        sender ! DataManagerActor.Error(new FileAlreadyExistsException("errorfileToRemove"))
       case DataManagerActor.StoreData(filename, _) => {
         sender ! DataManagerActor.Stored(filename + "-time-stamp")
       }
       case DataManagerActor.ListData => sender ! Set("demo1", "demo2")
       case DataManagerActor.DeleteData("/tmp/fileToRemove") => sender ! DataManagerActor.Deleted
-      case DataManagerActor.DeleteData("errorfileToRemove") => sender ! DataManagerActor.Error
+      case DataManagerActor.DeleteData("errorfileToRemove") =>
+        sender ! DataManagerActor.Error(new NoSuchFileException("errorfileToRemove"))
       case GetBinaryInfoListForCp(cp) if cp.contains("BinaryNotFound") =>
         sender ! NoSuchBinary("BinaryNotFound")
       case GetBinaryInfoListForCp(Seq("Failure")) =>
