@@ -1,21 +1,26 @@
 package spark.jobserver
 
 import akka.actor.{ActorRef, ActorSystem, Props}
+import akka.pattern.ask
 import akka.testkit.ImplicitSender
 import akka.testkit.TestKit
+import akka.util.Timeout
 import com.typesafe.config.{Config, ConfigFactory}
 import org.scalatest.{BeforeAndAfter, BeforeAndAfterAll}
 import spark.jobserver.common.akka.AkkaTestUtils
 import spark.jobserver.context.DefaultSparkContextFactory
 import spark.jobserver.io.JobDAOActor._
-import spark.jobserver.io.{BinaryObjectsDAO, BinaryInfo, BinaryType, MetaDataDAO}
+import spark.jobserver.io.{BinaryInfo, BinaryObjectsDAO, BinaryType, MetaDataDAO}
 import spark.jobserver.util.JobserverConfig
-
 import java.time.ZonedDateTime
+
 import scala.concurrent.duration._
 import scala.util.Success
 import org.scalatest.funspec.AnyFunSpecLike
 import org.scalatest.matchers.should.Matchers
+import spark.jobserver.CommonMessages.{JobFinished, JobStarted}
+
+import scala.concurrent.Await
 
 /**
  * Provides a base Config for tests.  Override the vals to configure.  Mix into an object.
@@ -122,6 +127,18 @@ with AnyFunSpecLike with Matchers with BeforeAndAfter with BeforeAndAfterAll {
 
   protected def uploadTestWheel(appName: String = "demo"): BinaryInfo = {
     uploadBinary(testWheel.getAbsolutePath, appName, BinaryType.Wheel)
+  }
+
+  protected def waitAndFetchJobResult(jobFinishTimeout: FiniteDuration = 10 seconds): Any = {
+    val smallTimeout = 5.seconds
+    expectMsgPF(smallTimeout, "Never got a JobStarted event") {
+      case JobStarted(jobId, _jobInfo) =>
+        expectMsgClass(jobFinishTimeout, classOf[JobFinished])
+        implicit val askTimeout : Timeout = Timeout(smallTimeout)
+        val future = daoActor ? GetJobResult(jobId)
+        Await.result(future, smallTimeout).asInstanceOf[JobResult].result
+      case message: Any => throw new Exception(s"Got unexpected message $message instead of JobStarted")
+    }
   }
 
   protected def getExtrasJarPath: String = extrasJar.getAbsolutePath
