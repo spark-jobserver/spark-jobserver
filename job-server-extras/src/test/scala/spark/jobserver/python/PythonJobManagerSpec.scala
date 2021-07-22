@@ -1,17 +1,11 @@
 package spark.jobserver.python
 
-import akka.util.Timeout
-import akka.pattern.ask
 import com.typesafe.config.ConfigFactory
-import spark.jobserver.CommonMessages.{JobErroredOut, JobFinished, JobStarted}
 import spark.jobserver.io.{BinaryInfo, InMemoryBinaryObjectsDAO, InMemoryMetaDAO, JobDAOActor}
 import spark.jobserver._
-import org.scalatest._
 import spark.jobserver.JobManagerActor.JobLoadingError
-import spark.jobserver.io.JobDAOActor.{GetJobResult, JobResult}
 
 import scala.collection.JavaConverters._
-import scala.concurrent.Await
 import scala.concurrent.duration._
 
 object PythonJobManagerSpec extends JobSpecConfig {
@@ -24,19 +18,6 @@ class PythonJobManagerSpec extends ExtrasJobSpecBase(PythonJobManagerSpec.getNew
     inMemoryMetaDAO = new InMemoryMetaDAO
     inMemoryBinDAO = new InMemoryBinaryObjectsDAO
     daoActor = system.actorOf(JobDAOActor.props(inMemoryMetaDAO, inMemoryBinDAO, daoConfig))
-  }
-
-  val smallTimeout = 5.seconds
-  implicit private val futureTimeout = Timeout(smallTimeout)
-
-  private def waitAndFetchJobResult(): Any = {
-    expectMsgPF(smallTimeout, "Never got a JobStarted event") {
-      case JobStarted(jobId, _jobInfo) =>
-        expectMsgClass(classOf[JobFinished])
-        val future = daoActor ? GetJobResult(jobId)
-        Await.result(future, smallTimeout).asInstanceOf[JobResult].result
-      case message: Any => throw new Exception(s"Got unexpected message $message")
-    }
   }
 
   describe("PythonContextFactory used with JobManager") {

@@ -276,16 +276,6 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
   var contextConfig: Config = _
   var callbackHandler: CallbackTestsHelper = new CallbackTestsHelper()
 
-  private def waitAndFetchJobResult(): JobResult = {
-    expectMsgPF(startJobWait, "Never got a JobStarted event") {
-      case JobStarted(jobId, _jobInfo) =>
-        expectMsgClass(classOf[JobFinished])
-        val future = daoActor ? GetJobResult(jobId)
-        Await.result(future, startJobWait).asInstanceOf[JobResult]
-      case message: Any => throw new Exception(s"Got unexpected message $message")
-    }
-  }
-
   before {
     logger.debug("Before block - started")
     inMemoryMetaDAO = new InMemoryMetaDAO
@@ -351,8 +341,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val testJar = uploadTestJar()
       manager ! JobManagerActor.StartJob(
         wordCountClass, List(testJar), stringConfig, allEvents)
-      val r = waitAndFetchJobResult()
-      r.result should equal (counts)
+      waitAndFetchJobResult() should equal (counts)
       expectNoMessage()
       assert(callbackHandler.failureCount == 0)
       assert(callbackHandler.successCount == 0)
@@ -367,8 +356,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val testJar = uploadTestJar()
       manager ! JobManagerActor.StartJob(
         wordCountClass, List(testJar), stringConfig, allEvents)
-      val r = waitAndFetchJobResult()
-      r.result should equal (counts)
+      waitAndFetchJobResult() should equal (counts)
       deathWatch.expectNoMessage(1.seconds)
     }
 
@@ -426,8 +414,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val testJar = uploadTestJar()
       manager ! JobManagerActor.StartJob(
         newWordCountClass, List(testJar), stringConfig, allEvents)
-      val r = waitAndFetchJobResult()
-      r.result should equal (counts)
+      waitAndFetchJobResult() should equal (counts)
       expectNoMessage()
     }
 
@@ -775,10 +762,10 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val testJar = uploadTestJar()
       manager ! JobManagerActor.StartJob(classPrefix + "CacheSomethingJob", List(testJar), baseJobConfig,
         allEvents)
-      val firstJobResult = waitAndFetchJobResult().result
+      val firstJobResult = waitAndFetchJobResult()
       manager ! JobManagerActor.StartJob(classPrefix + "AccessCacheJob", List(testJar), baseJobConfig,
         allEvents)
-      val secondJobResult = waitAndFetchJobResult().result
+      val secondJobResult = waitAndFetchJobResult()
       firstJobResult should equal (secondJobResult)
     }
 
@@ -789,7 +776,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       val testJar = uploadTestJar()
       manager ! JobManagerActor.StartJob(classPrefix + "CacheRddByNameJob", List(testJar), baseJobConfig,
         allEvents)
-      val result = waitAndFetchJobResult().result
+      val result = waitAndFetchJobResult()
       result should equal (1 + 4 + 9 + 16 + 25)
     }
   }
@@ -969,7 +956,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
         ConfigFactory.parseString(s"testFile = ${existingFile.getAbsolutePath}").withFallback(baseJobConfig),
         allEvents)
       dataFileActor.expectNoMessage()
-      val result = waitAndFetchJobResult().result
+      val result = waitAndFetchJobResult()
       result should equal (existingFile.getAbsolutePath)
 
       // downloads new file from data file manager
@@ -984,7 +971,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       }
       dataFileActor.reply(DataManagerActor.Data("test-data".getBytes))
       val cachedFile = waitAndFetchJobResult() match {
-        case JobResult(result: String) =>
+        case result: String =>
           val cachedFilePath = new File(result).toPath
           Files.exists(cachedFilePath) should equal (true)
           Files.readAllBytes(cachedFilePath) should equal ("test-data".getBytes)
@@ -997,7 +984,7 @@ class JobManagerActorSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) 
       manager ! JobManagerActor.StartJob(classPrefix + "RemoteDataFileJob", List(testJar), jobConfig,
         allEvents)
       dataFileActor.expectNoMessage() // already cached
-      val secondJobResult = waitAndFetchJobResult().result
+      val secondJobResult = waitAndFetchJobResult()
       secondJobResult should equal(cachedFile)
 
       manager ! JobManagerActor.DeleteData("test-file") // cleanup

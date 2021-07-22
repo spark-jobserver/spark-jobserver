@@ -1,20 +1,14 @@
 package spark.jobserver
 
-import akka.util.Timeout
-import akka.pattern.ask
 import com.typesafe.config.{Config, ConfigFactory}
-import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
-import spark.jobserver.context.{JavaContextFactory, JavaSessionContextFactory, SparkSessionContextLikeWrapper}
-import spark.jobserver.japi.{BaseJavaJob, JSessionJob}
+import spark.jobserver.context.{JavaSessionContextFactory, SparkSessionContextLikeWrapper}
 import spark.jobserver.util.{JobserverConfig, SparkJobUtils}
 import org.apache.spark.sql.Row
-import spark.jobserver.CommonMessages.{JobFinished, JobStarted}
 import spark.jobserver.common.akka.AkkaTestUtils
-import spark.jobserver.io.JobDAOActor.{GetJobResult, JobResult}
 import spark.jobserver.io.{InMemoryBinaryObjectsDAO, InMemoryMetaDAO, JobDAOActor}
 
-import scala.concurrent.Await
 import scala.concurrent.duration._
 
 
@@ -64,19 +58,6 @@ class JavaSessionSpec extends ExtrasJobSpecBase(JavaSessionSpec.getNewSystem) {
   after {
     JobManagerTestActor.stopSparkContextIfAlive(system, manager) should be(true)
     AkkaTestUtils.shutdownAndWait(manager)
-  }
-
-  val smallTimeout = 5.seconds
-  implicit private val futureTimeout = Timeout(smallTimeout)
-
-  private def waitAndFetchJobResult(): Any = {
-    expectMsgPF(smallTimeout, "Never got a JobStarted event") {
-      case JobStarted(jobId, _jobInfo) =>
-        expectMsgClass(classOf[JobFinished])
-        val future = daoActor ? GetJobResult(jobId)
-        Await.result(future, smallTimeout).asInstanceOf[JobResult].result
-      case message: Any => throw new Exception(s"Got unexpected message $message")
-    }
   }
 
   describe("Java Session Jobs") {
