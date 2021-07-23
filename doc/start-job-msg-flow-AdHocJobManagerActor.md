@@ -3,7 +3,7 @@ title POST /jobs start new job workflow with AdHocJobManagerActor
 user->WebApi: POST /jobs
 
 WebApi->LocalContextSupervisor: GetAdHocContext
-LocalContextSupervisor->WebApi: (AdHocJobManager, JobResultActor)
+LocalContextSupervisor->WebApi: (AdHocJobManager)
 
 WebApi->AdHocJobManagerActor: StartJob(event for JobStatusActor)
 
@@ -15,7 +15,6 @@ opt if Job validation fails
 end
 
 AdHocJobManagerActor->JobStatusActor: Subscribe(jobId, WebApi, event)
-AdHocJobManagerActor->JobResultActor: Subscribe(jobId, WebApi,  JobResult)
 AdHocJobManagerActor->JobFuture: CreateJob
 
 JobFuture->JobStatusActor: JobInit(info)
@@ -40,15 +39,15 @@ note over JobFuture: SparkJob.runJob()
 JobFuture->JobStatusActor: JobFinish(jobId)
 JobFuture->JobStatusActor: Unsubscribe(jobId, WebApi)
 
-JobFuture->JobResultActor: JobResult(jobId, result)
+JobFuture->JobDAOActor: SaveJobResult(jobId, result)
 
 JobFuture->AdHocJobManagerActor: JobFinish(jobId)
 
 note over JobFuture: Terminate
 
-note over JobResultActor: cacheResult(jobId, result)
-
 opt if sync job
-  JobResultActor->WebApi: JobResult(jobId, result)
+  JobStatusActor->WebApi: JobFinished(jobId, endTime)
+  WebApi->JobDAOActor: GetJobResult(jobId)
+  JobDAOActor->WebApi: JobResult(jobId)
   WebApi->user: result
 end

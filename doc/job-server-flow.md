@@ -38,7 +38,7 @@ Context routes
         note over JobManager: CREATE RddManager(createContextFromConfig())
         note over JobManager: createContextFromConfig(sparkMaster, contextName)
         note over JobManager: CREATE SparkContext
-        JobManager->LocalContextSupervisor: Initialized(JobResultActor)
+        JobManager->LocalContextSupervisor: Initialized(contextName)
         opt If JobManager times out
         LocalContextSupervisor->WebApi: ContextInitError
         WebApi->user: failWith(error)
@@ -82,15 +82,12 @@ Job routes
           JobDAOActor->WebApi:Some(jobInfo)
           WebApi->user:200 + "RUNNING" | "ERROR | "KILLED"
         end
-        WebApi -> LocalContextSupervisor:GetResultActor(contextName)
-        LocalContextSupervisor -> WebApi: (ActorRef)
-        WebApi -> JobResultActor: GetJobResult(jobId)
-        opt if jobId not in cache:
-            JobResultActor->WebApi: NoSuchJobId
-            WebApi->user: 200, jobs json without result
+        WebApi->JobDAOActor:GetJobResult(jobId)
+        opt if result not found:
+          JobDAOActor->WebApi:JobResult(None)
+          WebApi->user: 404
         end
-
-        JobResultActor->WebApi: JobResult(jobId, Any)
+        JobDAOActor->WebApi: JobResult(jobId, Any)
         WebApi->user: 200 + resultToTable(result)
 
 - submit a job
@@ -101,7 +98,7 @@ Job routes
           LocalContextSupervisor->WebApi: NoSuchContext
           WebApi->user: 404
         end
-        LocalContextSupervisor->WebApi: (JobManager, JobResultActor)
+        LocalContextSupervisor->WebApi: (JobManager)
         WebApi->JobManager: StartJob(appName, clasPatch, userConfig, asyncEvents | syncEvents)
         note over JobManager: JobDao.getLastUploadTime(appName)
         opt if no such appName:
@@ -116,7 +113,6 @@ Job routes
         end
         note over JobManager: JobJarInfo(SparkJob, jarFilePath, classLoader)
         JobManager->JobStatusActor: Subscribe(jobId, WebApi, asyncEvents | syncEvents)
-        JobManager->JobResultActor: Subscribe(jobId, WebApi, asyncEvents | syncEvents)
         note over JobManager: getJobFuture(jobId, JobJarInfo, JobInfo, jobConfig, sender)
         opt if too many running jobs:
           JobManager->WebApi: NoJobSlotsAvailable
@@ -145,16 +141,15 @@ Job routes
           JobStatusActor->WebApi: JobErroredOut
           WebApi->user: "ERROR"
         end
+        JobFuture->JobDAOActor: SaveJobResult(jobId, result)
         JobFuture->JobStatusActor: JobFinished(jobId, now)
-        JobFuture->JobResultActor: JobResult(jobId, result)
-        note over JobResultActor: cacheResult(jobId, result)
         opt if sync job
-          JobResultActor->WebApi: JobResult(jobId, result)
+          JobStatusActor->WebApi: JobFinished(jobId, endTime)
+          WebApi->JobDAOActor: GetJobResult(jobId)
+          JobDAOActor->WebApi: JobResult(jobId)
           WebApi->user: 200 + JSON
         end
-        note over JobResultActor: subscribers.remove(jobId)
         JobFuture->JobStatusActor: Unsubscribe(jobId, WebApi)
-        JobFuture->JobResultActor: Unsubscribe(jobId, WebApi)
 
 - kill a job with jobId
 
