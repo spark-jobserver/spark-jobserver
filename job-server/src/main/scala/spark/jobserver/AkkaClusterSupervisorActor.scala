@@ -73,8 +73,6 @@ class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
   protected val contextInitInfos = mutable.HashMap.empty[String,
     (ActorRef => Unit, Throwable => Unit, Cancellable)]
 
-  // actor name -> ResultActor ref
-  private val resultActorRefs = mutable.HashMap.empty[String, ActorRef]
   private val jobManagerActorRefs = mutable.HashMap.empty[String, ActorRef]
 
   protected val selfAddress = cluster.selfAddress

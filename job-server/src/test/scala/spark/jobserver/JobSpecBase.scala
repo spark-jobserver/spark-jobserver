@@ -29,7 +29,6 @@ import scala.concurrent.Await
 trait JobSpecConfig {
   import collection.JavaConverters._
 
-  val JobResultCacheSize = Integer.valueOf(30)
   // number of cores to allocate. Required.
   val NumCpuCores = Integer.valueOf(Runtime.getRuntime.availableProcessors())
   // Executor memory per node, -Xmx style eg 512m, 1G, etc.
@@ -40,7 +39,6 @@ trait JobSpecConfig {
   lazy val config = {
     val ConfigMap = Map(
       "akka.loglevel" -> "OFF",
-      "spark.jobserver.job-result-cache-size" -> JobResultCacheSize,
       "spark.jobserver.dao-timeout" -> "3s",
       "spark.jobserver.context-deletion-timeout" -> "5s",
       "num-cpu-cores" -> NumCpuCores,

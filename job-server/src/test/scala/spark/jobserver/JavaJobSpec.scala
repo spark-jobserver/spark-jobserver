@@ -13,14 +13,12 @@ import scala.concurrent.duration._
 
 class JavaJobSpec extends JobSpecBase(JobManagerActorSpec.getNewSystem) {
 
-  val JobResultCacheSize = Integer.valueOf(30)
   val NumCpuCores = Integer.valueOf(Runtime.getRuntime.availableProcessors())
   val MemoryPerNode = "512m"
   private val MaxJobsPerContext = Integer.valueOf(2)
 
   lazy val config = {
     val ConfigMap = Map(
-      "spark.jobserver.job-result-cache-size" -> JobResultCacheSize,
       "num-cpu-cores" -> NumCpuCores,
       "memory-per-node" -> MemoryPerNode,
       "spark.jobserver.max-jobs-per-context" -> MaxJobsPerContext,

@@ -22,7 +22,6 @@ object LocalContextSupervisorSpec {
         num-cpu-cores = 4           # Number of cores to allocate.  Required.
         memory-per-node = 512m      # Executor memory per node, -Xmx style eg 512m, 1G, etc.
       }
-      jobserver.job-result-cache-size = 100
       jobserver.context-creation-timeout = 5 s
 |     jobserver.context-deletion-timeout = 2 s
       jobserver.yarn-context-creation-timeout = 40 s
