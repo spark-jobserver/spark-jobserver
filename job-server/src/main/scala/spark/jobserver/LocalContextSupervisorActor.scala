@@ -28,7 +28,7 @@ object ContextSupervisor {
   case object ListContexts
   case class AddContext(name: String, contextConfig: Config)
   case class StartAdHocContext(mainClass: String, contextConfig: Config)
-  case class GetContext(name: String) // returns JobManager, JobResultActor
+  case class GetContext(name: String) // returns JobManager
   case class StopContext(name: String, force: Boolean = false)
   case class GetSparkContexData(name: String)
   case class RestartOfTerminatedJobsFailed(contextId: String)
@@ -144,7 +144,7 @@ class LocalContextSupervisorActor(dao: ActorRef, dataManagerActor: ActorRef) ext
           java.util.UUID.randomUUID().toString().substring(0, 8) + "-" + classPath
       } while (contexts contains contextName)
 
-      // Create JobManagerActor and JobResultActor
+      // Create JobManagerActor
       startContext(contextName, mergedConfig, true, contextTimeout) { contextMgr =>
         originator ! contexts(contextName)
       } { err =>

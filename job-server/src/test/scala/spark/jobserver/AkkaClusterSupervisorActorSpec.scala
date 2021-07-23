@@ -56,7 +56,6 @@ object AkkaClusterSupervisorActorSpec {
         num-cpu-cores = 1           # Number of cores to allocate.  Required.
         memory-per-node = 256m      # Executor memory per node, -Xmx style eg 512m, 1G, etc.
       }
-      jobserver.job-result-cache-size = 100
       jobserver.context-creation-timeout = 5 s
       jobserver.dao-timeout = 3 s
       jobserver.context-deletion-timeout= 3 s
