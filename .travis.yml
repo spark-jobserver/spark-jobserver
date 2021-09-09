@@ -1,5 +1,7 @@
 sudo: required
 
+dist: bionic
+
 env:
   global:
     - DOCKER_IMAGE="spark-jobserver:ci"
