@@ -19,7 +19,7 @@ object Versions {
   lazy val logback = "1.0.7"
   lazy val scalaTest = "2.2.6"
   lazy val scalatic = "2.2.6"
-  lazy val shiro = "1.7.0"
+  lazy val shiro = "1.8.0"
   lazy val cassandraUnit = "2.2.2.1"
   lazy val py4j = "0.10.3"
 }

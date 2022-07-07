@@ -288,7 +288,23 @@ lazy val publishSettings = Seq(
         case _ => node
       }
     }).transform(node).head
-  }
+  },
+  publishConfiguration := new PublishConfiguration(
+    publishConfiguration.value.ivyFile,
+    publishConfiguration.value.resolverName,
+    publishConfiguration.value.artifacts,
+    publishConfiguration.value.checksums,
+    publishConfiguration.value.logging,
+    true
+  ),
+  publishLocalConfiguration := new PublishConfiguration(
+    publishLocalConfiguration.value.ivyFile,
+    publishLocalConfiguration.value.resolverName,
+    publishLocalConfiguration.value.artifacts,
+    publishLocalConfiguration.value.checksums,
+    publishLocalConfiguration.value.logging,
+    true
+  )
 )
 
 // This is here so we can easily switch back to Logback when Spark fixes its log4j dependency.
