@@ -105,10 +105,10 @@ lazy val jobServerPythonSettings = revolverSettings ++ Assembly.settings ++ publ
 )
 
 lazy val jobServerTestJarSettings = Seq(
-  libraryDependencies ++= sparkDeps ++ apiDeps,
+  libraryDependencies ++= sparkDeps ++ apiDeps ++ slickTestDeps,
   publishArtifact := false,
   description := "Test jar for Spark Job Server",
-  exportJars := true        // use the jar instead of target/classes
+  exportJars := true // use the jar instead of target/classes
 )
 
 lazy val noPublishSettings = Seq(

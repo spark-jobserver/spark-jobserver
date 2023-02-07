@@ -719,6 +719,7 @@ Spark Jobserver programmatically.
 ## Contribution and Development
 Contributions via Github Pull Request are welcome.  See the TODO for some ideas.
 
+- You may need `export TERM=xterm-color` for `sbt` to work
 - If you need to build with a specific scala version use ++x.xx.x followed by the regular command,
 for instance: `sbt ++2.11.6 job-server/compile`
 - From the "master" project, please run "test" to ensure nothing is broken.

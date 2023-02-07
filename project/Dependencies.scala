@@ -55,9 +55,12 @@ object Dependencies {
   lazy val slickDeps = Seq(
     "com.typesafe.slick" %% "slick" % slick,
     "com.h2database" % "h2" % h2,
-    "org.postgresql" % "postgresql" % postgres,
     "commons-dbcp" % "commons-dbcp" % commons,
     "org.flywaydb" % "flyway-core" % flyway
+  )
+
+  lazy val slickTestDeps = Seq(
+    "org.postgresql" % "postgresql" % postgres
   )
 
   lazy val cassandraDeps = Seq(
