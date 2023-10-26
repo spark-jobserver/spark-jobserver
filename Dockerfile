@@ -4,8 +4,8 @@
 FROM openjdk:8-jdk-alpine AS build
 
 # Dependency/environment versions
-ARG SBT_VERSION=1.2.8
-ARG SCALA_VERSION=2.11.8
+ARG SBT_VERSION=1.9.7
+ARG SCALA_VERSION=2.11.12
 ARG SPARK_VERSION=2.4.5
 ARG HADOOP_VERSION=2.7
 
