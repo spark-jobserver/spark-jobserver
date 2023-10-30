@@ -114,7 +114,8 @@ object PythonContextFactory {
     )
 
   val sqlContextImports = sparkContextImports ++ Seq(
-    "org.apache.spark.sql.*"
+    "org.apache.spark.sql.*",
+    "org.apache.spark.sql.api.python.*"
   )
 
   val hiveContextImports = sqlContextImports ++ Seq(
