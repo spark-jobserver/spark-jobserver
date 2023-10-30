@@ -1,5 +1,5 @@
 object Versions {
-  lazy val spark = sys.env.getOrElse("SPARK_VERSION", "3.3.3")
+  lazy val spark = sys.env.getOrElse("SPARK_VERSION", "3.4.1")
 
   lazy val akka = "2.5.32"
   lazy val akkaHttp = "10.1.14"
@@ -8,6 +8,7 @@ object Versions {
   lazy val derby = "10.12.1.1"
   lazy val flyway = "4.2.0"
   lazy val hadoop = spark match {
+    case _ if spark.startsWith("3.4") => "3.3.4"
     case _ if spark.startsWith("3.3") => "3.3.2"
     case _ if spark.startsWith("3.2") => "3.3.1"
     case _ if spark.startsWith("3.1") => "3.2.0"

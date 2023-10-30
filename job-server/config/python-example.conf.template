@@ -7,8 +7,8 @@ spark {
     python {
       paths = [
          ${SPARK_HOME}/python/lib/pyspark.zip,
-         ${SPARK_HOME}/python/lib/py4j-0.9-src.zip,
-        "../job-server-python/target/python/spark_jobserver_python-0.7.0_SNAPSHOT-py2.7.egg"
+         ${SPARK_HOME}/python/lib/py4j-0.10.9.7-src.zip,
+        "../job-server-python/target/python/spark_jobserver_python-0.11.2-py3-none-any.whl"
       ]
     }
   }
