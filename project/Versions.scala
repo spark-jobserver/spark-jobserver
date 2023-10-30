@@ -1,5 +1,5 @@
 object Versions {
-  lazy val spark = sys.env.getOrElse("SPARK_VERSION", "3.1.3")
+  lazy val spark = sys.env.getOrElse("SPARK_VERSION", "3.2.4")
 
   lazy val akka = "2.5.32"
   lazy val akkaHttp = "10.1.14"
@@ -7,7 +7,7 @@ object Versions {
   lazy val commons = "1.4"
   lazy val derby = "10.12.1.1"
   lazy val flyway = "4.2.0"
-  lazy val hadoop = if (spark.startsWith("3.")) "3.2.0" else "2.7.4"
+  lazy val hadoop = if (spark.startsWith("3.")) "3.3.1" else "2.7.4"
   lazy val h2 = "1.3.176"
   lazy val java = sys.env.getOrElse("JAVA_VERSION", "8-jdk")
   lazy val jjwt = "0.9.1"
@@ -25,7 +25,7 @@ object Versions {
   lazy val slick = "3.3.3"
   lazy val typeSafeConfig = "1.4.1"
   lazy val cassandraConnector = "2.5.1"
-  lazy val curator = "4.2.0"
-  lazy val curatorTest = "4.2.0"
+  lazy val curator = "5.1.0"
+  lazy val curatorTest = "5.1.0"
   lazy val commonConfigurations = "1.10"
 }

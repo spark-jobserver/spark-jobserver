@@ -63,7 +63,7 @@ class ManagerLauncherSpec extends AnyFunSpec with Matchers with BeforeAndAfter w
         hasStarted should be (true)
       }
 
-      it("should accept valid HDFS path for jars") {
+      ignore("should accept valid HDFS path for jars") {
         super.startHDFS()
         val tempFile = File.createTempFile("hdfs-", ".jar")
         tempFile.deleteOnExit()

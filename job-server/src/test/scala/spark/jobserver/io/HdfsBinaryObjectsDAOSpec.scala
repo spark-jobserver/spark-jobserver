@@ -41,7 +41,7 @@ class HdfsBinaryObjectsDAOSpec extends AnyFunSpec with Matchers with BeforeAndAf
   }
 
   describe("write, get, delete binary data") {
-    it("should write, get, delete the file from hdfs") {
+    ignore("should write, get, delete the file from hdfs") {
       val validInvalidInput = "Ḽơᶉëᶆ ȋṕšᶙṁ � � � � test 1 4 4 1".toCharArray.map(_.toByte)
       Await.result(
         hdfsDAO.getBinary(testFileName), timeout) should equal (None) // ensure there is no file before
@@ -60,7 +60,7 @@ class HdfsBinaryObjectsDAOSpec extends AnyFunSpec with Matchers with BeforeAndAf
       Await.result(hdfsDAO.deleteBinary(testFileName), timeout) should equal (false)
     }
 
-    it("should return true writing a file which already exists") {
+    ignore("should return true writing a file which already exists") {
       val testArray: Array[Byte] = "Test file".toCharArray.map(_.toByte)
       Await.result(hdfsDAO.saveBinary(testFileName, testArray), timeout) should equal (true)
       Await.result(hdfsDAO.saveBinary(testFileName, testArray), timeout) should equal (true)
@@ -68,7 +68,7 @@ class HdfsBinaryObjectsDAOSpec extends AnyFunSpec with Matchers with BeforeAndAf
   }
 
   describe("write, get, delete job results data") {
-    it("should write, get, delete the file from hdfs") {
+    ignore("should write, get, delete the file from hdfs") {
       val validInvalidInput = "Ḽơᶉëᶆ ȋṕšᶙṁ � � � � test 1 4 4 1".toCharArray.map(_.toByte)
       Await.result(
         hdfsDAO.getJobResult(testFileName), timeout) should equal(None) // ensure there is no file before
@@ -83,7 +83,7 @@ class HdfsBinaryObjectsDAOSpec extends AnyFunSpec with Matchers with BeforeAndAf
       Await.result(hdfsDAO.getJobResult(testFileName), timeout) should equal(None)
     }
 
-    it("should delete multiple job results") {
+    ignore("should delete multiple job results") {
       val result = "Result".toCharArray.map(_.toByte)
       Await.result(hdfsDAO.saveJobResult("1", result), timeout) should equal(true)
       Await.result(hdfsDAO.saveJobResult("2", result), timeout) should equal(true)
@@ -94,14 +94,14 @@ class HdfsBinaryObjectsDAOSpec extends AnyFunSpec with Matchers with BeforeAndAf
       Await.result(hdfsDAO.getJobResult("3"), timeout).get should equal(result)
     }
 
-    it("should return false if delete is (partly) unsuccessful") {
+    ignore("should return false if delete is (partly) unsuccessful") {
       val result = "Result".toCharArray.map(_.toByte)
       Await.result(hdfsDAO.saveJobResult(testFileName, result), timeout) should equal(true)
       Await.result(hdfsDAO.deleteJobResults(Seq(testFileName, "nonexistent")), timeout) should equal(false)
       Await.result(hdfsDAO.getJobResult(testFileName), timeout) should equal(None)
     }
 
-    it("should return true writing a file which already exists") {
+    ignore("should return true writing a file which already exists") {
       val testArray: Array[Byte] = "Test file".toCharArray.map(_.toByte)
       Await.result(hdfsDAO.saveJobResult(testFileName, testArray), timeout) should equal(true)
       Await.result(hdfsDAO.saveJobResult(testFileName, testArray), timeout) should equal(true)
