@@ -92,7 +92,7 @@ Spark Job Server is included in Datastax Enterprise!
 - [Target](http://www.target.com/)
 - [Branch](http://branch.io)
 - [Informatica](https://www.informatica.com/)
-- [Cadenz.ai](https://cadenz.ai/)
+- [Lentra](https://lentra.ai/cadenz/)
 
 ## Features
 
