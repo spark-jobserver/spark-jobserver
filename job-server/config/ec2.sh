@@ -20,4 +20,4 @@ SPARK_EXECUTOR_URI=/home/spark/spark-0.8.0.tar.gz
 # Normally these are kept on the cluster in /etc/hadoop/conf
 # YARN_CONF_DIR=/pathToRemoteConf/conf
 # HADOOP_CONF_DIR=/pathToRemoteConf/conf
-SCALA_VERSION=2.12.12 # or 2.11.12
+SCALA_VERSION=2.12.18 # or 2.11.12

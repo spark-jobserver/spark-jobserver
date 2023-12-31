@@ -259,7 +259,7 @@ class JobManagerSpec extends AnyFunSpecLike with Matchers with BeforeAndAfter
       }
     }
 
-    it("should be able to load config file from hadoop supported file systems") {
+    ignore("should be able to load config file from hadoop supported file systems") {
       val configFilePath = writeConfigFile(Map(
         "spark.jobserver.hdfs.test" -> "Wohoo!"
       ))

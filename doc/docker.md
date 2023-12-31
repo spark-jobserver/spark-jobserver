@@ -13,14 +13,14 @@ in the project root directory.
 ### Arguments
 The Dockerfile defaults to the following build arguments:
 ```
-SBT_VERSION=1.2.8
-SCALA_VERSION=2.11.8
-SPARK_VERSION=2.4.5
-HADOOP_VERSION=2.7
+ARG SBT_VERSION=1.9.7
+ARG SCALA_VERSION=2.12.18
+ARG SPARK_VERSION=3.4.1
+ARG HADOOP_VERSION=3
 ```
 You can override these arguments on `build` with the `--build-arg` parameter:
 ```
-docker build --build-arg SCALA_VERSION=2.12.12 -t jobserver .
+docker build --build-arg SCALA_VERSION=2.12.18 -t jobserver .
 ```
 
 ## Usage

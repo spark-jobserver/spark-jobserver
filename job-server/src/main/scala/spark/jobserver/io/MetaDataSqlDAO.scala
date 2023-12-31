@@ -1,18 +1,17 @@
 package spark.jobserver.io
 
 import akka.http.scaladsl.model.Uri
-
-import java.sql.Timestamp
-import scala.concurrent.{Await, Future}
-import scala.concurrent.ExecutionContext.Implicits.global
-import scala.concurrent.duration.DurationInt
-import scala.reflect.runtime.universe
 import com.typesafe.config.{Config, ConfigFactory, ConfigRenderOptions}
 import org.slf4j.LoggerFactory
-import slick.driver.JdbcProfile
+import slick.jdbc.JdbcProfile
 import spark.jobserver.util.{ErrorData, SqlDBUtils}
 
+import java.sql.Timestamp
 import java.time.{Instant, ZoneId, ZonedDateTime}
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration.DurationInt
+import scala.concurrent.{Await, Future}
+import scala.reflect.runtime.universe
 
 class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
   private val logger = LoggerFactory.getLogger(getClass)
@@ -460,7 +459,7 @@ class MetaDataSqlDAO(config: Config) extends MetaDataDAO {
       )
   }
 
-  private def logDeleteErrors = PartialFunction[Any, Boolean] {
+  private def logDeleteErrors: PartialFunction[Throwable, Boolean] = {
     case e: Throwable =>
       logger.error(e.getMessage, e)
       false

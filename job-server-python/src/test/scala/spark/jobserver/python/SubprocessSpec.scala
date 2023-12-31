@@ -146,7 +146,8 @@ class SubprocessSpec extends AnyFunSpec with Matchers with BeforeAndAfter with B
     )
 
   val sqlContextImports = sparkContextImports ++ Seq(
-    "org.apache.spark.sql.*"
+    "org.apache.spark.sql.*",
+    "org.apache.spark.sql.api.python.*"
   )
 
   val hiveContextImports = sqlContextImports ++ Seq(

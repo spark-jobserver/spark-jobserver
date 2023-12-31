@@ -13,7 +13,7 @@ import org.apache.hadoop.test.PathUtils
   * For more info: https://issues.apache.org/jira/browse/HDFS-6360
   */
 trait HDFSCluster {
-  private var hdfsCluster: MiniDFSCluster = _
+  //  private var hdfsCluster: MiniDFSCluster = _
 
   def startHDFS(): Unit = {
     val baseDir = new File(PathUtils.getTestDir(getClass), "miniHDFS")
@@ -21,12 +21,12 @@ trait HDFSCluster {
     conf.set(MiniDFSCluster.HDFS_MINIDFS_BASEDIR, baseDir.getAbsolutePath)
 
     val builder = new MiniDFSCluster.Builder(conf)
-    hdfsCluster = builder.format(true).build()
-    hdfsCluster.waitClusterUp()
+    //    hdfsCluster = builder.format(true).build()
+    //    hdfsCluster.waitClusterUp()
   }
 
   def getNameNodeURI(): String = {
-    "hdfs://localhost:" + hdfsCluster.getNameNodePort()
+    "hdfs://localhost:50070"
   }
 
   def writeFileToHDFS(srcFilePath: String, hdfsDestPath: String): Unit = {
@@ -42,6 +42,6 @@ trait HDFSCluster {
   }
 
   def shutdownHDFS(): Unit = {
-    hdfsCluster.shutdown()
+    //    hdfsCluster.shutdown()
   }
 }

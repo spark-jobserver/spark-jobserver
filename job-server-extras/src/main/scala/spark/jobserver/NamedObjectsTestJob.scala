@@ -3,9 +3,9 @@ package spark.jobserver
 import com.typesafe.config.Config
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
-import org.apache.spark.storage.StorageLevel
 import org.apache.spark.sql.types._
-import org.apache.spark.sql.{ SQLContext, Row, DataFrame }
+import org.apache.spark.sql.{Row, SparkSession}
+import org.apache.spark.storage.StorageLevel
 
 /**
  * A test job for named objects
@@ -24,7 +24,7 @@ class NamedObjectsTestJob extends SparkJob with NamedObjectSupport {
 
   def runJob(sc: SparkContext, config: Config): Array[String] = {
     if (config.hasPath(CREATE_DF) && config.getBoolean(CREATE_DF)) {
-      val sqlContext = new SQLContext(sc)
+      val sqlContext = SparkSession.builder().config(sc.getConf).getOrCreate()
       val struct = StructType(
         StructField("i", IntegerType, true) ::
           StructField("b", BooleanType, false) :: Nil)

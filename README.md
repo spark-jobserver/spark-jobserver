@@ -41,6 +41,7 @@ Also see [Chinese docs / 中文](doc/chinese/job-server.md).
     - [Keycloak Authentication](#keycloak-authentication)
   - [User Authorization](#user-authorization)
 - [Deployment](#deployment)
+  - [Spark Version](#spark-version)
   - [Manual steps](#manual-steps)
   - [Context per JVM](#context-per-jvm)
   - [Configuring Spark Jobserver backend](#configuring-spark-jobserver-backend)
@@ -98,9 +99,9 @@ Spark Job Server is included in Datastax Enterprise!
 
 - *"Spark as a Service"*: Simple REST interface (including HTTPS) for all aspects of job, context management
 - Support for Spark SQL, Hive, Streaming Contexts/jobs and custom job contexts!  See [Contexts](doc/contexts.md).
+- Support for Spark 2.4, Spark 3.0 and Spark 3.1.
 - [Python](doc/python.md), Scala, and [Java](doc/javaapi.md) (see [TestJob.java](https://github.com/spark-jobserver/spark-jobserver/blob/master/job-server-api/src/main/java/spark/jobserver/api/TestJob.java)) support
 - LDAP Auth support via Apache Shiro integration
-- Separate JVM per SparkContext for isolation (EXPERIMENTAL)
 - Supports sub-second low-latency jobs via long-running job contexts
 - Start and stop job contexts for RDD sharing and low-latency jobs; change resources on restart
 - Kill running jobs via stop context and delete job
@@ -146,8 +147,6 @@ Alternatives:
   - `server_package.sh` deploys job server to a local directory, from which you can deploy the directory, or create a .tar.gz for Mesos or YARN deployment.
 * EC2 Deploy scripts - follow the instructions in [EC2](doc/EC2.md) to spin up a Spark cluster with job server and an example application.
 * EMR Deploy instruction - follow the instruction in [EMR](doc/EMR.md)
-
-NOTE: Spark Job Server can optionally run `SparkContext`s in their own, forked JVM process when the config option `spark.jobserver.context-per-jvm` is set to `true`.  This option does not currently work for SBT/local dev mode. See [Deployment](#deployment) section for more info.
 
 ## Development mode
 
@@ -635,9 +634,16 @@ user with the required permissions of an endpoint. For a detailed list of all av
 
 See also running on [cluster](doc/cluster.md), [YARN client](doc/yarn.md), on [EMR](doc/EMR.md) and running on [Mesos](doc/mesos.md).
 
+### Spark Version
+By default Spark Jobserver is build for Spark 3.0. Yet, support for Spark 2.4 and Spark 3.1 is also provided. To build
+Spark Jobserver for a specific Spark Version, you have to provide the `SPARK_VERSION` environment variable, e.g.
+```bash
+export SPARK_VERSION="2.4.7"
+```
+
 ### Manual steps
 
-1. Copy `config/local.sh.template` to `<environment>.sh` and edit as appropriate.  NOTE: be sure to set SPARK_VERSION if you need to compile against a different version.
+1. Copy `config/local.sh.template` to `<environment>.sh` and edit as appropriate.  NOTE: be sure to set `SPARK_VERSION` if you need to compile against a different version.
 2. Copy `config/shiro.ini.template` to `shiro.ini` and edit as appropriate. NOTE: only required when `access-control.provider = spark.jobserver.auth.ShiroAccessControl`
 3. Copy `config/local.conf.template` to `<environment>.conf` and edit as appropriate.
 4. `bin/server_deploy.sh <environment>` -- this packages the job server along with config files and pushes
@@ -650,15 +656,16 @@ NOTE: Under the hood, the deploy scripts generate an assembly jar from the `job-
 
 ### Context per JVM
 
-Each context can be a separate process launched using SparkLauncher, if `context-per-jvm` is set to true.
-This can be especially desirable when you want to run many contexts at once, or for certain types of contexts such as StreamingContexts which really need their own processes.
-
-Also, the extra processes talk to the master HTTP process via random ports using the Akka Cluster gossip protocol.  If for some reason the separate processes causes issues, set `spark.jobserver.context-per-jvm` to `false`, which will cause the job server to use a single JVM for all contexts.
+Each context is running in a separate process launched using SparkLauncher. The extra processes talk to the master HTTP
+process via random ports using the Akka Cluster gossip protocol.
 
 Among the known issues:
 - Launched contexts do not shut down by themselves.  You need to manually kill each separate process, or do `-X DELETE /contexts/<context-name>`
+- Log files are separated out for each context in their own subdirs under the `LOG_DIR` configured in `settings.sh` in the deployed directory.
 
-Log files are separated out for each context (assuming `context-per-jvm` is `true`) in their own subdirs under the `LOG_DIR` configured in `settings.sh` in the deployed directory.
+If you need to start a spark context in the same JVM process Spark Jobserver is running in, set `spark.jobserver.context-per-jvm` to `false`.
+In this mode, only a single spark context can be running at once. Execution of multiple contexts in parallel is not possible.
+It is highly recommended, that you do *not* use this mode in a production environment.
 
 Note: to test out the deploy to a local staging dir, or package the job server for Mesos,
 use `bin/server_package.sh <environment>`.
@@ -857,10 +864,7 @@ serialized properly:
 - Subclasses of java.util.Map with string key values (non-string keys may be converted to strings)
 - Maps, Seqs, Java Maps and Java Lists may contain nested values of any of the above
 - If a job result is of scala's Stream[Byte] type it will be serialised directly as a chunk encoded stream.
-  This is useful if your job result payload is large and may cause a timeout serialising as objects. Beware, this
-  will not currently work as desired with context-per-jvm=true configuration, since it would require serialising
-  Stream[\_] blob between processes. For now use Stream[\_] job results in context-per-jvm=false configuration, pending
-  potential future enhancements to support this in context-per-jvm=true mode.
+  This is useful if your job result payload is large and may cause a timeout serialising as objects.
 
 If we encounter a data type that is not supported, then the entire result will be serialized to a string.
 
@@ -888,7 +892,7 @@ Spark Jobserver programmatically.
 Contributions via Github Pull Request are welcome. Please start by taking a look at the [contribution guidelines](doc/contribution-guidelines.md) and check the TODO for some contribution ideas.
 
 - If you need to build with a specific scala version use ++x.xx.x followed by the regular command,
-for instance: `sbt ++2.12.12 job-server/compile`
+for instance: `sbt ++2.12.18 job-server/compile`
 - From the "master" project, please run "test" to ensure nothing is broken.
    - You may need to set `SPARK_LOCAL_IP` to `localhost` to ensure Akka port can bind successfully
    - Note for Windows users: very few tests fail on Windows. Thus, run `testOnly -- -l WindowsIgnore` from SBT shell to ignore them.

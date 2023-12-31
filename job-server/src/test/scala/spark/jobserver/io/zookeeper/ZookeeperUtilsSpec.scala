@@ -3,7 +3,7 @@ package spark.jobserver.io.zookeeper
 import com.typesafe.config.{Config, ConfigFactory}
 import spark.jobserver.io.{BinaryInfo, BinaryType}
 import org.scalatest.BeforeAndAfter
-import spark.jobserver.util.{CuratorTestCluster, JsonProtocols}
+import spark.jobserver.util.{CuratorTestCluster, JsonProtocols, Utils}
 import org.apache.curator.framework.CuratorFramework
 import spark.jobserver.JobServer.InvalidConfiguration
 
@@ -80,7 +80,10 @@ class ZookeeperUtilsSpec extends AnyFunSpec with Matchers with BeforeAndAfter {
         "spark.jobserver.zookeeperdao.connection-string = ip_address_doesnt_exist"
       )
       val zkUtils2 = new ZookeeperUtils(modifiedConfig.withFallback(config))
-      zkUtils2.write[BinaryInfo](zkUtils2.getClient, testInfo, "/testfile1") should equal(false)
+      Utils.usingResource(zkUtils2.getClient) {
+        client =>
+          zkUtils2.write[BinaryInfo](client, testInfo, "/testfile1") should equal(false)
+      }
     }
 
     it("should not see other namespaces") {
@@ -91,7 +94,10 @@ class ZookeeperUtilsSpec extends AnyFunSpec with Matchers with BeforeAndAfter {
         """
       )
       val zkUtils2 = new ZookeeperUtils(modifiedConfig.withFallback(config))
-      zkUtils2.list(zkUtils2.getClient, "/") should equal(Seq("zookeeper"))
+      Utils.usingResource(zkUtils2.getClient) {
+        client =>
+          zkUtils2.list(client, "/") should equal(Seq("zookeeper"))
+      }
     }
   }
 

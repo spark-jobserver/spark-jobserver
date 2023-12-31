@@ -4,10 +4,10 @@
 FROM openjdk:8-jdk-alpine AS build
 
 # Dependency/environment versions
-ARG SBT_VERSION=1.2.8
-ARG SCALA_VERSION=2.11.8
-ARG SPARK_VERSION=2.4.5
-ARG HADOOP_VERSION=2.7
+ARG SBT_VERSION=1.9.7
+ARG SCALA_VERSION=2.12.18
+ARG SPARK_VERSION=3.4.1
+ARG HADOOP_VERSION=3
 
 # Install dependencies
 RUN apk add --no-cache bash curl

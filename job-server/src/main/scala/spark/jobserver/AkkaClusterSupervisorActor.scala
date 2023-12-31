@@ -24,6 +24,34 @@ import akka.cluster.singleton.{ClusterSingletonManager, ClusterSingletonManagerS
 
 import java.time.ZonedDateTime
 
+/** Messages common to all ContextSupervisors */
+object ContextSupervisor {
+  sealed trait StopContextResponse
+  sealed trait StopForcefullyContextResponse
+  // Messages/actions
+  case object AddContextsFromConfig // Start up initial contexts
+  case object ListContexts
+  case class AddContext(name: String, contextConfig: Config)
+  case class StartAdHocContext(mainClass: String, contextConfig: Config)
+  case class GetContext(name: String) // returns JobManager
+  case class StopContext(name: String, force: Boolean = false)
+  case class GetSparkContexData(name: String)
+  case class RestartOfTerminatedJobsFailed(contextId: String)
+  case class ForkedJVMInitTimeout(contextActorName: String, contextInfo: ContextInfo)
+  case object SparkContextStopped extends StopContextResponse with StopForcefullyContextResponse
+
+  // Errors/Responses
+  case object ContextInitialized
+  case class ContextInitError(t: Throwable)
+  case class ContextStopError(t: Throwable) extends StopForcefullyContextResponse
+  case object ContextStopInProgress extends StopContextResponse
+  case object ContextAlreadyExists
+  case object NoSuchContext
+  case object ContextStopped
+  case class SparkContexData[T](context: T, appId: Option[String], url: Option[String])
+  case object UnexpectedError
+}
+
 object AkkaClusterSupervisorActor {
   val ACTOR_NAME = "context-supervisor"
 
@@ -50,7 +78,34 @@ object AkkaClusterSupervisorActor {
  * it is assumed to be one starting up, and it will be asked to identify itself,
  * and then the Supervisor will try to initialize it.
  *
- * See the [[LocalContextSupervisorActor]] for normal config options.
+ * == Auto context start configuration ==
+ * Contexts can be configured to be created automatically at job server initialization.
+ * Configuration example:
+ * {{{
+ *   spark {
+ *     contexts {
+ *       olap-demo {
+ *         num-cpu-cores = 4            # Number of cores to allocate.  Required.
+ *         memory-per-node = 1024m      # Executor memory per node, -Xmx style eg 512m, 1G, etc.
+ *       }
+ *     }
+ *   }
+ * }}}
+ *
+ * == Other configuration ==
+ * {{{
+ *   spark {
+ *     jobserver {
+ *       context-creation-timeout = 15 s
+ *       yarn-context-creation-timeout = 40 s
+ *     }
+ *
+ *     # Default settings for all context creation
+ *     context-settings {
+ *       spark.mesos.coarse = true
+ *     }
+ *   }
+ * }}}
  */
 class AkkaClusterSupervisorActor(daoActor: ActorRef, dataManagerActor: ActorRef,
     cluster: Cluster) extends InstrumentedActor {

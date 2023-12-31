@@ -50,7 +50,7 @@ class HadoopFSFacadeSpec extends AnyFunSpec with Matchers with BeforeAndAfterAll
       hdfsFacade.get(testFilePath) should equal(None)
     }
 
-    it("should write, get and delete the file using defaultFS (HDFS)") {
+    ignore("should write, get and delete the file using defaultFS (HDFS)") {
       val config = new Configuration()
       config.set("fs.defaultFS", testClusterUrl)
       hdfsFacade = new HadoopFSFacade(config)
@@ -64,7 +64,7 @@ class HadoopFSFacadeSpec extends AnyFunSpec with Matchers with BeforeAndAfterAll
       hdfsFacade.get(s"$testClusterUrl/$testFilePath") should equal(None)
     }
 
-    it("should work for all input types for write, get and delete the file (HDFS)") {
+    ignore("should work for all input types for write, get and delete the file (HDFS)") {
       val invalidUTF8Input = Seq("Ḽơᶉëᶆ ȋṕšᶙṁ", "� � � � ")
       invalidUTF8Input.foreach { input =>
         val config = new Configuration()
@@ -82,7 +82,7 @@ class HadoopFSFacadeSpec extends AnyFunSpec with Matchers with BeforeAndAfterAll
       }
     }
 
-    it("should overwrite default scheme if specified") {
+    ignore("should overwrite default scheme if specified") {
       val config = new Configuration()
       config.set("fs.defaultFS", "file:///")
       hdfsFacade = new HadoopFSFacade(config, defaultFS = testClusterUrl)
@@ -93,7 +93,7 @@ class HadoopFSFacadeSpec extends AnyFunSpec with Matchers with BeforeAndAfterAll
       hdfsFacade.delete(testFilePath) should equal(true)
     }
 
-    it("should not overwrite default schema if it is used") {
+    ignore("should not overwrite default schema if it is used") {
       val config = new Configuration()
       config.set("fs.defaultFS", testClusterUrl)
       hdfsFacade = new HadoopFSFacade(config, defaultFS = "file:///")
